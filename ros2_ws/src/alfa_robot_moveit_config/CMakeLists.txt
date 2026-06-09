@@ -9,6 +9,7 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_ros_planning REQUIRED)
 find_package(moveit_core REQUIRED)
 find_package(moveit_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(random_numbers REQUIRED)
@@ -54,6 +55,7 @@ ament_target_dependencies(dual_arm_planner_node
   moveit_ros_planning_interface
   moveit_ros_planning
   moveit_msgs
+  shape_msgs
   pluginlib
   ament_index_cpp
   random_numbers

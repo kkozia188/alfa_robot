@@ -29,6 +29,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -79,6 +80,29 @@ struct AttachedBoxSpec
   std::array<double, 3> size;
 };
 
+struct AxisAlignedBox
+{
+  std::array<double, 3> center;
+  std::array<double, 3> size;
+};
+
+
+struct ExtractCandidate
+{
+  size_t step_index = 0;
+  size_t candidate_index = 0;
+  double retreat_x = 0.0;
+  double lift_z = 0.0;
+  double pitch_up_rad = 0.0;
+  geometry_msgs::msg::Pose target_pose;
+  bool ik_success = false;
+  bool state_valid = false;
+  bool carried_clear = false;
+  bool detached_from_neighbors = false;
+  std::string rejection_reason;
+  moveit::core::RobotStatePtr state;
+};
+
 std::vector<double> deg_to_rad(const std::vector<double>& degrees)
 {
   std::vector<double> radians;
@@ -110,6 +134,17 @@ Eigen::Quaterniond top_suction_orientation()
 {
   // tool +Z -> world/base -Z.
   return Eigen::Quaterniond(0.0, 1.0, 0.0, 0.0);
+}
+
+Eigen::Quaterniond pitch_up_orientation(double pitch_up_rad)
+{
+  // Relax the extraction grasp by pitching tool +Z upward in world/base frame.
+  // Eigen's positive Y rotation maps +X toward -Z, which is a downward press for
+  // our front grasp. Use the opposite sign so a positive parameter means "lift
+  // the tool normal toward +Z".
+  Eigen::Quaterniond q = Eigen::AngleAxisd(-pitch_up_rad, Eigen::Vector3d::UnitY()) * forward_x_orientation();
+  q.normalize();
+  return q;
 }
 
 geometry_msgs::msg::Pose make_pose(double x, double y, double z, const Eigen::Quaterniond& quat)
@@ -206,6 +241,17 @@ nlohmann::json names_values_json(const std::vector<std::string>& names, const st
   return out;
 }
 
+double pose_position_error(const Eigen::Isometry3d& target, const Eigen::Isometry3d& actual)
+{
+  return (target.translation() - actual.translation()).norm();
+}
+
+double pose_orientation_error(const Eigen::Isometry3d& target, const Eigen::Isometry3d& actual)
+{
+  Eigen::AngleAxisd aa(target.linear().transpose() * actual.linear());
+  return aa.angle();
+}
+
 }  // namespace
 
 class DualArmPlannerNode : public rclcpp::Node
@@ -294,9 +340,24 @@ public:
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
 
-    pregrasp_arm_ = deg_to_rad({0, 15, 135, 0, 60, 0});
-    loaded_arm_ = deg_to_rad({0, 5, 145, 0, 120, 0});
-    place_arm_ = deg_to_rad({0, -90, -90, 0, -90, 180});
+    extract_demo_left_box_id_ = get_or_declare_parameter<int>("extract_demo_left_box_id", 2);
+    extract_demo_right_box_id_ = get_or_declare_parameter<int>("extract_demo_right_box_id", 4);
+    extract_step_x_ = get_or_declare_parameter<double>("extract_step_x", 0.03);
+    extract_max_x_ = get_or_declare_parameter<double>("extract_max_x", 0.36);
+    extract_lift_candidates_ = get_or_declare_parameter<std::vector<double>>("extract_lift_candidates", std::vector<double>{0.0, 0.02, 0.05, 0.08});
+    extract_pitch_candidates_deg_ = get_or_declare_parameter<std::vector<double>>("extract_pitch_candidates_deg", std::vector<double>{0.0, 5.0, 10.0, 15.0});
+    extract_neighbor_margin_ = get_or_declare_parameter<double>("extract_neighbor_margin", 0.02);
+    extract_fail_fast_ = get_or_declare_parameter<bool>("extract_fail_fast", false);
+    extract_kdl_timeout_ = get_or_declare_parameter<double>("extract_kdl_timeout", 0.01);
+    extract_position_tolerance_ = get_or_declare_parameter<double>("extract_position_tolerance", 0.01);
+    extract_orientation_tolerance_ = get_or_declare_parameter<double>("extract_orientation_tolerance", 0.05);
+    extract_max_tip_z_drop_ = get_or_declare_parameter<double>("extract_max_tip_z_drop", 0.002);
+    extract_min_tool_normal_z_ = get_or_declare_parameter<double>("extract_min_tool_normal_z", -1e-4);
+
+    left_pregrasp_arm_ = deg_to_rad({0, -90, 135, -45, 0, 0});
+    right_pregrasp_arm_ = deg_to_rad({0, -90, 135, 45, 0, 0});
+    left_loaded_arm_ = deg_to_rad({0, -60, 120, -90, 0, 0});
+    right_loaded_arm_ = deg_to_rad({0, -60, 120, 90, 0, 0});
 
     joint_state_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions joint_state_sub_options;
@@ -321,6 +382,11 @@ public:
     joint_group_ = robot_model_->getJointModelGroup(planning_group_);
     if (!joint_group_) {
       throw std::runtime_error("No JointModelGroup named " + planning_group_);
+    }
+    left_arm_group_ = robot_model_->getJointModelGroup("left_v5_arm");
+    right_arm_group_ = robot_model_->getJointModelGroup("right_v5_arm");
+    if (!left_arm_group_ || !right_arm_group_) {
+      throw std::runtime_error("Missing single-arm JointModelGroup left_v5_arm/right_v5_arm");
     }
 
     optimized_ik_solver_ = std::make_unique<ik_benchmark::ParallelUpdownAwareIkSolver>(ik_config_);
@@ -359,16 +425,29 @@ public:
         response->message = ok ? "box-stack MoveIt flow finished" : last_error_;
       });
 
+    extract_demo_srv_ = create_service<std_srvs::srv::Trigger>(
+      "~/run_left_extract_demo",
+      [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+             std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        RCLCPP_INFO(get_logger(), "Received /%s/run_left_extract_demo request", get_name());
+        const bool ok = run_left_extract_demo();
+        response->success = ok;
+        response->message = ok ? "left extract primitive finished" : last_error_;
+      });
+
     RCLCPP_INFO(get_logger(), "DualArmPlannerNode ready");
     RCLCPP_INFO(get_logger(), "  group=%s execute=%s box_front_x=%.3f max_rounds=%d include_top=%s",
                 planning_group_.c_str(), execute_ ? "true" : "false", box_front_x_, max_rounds_,
                 include_top_suction_ ? "true" : "false");
-    RCLCPP_INFO(get_logger(), "  Services: /%s/plan_and_execute, /%s/run_box_stack_flow",
-                get_name(), get_name());
+    RCLCPP_INFO(get_logger(), "  Services: /%s/plan_and_execute, /%s/run_box_stack_flow, /%s/run_left_extract_demo",
+                get_name(), get_name(), get_name());
     RCLCPP_INFO(get_logger(),
                 "  IK strategy=fixed_discrete h=%zu seed=%zu workers=%zu timeout=%.3fs collision=%s",
                 ik_config_.h_candidate_count, ik_config_.seed_count, ik_config_.workers, ik_config_.timeout,
                 ik_config_.check_collision ? "true" : "false");
+    RCLCPP_INFO(get_logger(),
+                "  Extract primitive IK=left_v5_arm/KDL fixed-updown timeout=%.3fs pos_tol=%.3fm ori_tol=%.3frad",
+                extract_kdl_timeout_, extract_position_tolerance_, extract_orientation_tolerance_);
     RCLCPP_INFO(get_logger(), "  speed scale velocity=%.2f acceleration=%.2f",
                 velocity_scale_, acceleration_scale_);
     RCLCPP_INFO(get_logger(), "  attached carried-box collision=%s size=(%.2f, %.2f, %.2f)",
@@ -626,6 +705,198 @@ private:
     return true;
   }
 
+  Eigen::Vector3d transform_point(const Eigen::Isometry3d& transform, const std::array<double, 3>& point) const
+  {
+    return transform * Eigen::Vector3d(point[0], point[1], point[2]);
+  }
+
+  AxisAlignedBox attached_box_world_aabb(
+    const moveit::core::RobotState& state,
+    const AttachedBoxSpec& box) const
+  {
+    const Eigen::Isometry3d& link_tf = state.getGlobalLinkTransform(box.link_name);
+    Eigen::Vector3d min_corner(
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity(),
+      std::numeric_limits<double>::infinity());
+    Eigen::Vector3d max_corner(
+      -std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity());
+
+    for (double sx : {-0.5, 0.5}) {
+      for (double sy : {-0.5, 0.5}) {
+        for (double sz : {-0.5, 0.5}) {
+          const std::array<double, 3> local_corner = {
+            box.center_in_link[0] + sx * box.size[0],
+            box.center_in_link[1] + sy * box.size[1],
+            box.center_in_link[2] + sz * box.size[2],
+          };
+          const Eigen::Vector3d world_corner = transform_point(link_tf, local_corner);
+          min_corner = min_corner.cwiseMin(world_corner);
+          max_corner = max_corner.cwiseMax(world_corner);
+        }
+      }
+    }
+
+    const Eigen::Vector3d center = 0.5 * (min_corner + max_corner);
+    const Eigen::Vector3d size = max_corner - min_corner;
+    return {{
+      center.x(), center.y(), center.z()
+    }, {
+      size.x(), size.y(), size.z()
+    }};
+  }
+
+  bool aabb_overlaps(const AxisAlignedBox& lhs, const AxisAlignedBox& rhs) const
+  {
+    for (size_t i = 0; i < 3; ++i) {
+      if (std::abs(lhs.center[i] - rhs.center[i]) > 0.5 * (lhs.size[i] + rhs.size[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool carried_boxes_clear_static_obstacles(
+    const moveit::core::RobotState& state,
+    std::string* reason) const
+  {
+    if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
+    if (!enable_static_box_obstacles_) return true;
+
+    const auto obstacles = static_box_obstacles();
+    for (const auto& carried_box : active_attached_boxes_) {
+      const auto carried_aabb = attached_box_world_aabb(state, carried_box);
+      for (const auto& obstacle : obstacles) {
+        const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
+        if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
+          if (reason) {
+            *reason = carried_box.id + " overlaps " + obstacle.id;
+          }
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  AxisAlignedBox expanded_aabb(const AxisAlignedBox& box, double margin) const
+  {
+    return {box.center, {
+      box.size[0] + 2.0 * margin,
+      box.size[1] + 2.0 * margin,
+      box.size[2] + 2.0 * margin,
+    }};
+  }
+
+  bool left_carried_box_detached_from_neighbors(
+    const moveit::core::RobotState& state,
+    const AttachedBoxSpec& carried_box,
+    int left_box_id,
+    std::string* reason) const
+  {
+    const int column = (left_box_id - 1) % 5 + 1;
+    const int row = (left_box_id - 1) / 5;
+    std::vector<int> neighbor_ids;
+    if (column > 1) neighbor_ids.push_back(row * 5 + column - 1);
+    if (column < 5) neighbor_ids.push_back(row * 5 + column + 1);
+
+    const auto boxes = make_boxes(box_front_x_);
+    const AxisAlignedBox carried = expanded_aabb(attached_box_world_aabb(state, carried_box), extract_neighbor_margin_);
+    for (int neighbor_id : neighbor_ids) {
+      const auto it = boxes.find(neighbor_id);
+      if (it == boxes.end()) continue;
+      const AxisAlignedBox neighbor = expanded_aabb({{
+        it->second.x + carried_box_depth_ * 0.5,
+        it->second.y,
+        it->second.z,
+      }, {
+        carried_box_depth_,
+        carried_box_width_,
+        carried_box_height_,
+      }}, extract_neighbor_margin_);
+      if (aabb_overlaps(carried, neighbor)) {
+        if (reason) {
+          *reason = carried_box.id + " still overlaps neighbor box " + std::to_string(neighbor_id);
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool carried_box_clear_static_obstacles(
+    const moveit::core::RobotState& state,
+    const AttachedBoxSpec& carried_box,
+    std::string* reason) const
+  {
+    if (!enable_attached_box_collision_ || !enable_static_box_obstacles_) return true;
+    const auto carried_aabb = attached_box_world_aabb(state, carried_box);
+    for (const auto& obstacle : static_box_obstacles()) {
+      const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
+      if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
+        if (reason) *reason = carried_box.id + " overlaps " + obstacle.id;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool state_clear_for_extract(
+    const moveit::core::RobotState& state,
+    const AttachedBoxSpec& left_carried_box,
+    int left_box_id,
+    bool* detached,
+    std::string* reason) const
+  {
+    if (!is_state_valid(state, true)) {
+      if (reason) *reason = "robot state colliding or out of bounds";
+      return false;
+    }
+
+    std::string carried_reason;
+    if (!carried_box_clear_static_obstacles(state, left_carried_box, &carried_reason)) {
+      if (reason) *reason = carried_reason;
+      return false;
+    }
+
+    std::string detached_reason;
+    const bool detached_now = left_carried_box_detached_from_neighbors(state, left_carried_box, left_box_id, &detached_reason);
+    if (detached) *detached = detached_now;
+    if (!detached_now && reason) *reason = detached_reason;
+    return true;
+  }
+
+  bool planned_carried_boxes_clear_static_obstacles(
+    const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+    const moveit::core::RobotState& start_state,
+    std::string* reason) const
+  {
+    if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
+    if (!enable_static_box_obstacles_) return true;
+
+    const auto& trajectory = plan.trajectory_.joint_trajectory;
+    for (size_t point_index = 0; point_index < trajectory.points.size(); ++point_index) {
+      moveit::core::RobotState state(start_state);
+      const auto& point = trajectory.points[point_index];
+      for (size_t i = 0; i < trajectory.joint_names.size() && i < point.positions.size(); ++i) {
+        if (is_robot_variable(trajectory.joint_names[i])) {
+          state.setVariablePosition(trajectory.joint_names[i], point.positions[i]);
+        }
+      }
+      state.update();
+      std::string point_reason;
+      if (!carried_boxes_clear_static_obstacles(state, &point_reason)) {
+        if (reason) {
+          *reason = "trajectory point " + std::to_string(point_index) + ": " + point_reason;
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool remove_carried_box_ids(const std::vector<std::string>& ids, const std::string& action_name)
   {
     if (!enable_attached_box_collision_) return true;
@@ -839,6 +1110,262 @@ private:
     return plan_to_goal_state(stage_name, *start_state, goal_state, result.selected.full_joint_names, extra);
   }
 
+  geometry_msgs::msg::Pose link_pose(const moveit::core::RobotState& state, const std::string& link_name) const
+  {
+    const Eigen::Isometry3d& tf = state.getGlobalLinkTransform(link_name);
+    Eigen::Quaterniond q(tf.linear());
+    q.normalize();
+    return make_pose(tf.translation().x(), tf.translation().y(), tf.translation().z(), q);
+  }
+
+  bool solve_extract_candidate(
+    const moveit::core::RobotState& current_state,
+    const geometry_msgs::msg::Pose& left_pose,
+    const geometry_msgs::msg::Pose& right_hold_pose,
+    size_t step_index,
+    size_t candidate_index,
+    double retreat_x,
+    double lift_z,
+    double pitch_up_rad,
+    ExtractCandidate* out) const
+  {
+    if (!out || !optimized_ik_solver_) return false;
+    out->step_index = step_index;
+    out->candidate_index = candidate_index;
+    out->retreat_x = retreat_x;
+    out->lift_z = lift_z;
+    out->pitch_up_rad = pitch_up_rad;
+    out->target_pose = left_pose;
+
+    ik_benchmark::UpdownAwareIkRequest request;
+    request.left_target = pose_to_eigen(left_pose);
+    request.right_target = pose_to_eigen(right_hold_pose);
+    request.current_h = current_updown(current_state);
+    request.grasp_mode = ik_benchmark::UpdownAwareIkRequest::GraspMode::Front;
+    request.current_arm_joints = state_values(current_state, optimized_ik_solver_->fixedVariableNames());
+    request.current_full_joints = state_values(current_state, optimized_ik_solver_->freeVariableNames());
+
+    auto result = optimized_ik_solver_->solve(request);
+    if (!result.success) {
+      out->rejection_reason = "ik_failed:" + result.failure_reason;
+      return false;
+    }
+    out->ik_success = true;
+
+    out->state = std::make_shared<moveit::core::RobotState>(current_state);
+    for (size_t i = 0; i < result.selected.full_joint_names.size() && i < result.selected.full_joint_values.size(); ++i) {
+      const auto& name = result.selected.full_joint_names[i];
+      if (!is_robot_variable(name)) continue;
+      if (name.rfind("right_v5_", 0) == 0) continue;
+      if (name == "updown") continue;
+      out->state->setVariablePosition(name, result.selected.full_joint_values[i]);
+    }
+    out->state->enforceBounds(joint_group_);
+    out->state->update();
+    return true;
+  }
+
+  bool solve_left_extract_candidate_kdl(
+    const moveit::core::RobotState& current_state,
+    const geometry_msgs::msg::Pose& left_pose,
+    size_t step_index,
+    size_t candidate_index,
+    double retreat_x,
+    double lift_z,
+    double pitch_up_rad,
+    double min_allowed_tip_z,
+    const AttachedBoxSpec& left_box,
+    int left_box_id,
+    ExtractCandidate* out) const
+  {
+    if (!out || !left_arm_group_) return false;
+    out->step_index = step_index;
+    out->candidate_index = candidate_index;
+    out->retreat_x = retreat_x;
+    out->lift_z = lift_z;
+    out->pitch_up_rad = pitch_up_rad;
+    out->target_pose = left_pose;
+
+    auto state = std::make_shared<moveit::core::RobotState>(current_state);
+    state->setVariablePosition("updown", current_updown(current_state));
+    state->update();
+
+    const Eigen::Isometry3d target = pose_to_eigen(left_pose);
+    const bool ik_ok = state->setFromIK(left_arm_group_, target, left_tip_, extract_kdl_timeout_);
+    if (!ik_ok) {
+      out->rejection_reason = "left_kdl_no_solution";
+      return false;
+    }
+
+    state->setVariablePosition("updown", current_updown(current_state));
+    state->enforceBounds(joint_group_);
+    state->update();
+
+    const Eigen::Isometry3d& actual = state->getGlobalLinkTransform(left_tip_);
+    const double pos_error = pose_position_error(target, actual);
+    const double ori_error = pose_orientation_error(target, actual);
+    if (pos_error > extract_position_tolerance_ || ori_error > extract_orientation_tolerance_) {
+      std::ostringstream oss;
+      oss << "left_kdl_tip_error pos=" << pos_error << " ori=" << ori_error;
+      out->rejection_reason = oss.str();
+      return false;
+    }
+
+    const Eigen::Vector3d tool_normal = actual.linear() * Eigen::Vector3d::UnitZ();
+    if (tool_normal.z() < extract_min_tool_normal_z_) {
+      std::ostringstream oss;
+      oss << "tool_normal_down z=" << tool_normal.z();
+      out->rejection_reason = oss.str();
+      return false;
+    }
+
+    if (actual.translation().z() + extract_max_tip_z_drop_ < min_allowed_tip_z) {
+      std::ostringstream oss;
+      oss << "tip_z_dropped z=" << actual.translation().z() << " min=" << min_allowed_tip_z;
+      out->rejection_reason = oss.str();
+      return false;
+    }
+
+    bool detached = false;
+    std::string reason;
+    if (!state_clear_for_extract(*state, left_box, left_box_id, &detached, &reason)) {
+      out->rejection_reason = reason;
+      return false;
+    }
+
+    out->ik_success = true;
+    out->state_valid = true;
+    out->carried_clear = true;
+    out->detached_from_neighbors = detached;
+    out->state = state;
+    return true;
+  }
+
+  bool record_extract_keyframe(
+    const std::string& stage_name,
+    const moveit::core::RobotState& state,
+    const AttachedBoxSpec& left_box,
+    const nlohmann::json& extra)
+  {
+    if (!record_stream_) return true;
+    const auto saved_boxes = active_attached_boxes_;
+    active_attached_boxes_ = {left_box};
+
+    trajectory_msgs::msg::JointTrajectory traj;
+    const auto names = optimized_ik_solver_ ? optimized_ik_solver_->freeVariableNames() : robot_model_->getVariableNames();
+    traj.joint_names = names;
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.time_from_start = rclcpp::Duration::from_seconds(0.0);
+    point.positions.reserve(names.size());
+    for (const auto& name : names) {
+      point.positions.push_back(is_robot_variable(name) ? state.getVariablePosition(name) : 0.0);
+    }
+    traj.points.push_back(point);
+
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    plan.trajectory_.joint_trajectory = traj;
+    record_stage(stage_name, plan, state, state, names, extra);
+
+    active_attached_boxes_ = saved_boxes;
+    return true;
+  }
+
+  bool plan_left_extract_primitive(int left_box_id, const std::string& prefix)
+  {
+    auto start_state = last_commanded_state_
+      ? std::make_shared<moveit::core::RobotState>(*last_commanded_state_)
+      : get_current_robot_state();
+    if (!start_state) return fail(prefix + "/extract: cannot get start state");
+
+    const AttachedBoxSpec left_box = make_attached_box_spec("left", left_box_id, false);
+    const auto boxes = make_boxes(box_front_x_);
+    const auto left_it = boxes.find(left_box_id);
+    if (left_it == boxes.end()) return fail(prefix + "/extract: unknown left box id");
+
+    const size_t max_steps = static_cast<size_t>(std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, extract_step_x_)));
+    std::vector<ExtractCandidate> accepted_path;
+    moveit::core::RobotState current_state(*start_state);
+    double last_retreat_x = 0.0;
+    double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
+
+    for (size_t step = 1; step <= max_steps; ++step) {
+      const double retreat_x = std::min(extract_max_x_, static_cast<double>(step) * extract_step_x_);
+      std::vector<ExtractCandidate> candidates;
+      size_t candidate_index = 0;
+      for (double lift_z : extract_lift_candidates_) {
+        for (double pitch_deg : extract_pitch_candidates_deg_) {
+          const double pitch_rad = pitch_deg * M_PI / 180.0;
+          const BoxSpec shifted_box{left_box_id, left_it->second.x - retreat_x, left_it->second.y, left_it->second.z + lift_z};
+          const auto left_pose = make_pose(
+            shifted_box.x,
+            shifted_box.y,
+            shifted_box.z - world_to_base_z_,
+            pitch_up_orientation(pitch_rad));
+
+          ExtractCandidate candidate;
+          solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
+                                           retreat_x, lift_z, pitch_rad, min_allowed_tip_z,
+                                           left_box, left_box_id, &candidate);
+          candidates.push_back(candidate);
+          ++candidate_index;
+        }
+      }
+
+      auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
+        const auto score = [&](const ExtractCandidate& c) {
+          if (!c.state_valid) return std::numeric_limits<double>::infinity();
+          return 10.0 * c.lift_z + 0.02 * std::abs(c.pitch_up_rad) + 0.2 * std::abs((c.retreat_x - last_retreat_x) - extract_step_x_);
+        };
+        return score(a) < score(b);
+      });
+
+      if (best_it == candidates.end() || !best_it->state_valid) {
+        nlohmann::json extra = {
+          {"stage_kind", "left_extract_primitive_candidates"},
+          {"step", step},
+          {"retreat_x", retreat_x},
+          {"accepted", false},
+          {"candidate_count", candidates.size()},
+        };
+        record_extract_keyframe(prefix + "/extract_failed_step_" + std::to_string(step), current_state, left_box, extra);
+        if (extract_fail_fast_) return fail(prefix + "/extract: no valid candidate at step " + std::to_string(step));
+        continue;
+      }
+
+      current_state = *best_it->state;
+      min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
+      last_retreat_x = best_it->retreat_x;
+      accepted_path.push_back(*best_it);
+      nlohmann::json extra = {
+        {"stage_kind", "left_extract_primitive"},
+        {"extract_ik", "left_v5_arm_kdl_fixed_updown"},
+        {"left_box_id", left_box_id},
+        {"step", step},
+        {"candidate_index", best_it->candidate_index},
+        {"retreat_x", best_it->retreat_x},
+        {"lift_z", best_it->lift_z},
+        {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
+        {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
+        {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
+        {"detached_from_neighbors", best_it->detached_from_neighbors},
+        {"candidate_count", candidates.size()},
+      };
+      record_extract_keyframe(prefix + "/extract_step_" + std::to_string(step), current_state, left_box, extra);
+
+      if (best_it->detached_from_neighbors) {
+        last_commanded_state_ = std::make_shared<moveit::core::RobotState>(current_state);
+        RCLCPP_INFO(get_logger(), "[%s/extract] detached at step=%zu retreat=%.3f lift=%.3f pitch=%.1fdeg",
+                    prefix.c_str(), step, best_it->retreat_x, best_it->lift_z, best_it->pitch_up_rad * 180.0 / M_PI);
+        return true;
+      }
+    }
+
+    if (!accepted_path.empty()) {
+      last_commanded_state_ = std::make_shared<moveit::core::RobotState>(current_state);
+    }
+    return fail(prefix + "/extract: reached max retreat without neighbor detachment");
+  }
+
   bool plan_to_goal_state(
     const std::string& stage_name,
     const moveit::core::RobotState& start_state,
@@ -858,6 +1385,11 @@ private:
     const auto& trajectory = plan.trajectory_.joint_trajectory;
     RCLCPP_INFO(get_logger(), "[%s] planned points=%zu execute=%s", stage_name.c_str(),
                 trajectory.points.size(), execute_ ? "true" : "false");
+
+    std::string carried_collision_reason;
+    if (!planned_carried_boxes_clear_static_obstacles(plan, start_state, &carried_collision_reason)) {
+      return fail(stage_name + ": carried box collides with static box obstacle (" + carried_collision_reason + ")");
+    }
 
     record_stage(stage_name, plan, start_state, goal_state, target_names, extra);
 
@@ -1132,6 +1664,60 @@ private:
       box.x + top_suction_x_offset_, box.y, box.z + top_suction_z_offset_ - world_to_base_z_, top_suction_orientation());
   }
 
+  bool run_left_extract_demo()
+  {
+    clear_carried_boxes_from_scene();
+    last_error_.clear();
+    last_commanded_state_.reset();
+
+    const auto boxes = make_boxes(box_front_x_);
+    const auto left_it = boxes.find(extract_demo_left_box_id_);
+    const auto right_it = boxes.find(extract_demo_right_box_id_);
+    if (left_it == boxes.end() || right_it == boxes.end()) {
+      return fail("left extract demo: unknown box id");
+    }
+
+    const std::string prefix = "left_extract_demo_L" + std::to_string(extract_demo_left_box_id_) +
+                               "_R" + std::to_string(extract_demo_right_box_id_);
+    if (!plan_to_joint_target(prefix + "/pregrasp",
+                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
+      return false;
+    }
+
+    const auto left_pose = front_grasp_pose(left_it->second);
+    const auto right_pose = front_grasp_pose(right_it->second);
+    if (!plan_dual_tip_ik(prefix + "/grasp_ik", left_pose, right_pose, false)) {
+      return false;
+    }
+
+    active_attached_boxes_ = {make_attached_box_spec("left", extract_demo_left_box_id_, false)};
+    if (!apply_attached_box_state(active_attached_boxes_, moveit_msgs::msg::CollisionObject::ADD,
+                                  prefix + "/attach_left_carried_box")) {
+      active_attached_boxes_.clear();
+      return false;
+    }
+
+    if (last_commanded_state_) {
+      record_extract_keyframe(
+        prefix + "/attach_hold",
+        *last_commanded_state_,
+        active_attached_boxes_.front(),
+        {
+          {"stage_kind", "attach_hold"},
+          {"left_box_id", extract_demo_left_box_id_},
+          {"note", "attached box added without changing robot joint state"}
+        });
+    }
+
+    const bool ok = plan_left_extract_primitive(extract_demo_left_box_id_, prefix);
+    detach_carried_boxes();
+    if (record_stream_) {
+      record_stream_ << nlohmann::json({{"type", "summary"}, {"success", ok}, {"error", ok ? "" : last_error_}, {"stages", record_stage_index_}}).dump() << '\n';
+      record_stream_.flush();
+    }
+    return ok;
+  }
+
   bool run_one_pair_flow(int left_box_id, int right_box_id, bool top_suction, int round)
   {
     clear_carried_boxes_from_scene();
@@ -1145,7 +1731,7 @@ private:
     const std::string prefix = "round_" + std::to_string(round) + "_L" + std::to_string(left_box_id) +
                                "_R" + std::to_string(right_box_id);
     if (!plan_to_joint_target(prefix + "/pregrasp",
-                              make_dual_arm_joint_target(fixed_updown_, pregrasp_arm_, pregrasp_arm_))) {
+                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
       return false;
     }
 
@@ -1158,18 +1744,27 @@ private:
       return false;
     }
 
+    if (auto attached_state = get_current_robot_state()) {
+      std::string carried_collision_reason;
+      if (!carried_boxes_clear_static_obstacles(*attached_state, &carried_collision_reason)) {
+        detach_carried_boxes();
+        return fail(prefix + "/attach: carried box collides with static box obstacle (" +
+                    carried_collision_reason + ")");
+      }
+    }
+
     if (!plan_to_joint_target(prefix + "/loaded",
-                              make_dual_arm_joint_target(fixed_updown_, loaded_arm_, loaded_arm_))) {
+                              make_dual_arm_joint_target(fixed_updown_, left_loaded_arm_, right_loaded_arm_))) {
       detach_carried_boxes();
       return false;
     }
 
-    if (!plan_to_joint_target(prefix + "/place",
-                              make_dual_arm_joint_target(fixed_updown_, place_arm_, place_arm_))) {
-      detach_carried_boxes();
+    if (!detach_carried_boxes()) {
       return false;
     }
-    if (!detach_carried_boxes()) {
+
+    if (!plan_to_joint_target(prefix + "/return_pregrasp",
+                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
       return false;
     }
     return true;
@@ -1247,14 +1842,28 @@ private:
   double carried_box_height_ = 0.4;
   bool enable_static_box_obstacles_ = true;
   double static_box_obstacle_inset_ = 0.002;
+  int extract_demo_left_box_id_ = 2;
+  int extract_demo_right_box_id_ = 4;
+  double extract_step_x_ = 0.03;
+  double extract_max_x_ = 0.36;
+  std::vector<double> extract_lift_candidates_;
+  std::vector<double> extract_pitch_candidates_deg_;
+  double extract_neighbor_margin_ = 0.02;
+  bool extract_fail_fast_ = false;
+  double extract_kdl_timeout_ = 0.01;
+  double extract_position_tolerance_ = 0.01;
+  double extract_orientation_tolerance_ = 0.05;
+  double extract_max_tip_z_drop_ = 0.002;
+  double extract_min_tool_normal_z_ = -1e-4;
   std::string record_jsonl_path_;
   bool record_trajectories_ = true;
   int max_rounds_ = 10;
   int planning_attempts_ = 20;
   size_t record_stage_index_ = 0;
-  std::vector<double> pregrasp_arm_;
-  std::vector<double> loaded_arm_;
-  std::vector<double> place_arm_;
+  std::vector<double> left_pregrasp_arm_;
+  std::vector<double> right_pregrasp_arm_;
+  std::vector<double> left_loaded_arm_;
+  std::vector<double> right_loaded_arm_;
   std::vector<AttachedBoxSpec> active_attached_boxes_;
   std::string last_error_;
   ik_benchmark::UpdownAwareIkConfig ik_config_;
@@ -1264,12 +1873,15 @@ private:
   planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
   moveit::core::RobotModelConstPtr robot_model_;
   const moveit::core::JointModelGroup* joint_group_ = nullptr;
+  const moveit::core::JointModelGroup* left_arm_group_ = nullptr;
+  const moveit::core::JointModelGroup* right_arm_group_ = nullptr;
   moveit::core::RobotStatePtr last_commanded_state_;
   std::unique_ptr<ik_benchmark::ParallelUpdownAwareIkSolver> optimized_ik_solver_;
   std::ofstream record_stream_;
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr demo_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr box_stack_srv_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr extract_demo_srv_;
   rclcpp::CallbackGroup::SharedPtr joint_state_callback_group_;
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   sensor_msgs::msg::JointState::SharedPtr latest_joint_state_;
@@ -1280,7 +1892,6 @@ int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
-  options.automatically_declare_parameters_from_overrides(true);
   auto node = std::make_shared<DualArmPlannerNode>(options);
 
   rclcpp::executors::MultiThreadedExecutor executor;

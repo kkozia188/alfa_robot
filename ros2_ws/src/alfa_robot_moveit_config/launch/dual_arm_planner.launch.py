@@ -61,6 +61,17 @@ def generate_launch_description():
         DeclareLaunchArgument("carried_box_height", default_value="0.4"),
         DeclareLaunchArgument("enable_static_box_obstacles", default_value="true"),
         DeclareLaunchArgument("static_box_obstacle_inset", default_value="0.002"),
+        DeclareLaunchArgument("extract_demo_left_box_id", default_value="2"),
+        DeclareLaunchArgument("extract_demo_right_box_id", default_value="4"),
+        DeclareLaunchArgument("extract_step_x", default_value="0.03"),
+        DeclareLaunchArgument("extract_max_x", default_value="0.36"),
+        DeclareLaunchArgument("extract_neighbor_margin", default_value="0.02"),
+        DeclareLaunchArgument("extract_fail_fast", default_value="false"),
+        DeclareLaunchArgument("extract_kdl_timeout", default_value="0.01"),
+        DeclareLaunchArgument("extract_position_tolerance", default_value="0.01"),
+        DeclareLaunchArgument("extract_orientation_tolerance", default_value="0.05"),
+        DeclareLaunchArgument("extract_max_tip_z_drop", default_value="0.002"),
+        DeclareLaunchArgument("extract_min_tool_normal_z", default_value="-0.0001"),
     ]
 
     # MoveIt defaults to 0.01 rad start-state tolerance. The ros2_control mock
@@ -79,6 +90,7 @@ def generate_launch_description():
         parameters=[
             moveit_config.robot_description,
             moveit_config.robot_description_semantic,
+            moveit_config.robot_description_kinematics,
             {
                 "execute": ParameterValue(LaunchConfiguration("execute"), value_type=bool),
                 "box_front_x": ParameterValue(LaunchConfiguration("box_front_x"), value_type=float),
@@ -124,6 +136,17 @@ def generate_launch_description():
                 "carried_box_height": ParameterValue(LaunchConfiguration("carried_box_height"), value_type=float),
                 "enable_static_box_obstacles": ParameterValue(LaunchConfiguration("enable_static_box_obstacles"), value_type=bool),
                 "static_box_obstacle_inset": ParameterValue(LaunchConfiguration("static_box_obstacle_inset"), value_type=float),
+                "extract_demo_left_box_id": ParameterValue(LaunchConfiguration("extract_demo_left_box_id"), value_type=int),
+                "extract_demo_right_box_id": ParameterValue(LaunchConfiguration("extract_demo_right_box_id"), value_type=int),
+                "extract_step_x": ParameterValue(LaunchConfiguration("extract_step_x"), value_type=float),
+                "extract_max_x": ParameterValue(LaunchConfiguration("extract_max_x"), value_type=float),
+                "extract_neighbor_margin": ParameterValue(LaunchConfiguration("extract_neighbor_margin"), value_type=float),
+                "extract_fail_fast": ParameterValue(LaunchConfiguration("extract_fail_fast"), value_type=bool),
+                "extract_kdl_timeout": ParameterValue(LaunchConfiguration("extract_kdl_timeout"), value_type=float),
+                "extract_position_tolerance": ParameterValue(LaunchConfiguration("extract_position_tolerance"), value_type=float),
+                "extract_orientation_tolerance": ParameterValue(LaunchConfiguration("extract_orientation_tolerance"), value_type=float),
+                "extract_max_tip_z_drop": ParameterValue(LaunchConfiguration("extract_max_tip_z_drop"), value_type=float),
+                "extract_min_tool_normal_z": ParameterValue(LaunchConfiguration("extract_min_tool_normal_z"), value_type=float),
             },
         ],
     )

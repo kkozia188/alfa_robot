@@ -1299,7 +1299,7 @@ private:
           const auto left_pose = make_pose(
             shifted_box.x,
             shifted_box.y,
-            shifted_box.z - world_to_base_z_,
+            shifted_box.z,
             pitch_up_orientation(pitch_rad));
 
           ExtractCandidate candidate;
@@ -1320,12 +1320,22 @@ private:
       });
 
       if (best_it == candidates.end() || !best_it->state_valid) {
+        std::map<std::string, size_t> rejection_counts;
+        for (const auto& candidate : candidates) {
+          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
+          rejection_counts[key]++;
+        }
+        nlohmann::json rejection_json = nlohmann::json::object();
+        for (const auto& [reason, count] : rejection_counts) {
+          rejection_json[reason] = count;
+        }
         nlohmann::json extra = {
           {"stage_kind", "left_extract_primitive_candidates"},
           {"step", step},
           {"retreat_x", retreat_x},
           {"accepted", false},
           {"candidate_count", candidates.size()},
+          {"rejection_counts", rejection_json},
         };
         record_extract_keyframe(prefix + "/extract_failed_step_" + std::to_string(step), current_state, left_box, extra);
         if (extract_fail_fast_) return fail(prefix + "/extract: no valid candidate at step " + std::to_string(step));

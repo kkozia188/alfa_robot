@@ -61,7 +61,9 @@ IkSolver::IkSolver(const std::string& group_name,
 
     node_ = std::make_shared<rclcpp::Node>(
         "_ik_bench_node",
-        rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
+        rclcpp::NodeOptions()
+            .automatically_declare_parameters_from_overrides(false)
+            .use_global_arguments(false));
 
     loadRobotModel();
     loadIkPlugin();

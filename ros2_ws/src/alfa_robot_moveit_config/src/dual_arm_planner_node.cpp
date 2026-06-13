@@ -94,8 +94,11 @@ struct ExtractCandidate
   size_t step_index = 0;
   size_t candidate_index = 0;
   double retreat_x = 0.0;
+  double retreat_delta_x = 0.0;
   double lift_z = 0.0;
+  double lift_delta_z = 0.0;
   double pitch_up_rad = 0.0;
+  double pitch_delta_rad = 0.0;
   geometry_msgs::msg::Pose target_pose;
   bool ik_success = false;
   bool state_valid = false;
@@ -103,6 +106,13 @@ struct ExtractCandidate
   bool detached_from_neighbors = false;
   std::string rejection_reason;
   moveit::core::RobotStatePtr state;
+};
+
+struct ExtractMotionDelta
+{
+  double retreat_ratio = 1.0;
+  double lift_ratio = 0.0;
+  double pitch_delta_deg = 0.0;
 };
 
 std::vector<double> deg_to_rad(const std::vector<double>& degrees)
@@ -1290,8 +1300,11 @@ private:
     size_t step_index,
     size_t candidate_index,
     double retreat_x,
+    double retreat_delta_x,
     double lift_z,
+    double lift_delta_z,
     double pitch_up_rad,
+    double pitch_delta_rad,
     double min_allowed_tip_z,
     const AttachedBoxSpec& left_box,
     int left_box_id,
@@ -1301,8 +1314,11 @@ private:
     out->step_index = step_index;
     out->candidate_index = candidate_index;
     out->retreat_x = retreat_x;
+    out->retreat_delta_x = retreat_delta_x;
     out->lift_z = lift_z;
+    out->lift_delta_z = lift_delta_z;
     out->pitch_up_rad = pitch_up_rad;
+    out->pitch_delta_rad = pitch_delta_rad;
     out->target_pose = left_pose;
 
     auto state = std::make_shared<moveit::core::RobotState>(current_state);
@@ -1426,6 +1442,71 @@ private:
            extract_score_tip_orientation_delta_weight_ * tip_orientation_delta;
   }
 
+  std::vector<ExtractMotionDelta> extract_motion_deltas() const
+  {
+    return {
+      {1.0, 0.0, 0.0},
+      {0.9, 0.3, 0.0},
+      {0.8, 0.5, 0.0},
+      {0.7, 0.8, 0.0},
+      {0.9, 0.0, 1.0},
+      {0.8, 0.3, 1.0},
+      {0.7, 0.5, -1.0},
+      {0.8, 0.0, 3.0},
+      {0.7, 0.3, -3.0},
+      {0.6, 1.0, 3.0},
+    };
+  }
+
+  double extract_current_pitch_up_rad(const moveit::core::RobotState& state) const
+  {
+    const Eigen::Vector3d tool_normal =
+      state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ();
+    const double x = std::max(0.0, tool_normal.x());
+    const double z = tool_normal.z();
+    return std::max(0.0, std::atan2(z, x));
+  }
+
+  std::vector<ExtractCandidate> make_left_extract_candidates(
+    const moveit::core::RobotState& current_state,
+    const BoxSpec& source_box,
+    const AttachedBoxSpec& left_box,
+    int left_box_id,
+    size_t step,
+    double last_retreat_x,
+    double current_lift_z,
+    double min_allowed_tip_z) const
+  {
+    std::vector<ExtractCandidate> candidates;
+    size_t candidate_index = 0;
+    const double current_pitch = extract_current_pitch_up_rad(current_state);
+
+    for (const auto& delta : extract_motion_deltas()) {
+      const double retreat_delta = std::max(1e-6, delta.retreat_ratio * extract_step_x_);
+      const double retreat_x = std::min(extract_max_x_, last_retreat_x + retreat_delta);
+      if (retreat_x <= last_retreat_x + 1e-6 && last_retreat_x >= extract_max_x_ - 1e-6) {
+        continue;
+      }
+
+      const double lift_delta = std::max(0.0, delta.lift_ratio * extract_step_x_);
+      const double lift_z = current_lift_z + lift_delta;
+      const double pitch_delta = delta.pitch_delta_deg * M_PI / 180.0;
+      const double pitch_rad = std::max(0.0, current_pitch + pitch_delta);
+      const BoxSpec shifted_box{left_box_id, source_box.x - retreat_x, source_box.y, source_box.z + lift_z};
+      const auto left_pose = make_pose(shifted_box.x, shifted_box.y, shifted_box.z, pitch_up_orientation(pitch_rad));
+
+      ExtractCandidate candidate;
+      solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
+                                       retreat_x, retreat_x - last_retreat_x,
+                                       lift_z, lift_delta, pitch_rad, pitch_delta,
+                                       min_allowed_tip_z, left_box, left_box_id, &candidate);
+      candidates.push_back(candidate);
+      ++candidate_index;
+    }
+
+    return candidates;
+  }
+
   moveit::core::RobotState state_from_ik_candidate(
     const moveit::core::RobotState& seed_state,
     const ik_benchmark::UpdownAwareIkCandidate& candidate) const
@@ -1487,8 +1568,10 @@ private:
     const auto t0 = std::chrono::steady_clock::now();
     moveit::core::RobotState current_state(start_state);
     double last_retreat_x = 0.0;
+    double current_lift_z = 0.0;
     double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
-    const size_t max_steps = static_cast<size_t>(std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, extract_step_x_)));
+    const size_t max_steps = static_cast<size_t>(
+      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
 
     if (record_step) {
       nlohmann::json extra = {
@@ -1512,23 +1595,9 @@ private:
     }
 
     for (size_t step = 1; step <= max_steps; ++step) {
-      const double retreat_x = std::min(extract_max_x_, static_cast<double>(step) * extract_step_x_);
-      std::vector<ExtractCandidate> candidates;
-      size_t candidate_index = 0;
-      for (double lift_z : extract_lift_candidates_) {
-        for (double pitch_deg : extract_pitch_candidates_deg_) {
-          const double pitch_rad = pitch_deg * M_PI / 180.0;
-          const BoxSpec shifted_box{left_box_id, left_it->second.x - retreat_x, left_it->second.y, left_it->second.z + lift_z};
-          const auto left_pose = make_pose(shifted_box.x, shifted_box.y, shifted_box.z, pitch_up_orientation(pitch_rad));
-
-          ExtractCandidate candidate;
-          solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
-                                           retreat_x, lift_z, pitch_rad, min_allowed_tip_z,
-                                           left_box, left_box_id, &candidate);
-          candidates.push_back(candidate);
-          ++candidate_index;
-        }
-      }
+      std::vector<ExtractCandidate> candidates =
+        make_left_extract_candidates(current_state, left_it->second, left_box, left_box_id,
+                                     step, last_retreat_x, current_lift_z, min_allowed_tip_z);
 
       auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
         return extract_candidate_score(a, current_state, last_retreat_x) <
@@ -1568,7 +1637,7 @@ private:
             {"ik_score", ik_candidate.score},
             {"ik_solve_ms", ik_candidate.solve_ms},
             {"step", step},
-            {"retreat_x", retreat_x},
+            {"retreat_x", last_retreat_x},
             {"accepted", false},
             {"candidate_count", candidates.size()},
             {"rejection_counts", rejection_json},
@@ -1588,6 +1657,7 @@ private:
       current_state = *best_it->state;
       min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
       last_retreat_x = best_it->retreat_x;
+      current_lift_z = best_it->lift_z;
       timing.final_retreat_x = best_it->retreat_x;
       timing.final_lift_z = best_it->lift_z;
       timing.final_pitch_deg = best_it->pitch_up_rad * 180.0 / M_PI;
@@ -1605,8 +1675,11 @@ private:
           {"step", step},
           {"candidate_index", best_it->candidate_index},
           {"retreat_x", best_it->retreat_x},
+          {"retreat_delta_x", best_it->retreat_delta_x},
           {"lift_z", best_it->lift_z},
+          {"lift_delta_z", best_it->lift_delta_z},
           {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
+          {"pitch_delta_deg", best_it->pitch_delta_rad * 180.0 / M_PI},
           {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
           {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
           {"detached_from_neighbors", best_it->detached_from_neighbors},
@@ -1787,34 +1860,18 @@ private:
     const auto left_it = boxes.find(left_box_id);
     if (left_it == boxes.end()) return fail(prefix + "/extract: unknown left box id");
 
-    const size_t max_steps = static_cast<size_t>(std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, extract_step_x_)));
+    const size_t max_steps = static_cast<size_t>(
+      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
     std::vector<ExtractCandidate> accepted_path;
     moveit::core::RobotState current_state(*start_state);
     double last_retreat_x = 0.0;
+    double current_lift_z = 0.0;
     double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
 
     for (size_t step = 1; step <= max_steps; ++step) {
-      const double retreat_x = std::min(extract_max_x_, static_cast<double>(step) * extract_step_x_);
-      std::vector<ExtractCandidate> candidates;
-      size_t candidate_index = 0;
-      for (double lift_z : extract_lift_candidates_) {
-        for (double pitch_deg : extract_pitch_candidates_deg_) {
-          const double pitch_rad = pitch_deg * M_PI / 180.0;
-          const BoxSpec shifted_box{left_box_id, left_it->second.x - retreat_x, left_it->second.y, left_it->second.z + lift_z};
-          const auto left_pose = make_pose(
-            shifted_box.x,
-            shifted_box.y,
-            shifted_box.z,
-            pitch_up_orientation(pitch_rad));
-
-          ExtractCandidate candidate;
-          solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
-                                           retreat_x, lift_z, pitch_rad, min_allowed_tip_z,
-                                           left_box, left_box_id, &candidate);
-          candidates.push_back(candidate);
-          ++candidate_index;
-        }
-      }
+      std::vector<ExtractCandidate> candidates =
+        make_left_extract_candidates(current_state, left_it->second, left_box, left_box_id,
+                                     step, last_retreat_x, current_lift_z, min_allowed_tip_z);
 
       auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
         return extract_candidate_score(a, current_state, last_retreat_x) <
@@ -1834,7 +1891,7 @@ private:
         nlohmann::json extra = {
           {"stage_kind", "left_extract_primitive_candidates"},
           {"step", step},
-          {"retreat_x", retreat_x},
+          {"retreat_x", last_retreat_x},
           {"accepted", false},
           {"candidate_count", candidates.size()},
           {"rejection_counts", rejection_json},
@@ -1852,6 +1909,7 @@ private:
       current_state = *best_it->state;
       min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
       last_retreat_x = best_it->retreat_x;
+      current_lift_z = best_it->lift_z;
       accepted_path.push_back(*best_it);
       nlohmann::json extra = {
         {"stage_kind", "left_extract_primitive"},
@@ -1860,8 +1918,11 @@ private:
         {"step", step},
         {"candidate_index", best_it->candidate_index},
         {"retreat_x", best_it->retreat_x},
+        {"retreat_delta_x", best_it->retreat_delta_x},
         {"lift_z", best_it->lift_z},
+        {"lift_delta_z", best_it->lift_delta_z},
         {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
+        {"pitch_delta_deg", best_it->pitch_delta_rad * 180.0 / M_PI},
         {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
         {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
         {"detached_from_neighbors", best_it->detached_from_neighbors},

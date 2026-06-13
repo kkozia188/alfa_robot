@@ -83,6 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument("extract_demo_direct_grasp_start", default_value="false"),
         DeclareLaunchArgument("extract_benchmark_all_legal_ik", default_value="false"),
         DeclareLaunchArgument("extract_benchmark_record_rollouts", default_value="false"),
+        DeclareLaunchArgument("extract_benchmark_candidate_limit", default_value="0"),
         DeclareLaunchArgument("record_tip_error_ik_candidates", default_value="false"),
         DeclareLaunchArgument("record_tip_error_ik_candidate_limit", default_value="80"),
         DeclareLaunchArgument(
@@ -175,6 +176,7 @@ def generate_launch_description():
                 "extract_demo_direct_grasp_start": ParameterValue(LaunchConfiguration("extract_demo_direct_grasp_start"), value_type=bool),
                 "extract_benchmark_all_legal_ik": ParameterValue(LaunchConfiguration("extract_benchmark_all_legal_ik"), value_type=bool),
                 "extract_benchmark_record_rollouts": ParameterValue(LaunchConfiguration("extract_benchmark_record_rollouts"), value_type=bool),
+                "extract_benchmark_candidate_limit": ParameterValue(LaunchConfiguration("extract_benchmark_candidate_limit"), value_type=int),
                 "record_tip_error_ik_candidates": ParameterValue(LaunchConfiguration("record_tip_error_ik_candidates"), value_type=bool),
                 "record_tip_error_ik_candidate_limit": ParameterValue(LaunchConfiguration("record_tip_error_ik_candidate_limit"), value_type=int),
                 "extract_benchmark_csv_path": LaunchConfiguration("extract_benchmark_csv_path"),

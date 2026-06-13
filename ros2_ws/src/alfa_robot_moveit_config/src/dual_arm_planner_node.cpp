@@ -379,6 +379,8 @@ public:
       "extract_benchmark_csv_path",
       "/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/motion51_extract_replay/extract_all_legal_ik_timing.csv");
     extract_benchmark_record_rollouts_ = get_or_declare_parameter<bool>("extract_benchmark_record_rollouts", false);
+    extract_benchmark_candidate_limit_ = static_cast<size_t>(
+      std::max(0, get_or_declare_parameter<int>("extract_benchmark_candidate_limit", 0)));
     record_tip_error_ik_candidates_ = get_or_declare_parameter<bool>("record_tip_error_ik_candidates", false);
     record_tip_error_ik_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("record_tip_error_ik_candidate_limit", 80)));
@@ -1805,6 +1807,10 @@ private:
     if (legal_candidates.empty()) {
       return fail(prefix + "/extract_benchmark: no legal IK candidates");
     }
+    const size_t original_legal_count = legal_candidates.size();
+    if (extract_benchmark_candidate_limit_ > 0 && legal_candidates.size() > extract_benchmark_candidate_limit_) {
+      legal_candidates.resize(extract_benchmark_candidate_limit_);
+    }
 
     if (record_tip_error_ik_candidates_) {
       record_tip_error_ik_candidates(prefix, seed_state, ik_result, left_box);
@@ -1855,7 +1861,9 @@ private:
     if (record_stream_) {
       record_stream_ << nlohmann::json({
         {"type", "extract_benchmark_summary"},
-        {"legal_ik_count", legal_candidates.size()},
+        {"legal_ik_count", original_legal_count},
+        {"tested_ik_count", legal_candidates.size()},
+        {"candidate_limit", extract_benchmark_candidate_limit_},
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
@@ -2634,6 +2642,7 @@ private:
   bool extract_benchmark_all_legal_ik_ = false;
   std::string extract_benchmark_csv_path_;
   bool extract_benchmark_record_rollouts_ = false;
+  size_t extract_benchmark_candidate_limit_ = 0;
   bool record_tip_error_ik_candidates_ = false;
   size_t record_tip_error_ik_candidate_limit_ = 80;
   std::string record_jsonl_path_;

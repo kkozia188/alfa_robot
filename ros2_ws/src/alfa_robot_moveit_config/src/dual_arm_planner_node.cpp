@@ -361,6 +361,7 @@ public:
     extract_score_joint_delta_weight_ = get_or_declare_parameter<double>("extract_score_joint_delta_weight", 0.6);
     extract_score_tip_position_delta_weight_ = get_or_declare_parameter<double>("extract_score_tip_position_delta_weight", 2.0);
     extract_score_tip_orientation_delta_weight_ = get_or_declare_parameter<double>("extract_score_tip_orientation_delta_weight", 0.05);
+    extract_max_joint_delta_ = get_or_declare_parameter<double>("extract_max_joint_delta", 0.0);
     extract_demo_direct_grasp_start_ = get_or_declare_parameter<bool>("extract_demo_direct_grasp_start", false);
     extract_benchmark_all_legal_ik_ = get_or_declare_parameter<bool>("extract_benchmark_all_legal_ik", false);
     extract_benchmark_csv_path_ = get_or_declare_parameter<std::string>(
@@ -1342,6 +1343,16 @@ private:
       oss << "tip_z_dropped z=" << actual.translation().z() << " min=" << min_allowed_tip_z;
       out->rejection_reason = oss.str();
       return false;
+    }
+
+    if (extract_max_joint_delta_ > 0.0) {
+      const double joint_delta = extract_left_arm_joint_delta(current_state, *state);
+      if (joint_delta > extract_max_joint_delta_) {
+        std::ostringstream oss;
+        oss << "joint_delta_too_large delta=" << joint_delta << " limit=" << extract_max_joint_delta_;
+        out->rejection_reason = oss.str();
+        return false;
+      }
     }
 
     bool detached = false;
@@ -2413,6 +2424,7 @@ private:
   double extract_score_joint_delta_weight_ = 0.6;
   double extract_score_tip_position_delta_weight_ = 2.0;
   double extract_score_tip_orientation_delta_weight_ = 0.05;
+  double extract_max_joint_delta_ = 0.0;
   bool extract_demo_direct_grasp_start_ = false;
   bool extract_benchmark_all_legal_ik_ = false;
   std::string extract_benchmark_csv_path_;

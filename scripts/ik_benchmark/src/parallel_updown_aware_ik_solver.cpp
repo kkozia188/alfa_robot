@@ -52,6 +52,11 @@ void pushUniqueTrial(std::vector<Trial>& trials,
     trials.push_back(std::move(trial));
 }
 
+double angularDistance(double a, double b)
+{
+    return std::abs(std::atan2(std::sin(a - b), std::cos(a - b)));
+}
+
 } // namespace
 
 ParallelUpdownAwareIkSolver::ParallelUpdownAwareIkSolver(UpdownAwareIkConfig config,
@@ -770,6 +775,53 @@ double ParallelUpdownAwareIkSolver::armTorqueProxy(
     return config_.cost_joint2_torque * joint2_proxy + config_.cost_joint3_torque * joint3_proxy;
 }
 
+double ParallelUpdownAwareIkSolver::loadedPoseDistance(
+    const UpdownAwareIkCandidate& candidate,
+    const std::string& prefix,
+    const std::vector<double>& pose) const
+{
+    if (pose.size() < 6) {
+        return 0.0;
+    }
+    double squared_sum = 0.0;
+    for (size_t i = 0; i < 6; ++i) {
+        const std::string joint_name = prefix + "_v5_joint" + std::to_string(i + 1);
+        const double diff = angularDistance(jointValue(candidate, joint_name), pose[i]);
+        squared_sum += diff * diff;
+    }
+    return std::sqrt(squared_sum);
+}
+
+double ParallelUpdownAwareIkSolver::loadedPoseFamilyMinDistance(
+    const UpdownAwareIkCandidate& candidate,
+    const std::string& prefix,
+    const std::vector<std::vector<double>>& family) const
+{
+    if (family.empty()) {
+        return 0.0;
+    }
+    double best = std::numeric_limits<double>::infinity();
+    for (const auto& pose : family) {
+        if (pose.size() < 6) {
+            continue;
+        }
+        best = std::min(best, loadedPoseDistance(candidate, prefix, pose));
+    }
+    return std::isfinite(best) ? best : 0.0;
+}
+
+double ParallelUpdownAwareIkSolver::loadedPosePreferredDistance(
+    const UpdownAwareIkCandidate& candidate,
+    const std::string& prefix,
+    const std::vector<std::vector<double>>& family,
+    size_t preferred_index) const
+{
+    if (preferred_index >= family.size() || family[preferred_index].size() < 6) {
+        return 0.0;
+    }
+    return loadedPoseDistance(candidate, prefix, family[preferred_index]);
+}
+
 double ParallelUpdownAwareIkSolver::jointLeverProxy(
     const UpdownAwareIkCandidate& candidate, const std::string& prefix, int joint_index) const
 {
@@ -811,6 +863,18 @@ double ParallelUpdownAwareIkSolver::scoreCandidate(
 
     score += armTorqueProxy(candidate, "left");
     score += armTorqueProxy(candidate, "right");
+    if (config_.cost_loaded_family_distance != 0.0) {
+        score += config_.cost_loaded_family_distance *
+                 (loadedPoseFamilyMinDistance(candidate, "left", config_.left_loaded_pose_family) +
+                  loadedPoseFamilyMinDistance(candidate, "right", config_.right_loaded_pose_family));
+    }
+    if (config_.cost_loaded_preferred_distance != 0.0) {
+        score += config_.cost_loaded_preferred_distance *
+                 (loadedPosePreferredDistance(candidate, "left", config_.left_loaded_pose_family,
+                                              config_.left_preferred_loaded_pose_index) +
+                  loadedPosePreferredDistance(candidate, "right", config_.right_loaded_pose_family,
+                                              config_.right_preferred_loaded_pose_index));
+    }
     score += config_.cost_solve_ms * candidate.solve_ms;
     return score;
 }

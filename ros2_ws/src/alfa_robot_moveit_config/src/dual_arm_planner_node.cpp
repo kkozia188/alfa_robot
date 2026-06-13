@@ -125,6 +125,73 @@ std::vector<double> deg_to_rad(const std::vector<double>& degrees)
   return radians;
 }
 
+std::string trim_copy(std::string value)
+{
+  const auto first = value.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) return "";
+  const auto last = value.find_last_not_of(" \t\r\n");
+  return value.substr(first, last - first + 1);
+}
+
+std::vector<double> parse_degrees_list(std::string value)
+{
+  value = trim_copy(value);
+  if (!value.empty() && value.front() == '[') value.erase(value.begin());
+  if (!value.empty() && value.back() == ']') value.pop_back();
+  std::vector<double> result;
+  std::stringstream stream(value);
+  std::string token;
+  while (std::getline(stream, token, ',')) {
+    token = trim_copy(token);
+    if (!token.empty()) {
+      result.push_back(std::stod(token));
+    }
+  }
+  return result;
+}
+
+std::vector<std::vector<double>> parse_pose_family_degrees(const std::string& value)
+{
+  std::vector<std::vector<double>> family;
+  std::stringstream stream(value);
+  std::string segment;
+  while (std::getline(stream, segment, ';')) {
+    auto pose_deg = parse_degrees_list(segment);
+    if (pose_deg.size() != 6) {
+      continue;
+    }
+    family.push_back(deg_to_rad(pose_deg));
+  }
+  return family;
+}
+
+nlohmann::json pose_family_degrees_json(const std::vector<std::vector<double>>& family)
+{
+  nlohmann::json out = nlohmann::json::array();
+  for (const auto& pose : family) {
+    nlohmann::json pose_json = nlohmann::json::array();
+    for (double value : pose) {
+      pose_json.push_back(value * 180.0 / M_PI);
+    }
+    out.push_back(pose_json);
+  }
+  return out;
+}
+
+nlohmann::json pose_degrees_json(const std::vector<double>& pose)
+{
+  nlohmann::json out = nlohmann::json::array();
+  for (double value : pose) {
+    out.push_back(value * 180.0 / M_PI);
+  }
+  return out;
+}
+
+double shortest_angular_distance(double a, double b)
+{
+  return std::abs(std::atan2(std::sin(a - b), std::cos(a - b)));
+}
+
 std::string format_degrees(const std::vector<std::string>& names, const std::vector<double>& values)
 {
   std::ostringstream oss;
@@ -318,6 +385,10 @@ public:
     ik_config_.h_step = get_or_declare_parameter<double>("ik_h_step", 0.1);
     ik_config_.h_candidate_count = static_cast<size_t>(std::max(1, get_or_declare_parameter<int>("ik_h_candidate_count", 16)));
     ik_config_.seed_count = static_cast<size_t>(std::max(1, get_or_declare_parameter<int>("ik_seed_count", 32)));
+    ik_config_.cost_loaded_family_distance =
+      get_or_declare_parameter<double>("ik_loaded_family_distance_weight", 0.2);
+    ik_config_.cost_loaded_preferred_distance =
+      get_or_declare_parameter<double>("ik_loaded_preferred_distance_weight", 0.1);
     ik_config_.workers = static_cast<size_t>(std::max(1, get_or_declare_parameter<int>("ik_workers", 16)));
     ik_config_.timeout = get_or_declare_parameter<double>("ik_candidate_timeout", 0.01);
     ik_config_.try_target_orders = get_or_declare_parameter<bool>("ik_try_target_orders", false);
@@ -394,10 +465,31 @@ public:
     record_tip_error_ik_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("record_tip_error_ik_candidate_limit", 80)));
 
+    left_loaded_pose_family_ = parse_pose_family_degrees(get_or_declare_parameter<std::string>(
+      "loaded_left_pose_family_deg",
+      "[-0.0,59.04,-135.16,0.0,-76.13,0.0];[0.0,-75.0,135.0,0.0,60.0,0.0];[33.87,75.82,-135.08,0.0,-59.25,-33.87]"));
+    right_loaded_pose_family_ = parse_pose_family_degrees(get_or_declare_parameter<std::string>(
+      "loaded_right_pose_family_deg",
+      "[0.0,58.88,-134.84,0.0,-75.96,0.0];[0.0,-75.0,135.0,0.0,60.0,0.0];[-30.93,74.17,-134.92,0.0,-60.74,30.93]"));
+    if (left_loaded_pose_family_.empty()) {
+      left_loaded_pose_family_.push_back(deg_to_rad({0, -75, 135, 0, 60, 0}));
+    }
+    if (right_loaded_pose_family_.empty()) {
+      right_loaded_pose_family_.push_back(deg_to_rad({0, -75, 135, 0, 60, 0}));
+    }
+    const size_t loaded_preferred_index = static_cast<size_t>(
+      std::max(0, get_or_declare_parameter<int>("loaded_preferred_pose_index", 1)));
+    left_preferred_loaded_pose_index_ = std::min(loaded_preferred_index, left_loaded_pose_family_.size() - 1);
+    right_preferred_loaded_pose_index_ = std::min(loaded_preferred_index, right_loaded_pose_family_.size() - 1);
+    ik_config_.left_loaded_pose_family = left_loaded_pose_family_;
+    ik_config_.right_loaded_pose_family = right_loaded_pose_family_;
+    ik_config_.left_preferred_loaded_pose_index = left_preferred_loaded_pose_index_;
+    ik_config_.right_preferred_loaded_pose_index = right_preferred_loaded_pose_index_;
+
     left_pregrasp_arm_ = deg_to_rad({0, -90, 135, -45, 0, 0});
     right_pregrasp_arm_ = deg_to_rad({0, -90, 135, 45, 0, 0});
-    left_loaded_arm_ = deg_to_rad({0, -75, 135, 0, 60, 0});
-    right_loaded_arm_ = deg_to_rad({0, -75, 135, 0, 60, 0});
+    left_loaded_arm_ = left_loaded_pose_family_[left_preferred_loaded_pose_index_];
+    right_loaded_arm_ = right_loaded_pose_family_[right_preferred_loaded_pose_index_];
 
     joint_state_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions joint_state_sub_options;
@@ -493,6 +585,11 @@ public:
                 "  IK strategy=fixed_discrete h=%zu seed=%zu workers=%zu timeout=%.3fs collision=%s",
                 ik_config_.h_candidate_count, ik_config_.seed_count, ik_config_.workers, ik_config_.timeout,
                 ik_config_.check_collision ? "true" : "false");
+    RCLCPP_INFO(get_logger(),
+                "  loaded pose prior left=%zu right=%zu preferred=(%zu,%zu) weights=(family %.3f, preferred %.3f)",
+                left_loaded_pose_family_.size(), right_loaded_pose_family_.size(),
+                left_preferred_loaded_pose_index_, right_preferred_loaded_pose_index_,
+                ik_config_.cost_loaded_family_distance, ik_config_.cost_loaded_preferred_distance);
     RCLCPP_INFO(get_logger(),
                 "  Extract primitive IK=left_v5_arm/KDL fixed-updown timeout=%.3fs pos_tol=%.3fm ori_tol=%.3frad",
                 extract_kdl_timeout_, extract_position_tolerance_, extract_orientation_tolerance_);
@@ -1605,6 +1702,10 @@ private:
     bool loaded_plan_success = false;
     double loaded_plan_ms = 0.0;
     size_t loaded_plan_points = 0;
+    size_t selected_left_loaded_pose_index = 0;
+    size_t selected_right_loaded_pose_index = 0;
+    double selected_left_loaded_pose_distance = 0.0;
+    double selected_right_loaded_pose_distance = 0.0;
     size_t accepted_steps = 0;
     size_t failed_steps = 0;
     double final_retreat_x = 0.0;
@@ -1625,15 +1726,66 @@ private:
     };
   }
 
+  double arm_pose_distance(
+    const moveit::core::RobotState& state,
+    const std::string& prefix,
+    const std::vector<double>& pose) const
+  {
+    if (pose.size() < 6) return std::numeric_limits<double>::infinity();
+    double squared_sum = 0.0;
+    for (size_t i = 0; i < 6; ++i) {
+      const std::string joint_name = prefix + "_v5_joint" + std::to_string(i + 1);
+      if (!is_robot_variable(joint_name)) {
+        return std::numeric_limits<double>::infinity();
+      }
+      const double diff = shortest_angular_distance(state.getVariablePosition(joint_name), pose[i]);
+      squared_sum += diff * diff;
+    }
+    return std::sqrt(squared_sum);
+  }
+
+  size_t nearest_loaded_pose_index(
+    const moveit::core::RobotState& state,
+    const std::string& prefix,
+    const std::vector<std::vector<double>>& family,
+    double* distance = nullptr) const
+  {
+    size_t best_index = 0;
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i < family.size(); ++i) {
+      const double candidate_distance = arm_pose_distance(state, prefix, family[i]);
+      if (candidate_distance < best_distance) {
+        best_distance = candidate_distance;
+        best_index = i;
+      }
+    }
+    if (distance) {
+      *distance = best_distance;
+    }
+    return best_index;
+  }
+
   moveit::core::RobotState loaded_goal_from_extract_state(
-    const moveit::core::RobotState& extract_state) const
+    const moveit::core::RobotState& extract_state,
+    size_t* selected_left_index = nullptr,
+    size_t* selected_right_index = nullptr,
+    double* selected_left_distance = nullptr,
+    double* selected_right_distance = nullptr) const
   {
     moveit::core::RobotState goal_state(extract_state);
-    for (size_t i = 0; i < left_loaded_arm_.size(); ++i) {
-      goal_state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_loaded_arm_[i]);
+    const size_t left_index = nearest_loaded_pose_index(
+      extract_state, "left", left_loaded_pose_family_, selected_left_distance);
+    const size_t right_index = nearest_loaded_pose_index(
+      extract_state, "right", right_loaded_pose_family_, selected_right_distance);
+    if (selected_left_index) *selected_left_index = left_index;
+    if (selected_right_index) *selected_right_index = right_index;
+    const auto& left_pose = left_loaded_pose_family_[left_index];
+    const auto& right_pose = right_loaded_pose_family_[right_index];
+    for (size_t i = 0; i < left_pose.size(); ++i) {
+      goal_state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_pose[i]);
     }
-    for (size_t i = 0; i < right_loaded_arm_.size(); ++i) {
-      goal_state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_loaded_arm_[i]);
+    for (size_t i = 0; i < right_pose.size(); ++i) {
+      goal_state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pose[i]);
     }
     goal_state.enforceBounds(joint_group_);
     goal_state.update();
@@ -1666,7 +1818,16 @@ private:
       return false;
     }
 
-    moveit::core::RobotState goal_state = loaded_goal_from_extract_state(extract_state);
+    size_t selected_left_loaded_pose_index = 0;
+    size_t selected_right_loaded_pose_index = 0;
+    double selected_left_loaded_pose_distance = 0.0;
+    double selected_right_loaded_pose_distance = 0.0;
+    moveit::core::RobotState goal_state = loaded_goal_from_extract_state(
+      extract_state,
+      &selected_left_loaded_pose_index,
+      &selected_right_loaded_pose_index,
+      &selected_left_loaded_pose_distance,
+      &selected_right_loaded_pose_distance);
     const auto target_names = arm_joint_target_names();
 
     loaded_move_group_->setStartState(extract_state);
@@ -1681,6 +1842,10 @@ private:
       timing->loaded_plan_attempted = true;
       timing->loaded_plan_ms = plan_ms;
       timing->loaded_plan_points = plan.trajectory_.joint_trajectory.points.size();
+      timing->selected_left_loaded_pose_index = selected_left_loaded_pose_index;
+      timing->selected_right_loaded_pose_index = selected_right_loaded_pose_index;
+      timing->selected_left_loaded_pose_distance = selected_left_loaded_pose_distance;
+      timing->selected_right_loaded_pose_distance = selected_right_loaded_pose_distance;
     }
 
     if (plan_result != moveit::core::MoveItErrorCode::SUCCESS) {
@@ -1707,6 +1872,12 @@ private:
         {"loaded_plan_points", plan.trajectory_.joint_trajectory.points.size()},
         {"fixed_updown", current_updown(extract_state)},
         {"left_box_id", left_box.id},
+        {"selected_left_loaded_pose_index", selected_left_loaded_pose_index},
+        {"selected_right_loaded_pose_index", selected_right_loaded_pose_index},
+        {"selected_left_loaded_pose_distance", selected_left_loaded_pose_distance},
+        {"selected_right_loaded_pose_distance", selected_right_loaded_pose_distance},
+        {"selected_left_loaded_pose_deg", pose_degrees_json(left_loaded_pose_family_[selected_left_loaded_pose_index])},
+        {"selected_right_loaded_pose_deg", pose_degrees_json(right_loaded_pose_family_[selected_right_loaded_pose_index])},
         {"failure_reason", carried_clear ? "" : carried_collision_reason}
       };
       record_stage(stage_name, plan, extract_state, goal_state, target_names, extra);
@@ -1904,6 +2075,8 @@ private:
     }
     out << "candidate_order,h_index,seed_index,h,ik_score,ik_solve_ms,rollout_ms,interval_ms,success,"
            "loaded_plan_attempted,loaded_plan_success,loaded_plan_ms,loaded_plan_points,"
+           "selected_left_loaded_pose_index,selected_right_loaded_pose_index,"
+           "selected_left_loaded_pose_distance,selected_right_loaded_pose_distance,"
            "accepted_steps,failed_steps,final_retreat_x,final_lift_z,final_pitch_deg,failure_reason,loaded_plan_failure_reason\n";
     out << std::setprecision(12);
     for (const auto& timing : timings) {
@@ -1920,6 +2093,10 @@ private:
           << (timing.loaded_plan_success ? 1 : 0) << ','
           << timing.loaded_plan_ms << ','
           << timing.loaded_plan_points << ','
+          << timing.selected_left_loaded_pose_index << ','
+          << timing.selected_right_loaded_pose_index << ','
+          << timing.selected_left_loaded_pose_distance << ','
+          << timing.selected_right_loaded_pose_distance << ','
           << timing.accepted_steps << ','
           << timing.failed_steps << ','
           << timing.final_retreat_x << ','
@@ -2385,6 +2562,14 @@ private:
       {"container_obstacle", container_obstacle_json()},
       {"static_box_obstacles", static_box_obstacles_json()},
       {"attached_box_collision", attached_box_config_json()},
+      {"loaded_pose_family", {
+        {"left_candidates_deg", pose_family_degrees_json(left_loaded_pose_family_)},
+        {"right_candidates_deg", pose_family_degrees_json(right_loaded_pose_family_)},
+        {"left_preferred_index", left_preferred_loaded_pose_index_},
+        {"right_preferred_index", right_preferred_loaded_pose_index_},
+        {"family_distance_weight", ik_config_.cost_loaded_family_distance},
+        {"preferred_distance_weight", ik_config_.cost_loaded_preferred_distance}
+      }},
       {"ik_config", {
         {"fixed_group", ik_config_.fixed_group},
         {"free_group", ik_config_.free_group},
@@ -2397,7 +2582,9 @@ private:
         {"front_z_reach_window", {ik_config_.gripper_z_reach_lower, ik_config_.gripper_z_reach_upper}},
         {"top_z_reach_window", {ik_config_.top_suction_z_reach_lower, ik_config_.top_suction_z_reach_upper}},
         {"h_limits", {ik_config_.h_lower, ik_config_.h_upper}},
-        {"check_collision", ik_config_.check_collision}
+        {"check_collision", ik_config_.check_collision},
+        {"cost_loaded_family_distance", ik_config_.cost_loaded_family_distance},
+        {"cost_loaded_preferred_distance", ik_config_.cost_loaded_preferred_distance}
       }}
     };
     record_stream_ << header.dump() << '\n';
@@ -2837,6 +3024,10 @@ private:
   std::vector<double> right_pregrasp_arm_;
   std::vector<double> left_loaded_arm_;
   std::vector<double> right_loaded_arm_;
+  std::vector<std::vector<double>> left_loaded_pose_family_;
+  std::vector<std::vector<double>> right_loaded_pose_family_;
+  size_t left_preferred_loaded_pose_index_ = 0;
+  size_t right_preferred_loaded_pose_index_ = 0;
   std::vector<AttachedBoxSpec> active_attached_boxes_;
   std::string last_error_;
   ik_benchmark::UpdownAwareIkConfig ik_config_;

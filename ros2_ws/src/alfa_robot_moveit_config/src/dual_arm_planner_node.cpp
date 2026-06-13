@@ -29,11 +29,13 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <map>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -353,6 +355,18 @@ public:
     extract_orientation_tolerance_ = get_or_declare_parameter<double>("extract_orientation_tolerance", 0.05);
     extract_max_tip_z_drop_ = get_or_declare_parameter<double>("extract_max_tip_z_drop", 0.002);
     extract_min_tool_normal_z_ = get_or_declare_parameter<double>("extract_min_tool_normal_z", -1e-4);
+    extract_score_lift_weight_ = get_or_declare_parameter<double>("extract_score_lift_weight", 10.0);
+    extract_score_pitch_weight_ = get_or_declare_parameter<double>("extract_score_pitch_weight", 0.02);
+    extract_score_retreat_continuity_weight_ = get_or_declare_parameter<double>("extract_score_retreat_continuity_weight", 0.2);
+    extract_score_joint_delta_weight_ = get_or_declare_parameter<double>("extract_score_joint_delta_weight", 0.6);
+    extract_score_tip_position_delta_weight_ = get_or_declare_parameter<double>("extract_score_tip_position_delta_weight", 2.0);
+    extract_score_tip_orientation_delta_weight_ = get_or_declare_parameter<double>("extract_score_tip_orientation_delta_weight", 0.05);
+    extract_demo_direct_grasp_start_ = get_or_declare_parameter<bool>("extract_demo_direct_grasp_start", false);
+    extract_benchmark_all_legal_ik_ = get_or_declare_parameter<bool>("extract_benchmark_all_legal_ik", false);
+    extract_benchmark_csv_path_ = get_or_declare_parameter<std::string>(
+      "extract_benchmark_csv_path",
+      "/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/motion51_extract_replay/extract_all_legal_ik_timing.csv");
+    extract_benchmark_record_rollouts_ = get_or_declare_parameter<bool>("extract_benchmark_record_rollouts", false);
 
     left_pregrasp_arm_ = deg_to_rad({0, -90, 135, -45, 0, 0});
     right_pregrasp_arm_ = deg_to_rad({0, -90, 135, 45, 0, 0});
@@ -1110,6 +1124,110 @@ private:
     return plan_to_goal_state(stage_name, *start_state, goal_state, result.selected.full_joint_names, extra);
   }
 
+  bool solve_dual_tip_ik_state(
+    const std::string& stage_name,
+    const geometry_msgs::msg::Pose& left_pose,
+    const geometry_msgs::msg::Pose& right_pose,
+    bool top_suction,
+    const moveit::core::RobotState& seed_state,
+    moveit::core::RobotState* goal_state,
+    nlohmann::json* extra_out,
+    ik_benchmark::UpdownAwareIkResult* result_out = nullptr)
+  {
+    if (!optimized_ik_solver_) {
+      return fail(stage_name + ": optimized IK solver is not initialized");
+    }
+    if (!goal_state) {
+      return fail(stage_name + ": output goal_state is null");
+    }
+
+    ik_benchmark::UpdownAwareIkRequest request;
+    request.left_target = pose_to_eigen(left_pose);
+    request.right_target = pose_to_eigen(right_pose);
+    request.current_h = current_updown(seed_state);
+    request.grasp_mode = top_suction
+      ? ik_benchmark::UpdownAwareIkRequest::GraspMode::TopSuction
+      : ik_benchmark::UpdownAwareIkRequest::GraspMode::Front;
+    request.current_arm_joints = state_values(seed_state, optimized_ik_solver_->fixedVariableNames());
+    request.current_full_joints = state_values(seed_state, optimized_ik_solver_->freeVariableNames());
+
+    RCLCPP_INFO(get_logger(), "[%s] direct optimized IK L=(%.3f, %.3f, %.3f) R=(%.3f, %.3f, %.3f) current_h=%.3f",
+                stage_name.c_str(),
+                left_pose.position.x, left_pose.position.y, left_pose.position.z,
+                right_pose.position.x, right_pose.position.y, right_pose.position.z, request.current_h);
+
+    const auto result = optimized_ik_solver_->solve(request);
+    if (result_out) {
+      *result_out = result;
+    }
+    if (!result.success) {
+      std::ostringstream oss;
+      oss << stage_name << ": optimized IK failed reason=" << result.failure_reason
+          << " trials=" << result.trial_count << " legal=" << result.legal_count
+          << " wall_ms=" << result.wall_ms;
+      return fail(oss.str());
+    }
+
+    *goal_state = seed_state;
+    for (size_t i = 0; i < result.selected.full_joint_names.size() && i < result.selected.full_joint_values.size(); ++i) {
+      const auto& name = result.selected.full_joint_names[i];
+      if (is_robot_variable(name)) {
+        goal_state->setVariablePosition(name, result.selected.full_joint_values[i]);
+      }
+    }
+    goal_state->enforceBounds(joint_group_);
+    goal_state->update();
+
+    if (!is_state_valid(*goal_state, check_goal_collision_)) {
+      return fail(stage_name + ": selected IK state out of bounds or colliding");
+    }
+
+    RCLCPP_INFO(get_logger(),
+                "[%s] direct IK selected h=%.3f score=%.3f path=%s h_index=%zu seed_index=%zu trials=%zu legal=%zu wall=%.1fms",
+                stage_name.c_str(), result.selected.h, result.selected.score, result.selected.solver_path.c_str(),
+                result.selected.h_index, result.selected.seed_index, result.trial_count, result.legal_count,
+                result.wall_ms);
+
+    if (extra_out) {
+      *extra_out = {
+        {"stage_kind", "optimized_dual_tip_ik_direct_seed"},
+        {"grasp_mode", top_suction ? "top_suction" : "front"},
+        {"left_target", pose_json(left_pose)},
+        {"right_target", pose_json(right_pose)},
+        {"ik", {
+          {"strategy", "fixed_discrete_h_multi_seed_cost_scorer"},
+          {"success", result.success},
+          {"fallback_used", result.fallback_used},
+          {"failure_reason", result.failure_reason},
+          {"trial_count", result.trial_count},
+          {"legal_count", result.legal_count},
+          {"timeout_like_count", result.timeout_like_count},
+          {"wall_ms", result.wall_ms},
+          {"sum_solve_ms", result.sum_solve_ms},
+          {"h_interval", {{"lower", result.h_interval_lower}, {"upper", result.h_interval_upper}, {"center", result.h_center}}},
+          {"h_candidates", vector_json(result.h_candidates)},
+          {"selected", {
+            {"h", result.selected.h},
+            {"h_index", result.selected.h_index},
+            {"seed_index", result.selected.seed_index},
+            {"score", result.selected.score},
+            {"solver_path", result.selected.solver_path},
+            {"target_order", result.selected.target_order},
+            {"direct_pos_error", result.selected.direct_pos_error},
+            {"direct_ori_error", result.selected.direct_ori_error},
+            {"updown_delta", result.selected.updown_delta},
+            {"joint_delta", result.selected.joint_delta},
+            {"collision_free", result.selected.collision_free},
+            {"collision_pairs", result.selected.collision_pairs},
+            {"joint_names", result.selected.full_joint_names},
+            {"joint_values", result.selected.full_joint_values}
+          }}
+        }}
+      };
+    }
+    return true;
+  }
+
   geometry_msgs::msg::Pose link_pose(const moveit::core::RobotState& state, const std::string& link_name) const
   {
     const Eigen::Isometry3d& tf = state.getGlobalLinkTransform(link_name);
@@ -1241,6 +1359,382 @@ private:
     return true;
   }
 
+  double extract_left_arm_joint_delta(
+    const moveit::core::RobotState& from,
+    const moveit::core::RobotState& to) const
+  {
+    if (!left_arm_group_) return 0.0;
+    double sum = 0.0;
+    const auto& names = left_arm_group_->getVariableNames();
+    for (const auto& name : names) {
+      if (!is_robot_variable(name)) continue;
+      const double delta = to.getVariablePosition(name) - from.getVariablePosition(name);
+      sum += delta * delta;
+    }
+    return std::sqrt(sum);
+  }
+
+  double extract_tip_position_delta(
+    const moveit::core::RobotState& from,
+    const moveit::core::RobotState& to) const
+  {
+    const auto& from_tf = from.getGlobalLinkTransform(left_tip_);
+    const auto& to_tf = to.getGlobalLinkTransform(left_tip_);
+    return (to_tf.translation() - from_tf.translation()).norm();
+  }
+
+  double extract_tip_orientation_delta(
+    const moveit::core::RobotState& from,
+    const moveit::core::RobotState& to) const
+  {
+    const auto& from_tf = from.getGlobalLinkTransform(left_tip_);
+    const auto& to_tf = to.getGlobalLinkTransform(left_tip_);
+    return pose_orientation_error(from_tf, to_tf);
+  }
+
+  double extract_candidate_score(
+    const ExtractCandidate& candidate,
+    const moveit::core::RobotState& current_state,
+    double last_retreat_x) const
+  {
+    if (!candidate.state_valid || !candidate.state) {
+      return std::numeric_limits<double>::infinity();
+    }
+
+    const double retreat_continuity =
+      std::abs((candidate.retreat_x - last_retreat_x) - extract_step_x_);
+    const double joint_delta = extract_left_arm_joint_delta(current_state, *candidate.state);
+    const double tip_position_delta = extract_tip_position_delta(current_state, *candidate.state);
+    const double tip_orientation_delta = extract_tip_orientation_delta(current_state, *candidate.state);
+
+    return extract_score_lift_weight_ * candidate.lift_z +
+           extract_score_pitch_weight_ * std::abs(candidate.pitch_up_rad) +
+           extract_score_retreat_continuity_weight_ * retreat_continuity +
+           extract_score_joint_delta_weight_ * joint_delta +
+           extract_score_tip_position_delta_weight_ * tip_position_delta +
+           extract_score_tip_orientation_delta_weight_ * tip_orientation_delta;
+  }
+
+  moveit::core::RobotState state_from_ik_candidate(
+    const moveit::core::RobotState& seed_state,
+    const ik_benchmark::UpdownAwareIkCandidate& candidate) const
+  {
+    moveit::core::RobotState state(seed_state);
+    for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
+      const auto& name = candidate.full_joint_names[i];
+      if (is_robot_variable(name)) {
+        state.setVariablePosition(name, candidate.full_joint_values[i]);
+      }
+    }
+    state.enforceBounds(joint_group_);
+    state.update();
+    return state;
+  }
+
+  struct ExtractRolloutTiming
+  {
+    size_t candidate_order = 0;
+    size_t h_index = 0;
+    size_t seed_index = 0;
+    double h = 0.0;
+    double ik_score = 0.0;
+    double ik_solve_ms = 0.0;
+    double rollout_ms = 0.0;
+    double interval_ms = 0.0;
+    bool success = false;
+    size_t accepted_steps = 0;
+    size_t failed_steps = 0;
+    double final_retreat_x = 0.0;
+    double final_lift_z = 0.0;
+    double final_pitch_deg = 0.0;
+    std::string failure_reason;
+  };
+
+  ExtractRolloutTiming rollout_left_extract_from_state(
+    const moveit::core::RobotState& start_state,
+    const AttachedBoxSpec& left_box,
+    int left_box_id,
+    size_t candidate_order,
+    const ik_benchmark::UpdownAwareIkCandidate& ik_candidate,
+    const std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)>& record_step = {}) const
+  {
+    ExtractRolloutTiming timing;
+    timing.candidate_order = candidate_order;
+    timing.h_index = ik_candidate.h_index;
+    timing.seed_index = ik_candidate.seed_index;
+    timing.h = ik_candidate.h;
+    timing.ik_score = ik_candidate.score;
+    timing.ik_solve_ms = ik_candidate.solve_ms;
+
+    const auto boxes = make_boxes(box_front_x_);
+    const auto left_it = boxes.find(left_box_id);
+    if (left_it == boxes.end()) {
+      timing.failure_reason = "unknown_left_box_id";
+      return timing;
+    }
+
+    const auto t0 = std::chrono::steady_clock::now();
+    moveit::core::RobotState current_state(start_state);
+    double last_retreat_x = 0.0;
+    double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
+    const size_t max_steps = static_cast<size_t>(std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, extract_step_x_)));
+
+    if (record_step) {
+      nlohmann::json extra = {
+        {"stage_kind", "left_extract_all_legal_ik_start"},
+        {"candidate_order", candidate_order},
+        {"h_index", ik_candidate.h_index},
+        {"seed_index", ik_candidate.seed_index},
+        {"h", ik_candidate.h},
+        {"ik_score", ik_candidate.score},
+        {"ik_solve_ms", ik_candidate.solve_ms},
+        {"accepted", true},
+        {"step", 0},
+        {"retreat_x", 0.0},
+        {"lift_z", 0.0},
+        {"pitch_up_deg", 0.0},
+        {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
+        {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
+        {"detached_from_neighbors", false}
+      };
+      record_step(0, current_state, extra);
+    }
+
+    for (size_t step = 1; step <= max_steps; ++step) {
+      const double retreat_x = std::min(extract_max_x_, static_cast<double>(step) * extract_step_x_);
+      std::vector<ExtractCandidate> candidates;
+      size_t candidate_index = 0;
+      for (double lift_z : extract_lift_candidates_) {
+        for (double pitch_deg : extract_pitch_candidates_deg_) {
+          const double pitch_rad = pitch_deg * M_PI / 180.0;
+          const BoxSpec shifted_box{left_box_id, left_it->second.x - retreat_x, left_it->second.y, left_it->second.z + lift_z};
+          const auto left_pose = make_pose(shifted_box.x, shifted_box.y, shifted_box.z, pitch_up_orientation(pitch_rad));
+
+          ExtractCandidate candidate;
+          solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
+                                           retreat_x, lift_z, pitch_rad, min_allowed_tip_z,
+                                           left_box, left_box_id, &candidate);
+          candidates.push_back(candidate);
+          ++candidate_index;
+        }
+      }
+
+      auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
+        return extract_candidate_score(a, current_state, last_retreat_x) <
+               extract_candidate_score(b, current_state, last_retreat_x);
+      });
+
+      if (best_it == candidates.end() || !best_it->state_valid) {
+        ++timing.failed_steps;
+        std::map<std::string, size_t> rejection_counts;
+        for (const auto& candidate : candidates) {
+          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
+          rejection_counts[key]++;
+        }
+        if (!rejection_counts.empty()) {
+          timing.failure_reason = rejection_counts.begin()->first;
+          size_t best_count = 0;
+          for (const auto& [reason, count] : rejection_counts) {
+            if (count > best_count) {
+              best_count = count;
+              timing.failure_reason = reason;
+            }
+          }
+        } else {
+          timing.failure_reason = "no_valid_candidate";
+        }
+        if (record_step) {
+          nlohmann::json rejection_json = nlohmann::json::object();
+          for (const auto& [reason, count] : rejection_counts) {
+            rejection_json[reason] = count;
+          }
+          nlohmann::json extra = {
+            {"stage_kind", "left_extract_all_legal_ik_failed_step"},
+            {"candidate_order", candidate_order},
+            {"h_index", ik_candidate.h_index},
+            {"seed_index", ik_candidate.seed_index},
+            {"h", ik_candidate.h},
+            {"ik_score", ik_candidate.score},
+            {"ik_solve_ms", ik_candidate.solve_ms},
+            {"step", step},
+            {"retreat_x", retreat_x},
+            {"accepted", false},
+            {"candidate_count", candidates.size()},
+            {"rejection_counts", rejection_json},
+            {"failure_reason", timing.failure_reason}
+          };
+          record_step(step, current_state, extra);
+        }
+        if (extract_fail_fast_) break;
+        continue;
+      }
+
+      const double selected_score = extract_candidate_score(*best_it, current_state, last_retreat_x);
+      const double selected_joint_delta = extract_left_arm_joint_delta(current_state, *best_it->state);
+      const double selected_tip_position_delta = extract_tip_position_delta(current_state, *best_it->state);
+      const double selected_tip_orientation_delta = extract_tip_orientation_delta(current_state, *best_it->state);
+
+      current_state = *best_it->state;
+      min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
+      last_retreat_x = best_it->retreat_x;
+      timing.final_retreat_x = best_it->retreat_x;
+      timing.final_lift_z = best_it->lift_z;
+      timing.final_pitch_deg = best_it->pitch_up_rad * 180.0 / M_PI;
+      ++timing.accepted_steps;
+
+      if (record_step) {
+        nlohmann::json extra = {
+          {"stage_kind", "left_extract_all_legal_ik_step"},
+          {"candidate_order", candidate_order},
+          {"h_index", ik_candidate.h_index},
+          {"seed_index", ik_candidate.seed_index},
+          {"h", ik_candidate.h},
+          {"ik_score", ik_candidate.score},
+          {"ik_solve_ms", ik_candidate.solve_ms},
+          {"step", step},
+          {"candidate_index", best_it->candidate_index},
+          {"retreat_x", best_it->retreat_x},
+          {"lift_z", best_it->lift_z},
+          {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
+          {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
+          {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
+          {"detached_from_neighbors", best_it->detached_from_neighbors},
+          {"candidate_count", candidates.size()},
+          {"score", selected_score},
+          {"joint_delta", selected_joint_delta},
+          {"tip_position_delta", selected_tip_position_delta},
+          {"tip_orientation_delta", selected_tip_orientation_delta},
+          {"accepted", true}
+        };
+        record_step(step, current_state, extra);
+      }
+
+      if (best_it->detached_from_neighbors) {
+        timing.success = true;
+        timing.failure_reason.clear();
+        break;
+      }
+    }
+
+    if (!timing.success && timing.failure_reason.empty()) {
+      timing.failure_reason = "reached_max_retreat_without_neighbor_detachment";
+    }
+    const auto t1 = std::chrono::steady_clock::now();
+    timing.rollout_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return timing;
+  }
+
+  bool write_extract_benchmark_csv(const std::vector<ExtractRolloutTiming>& timings) const
+  {
+    if (extract_benchmark_csv_path_.empty()) return true;
+    const std::filesystem::path path(extract_benchmark_csv_path_);
+    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out) {
+      RCLCPP_WARN(get_logger(), "Failed to open extract benchmark CSV: %s", extract_benchmark_csv_path_.c_str());
+      return false;
+    }
+    out << "candidate_order,h_index,seed_index,h,ik_score,ik_solve_ms,rollout_ms,interval_ms,success,"
+           "accepted_steps,failed_steps,final_retreat_x,final_lift_z,final_pitch_deg,failure_reason\n";
+    out << std::setprecision(12);
+    for (const auto& timing : timings) {
+      out << timing.candidate_order << ','
+          << timing.h_index << ','
+          << timing.seed_index << ','
+          << timing.h << ','
+          << timing.ik_score << ','
+          << timing.ik_solve_ms << ','
+          << timing.rollout_ms << ','
+          << timing.interval_ms << ','
+          << (timing.success ? 1 : 0) << ','
+          << timing.accepted_steps << ','
+          << timing.failed_steps << ','
+          << timing.final_retreat_x << ','
+          << timing.final_lift_z << ','
+          << timing.final_pitch_deg << ','
+          << '"' << timing.failure_reason << '"' << '\n';
+    }
+    RCLCPP_INFO(get_logger(), "Wrote extract all-legal-IK timing CSV: %s rows=%zu",
+                extract_benchmark_csv_path_.c_str(), timings.size());
+    return true;
+  }
+
+  bool benchmark_all_legal_ik_extract(
+    const std::string& prefix,
+    const moveit::core::RobotState& seed_state,
+    const ik_benchmark::UpdownAwareIkResult& ik_result,
+    const AttachedBoxSpec& left_box,
+    int left_box_id)
+  {
+    std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
+    for (const auto& candidate : ik_result.candidates) {
+      if (candidate.legal) {
+        legal_candidates.push_back(candidate);
+      }
+    }
+    std::sort(legal_candidates.begin(), legal_candidates.end(),
+              [](const auto& a, const auto& b) { return a.score < b.score; });
+    if (legal_candidates.empty()) {
+      return fail(prefix + "/extract_benchmark: no legal IK candidates");
+    }
+
+    std::vector<ExtractRolloutTiming> timings;
+    timings.reserve(legal_candidates.size());
+    auto previous_start = std::chrono::steady_clock::now();
+    bool any_success = false;
+    for (size_t i = 0; i < legal_candidates.size(); ++i) {
+      const auto start = std::chrono::steady_clock::now();
+      auto state = state_from_ik_candidate(seed_state, legal_candidates[i]);
+      std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)> record_step;
+      if (extract_benchmark_record_rollouts_) {
+        record_step = [&](size_t step_index, const moveit::core::RobotState& rollout_state, const nlohmann::json& extra) {
+          record_extract_keyframe(
+            prefix + "/candidate_" + std::to_string(i) + "/step_" + std::to_string(step_index),
+            rollout_state,
+            left_box,
+            extra);
+        };
+      }
+      auto timing = rollout_left_extract_from_state(state, left_box, left_box_id, i, legal_candidates[i], record_step);
+      timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
+      previous_start = start;
+      any_success = any_success || timing.success;
+      timings.push_back(std::move(timing));
+    }
+    if (!timings.empty()) {
+      timings.front().interval_ms = 0.0;
+    }
+    write_extract_benchmark_csv(timings);
+
+    double total_interval_ms = 0.0;
+    double total_rollout_ms = 0.0;
+    for (const auto& timing : timings) {
+      total_interval_ms += timing.interval_ms;
+      total_rollout_ms += timing.rollout_ms;
+    }
+    const double mean_interval_ms = timings.size() > 1
+      ? total_interval_ms / static_cast<double>(timings.size() - 1)
+      : 0.0;
+    const double mean_rollout_ms = total_rollout_ms / static_cast<double>(timings.size());
+    RCLCPP_INFO(get_logger(),
+                "[%s/extract_benchmark] legal_ik=%zu success_any=%s mean_interval=%.3fms mean_rollout=%.3fms",
+                prefix.c_str(), timings.size(), any_success ? "true" : "false", mean_interval_ms, mean_rollout_ms);
+
+    if (record_stream_) {
+      record_stream_ << nlohmann::json({
+        {"type", "extract_benchmark_summary"},
+        {"legal_ik_count", legal_candidates.size()},
+        {"success_any", any_success},
+        {"mean_interval_ms", mean_interval_ms},
+        {"mean_rollout_ms", mean_rollout_ms},
+        {"csv_path", extract_benchmark_csv_path_},
+        {"rollouts_recorded", extract_benchmark_record_rollouts_}
+      }).dump() << '\n';
+      record_stream_.flush();
+    }
+    return any_success;
+  }
+
   bool record_extract_keyframe(
     const std::string& stage_name,
     const moveit::core::RobotState& state,
@@ -1312,11 +1806,8 @@ private:
       }
 
       auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
-        const auto score = [&](const ExtractCandidate& c) {
-          if (!c.state_valid) return std::numeric_limits<double>::infinity();
-          return 10.0 * c.lift_z + 0.02 * std::abs(c.pitch_up_rad) + 0.2 * std::abs((c.retreat_x - last_retreat_x) - extract_step_x_);
-        };
-        return score(a) < score(b);
+        return extract_candidate_score(a, current_state, last_retreat_x) <
+               extract_candidate_score(b, current_state, last_retreat_x);
       });
 
       if (best_it == candidates.end() || !best_it->state_valid) {
@@ -1342,6 +1833,11 @@ private:
         continue;
       }
 
+      const double selected_score = extract_candidate_score(*best_it, current_state, last_retreat_x);
+      const double selected_joint_delta = extract_left_arm_joint_delta(current_state, *best_it->state);
+      const double selected_tip_position_delta = extract_tip_position_delta(current_state, *best_it->state);
+      const double selected_tip_orientation_delta = extract_tip_orientation_delta(current_state, *best_it->state);
+
       current_state = *best_it->state;
       min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
       last_retreat_x = best_it->retreat_x;
@@ -1359,6 +1855,10 @@ private:
         {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
         {"detached_from_neighbors", best_it->detached_from_neighbors},
         {"candidate_count", candidates.size()},
+        {"score", selected_score},
+        {"joint_delta", selected_joint_delta},
+        {"tip_position_delta", selected_tip_position_delta},
+        {"tip_orientation_delta", selected_tip_orientation_delta},
       };
       record_extract_keyframe(prefix + "/extract_step_" + std::to_string(step), current_state, left_box, extra);
 
@@ -1689,15 +2189,57 @@ private:
 
     const std::string prefix = "left_extract_demo_L" + std::to_string(extract_demo_left_box_id_) +
                                "_R" + std::to_string(extract_demo_right_box_id_);
-    if (!plan_to_joint_target(prefix + "/pregrasp",
-                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
-      return false;
-    }
 
     const auto left_pose = front_grasp_pose(left_it->second);
     const auto right_pose = front_grasp_pose(right_it->second);
-    if (!plan_dual_tip_ik(prefix + "/grasp_ik", left_pose, right_pose, false)) {
-      return false;
+
+    if (extract_demo_direct_grasp_start_) {
+      auto seed_state = std::make_shared<moveit::core::RobotState>(robot_model_);
+      seed_state->setToDefaultValues();
+      for (size_t i = 0; i < left_pregrasp_arm_.size(); ++i) {
+        seed_state->setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_pregrasp_arm_[i]);
+      }
+      for (size_t i = 0; i < right_pregrasp_arm_.size(); ++i) {
+        seed_state->setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
+      }
+      seed_state->setVariablePosition("updown", fixed_updown_);
+      seed_state->enforceBounds(joint_group_);
+      seed_state->update();
+
+      moveit::core::RobotState grasp_state(*seed_state);
+      nlohmann::json grasp_extra;
+      ik_benchmark::UpdownAwareIkResult direct_ik_result;
+      if (!solve_dual_tip_ik_state(prefix + "/grasp_ik_direct_start", left_pose, right_pose, false,
+                                   *seed_state, &grasp_state, &grasp_extra, &direct_ik_result)) {
+        return false;
+      }
+      if (extract_benchmark_all_legal_ik_) {
+        const AttachedBoxSpec left_box = make_attached_box_spec("left", extract_demo_left_box_id_, false);
+        const bool ok = benchmark_all_legal_ik_extract(prefix, *seed_state, direct_ik_result,
+                                                       left_box, extract_demo_left_box_id_);
+        if (record_stream_) {
+          record_stream_ << nlohmann::json({
+            {"type", "summary"},
+            {"success", ok},
+            {"error", ok ? "" : last_error_},
+            {"stages", record_stage_index_}
+          }).dump() << '\n';
+          record_stream_.flush();
+        }
+        return ok;
+      }
+      last_commanded_state_ = std::make_shared<moveit::core::RobotState>(grasp_state);
+      record_extract_keyframe(prefix + "/grasp_ik_direct_start", grasp_state,
+                              make_attached_box_spec("left", extract_demo_left_box_id_, false), grasp_extra);
+    } else {
+      if (!plan_to_joint_target(prefix + "/pregrasp",
+                                make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
+        return false;
+      }
+
+      if (!plan_dual_tip_ik(prefix + "/grasp_ik", left_pose, right_pose, false)) {
+        return false;
+      }
     }
 
     active_attached_boxes_ = {make_attached_box_spec("left", extract_demo_left_box_id_, false)};
@@ -1865,6 +2407,16 @@ private:
   double extract_orientation_tolerance_ = 0.05;
   double extract_max_tip_z_drop_ = 0.002;
   double extract_min_tool_normal_z_ = -1e-4;
+  double extract_score_lift_weight_ = 10.0;
+  double extract_score_pitch_weight_ = 0.02;
+  double extract_score_retreat_continuity_weight_ = 0.2;
+  double extract_score_joint_delta_weight_ = 0.6;
+  double extract_score_tip_position_delta_weight_ = 2.0;
+  double extract_score_tip_orientation_delta_weight_ = 0.05;
+  bool extract_demo_direct_grasp_start_ = false;
+  bool extract_benchmark_all_legal_ik_ = false;
+  std::string extract_benchmark_csv_path_;
+  bool extract_benchmark_record_rollouts_ = false;
   std::string record_jsonl_path_;
   bool record_trajectories_ = true;
   int max_rounds_ = 10;

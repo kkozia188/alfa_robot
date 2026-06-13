@@ -72,6 +72,19 @@ def generate_launch_description():
         DeclareLaunchArgument("extract_orientation_tolerance", default_value="0.05"),
         DeclareLaunchArgument("extract_max_tip_z_drop", default_value="0.002"),
         DeclareLaunchArgument("extract_min_tool_normal_z", default_value="-0.0001"),
+        DeclareLaunchArgument("extract_score_lift_weight", default_value="10.0"),
+        DeclareLaunchArgument("extract_score_pitch_weight", default_value="0.02"),
+        DeclareLaunchArgument("extract_score_retreat_continuity_weight", default_value="0.2"),
+        DeclareLaunchArgument("extract_score_joint_delta_weight", default_value="0.6"),
+        DeclareLaunchArgument("extract_score_tip_position_delta_weight", default_value="2.0"),
+        DeclareLaunchArgument("extract_score_tip_orientation_delta_weight", default_value="0.05"),
+        DeclareLaunchArgument("extract_demo_direct_grasp_start", default_value="false"),
+        DeclareLaunchArgument("extract_benchmark_all_legal_ik", default_value="false"),
+        DeclareLaunchArgument("extract_benchmark_record_rollouts", default_value="false"),
+        DeclareLaunchArgument(
+            "extract_benchmark_csv_path",
+            default_value="/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/motion51_extract_replay/extract_all_legal_ik_timing.csv",
+        ),
     ]
 
     # MoveIt defaults to 0.01 rad start-state tolerance. The ros2_control mock
@@ -147,6 +160,16 @@ def generate_launch_description():
                 "extract_orientation_tolerance": ParameterValue(LaunchConfiguration("extract_orientation_tolerance"), value_type=float),
                 "extract_max_tip_z_drop": ParameterValue(LaunchConfiguration("extract_max_tip_z_drop"), value_type=float),
                 "extract_min_tool_normal_z": ParameterValue(LaunchConfiguration("extract_min_tool_normal_z"), value_type=float),
+                "extract_score_lift_weight": ParameterValue(LaunchConfiguration("extract_score_lift_weight"), value_type=float),
+                "extract_score_pitch_weight": ParameterValue(LaunchConfiguration("extract_score_pitch_weight"), value_type=float),
+                "extract_score_retreat_continuity_weight": ParameterValue(LaunchConfiguration("extract_score_retreat_continuity_weight"), value_type=float),
+                "extract_score_joint_delta_weight": ParameterValue(LaunchConfiguration("extract_score_joint_delta_weight"), value_type=float),
+                "extract_score_tip_position_delta_weight": ParameterValue(LaunchConfiguration("extract_score_tip_position_delta_weight"), value_type=float),
+                "extract_score_tip_orientation_delta_weight": ParameterValue(LaunchConfiguration("extract_score_tip_orientation_delta_weight"), value_type=float),
+                "extract_demo_direct_grasp_start": ParameterValue(LaunchConfiguration("extract_demo_direct_grasp_start"), value_type=bool),
+                "extract_benchmark_all_legal_ik": ParameterValue(LaunchConfiguration("extract_benchmark_all_legal_ik"), value_type=bool),
+                "extract_benchmark_record_rollouts": ParameterValue(LaunchConfiguration("extract_benchmark_record_rollouts"), value_type=bool),
+                "extract_benchmark_csv_path": LaunchConfiguration("extract_benchmark_csv_path"),
             },
         ],
     )

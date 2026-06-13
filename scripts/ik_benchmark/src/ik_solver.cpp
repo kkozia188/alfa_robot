@@ -620,6 +620,23 @@ std::vector<Eigen::Isometry3d> IkSolver::fkNamed(const std::vector<std::string>&
     return poses;
 }
 
+Eigen::Isometry3d IkSolver::linkTransformNamed(
+    const std::string& link_name,
+    const std::vector<std::string>& joint_names,
+    const std::vector<double>& joint_values) const
+{
+    moveit::core::RobotState state(robot_model_);
+    state.setToDefaultValues();
+    for (size_t k = 0; k < joint_names.size() && k < joint_values.size(); ++k) {
+        state.setJointPositions(joint_names[k], {joint_values[k]});
+    }
+    state.update();
+
+    const Eigen::Isometry3d T_base_inv =
+        state.getGlobalLinkTransform(base_frame_).inverse();
+    return T_base_inv * state.getGlobalLinkTransform(link_name);
+}
+
 std::vector<double> IkSolver::getHomeSeed() const
 {
     // 返回 IK solver 维度的 home seed (全零)

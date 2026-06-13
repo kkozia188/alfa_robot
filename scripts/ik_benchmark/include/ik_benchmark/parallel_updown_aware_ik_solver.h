@@ -222,6 +222,7 @@ private:
                                       bool fallback) const;
 
     Eigen::Isometry3d compensateTool0(const Eigen::Isometry3d& target) const;
+    Eigen::Isometry3d updownTransformInBase(double h) const;
     Eigen::Isometry3d fixedTarget(const Eigen::Isometry3d& target, double h) const;
     std::vector<double> makePerturbedSeed(const std::vector<std::string>& variable_names,
                                           const std::vector<double>& base_seed,

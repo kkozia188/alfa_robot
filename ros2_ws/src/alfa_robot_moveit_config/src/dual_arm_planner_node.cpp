@@ -382,14 +382,22 @@ public:
     extract_benchmark_record_rollouts_ = get_or_declare_parameter<bool>("extract_benchmark_record_rollouts", false);
     extract_benchmark_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("extract_benchmark_candidate_limit", 0)));
+    extract_benchmark_plan_loaded_after_success_ =
+      get_or_declare_parameter<bool>("extract_benchmark_plan_loaded_after_success", false);
+    extract_loaded_planning_group_ = get_or_declare_parameter<std::string>("extract_loaded_planning_group", "dual_v5_arm");
+    extract_loaded_planning_time_ = get_or_declare_parameter<double>("extract_loaded_planning_time", 1.0);
+    extract_loaded_planning_attempts_ =
+      std::max(1, get_or_declare_parameter<int>("extract_loaded_planning_attempts", 4));
+    extract_loaded_candidate_limit_ = static_cast<size_t>(
+      std::max(0, get_or_declare_parameter<int>("extract_loaded_candidate_limit", 0)));
     record_tip_error_ik_candidates_ = get_or_declare_parameter<bool>("record_tip_error_ik_candidates", false);
     record_tip_error_ik_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("record_tip_error_ik_candidate_limit", 80)));
 
     left_pregrasp_arm_ = deg_to_rad({0, -90, 135, -45, 0, 0});
     right_pregrasp_arm_ = deg_to_rad({0, -90, 135, 45, 0, 0});
-    left_loaded_arm_ = deg_to_rad({0, -60, 120, -90, 0, 0});
-    right_loaded_arm_ = deg_to_rad({0, -60, 120, 90, 0, 0});
+    left_loaded_arm_ = deg_to_rad({0, -75, 135, 0, 60, 0});
+    right_loaded_arm_ = deg_to_rad({0, -75, 135, 0, 60, 0});
 
     joint_state_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions joint_state_sub_options;
@@ -409,6 +417,14 @@ public:
     move_group_->setMaxVelocityScalingFactor(velocity_scale_);
     move_group_->setMaxAccelerationScalingFactor(acceleration_scale_);
     move_group_->setGoalJointTolerance(joint_goal_tolerance_rad_);
+
+    loaded_move_group_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(
+      shared_from_this(), extract_loaded_planning_group_);
+    loaded_move_group_->setPlanningTime(extract_loaded_planning_time_);
+    loaded_move_group_->setNumPlanningAttempts(extract_loaded_planning_attempts_);
+    loaded_move_group_->setMaxVelocityScalingFactor(velocity_scale_);
+    loaded_move_group_->setMaxAccelerationScalingFactor(acceleration_scale_);
+    loaded_move_group_->setGoalJointTolerance(joint_goal_tolerance_rad_);
 
     robot_model_ = move_group_->getRobotModel();
     joint_group_ = robot_model_->getJointModelGroup(planning_group_);
@@ -911,7 +927,6 @@ private:
     std::string* reason) const
   {
     if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
-    if (!enable_static_box_obstacles_) return true;
 
     const auto& trajectory = plan.trajectory_.joint_trajectory;
     for (size_t point_index = 0; point_index < trajectory.points.size(); ++point_index) {
@@ -1586,13 +1601,129 @@ private:
     double rollout_ms = 0.0;
     double interval_ms = 0.0;
     bool success = false;
+    bool loaded_plan_attempted = false;
+    bool loaded_plan_success = false;
+    double loaded_plan_ms = 0.0;
+    size_t loaded_plan_points = 0;
     size_t accepted_steps = 0;
     size_t failed_steps = 0;
     double final_retreat_x = 0.0;
     double final_lift_z = 0.0;
     double final_pitch_deg = 0.0;
     std::string failure_reason;
+    std::string loaded_plan_failure_reason;
+    moveit::core::RobotStatePtr final_state;
   };
+
+  std::vector<std::string> arm_joint_target_names() const
+  {
+    return {
+      "left_v5_joint1", "left_v5_joint2", "left_v5_joint3",
+      "left_v5_joint4", "left_v5_joint5", "left_v5_joint6",
+      "right_v5_joint1", "right_v5_joint2", "right_v5_joint3",
+      "right_v5_joint4", "right_v5_joint5", "right_v5_joint6",
+    };
+  }
+
+  moveit::core::RobotState loaded_goal_from_extract_state(
+    const moveit::core::RobotState& extract_state) const
+  {
+    moveit::core::RobotState goal_state(extract_state);
+    for (size_t i = 0; i < left_loaded_arm_.size(); ++i) {
+      goal_state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_loaded_arm_[i]);
+    }
+    for (size_t i = 0; i < right_loaded_arm_.size(); ++i) {
+      goal_state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_loaded_arm_[i]);
+    }
+    goal_state.enforceBounds(joint_group_);
+    goal_state.update();
+    return goal_state;
+  }
+
+  bool plan_loaded_from_extract_state(
+    const std::string& stage_name,
+    const moveit::core::RobotState& extract_state,
+    const AttachedBoxSpec& left_box,
+    ExtractRolloutTiming* timing)
+  {
+    if (!loaded_move_group_) {
+      if (timing) timing->loaded_plan_failure_reason = "loaded_move_group_not_initialized";
+      return false;
+    }
+
+    const auto saved_boxes = active_attached_boxes_;
+    active_attached_boxes_ = {left_box};
+
+    auto restore_boxes = [&]() {
+      remove_carried_box_ids({left_box.id}, "extract_loaded_plan_detach_box");
+      active_attached_boxes_ = saved_boxes;
+    };
+
+    if (!apply_attached_box_state(active_attached_boxes_, moveit_msgs::msg::CollisionObject::ADD,
+                                  "extract_loaded_plan_attach_box")) {
+      if (timing) timing->loaded_plan_failure_reason = "failed_to_attach_box_for_loaded_plan";
+      restore_boxes();
+      return false;
+    }
+
+    moveit::core::RobotState goal_state = loaded_goal_from_extract_state(extract_state);
+    const auto target_names = arm_joint_target_names();
+
+    loaded_move_group_->setStartState(extract_state);
+    loaded_move_group_->setJointValueTarget(goal_state);
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    const auto t0 = std::chrono::steady_clock::now();
+    const auto plan_result = loaded_move_group_->plan(plan);
+    const auto t1 = std::chrono::steady_clock::now();
+    const double plan_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    if (timing) {
+      timing->loaded_plan_attempted = true;
+      timing->loaded_plan_ms = plan_ms;
+      timing->loaded_plan_points = plan.trajectory_.joint_trajectory.points.size();
+    }
+
+    if (plan_result != moveit::core::MoveItErrorCode::SUCCESS) {
+      if (timing) {
+        timing->loaded_plan_failure_reason = "moveit_planning_failed_code_" + std::to_string(plan_result.val);
+      }
+      restore_boxes();
+      return false;
+    }
+
+    std::string carried_collision_reason;
+    const bool carried_clear = planned_carried_boxes_clear_static_obstacles(plan, extract_state, &carried_collision_reason);
+    if (!carried_clear) {
+      if (timing) {
+        timing->loaded_plan_failure_reason = carried_collision_reason;
+      }
+    }
+
+    if (record_stream_) {
+      nlohmann::json extra = {
+        {"stage_kind", "post_extract_loaded_plan"},
+        {"valid", carried_clear},
+        {"loaded_plan_ms", plan_ms},
+        {"loaded_plan_points", plan.trajectory_.joint_trajectory.points.size()},
+        {"fixed_updown", current_updown(extract_state)},
+        {"left_box_id", left_box.id},
+        {"failure_reason", carried_clear ? "" : carried_collision_reason}
+      };
+      record_stage(stage_name, plan, extract_state, goal_state, target_names, extra);
+    }
+
+    if (!carried_clear) {
+      restore_boxes();
+      return false;
+    }
+
+    if (timing) {
+      timing->loaded_plan_success = true;
+      timing->loaded_plan_failure_reason.clear();
+    }
+    restore_boxes();
+    return true;
+  }
 
   ExtractRolloutTiming rollout_left_extract_from_state(
     const moveit::core::RobotState& start_state,
@@ -1748,6 +1879,7 @@ private:
       if (best_it->detached_from_neighbors) {
         timing.success = true;
         timing.failure_reason.clear();
+        timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
         break;
       }
     }
@@ -1771,7 +1903,8 @@ private:
       return false;
     }
     out << "candidate_order,h_index,seed_index,h,ik_score,ik_solve_ms,rollout_ms,interval_ms,success,"
-           "accepted_steps,failed_steps,final_retreat_x,final_lift_z,final_pitch_deg,failure_reason\n";
+           "loaded_plan_attempted,loaded_plan_success,loaded_plan_ms,loaded_plan_points,"
+           "accepted_steps,failed_steps,final_retreat_x,final_lift_z,final_pitch_deg,failure_reason,loaded_plan_failure_reason\n";
     out << std::setprecision(12);
     for (const auto& timing : timings) {
       out << timing.candidate_order << ','
@@ -1783,12 +1916,17 @@ private:
           << timing.rollout_ms << ','
           << timing.interval_ms << ','
           << (timing.success ? 1 : 0) << ','
+          << (timing.loaded_plan_attempted ? 1 : 0) << ','
+          << (timing.loaded_plan_success ? 1 : 0) << ','
+          << timing.loaded_plan_ms << ','
+          << timing.loaded_plan_points << ','
           << timing.accepted_steps << ','
           << timing.failed_steps << ','
           << timing.final_retreat_x << ','
           << timing.final_lift_z << ','
           << timing.final_pitch_deg << ','
-          << '"' << timing.failure_reason << '"' << '\n';
+          << '"' << timing.failure_reason << '"' << ','
+          << '"' << timing.loaded_plan_failure_reason << '"' << '\n';
     }
     RCLCPP_INFO(get_logger(), "Wrote extract all-legal-IK timing CSV: %s rows=%zu",
                 extract_benchmark_csv_path_.c_str(), timings.size());
@@ -1826,6 +1964,7 @@ private:
     timings.reserve(legal_candidates.size());
     auto previous_start = std::chrono::steady_clock::now();
     bool any_success = false;
+    size_t loaded_plan_requests = 0;
     for (size_t i = 0; i < legal_candidates.size(); ++i) {
       const auto start = std::chrono::steady_clock::now();
       auto state = state_from_ik_candidate(seed_state, legal_candidates[i]);
@@ -1840,6 +1979,18 @@ private:
         };
       }
       auto timing = rollout_left_extract_from_state(state, left_box, left_box_id, i, legal_candidates[i], record_step);
+      if (extract_benchmark_plan_loaded_after_success_ && timing.success && timing.final_state) {
+        if (extract_loaded_candidate_limit_ == 0 || loaded_plan_requests < extract_loaded_candidate_limit_) {
+          ++loaded_plan_requests;
+          plan_loaded_from_extract_state(
+            prefix + "/candidate_" + std::to_string(i) + "/post_extract_loaded",
+            *timing.final_state,
+            left_box,
+            &timing);
+        } else {
+          timing.loaded_plan_failure_reason = "loaded_plan_skipped_by_limit";
+        }
+      }
       timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
       previous_start = start;
       any_success = any_success || timing.success;
@@ -1852,17 +2003,32 @@ private:
 
     double total_interval_ms = 0.0;
     double total_rollout_ms = 0.0;
+    double total_loaded_plan_ms = 0.0;
+    size_t loaded_plan_attempted_count = 0;
+    size_t loaded_plan_success_count = 0;
     for (const auto& timing : timings) {
       total_interval_ms += timing.interval_ms;
       total_rollout_ms += timing.rollout_ms;
+      if (timing.loaded_plan_attempted) {
+        ++loaded_plan_attempted_count;
+        total_loaded_plan_ms += timing.loaded_plan_ms;
+      }
+      if (timing.loaded_plan_success) {
+        ++loaded_plan_success_count;
+      }
     }
     const double mean_interval_ms = timings.size() > 1
       ? total_interval_ms / static_cast<double>(timings.size() - 1)
       : 0.0;
     const double mean_rollout_ms = total_rollout_ms / static_cast<double>(timings.size());
+    const double mean_loaded_plan_ms = loaded_plan_attempted_count > 0
+      ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
+      : 0.0;
     RCLCPP_INFO(get_logger(),
-                "[%s/extract_benchmark] legal_ik=%zu success_any=%s mean_interval=%.3fms mean_rollout=%.3fms",
-                prefix.c_str(), timings.size(), any_success ? "true" : "false", mean_interval_ms, mean_rollout_ms);
+                "[%s/extract_benchmark] legal_ik=%zu success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
+                prefix.c_str(), timings.size(), any_success ? "true" : "false",
+                loaded_plan_success_count, loaded_plan_attempted_count,
+                mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
 
     if (record_stream_) {
       record_stream_ << nlohmann::json({
@@ -1873,6 +2039,11 @@ private:
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
+        {"loaded_plan_after_success", extract_benchmark_plan_loaded_after_success_},
+        {"loaded_plan_candidate_limit", extract_loaded_candidate_limit_},
+        {"loaded_plan_attempted_count", loaded_plan_attempted_count},
+        {"loaded_plan_success_count", loaded_plan_success_count},
+        {"mean_loaded_plan_ms", mean_loaded_plan_ms},
         {"csv_path", extract_benchmark_csv_path_},
         {"rollouts_recorded", extract_benchmark_record_rollouts_},
         {"ik_candidate_rejection_counts", ik_candidate_rejection_counts_json(ik_result)}
@@ -2650,6 +2821,11 @@ private:
   std::string extract_benchmark_csv_path_;
   bool extract_benchmark_record_rollouts_ = false;
   size_t extract_benchmark_candidate_limit_ = 0;
+  bool extract_benchmark_plan_loaded_after_success_ = false;
+  std::string extract_loaded_planning_group_ = "dual_v5_arm";
+  double extract_loaded_planning_time_ = 1.0;
+  int extract_loaded_planning_attempts_ = 4;
+  size_t extract_loaded_candidate_limit_ = 0;
   bool record_tip_error_ik_candidates_ = false;
   size_t record_tip_error_ik_candidate_limit_ = 80;
   std::string record_jsonl_path_;
@@ -2666,6 +2842,7 @@ private:
   ik_benchmark::UpdownAwareIkConfig ik_config_;
 
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
+  std::shared_ptr<moveit::planning_interface::MoveGroupInterface> loaded_move_group_;
   std::unique_ptr<moveit::planning_interface::PlanningSceneInterface> planning_scene_interface_;
   planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
   moveit::core::RobotModelConstPtr robot_model_;

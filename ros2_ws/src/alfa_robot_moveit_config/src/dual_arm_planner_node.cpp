@@ -374,6 +374,7 @@ public:
     extract_score_tip_orientation_delta_weight_ = get_or_declare_parameter<double>("extract_score_tip_orientation_delta_weight", 0.05);
     extract_max_joint_delta_ = get_or_declare_parameter<double>("extract_max_joint_delta", 0.0);
     extract_demo_direct_grasp_start_ = get_or_declare_parameter<bool>("extract_demo_direct_grasp_start", false);
+    extract_grasp_ik_home_updown_ = get_or_declare_parameter<double>("extract_grasp_ik_home_updown", 0.45);
     extract_benchmark_all_legal_ik_ = get_or_declare_parameter<bool>("extract_benchmark_all_legal_ik", false);
     extract_benchmark_csv_path_ = get_or_declare_parameter<std::string>(
       "extract_benchmark_csv_path",
@@ -794,19 +795,10 @@ private:
     std::string* reason) const
   {
     if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
-    if (!enable_static_box_obstacles_) return true;
 
-    const auto obstacles = static_box_obstacles();
     for (const auto& carried_box : active_attached_boxes_) {
-      const auto carried_aabb = attached_box_world_aabb(state, carried_box);
-      for (const auto& obstacle : obstacles) {
-        const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
-        if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
-          if (reason) {
-            *reason = carried_box.id + " overlaps " + obstacle.id;
-          }
-          return false;
-        }
+      if (!carried_box_clear_scene_obstacles(state, carried_box, reason)) {
+        return false;
       }
     }
     return true;
@@ -857,20 +849,34 @@ private:
     return true;
   }
 
-  bool carried_box_clear_static_obstacles(
+  bool carried_box_clear_scene_obstacles(
     const moveit::core::RobotState& state,
     const AttachedBoxSpec& carried_box,
     std::string* reason) const
   {
-    if (!enable_attached_box_collision_ || !enable_static_box_obstacles_) return true;
+    if (!enable_attached_box_collision_) return true;
     const auto carried_aabb = attached_box_world_aabb(state, carried_box);
-    for (const auto& obstacle : static_box_obstacles()) {
-      const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
-      if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
-        if (reason) *reason = carried_box.id + " overlaps " + obstacle.id;
-        return false;
+
+    if (enable_static_box_obstacles_) {
+      for (const auto& obstacle : static_box_obstacles()) {
+        const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
+        if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
+          if (reason) *reason = carried_box.id + " overlaps " + obstacle.id;
+          return false;
+        }
       }
     }
+
+    if (enable_container_obstacle_) {
+      for (const auto& panel : container_panels()) {
+        const AxisAlignedBox panel_aabb{panel.center, panel.size};
+        if (aabb_overlaps(carried_aabb, panel_aabb)) {
+          if (reason) *reason = carried_box.id + " overlaps " + panel.id;
+          return false;
+        }
+      }
+    }
+
     return true;
   }
 
@@ -887,7 +893,7 @@ private:
     }
 
     std::string carried_reason;
-    if (!carried_box_clear_static_obstacles(state, left_carried_box, &carried_reason)) {
+    if (!carried_box_clear_scene_obstacles(state, left_carried_box, &carried_reason)) {
       if (reason) *reason = carried_reason;
       return false;
     }
@@ -2417,7 +2423,7 @@ private:
       for (size_t i = 0; i < right_pregrasp_arm_.size(); ++i) {
         seed_state->setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
       }
-      seed_state->setVariablePosition("updown", fixed_updown_);
+      seed_state->setVariablePosition("updown", extract_grasp_ik_home_updown_);
       seed_state->enforceBounds(joint_group_);
       seed_state->update();
 
@@ -2639,6 +2645,7 @@ private:
   double extract_score_tip_orientation_delta_weight_ = 0.05;
   double extract_max_joint_delta_ = 0.0;
   bool extract_demo_direct_grasp_start_ = false;
+  double extract_grasp_ik_home_updown_ = 0.45;
   bool extract_benchmark_all_legal_ik_ = false;
   std::string extract_benchmark_csv_path_;
   bool extract_benchmark_record_rollouts_ = false;

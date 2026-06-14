@@ -25,6 +25,7 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -118,6 +119,19 @@ struct DualExtractStepCandidate
   bool right_detached = false;
   double score = std::numeric_limits<double>::infinity();
   std::string rejection_reason;
+};
+
+struct ArmExtractPath
+{
+  bool success = false;
+  std::string failure_reason;
+  std::vector<moveit::core::RobotStatePtr> states;
+  std::vector<ExtractCandidate> selected_candidates;
+  double final_retreat_x = 0.0;
+  double final_lift_z = 0.0;
+  double final_pitch_deg = 0.0;
+  size_t accepted_steps = 0;
+  size_t failed_steps = 0;
 };
 
 struct ExtractMotionDelta
@@ -444,6 +458,8 @@ public:
     extract_pitch_candidates_deg_ = get_or_declare_parameter<std::vector<double>>("extract_pitch_candidates_deg", std::vector<double>{0.0, 5.0, 10.0, 15.0});
     extract_neighbor_margin_ = get_or_declare_parameter<double>("extract_neighbor_margin", 0.02);
     extract_fail_fast_ = get_or_declare_parameter<bool>("extract_fail_fast", false);
+    extract_success_extra_steps_ = static_cast<size_t>(
+      std::max(0, get_or_declare_parameter<int>("extract_success_extra_steps", 3)));
     extract_kdl_timeout_ = get_or_declare_parameter<double>("extract_kdl_timeout", 0.01);
     extract_position_tolerance_ = get_or_declare_parameter<double>("extract_position_tolerance", 0.01);
     extract_orientation_tolerance_ = get_or_declare_parameter<double>("extract_orientation_tolerance", 0.05);
@@ -460,12 +476,19 @@ public:
     extract_grasp_ik_home_updown_ = get_or_declare_parameter<double>("extract_grasp_ik_home_updown", 0.3);
     extract_benchmark_all_legal_ik_ = get_or_declare_parameter<bool>("extract_benchmark_all_legal_ik", false);
     extract_benchmark_dual_arm_ = get_or_declare_parameter<bool>("extract_benchmark_dual_arm", false);
+    extract_benchmark_dual_async_ = get_or_declare_parameter<bool>("extract_benchmark_dual_async", false);
     extract_benchmark_csv_path_ = get_or_declare_parameter<std::string>(
       "extract_benchmark_csv_path",
       "/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/motion51_extract_replay/extract_all_legal_ik_timing.csv");
     extract_benchmark_record_rollouts_ = get_or_declare_parameter<bool>("extract_benchmark_record_rollouts", false);
     extract_benchmark_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("extract_benchmark_candidate_limit", 0)));
+    extract_benchmark_extract_workers_ = static_cast<size_t>(
+      std::max(1, get_or_declare_parameter<int>("extract_benchmark_extract_workers", 1)));
+    extract_ik_dedup_enabled_ = get_or_declare_parameter<bool>("extract_ik_dedup_enabled", false);
+    extract_ik_dedup_joint_threshold_ =
+      get_or_declare_parameter<double>("extract_ik_dedup_joint_threshold_deg", 1.0) * M_PI / 180.0;
+    extract_ik_dedup_h_threshold_ = get_or_declare_parameter<double>("extract_ik_dedup_h_threshold", 0.005);
     extract_benchmark_plan_loaded_after_success_ =
       get_or_declare_parameter<bool>("extract_benchmark_plan_loaded_after_success", false);
     extract_loaded_planning_group_ =
@@ -477,6 +500,8 @@ public:
       std::max(0, get_or_declare_parameter<int>("extract_loaded_candidate_limit", 0)));
     extract_loaded_sort_by_pose_distance_ =
       get_or_declare_parameter<bool>("extract_loaded_sort_by_pose_distance", false);
+    extract_loaded_stop_on_first_success_ =
+      get_or_declare_parameter<bool>("extract_loaded_stop_on_first_success", false);
     extract_loaded_target_updown_ = get_or_declare_parameter<double>("extract_loaded_target_updown", 0.3);
     record_tip_error_ik_candidates_ = get_or_declare_parameter<bool>("record_tip_error_ik_candidates", false);
     record_tip_error_ik_candidate_limit_ = static_cast<size_t>(
@@ -1064,6 +1089,10 @@ private:
 
     const auto boxes = make_boxes(box_front_x_);
     const AxisAlignedBox carried = expanded_aabb(attached_box_world_aabb(state, carried_box), extract_neighbor_margin_);
+    const double carried_min_x = carried.center[0] - 0.5 * carried.size[0];
+    const double carried_max_x = carried.center[0] + 0.5 * carried.size[0];
+    const double carried_min_z = carried.center[2] - 0.5 * carried.size[2];
+    const double carried_max_z = carried.center[2] + 0.5 * carried.size[2];
     for (int neighbor_id : neighbor_ids) {
       const auto it = boxes.find(neighbor_id);
       if (it == boxes.end()) continue;
@@ -1076,9 +1105,18 @@ private:
         carried_box_width_,
         carried_box_height_,
       }}, extract_neighbor_margin_);
-      if (aabb_overlaps(carried, neighbor)) {
+      const double neighbor_min_x = neighbor.center[0] - 0.5 * neighbor.size[0];
+      const double neighbor_max_x = neighbor.center[0] + 0.5 * neighbor.size[0];
+      const double neighbor_min_z = neighbor.center[2] - 0.5 * neighbor.size[2];
+      const double neighbor_max_z = neighbor.center[2] + 0.5 * neighbor.size[2];
+      const bool side_face_projection_overlaps =
+        carried_min_x <= neighbor_max_x &&
+        carried_max_x >= neighbor_min_x &&
+        carried_min_z <= neighbor_max_z &&
+        carried_max_z >= neighbor_min_z;
+      if (side_face_projection_overlaps) {
         if (reason) {
-          *reason = carried_box.id + " still overlaps neighbor box " + std::to_string(neighbor_id);
+          *reason = carried_box.id + " side face still overlaps neighbor box " + std::to_string(neighbor_id);
         }
         return false;
       }
@@ -2103,6 +2141,163 @@ private:
     return valid;
   }
 
+  ArmExtractPath rollout_arm_extract_path(
+    const std::string& side,
+    const moveit::core::RobotState& start_state,
+    const AttachedBoxSpec& carried_box,
+    int box_id) const
+  {
+    ArmExtractPath path;
+    const auto boxes = make_boxes(box_front_x_);
+    const auto source_it = boxes.find(box_id);
+    if (source_it == boxes.end()) {
+      path.failure_reason = "unknown_box_id";
+      return path;
+    }
+
+    moveit::core::RobotState current_state(start_state);
+    double last_retreat_x = 0.0;
+    double current_lift_z = 0.0;
+    double min_allowed_tip_z =
+      current_state.getGlobalLinkTransform(side == "left" ? left_tip_ : right_tip_).translation().z();
+    const size_t max_steps = static_cast<size_t>(
+      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
+
+    path.states.push_back(std::make_shared<moveit::core::RobotState>(current_state));
+    bool detached_seen = false;
+    size_t extra_steps_after_detached = 0;
+    for (size_t step = 1; step <= max_steps; ++step) {
+      const auto candidates =
+        make_extract_candidates_for_side(side, current_state, source_it->second, carried_box, box_id,
+                                         step, last_retreat_x, current_lift_z, min_allowed_tip_z);
+      auto best_it = std::min_element(
+        candidates.begin(), candidates.end(),
+        [&](const ExtractCandidate& a, const ExtractCandidate& b) {
+          return extract_candidate_score_for_side(side, a, current_state, last_retreat_x) <
+                 extract_candidate_score_for_side(side, b, current_state, last_retreat_x);
+        });
+      if (best_it == candidates.end() || !best_it->state_valid || !best_it->state) {
+        ++path.failed_steps;
+        std::map<std::string, size_t> rejection_counts;
+        for (const auto& candidate : candidates) {
+          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
+          rejection_counts[key]++;
+        }
+        if (!rejection_counts.empty()) {
+          size_t best_count = 0;
+          for (const auto& [reason, count] : rejection_counts) {
+            if (count > best_count) {
+              best_count = count;
+              path.failure_reason = side + ":" + reason;
+            }
+          }
+        } else {
+          path.failure_reason = side + ":no_valid_candidate";
+        }
+        if (detached_seen && path.success) {
+          path.failure_reason.clear();
+        }
+        break;
+      }
+
+      current_state = *best_it->state;
+      min_allowed_tip_z =
+        std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(side == "left" ? left_tip_ : right_tip_).translation().z());
+      last_retreat_x = best_it->retreat_x;
+      current_lift_z = best_it->lift_z;
+      path.final_retreat_x = best_it->retreat_x;
+      path.final_lift_z = best_it->lift_z;
+      path.final_pitch_deg = best_it->pitch_up_rad * 180.0 / M_PI;
+      path.selected_candidates.push_back(*best_it);
+      path.states.push_back(std::make_shared<moveit::core::RobotState>(current_state));
+      ++path.accepted_steps;
+
+      if (best_it->detached_from_neighbors) {
+        detached_seen = true;
+        path.success = true;
+        path.failure_reason.clear();
+      }
+      if (detached_seen) {
+        ++extra_steps_after_detached;
+      }
+      if (detached_seen && extra_steps_after_detached > extract_success_extra_steps_) {
+        path.success = true;
+        path.failure_reason.clear();
+        break;
+      }
+    }
+
+    if (!path.success && path.failure_reason.empty()) {
+      path.failure_reason = side + ":reached_max_retreat_without_neighbor_detachment";
+    }
+    return path;
+  }
+
+  moveit::core::RobotState combine_async_arm_states(
+    const moveit::core::RobotState& base_state,
+    const ArmExtractPath& left_path,
+    const ArmExtractPath& right_path,
+    size_t left_index,
+    size_t right_index) const
+  {
+    moveit::core::RobotState state(base_state);
+    const auto& left_state = *left_path.states[std::min(left_index, left_path.states.size() - 1)];
+    const auto& right_state = *right_path.states[std::min(right_index, right_path.states.size() - 1)];
+    copy_arm_state("left", left_state, state);
+    copy_arm_state("right", right_state, state);
+    state.setVariablePosition("updown", current_updown(base_state));
+    state.enforceBounds(joint_group_);
+    state.update();
+    return state;
+  }
+
+  bool validate_async_extract_path(
+    const moveit::core::RobotState& start_state,
+    const ArmExtractPath& left_path,
+    const ArmExtractPath& right_path,
+    const AttachedBoxSpec& left_box,
+    int left_box_id,
+    const AttachedBoxSpec& right_box,
+    int right_box_id,
+    std::vector<moveit::core::RobotStatePtr>* combined_states,
+    std::string* reason) const
+  {
+    if (!left_path.success) {
+      if (reason) *reason = left_path.failure_reason.empty() ? "left_async_extract_failed" : left_path.failure_reason;
+      return false;
+    }
+    if (!right_path.success) {
+      if (reason) *reason = right_path.failure_reason.empty() ? "right_async_extract_failed" : right_path.failure_reason;
+      return false;
+    }
+    if (left_path.states.empty() || right_path.states.empty()) {
+      if (reason) *reason = "empty_async_extract_path";
+      return false;
+    }
+
+    const size_t step_count = std::max(left_path.states.size(), right_path.states.size());
+    if (combined_states) {
+      combined_states->clear();
+      combined_states->reserve(step_count);
+    }
+    for (size_t step = 0; step < step_count; ++step) {
+      auto state = std::make_shared<moveit::core::RobotState>(
+        combine_async_arm_states(start_state, left_path, right_path, step, step));
+      bool left_detached = false;
+      bool right_detached = false;
+      std::string state_reason;
+      if (!state_clear_for_dual_extract(*state, left_box, left_box_id, right_box, right_box_id,
+                                        &left_detached, &right_detached, &state_reason)) {
+        if (reason) *reason = "async_combined_step_" + std::to_string(step) + ":" + state_reason;
+        return false;
+      }
+      if (combined_states) {
+        combined_states->push_back(state);
+      }
+    }
+    return true;
+  }
+
   DualExtractStepCandidate select_dual_extract_step_candidate(
     const moveit::core::RobotState& current_state,
     const std::vector<ExtractCandidate>& left_candidates,
@@ -2198,6 +2393,115 @@ private:
     state.enforceBounds(joint_group_);
     state.update();
     return state;
+  }
+
+  struct IkDedupStats
+  {
+    bool enabled = false;
+    size_t input_count = 0;
+    size_t unique_count = 0;
+    size_t selected_count = 0;
+    size_t removed_count = 0;
+    double elapsed_ms = 0.0;
+  };
+
+  static double wrapped_angle_delta(double lhs, double rhs)
+  {
+    double delta = std::fmod(lhs - rhs + M_PI, 2.0 * M_PI);
+    if (delta < 0.0) {
+      delta += 2.0 * M_PI;
+    }
+    return std::abs(delta - M_PI);
+  }
+
+  std::optional<double> candidate_joint_value(
+    const ik_benchmark::UpdownAwareIkCandidate& candidate,
+    const std::string& joint_name) const
+  {
+    for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
+      if (candidate.full_joint_names[i] == joint_name) {
+        return candidate.full_joint_values[i];
+      }
+    }
+    return std::nullopt;
+  }
+
+  bool ik_candidates_similar(
+    const ik_benchmark::UpdownAwareIkCandidate& candidate,
+    const ik_benchmark::UpdownAwareIkCandidate& kept) const
+  {
+    if (extract_ik_dedup_h_threshold_ >= 0.0 &&
+        std::abs(candidate.h - kept.h) > extract_ik_dedup_h_threshold_) {
+      return false;
+    }
+    if (extract_ik_dedup_joint_threshold_ <= 0.0) {
+      return false;
+    }
+
+    static const std::array<const char*, 12> arm_joints = {
+      "left_v5_joint1", "left_v5_joint2", "left_v5_joint3",
+      "left_v5_joint4", "left_v5_joint5", "left_v5_joint6",
+      "right_v5_joint1", "right_v5_joint2", "right_v5_joint3",
+      "right_v5_joint4", "right_v5_joint5", "right_v5_joint6",
+    };
+
+    size_t compared = 0;
+    for (const auto* joint_name : arm_joints) {
+      const auto lhs = candidate_joint_value(candidate, joint_name);
+      const auto rhs = candidate_joint_value(kept, joint_name);
+      if (!lhs || !rhs) {
+        continue;
+      }
+      ++compared;
+      if (wrapped_angle_delta(*lhs, *rhs) > extract_ik_dedup_joint_threshold_) {
+        return false;
+      }
+    }
+    return compared > 0;
+  }
+
+  std::vector<ik_benchmark::UpdownAwareIkCandidate> select_benchmark_ik_candidates(
+    const std::vector<ik_benchmark::UpdownAwareIkCandidate>& sorted_legal_candidates,
+    IkDedupStats* stats) const
+  {
+    IkDedupStats local_stats;
+    local_stats.enabled = extract_ik_dedup_enabled_ && extract_ik_dedup_joint_threshold_ > 0.0;
+    local_stats.input_count = sorted_legal_candidates.size();
+
+    std::vector<ik_benchmark::UpdownAwareIkCandidate> selected;
+    if (local_stats.enabled) {
+      const auto start = std::chrono::steady_clock::now();
+      selected.reserve(sorted_legal_candidates.size());
+      for (const auto& candidate : sorted_legal_candidates) {
+        bool duplicate = false;
+        for (const auto& kept : selected) {
+          if (ik_candidates_similar(candidate, kept)) {
+            duplicate = true;
+            break;
+          }
+        }
+        if (!duplicate) {
+          selected.push_back(candidate);
+        }
+      }
+      local_stats.elapsed_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count();
+    } else {
+      selected = sorted_legal_candidates;
+    }
+
+    local_stats.unique_count = selected.size();
+    local_stats.removed_count = local_stats.input_count > local_stats.unique_count
+      ? local_stats.input_count - local_stats.unique_count
+      : 0;
+    if (extract_benchmark_candidate_limit_ > 0 && selected.size() > extract_benchmark_candidate_limit_) {
+      selected.resize(extract_benchmark_candidate_limit_);
+    }
+    local_stats.selected_count = selected.size();
+    if (stats) {
+      *stats = local_stats;
+    }
+    return selected;
   }
 
   struct ExtractRolloutTiming
@@ -2697,6 +3001,101 @@ private:
 
     const auto t0 = std::chrono::steady_clock::now();
     moveit::core::RobotState current_state(start_state);
+    if (extract_benchmark_dual_async_) {
+      const auto left_path = rollout_arm_extract_path("left", start_state, left_box, left_box_id);
+      const auto right_path = rollout_arm_extract_path("right", start_state, right_box, right_box_id);
+      timing.accepted_steps = left_path.accepted_steps + right_path.accepted_steps;
+      timing.failed_steps = left_path.failed_steps + right_path.failed_steps;
+      timing.final_retreat_x = left_path.final_retreat_x;
+      timing.final_lift_z = left_path.final_lift_z;
+      timing.final_pitch_deg = left_path.final_pitch_deg;
+      timing.right_final_retreat_x = right_path.final_retreat_x;
+      timing.right_final_lift_z = right_path.final_lift_z;
+      timing.right_final_pitch_deg = right_path.final_pitch_deg;
+
+      std::vector<moveit::core::RobotStatePtr> combined_states;
+      std::string async_reason;
+      const bool async_valid = validate_async_extract_path(
+        start_state, left_path, right_path, left_box, left_box_id, right_box, right_box_id,
+        &combined_states, &async_reason);
+      if (!async_valid) {
+        timing.failure_reason = async_reason;
+      } else {
+        timing.success = true;
+        timing.failure_reason.clear();
+        timing.final_state = combined_states.empty() ? std::make_shared<moveit::core::RobotState>(start_state) : combined_states.back();
+      }
+
+      if (record_step) {
+        nlohmann::json start_extra = {
+          {"stage_kind", "dual_extract_async_start"},
+          {"candidate_order", candidate_order},
+          {"h_index", ik_candidate.h_index},
+          {"seed_index", ik_candidate.seed_index},
+          {"h", ik_candidate.h},
+          {"ik_score", ik_candidate.score},
+          {"ik_solve_ms", ik_candidate.solve_ms},
+          {"accepted", true},
+          {"step", 0},
+          {"left_path_success", left_path.success},
+          {"right_path_success", right_path.success},
+          {"left_path_steps", left_path.accepted_steps},
+          {"right_path_steps", right_path.accepted_steps},
+          {"async_valid", async_valid},
+          {"failure_reason", timing.failure_reason}
+        };
+        record_step(0, start_state, start_extra);
+        const size_t recorded_step_count = std::max(
+          combined_states.size(),
+          std::max(left_path.states.empty() ? 0 : left_path.states.size() - 1,
+                   right_path.states.empty() ? 0 : right_path.states.size() - 1));
+        for (size_t step = 1; step <= recorded_step_count; ++step) {
+          const auto left_index = std::min(step, left_path.selected_candidates.size());
+          const auto right_index = std::min(step, right_path.selected_candidates.size());
+          auto display_state = combined_states.empty() || step > combined_states.size()
+            ? std::make_shared<moveit::core::RobotState>(
+                combine_async_arm_states(start_state, left_path, right_path, left_index, right_index))
+            : combined_states[step - 1];
+          nlohmann::json extra = {
+            {"stage_kind", "dual_extract_async_step"},
+            {"candidate_order", candidate_order},
+            {"h_index", ik_candidate.h_index},
+            {"seed_index", ik_candidate.seed_index},
+            {"h", ik_candidate.h},
+            {"ik_score", ik_candidate.score},
+            {"ik_solve_ms", ik_candidate.solve_ms},
+            {"step", step},
+            {"accepted", true},
+            {"left_path_success", left_path.success},
+            {"right_path_success", right_path.success},
+            {"left_path_steps", left_path.accepted_steps},
+            {"right_path_steps", right_path.accepted_steps},
+            {"async_valid", async_valid},
+            {"failure_reason", timing.failure_reason}
+          };
+          if (left_index > 0 && left_index <= left_path.selected_candidates.size()) {
+            const auto& left = left_path.selected_candidates[left_index - 1];
+            extra["left_retreat_x"] = left.retreat_x;
+            extra["left_lift_z"] = left.lift_z;
+            extra["left_pitch_up_deg"] = left.pitch_up_rad * 180.0 / M_PI;
+            extra["left_detached_from_neighbors"] = left.detached_from_neighbors;
+          }
+          if (right_index > 0 && right_index <= right_path.selected_candidates.size()) {
+            const auto& right = right_path.selected_candidates[right_index - 1];
+            extra["right_retreat_x"] = right.retreat_x;
+            extra["right_lift_z"] = right.lift_z;
+            extra["right_pitch_up_deg"] = right.pitch_up_rad * 180.0 / M_PI;
+            extra["right_detached_from_neighbors"] = right.detached_from_neighbors;
+          }
+          record_step(step, *display_state, extra);
+        }
+      }
+
+      const auto t1 = std::chrono::steady_clock::now();
+      timing.rollout_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+      return timing;
+    }
+
     double left_last_retreat_x = 0.0;
     double right_last_retreat_x = 0.0;
     double left_lift_z = 0.0;
@@ -2887,6 +3286,37 @@ private:
     return true;
   }
 
+  ExtractRolloutTiming run_dual_extract_candidate(
+    const std::string& prefix,
+    const moveit::core::RobotState& seed_state,
+    const std::vector<ik_benchmark::UpdownAwareIkCandidate>& legal_candidates,
+    const AttachedBoxSpec& left_box,
+    int left_box_id,
+    const AttachedBoxSpec& right_box,
+    int right_box_id,
+    size_t index,
+    bool record_rollout)
+  {
+    auto state = state_from_ik_candidate(seed_state, legal_candidates[index]);
+    std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)> record_step;
+    if (record_rollout) {
+      const std::vector<AttachedBoxSpec> boxes{left_box, right_box};
+      record_step = [&, boxes, index](size_t step_index, const moveit::core::RobotState& rollout_state, const nlohmann::json& extra) {
+        record_extract_keyframe(
+          prefix + "/candidate_" + std::to_string(index) + "/step_" + std::to_string(step_index),
+          rollout_state,
+          boxes,
+          extra);
+      };
+    }
+    auto timing = rollout_dual_extract_from_state(
+      state, left_box, left_box_id, right_box, right_box_id, index, legal_candidates[index], record_step);
+    if (timing.success && timing.final_state) {
+      fill_loaded_pose_distance_metrics(timing);
+    }
+    return timing;
+  }
+
   bool benchmark_all_legal_ik_extract(
     const std::string& prefix,
     const moveit::core::RobotState& seed_state,
@@ -2906,9 +3336,8 @@ private:
       return fail(prefix + "/extract_benchmark: no legal IK candidates");
     }
     const size_t original_legal_count = legal_candidates.size();
-    if (extract_benchmark_candidate_limit_ > 0 && legal_candidates.size() > extract_benchmark_candidate_limit_) {
-      legal_candidates.resize(extract_benchmark_candidate_limit_);
-    }
+    IkDedupStats dedup_stats;
+    legal_candidates = select_benchmark_ik_candidates(legal_candidates, &dedup_stats);
 
     if (record_tip_error_ik_candidates_) {
       record_tip_error_ik_candidates(prefix, seed_state, ik_result, left_box);
@@ -3015,8 +3444,11 @@ private:
       ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
       : 0.0;
     RCLCPP_INFO(get_logger(),
-                "[%s/extract_benchmark] legal_ik=%zu success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
-                prefix.c_str(), timings.size(), any_success ? "true" : "false",
+                "[%s/extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
+                prefix.c_str(), original_legal_count, timings.size(),
+                dedup_stats.enabled ? "true" : "false", dedup_stats.unique_count,
+                dedup_stats.removed_count, dedup_stats.elapsed_ms,
+                any_success ? "true" : "false",
                 loaded_plan_success_count, loaded_plan_attempted_count,
                 mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
 
@@ -3026,6 +3458,14 @@ private:
         {"legal_ik_count", original_legal_count},
         {"tested_ik_count", legal_candidates.size()},
         {"candidate_limit", extract_benchmark_candidate_limit_},
+        {"ik_dedup_enabled", dedup_stats.enabled},
+        {"ik_dedup_joint_threshold_deg", extract_ik_dedup_joint_threshold_ * 180.0 / M_PI},
+        {"ik_dedup_h_threshold", extract_ik_dedup_h_threshold_},
+        {"ik_dedup_input_count", dedup_stats.input_count},
+        {"ik_dedup_unique_count", dedup_stats.unique_count},
+        {"ik_dedup_removed_count", dedup_stats.removed_count},
+        {"ik_dedup_selected_count", dedup_stats.selected_count},
+        {"ik_dedup_ms", dedup_stats.elapsed_ms},
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
@@ -3066,9 +3506,8 @@ private:
       return fail(prefix + "/dual_extract_benchmark: no legal IK candidates");
     }
     const size_t original_legal_count = legal_candidates.size();
-    if (extract_benchmark_candidate_limit_ > 0 && legal_candidates.size() > extract_benchmark_candidate_limit_) {
-      legal_candidates.resize(extract_benchmark_candidate_limit_);
-    }
+    IkDedupStats dedup_stats;
+    legal_candidates = select_benchmark_ik_candidates(legal_candidates, &dedup_stats);
 
     std::vector<ExtractRolloutTiming> timings;
     timings.reserve(legal_candidates.size());
@@ -3173,8 +3612,11 @@ private:
       ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
       : 0.0;
     RCLCPP_INFO(get_logger(),
-                "[%s/dual_extract_benchmark] legal_ik=%zu success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
-                prefix.c_str(), timings.size(), any_success ? "true" : "false",
+                "[%s/dual_extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
+                prefix.c_str(), original_legal_count, timings.size(),
+                dedup_stats.enabled ? "true" : "false", dedup_stats.unique_count,
+                dedup_stats.removed_count, dedup_stats.elapsed_ms,
+                any_success ? "true" : "false",
                 loaded_plan_success_count, loaded_plan_attempted_count,
                 mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
 
@@ -3182,9 +3624,18 @@ private:
       record_stream_ << nlohmann::json({
         {"type", "extract_benchmark_summary"},
         {"mode", "dual_extract"},
+        {"dual_async", extract_benchmark_dual_async_},
         {"legal_ik_count", original_legal_count},
         {"tested_ik_count", legal_candidates.size()},
         {"candidate_limit", extract_benchmark_candidate_limit_},
+        {"ik_dedup_enabled", dedup_stats.enabled},
+        {"ik_dedup_joint_threshold_deg", extract_ik_dedup_joint_threshold_ * 180.0 / M_PI},
+        {"ik_dedup_h_threshold", extract_ik_dedup_h_threshold_},
+        {"ik_dedup_input_count", dedup_stats.input_count},
+        {"ik_dedup_unique_count", dedup_stats.unique_count},
+        {"ik_dedup_removed_count", dedup_stats.removed_count},
+        {"ik_dedup_selected_count", dedup_stats.selected_count},
+        {"ik_dedup_ms", dedup_stats.elapsed_ms},
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
@@ -3982,6 +4433,7 @@ private:
   std::vector<double> extract_pitch_candidates_deg_;
   double extract_neighbor_margin_ = 0.02;
   bool extract_fail_fast_ = false;
+  size_t extract_success_extra_steps_ = 3;
   double extract_kdl_timeout_ = 0.01;
   double extract_position_tolerance_ = 0.01;
   double extract_orientation_tolerance_ = 0.05;
@@ -3998,15 +4450,21 @@ private:
   double extract_grasp_ik_home_updown_ = 0.3;
   bool extract_benchmark_all_legal_ik_ = false;
   bool extract_benchmark_dual_arm_ = false;
+  bool extract_benchmark_dual_async_ = false;
   std::string extract_benchmark_csv_path_;
   bool extract_benchmark_record_rollouts_ = false;
   size_t extract_benchmark_candidate_limit_ = 0;
+  size_t extract_benchmark_extract_workers_ = 1;
+  bool extract_ik_dedup_enabled_ = false;
+  double extract_ik_dedup_joint_threshold_ = 1.0 * M_PI / 180.0;
+  double extract_ik_dedup_h_threshold_ = 0.005;
   bool extract_benchmark_plan_loaded_after_success_ = false;
   std::string extract_loaded_planning_group_ = "dual_v5_arm_with_base";
   double extract_loaded_planning_time_ = 1.0;
   int extract_loaded_planning_attempts_ = 4;
   size_t extract_loaded_candidate_limit_ = 0;
   bool extract_loaded_sort_by_pose_distance_ = false;
+  bool extract_loaded_stop_on_first_success_ = false;
   double extract_loaded_target_updown_ = 0.3;
   bool record_tip_error_ik_candidates_ = false;
   size_t record_tip_error_ik_candidate_limit_ = 80;

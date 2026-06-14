@@ -39,6 +39,8 @@
   <depend>visualization_msgs</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_eigen</depend>
+  <depend>kdl_parser</depend>
+  <depend>orocos_kdl_vendor</depend>
   <depend>std_msgs</depend>
 
   <!-- Runtime deps (MoveIt launch / plugins) -->

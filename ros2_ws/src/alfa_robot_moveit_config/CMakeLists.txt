@@ -24,6 +24,8 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(kdl_parser REQUIRED)
+find_package(orocos_kdl_vendor REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SemanticCargo.msg"
@@ -68,6 +70,8 @@ ament_target_dependencies(dual_arm_planner_node
   tf2_ros
   tf2_geometry_msgs
   tf2_eigen
+  kdl_parser
+  orocos_kdl_vendor
 )
 
 install(TARGETS dual_arm_planner_node

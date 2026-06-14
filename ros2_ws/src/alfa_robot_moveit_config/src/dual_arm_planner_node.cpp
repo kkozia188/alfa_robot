@@ -15,6 +15,13 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/robot_state/robot_state.h>
+#include <kdl/chainfksolverpos_recursive.hpp>
+#include <kdl/chainiksolverpos_nr_jl.hpp>
+#include <kdl/chainiksolvervel_pinv.hpp>
+#include <kdl/frames.hpp>
+#include <kdl/jntarray.hpp>
+#include <kdl/tree.hpp>
+#include <kdl_parser/kdl_parser.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <moveit_msgs/msg/attached_collision_object.hpp>
@@ -37,6 +44,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <iomanip>
+#include <random>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -132,6 +140,18 @@ struct ArmExtractPath
   double final_pitch_deg = 0.0;
   size_t accepted_steps = 0;
   size_t failed_steps = 0;
+};
+
+struct ArmKdlChain
+{
+  std::string side;
+  std::string base_link;
+  std::string tip_link;
+  KDL::Chain chain;
+  std::vector<std::string> joint_names;
+  KDL::JntArray lower;
+  KDL::JntArray upper;
+  bool valid = false;
 };
 
 struct ExtractMotionDelta
@@ -307,18 +327,41 @@ std::map<int, BoxSpec> make_boxes(double front_x)
   return boxes;
 }
 
-std::vector<PickPair> make_pick_pairs(bool include_top_suction)
+std::vector<std::pair<int, int>> parse_box_pair_list(const std::string& value)
 {
-  std::vector<PickPair> pairs = {
-    {1, 2, 4, false},
-    {2, 7, 9, false},
-    {3, 12, 14, false},
-    {4, 17, 19, false},
-  };
+  std::vector<std::pair<int, int>> pairs;
+  std::stringstream stream(value);
+  std::string segment;
+  while (std::getline(stream, segment, ';')) {
+    segment = trim_copy(segment);
+    if (segment.empty()) continue;
+    const auto comma = segment.find(',');
+    const auto slash = segment.find('/');
+    const auto sep = comma == std::string::npos ? slash : comma;
+    if (sep == std::string::npos) continue;
+    const std::string left = trim_copy(segment.substr(0, sep));
+    const std::string right = trim_copy(segment.substr(sep + 1));
+    if (left.empty() || right.empty()) continue;
+    pairs.push_back({std::stoi(left), std::stoi(right)});
+  }
+  return pairs;
+}
+
+std::vector<PickPair> make_pick_pairs(bool include_top_suction, const std::vector<std::pair<int, int>>& front_pairs)
+{
+  std::vector<PickPair> pairs;
+  pairs.reserve(front_pairs.size() + 1);
+  for (size_t index = 0; index < front_pairs.size(); ++index) {
+    pairs.push_back({
+      static_cast<int>(index + 1),
+      front_pairs[index].first,
+      front_pairs[index].second,
+      false,
+    });
+  }
   if (include_top_suction) {
-    pairs.push_back({5, 22, 24, true});
-  } else {
-    pairs.push_back({5, 22, 24, false});
+    const int round = static_cast<int>(pairs.size() + 1);
+    pairs.push_back({round, 22, 24, true});
   }
   return pairs;
 }
@@ -400,8 +443,8 @@ public:
     ik_config_.left_tip = left_tip_;
     ik_config_.right_tip = right_tip_;
     ik_config_.tool0_offset = get_or_declare_parameter<double>("ik_tool0_offset", 0.0);
-    ik_config_.gripper_z_reach_lower = get_or_declare_parameter<double>("front_z_reach_lower", 0.45) - world_to_base_z_;
-    ik_config_.gripper_z_reach_upper = get_or_declare_parameter<double>("front_z_reach_upper", 1.25) - world_to_base_z_;
+    ik_config_.gripper_z_reach_lower = get_or_declare_parameter<double>("front_z_reach_lower", 0.9) - world_to_base_z_;
+    ik_config_.gripper_z_reach_upper = get_or_declare_parameter<double>("front_z_reach_upper", 1.3) - world_to_base_z_;
     ik_config_.top_suction_z_reach_lower = get_or_declare_parameter<double>("top_z_reach_lower", 0.3) - world_to_base_z_;
     ik_config_.top_suction_z_reach_upper = get_or_declare_parameter<double>("top_z_reach_upper", 0.45) - world_to_base_z_;
     ik_config_.h_lower = get_or_declare_parameter<double>("ik_h_lower", 0.0);
@@ -451,6 +494,11 @@ public:
 
     extract_demo_left_box_id_ = get_or_declare_parameter<int>("extract_demo_left_box_id", 2);
     extract_demo_right_box_id_ = get_or_declare_parameter<int>("extract_demo_right_box_id", 4);
+    extract_demo_pair_sequence_ = parse_box_pair_list(
+      get_or_declare_parameter<std::string>("extract_demo_pair_sequence", "2,4;7,9;12,14;17,19"));
+    if (extract_demo_pair_sequence_.empty()) {
+      extract_demo_pair_sequence_ = {{2, 4}, {7, 9}, {12, 14}, {17, 19}};
+    }
     extract_demo_all_rows_ = get_or_declare_parameter<bool>("extract_demo_all_rows", false);
     extract_step_x_ = get_or_declare_parameter<double>("extract_step_x", 0.03);
     extract_max_x_ = get_or_declare_parameter<double>("extract_max_x", 0.36);
@@ -503,6 +551,15 @@ public:
     extract_loaded_stop_on_first_success_ =
       get_or_declare_parameter<bool>("extract_loaded_stop_on_first_success", false);
     extract_loaded_target_updown_ = get_or_declare_parameter<double>("extract_loaded_target_updown", 0.3);
+    extract_use_independent_kdl_ = get_or_declare_parameter<bool>("extract_use_independent_kdl", false);
+    extract_independent_kdl_max_iterations_ =
+      std::max(1, get_or_declare_parameter<int>("extract_independent_kdl_max_iterations", 120));
+    extract_independent_kdl_eps_ =
+      get_or_declare_parameter<double>("extract_independent_kdl_eps", 1e-5);
+    extract_independent_kdl_seed_attempts_ =
+      std::max(1, get_or_declare_parameter<int>("extract_independent_kdl_seed_attempts", 1));
+    extract_independent_kdl_seed_jitter_ =
+      get_or_declare_parameter<double>("extract_independent_kdl_seed_jitter_deg", 8.0) * M_PI / 180.0;
     record_tip_error_ik_candidates_ = get_or_declare_parameter<bool>("record_tip_error_ik_candidates", false);
     record_tip_error_ik_candidate_limit_ = static_cast<size_t>(
       std::max(0, get_or_declare_parameter<int>("record_tip_error_ik_candidate_limit", 80)));
@@ -571,6 +628,13 @@ public:
       throw std::runtime_error("Missing single-arm JointModelGroup left_v5_arm/right_v5_arm");
     }
 
+    if (extract_use_independent_kdl_) {
+      if (!init_arm_kdl_chain("left", &left_kdl_chain_) ||
+          !init_arm_kdl_chain("right", &right_kdl_chain_)) {
+        throw std::runtime_error("Failed to initialize independent KDL chains");
+      }
+    }
+
     optimized_ik_solver_ = std::make_unique<ik_benchmark::ParallelUpdownAwareIkSolver>(ik_config_);
 
     planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
@@ -633,8 +697,15 @@ public:
                 left_preferred_loaded_pose_index_, right_preferred_loaded_pose_index_,
                 ik_config_.cost_loaded_family_distance, ik_config_.cost_loaded_preferred_distance);
     RCLCPP_INFO(get_logger(),
-                "  Extract primitive IK=left_v5_arm/KDL fixed-updown timeout=%.3fs pos_tol=%.3fm ori_tol=%.3frad",
+                "  Extract primitive IK=%s fixed-updown timeout=%.3fs pos_tol=%.3fm ori_tol=%.3frad",
+                extract_use_independent_kdl_ ? "independent Orocos KDL chains" : "MoveIt setFromIK/KDL plugin",
                 extract_kdl_timeout_, extract_position_tolerance_, extract_orientation_tolerance_);
+    if (extract_use_independent_kdl_) {
+      RCLCPP_INFO(get_logger(), "  Independent KDL settings: max_iterations=%d eps=%.2e",
+                  extract_independent_kdl_max_iterations_, extract_independent_kdl_eps_);
+      RCLCPP_INFO(get_logger(), "  Independent KDL seeds: attempts=%d jitter=%.2fdeg",
+                  extract_independent_kdl_seed_attempts_, extract_independent_kdl_seed_jitter_ * 180.0 / M_PI);
+    }
     RCLCPP_INFO(get_logger(), "  speed scale velocity=%.2f acceleration=%.2f",
                 velocity_scale_, acceleration_scale_);
     RCLCPP_INFO(get_logger(), "  attached carried-box collision=%s size=(%.2f, %.2f, %.2f)",
@@ -826,11 +897,15 @@ private:
       x_min, x_max,
       positive_hole_y_max + inset, inner_y_max,
       z_min, z_max);
-    add_static_wall_piece(
-      obstacles, prefix + "_between",
-      x_min, x_max,
-      negative_hole_y_max + inset, positive_hole_y_min - inset,
-      z_min, z_max);
+    const double between_y_min = negative_hole_y_max + inset;
+    const double between_y_max = positive_hole_y_min - inset;
+    if (between_y_max > between_y_min) {
+      add_static_wall_piece(
+        obstacles, prefix + "_between",
+        x_min, x_max,
+        between_y_min, between_y_max,
+        z_min, z_max);
+    }
     add_static_wall_piece(
       obstacles, prefix + "_right_side",
       x_min, x_max,
@@ -1604,6 +1679,182 @@ private:
     return make_pose(tf.translation().x(), tf.translation().y(), tf.translation().z(), q);
   }
 
+  KDL::Frame eigen_to_kdl_frame(const Eigen::Isometry3d& transform) const
+  {
+    const Eigen::Matrix3d rotation = transform.linear();
+    return KDL::Frame(
+      KDL::Rotation(
+        rotation(0, 0), rotation(0, 1), rotation(0, 2),
+        rotation(1, 0), rotation(1, 1), rotation(1, 2),
+        rotation(2, 0), rotation(2, 1), rotation(2, 2)),
+      KDL::Vector(
+        transform.translation().x(),
+        transform.translation().y(),
+        transform.translation().z()));
+  }
+
+  Eigen::Isometry3d kdl_frame_to_eigen(const KDL::Frame& frame) const
+  {
+    Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
+    for (int row = 0; row < 3; ++row) {
+      for (int col = 0; col < 3; ++col) {
+        transform.linear()(row, col) = frame.M(row, col);
+      }
+    }
+    transform.translation() = Eigen::Vector3d(frame.p.x(), frame.p.y(), frame.p.z());
+    return transform;
+  }
+
+  bool init_arm_kdl_chain(const std::string& side, ArmKdlChain* out) const
+  {
+    if (!out || !robot_model_) return false;
+    const auto* group = side == "left" ? left_arm_group_ : right_arm_group_;
+    if (!group) return false;
+
+    const std::string base_link = side == "left" ? "left_v5_link0" : "right_v5_link0";
+    const std::string tip_link = side == "left" ? left_tip_ : right_tip_;
+
+    KDL::Tree tree;
+    if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree)) {
+      RCLCPP_ERROR(get_logger(), "Failed to build KDL tree from URDF");
+      return false;
+    }
+
+    KDL::Chain chain;
+    if (!tree.getChain(base_link, tip_link, chain)) {
+      RCLCPP_ERROR(get_logger(), "Failed to get KDL chain %s -> %s", base_link.c_str(), tip_link.c_str());
+      return false;
+    }
+
+    out->side = side;
+    out->base_link = base_link;
+    out->tip_link = tip_link;
+    out->chain = chain;
+    out->joint_names.clear();
+    out->joint_names.reserve(chain.getNrOfJoints());
+
+    for (unsigned int segment_index = 0; segment_index < chain.getNrOfSegments(); ++segment_index) {
+      const auto& segment = chain.getSegment(segment_index);
+      const auto& joint = segment.getJoint();
+      if (joint.getType() != KDL::Joint::None) {
+        out->joint_names.push_back(joint.getName());
+      }
+    }
+
+    if (out->joint_names.size() != chain.getNrOfJoints()) {
+      RCLCPP_ERROR(get_logger(), "KDL chain %s joint name count mismatch: names=%zu joints=%u",
+                   side.c_str(), out->joint_names.size(), chain.getNrOfJoints());
+      return false;
+    }
+
+    out->lower.resize(chain.getNrOfJoints());
+    out->upper.resize(chain.getNrOfJoints());
+    for (unsigned int i = 0; i < chain.getNrOfJoints(); ++i) {
+      const auto& name = out->joint_names[i];
+      const auto& bounds = robot_model_->getVariableBounds(name);
+      out->lower(i) = bounds.position_bounded_ ? bounds.min_position_ : -M_PI;
+      out->upper(i) = bounds.position_bounded_ ? bounds.max_position_ : M_PI;
+    }
+
+    out->valid = true;
+    RCLCPP_INFO(get_logger(), "Independent KDL chain ready: %s %s -> %s joints=%u",
+                side.c_str(), base_link.c_str(), tip_link.c_str(), chain.getNrOfJoints());
+    return true;
+  }
+
+  bool solve_extract_candidate_independent_kdl(
+    const std::string& side,
+    const ArmKdlChain& chain,
+    const moveit::core::RobotState& current_state,
+    const Eigen::Isometry3d& target_world,
+    moveit::core::RobotState& state) const
+  {
+    if (!chain.valid || chain.joint_names.empty()) return false;
+
+    state = current_state;
+    state.setVariablePosition("updown", current_updown(current_state));
+    state.update();
+
+    const Eigen::Isometry3d& base_world = state.getGlobalLinkTransform(chain.base_link);
+    const Eigen::Isometry3d target_in_base = base_world.inverse() * target_world;
+
+    KDL::JntArray seed(chain.chain.getNrOfJoints());
+    for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
+      seed(i) = current_state.getVariablePosition(chain.joint_names[i]);
+    }
+
+    KDL::ChainFkSolverPos_recursive fk_solver(chain.chain);
+    const int max_iterations = std::max(1, extract_independent_kdl_max_iterations_);
+    const double eps = std::max(1e-9, extract_independent_kdl_eps_);
+    const KDL::Frame target_frame = eigen_to_kdl_frame(target_in_base);
+
+    KDL::JntArray best_solution(chain.chain.getNrOfJoints());
+    double best_error = std::numeric_limits<double>::infinity();
+    bool found = false;
+
+    const uint32_t seed_base =
+      static_cast<uint32_t>(std::hash<std::string>{}(side) ^
+                            static_cast<size_t>(std::llround(target_world.translation().x() * 1000000.0)) ^
+                            (static_cast<size_t>(std::llround(target_world.translation().y() * 1000000.0)) << 1) ^
+                            (static_cast<size_t>(std::llround(target_world.translation().z() * 1000000.0)) << 2));
+    std::mt19937 rng(seed_base);
+    std::uniform_real_distribution<double> jitter_dist(
+      -std::abs(extract_independent_kdl_seed_jitter_),
+      std::abs(extract_independent_kdl_seed_jitter_));
+
+    for (int attempt = 0; attempt < std::max(1, extract_independent_kdl_seed_attempts_); ++attempt) {
+      KDL::JntArray attempt_seed = seed;
+      if (attempt > 0) {
+        for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
+          double value = seed(i) + jitter_dist(rng);
+          value = std::max(chain.lower(i), std::min(chain.upper(i), value));
+          attempt_seed(i) = value;
+        }
+      }
+
+      KDL::JntArray solution(chain.chain.getNrOfJoints());
+      KDL::ChainIkSolverVel_pinv vel_solver(chain.chain);
+      KDL::ChainIkSolverPos_NR_JL ik_solver(
+        chain.chain, chain.lower, chain.upper, fk_solver, vel_solver, max_iterations, eps);
+
+      const int rc = ik_solver.CartToJnt(attempt_seed, target_frame, solution);
+      if (rc < 0) {
+        continue;
+      }
+
+      KDL::Frame achieved;
+      if (fk_solver.JntToCart(solution, achieved) < 0) {
+        continue;
+      }
+      const Eigen::Isometry3d achieved_eigen = kdl_frame_to_eigen(achieved);
+      const double error = pose_position_error(target_in_base, achieved_eigen) +
+                           pose_orientation_error(target_in_base, achieved_eigen);
+      if (error < best_error) {
+        best_error = error;
+        best_solution = solution;
+        found = true;
+      }
+      if (pose_position_error(target_in_base, achieved_eigen) <= extract_position_tolerance_ &&
+          pose_orientation_error(target_in_base, achieved_eigen) <= extract_orientation_tolerance_) {
+        break;
+      }
+    }
+
+    if (!found) {
+      return false;
+    }
+
+    for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
+      state.setVariablePosition(chain.joint_names[i], best_solution(i));
+    }
+    state.setVariablePosition("updown", current_updown(current_state));
+    state.enforceBounds(joint_group_);
+    state.update();
+
+    (void)side;
+    return true;
+  }
+
   bool solve_extract_candidate(
     const moveit::core::RobotState& current_state,
     const geometry_msgs::msg::Pose& left_pose,
@@ -1678,13 +1929,14 @@ private:
     out->pitch_delta_rad = pitch_delta_rad;
     out->target_pose = left_pose;
 
-    auto state = std::make_shared<moveit::core::RobotState>(current_state);
-    state->setVariablePosition("updown", current_updown(current_state));
-    state->update();
-
     const Eigen::Isometry3d target = pose_to_eigen(left_pose);
+    auto state = std::make_shared<moveit::core::RobotState>(current_state);
     bool ik_ok = false;
-    {
+    if (extract_use_independent_kdl_ && left_kdl_chain_.valid) {
+      ik_ok = solve_extract_candidate_independent_kdl("left", left_kdl_chain_, current_state, target, *state);
+    } else {
+      state->setVariablePosition("updown", current_updown(current_state));
+      state->update();
       std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
       ik_ok = state->setFromIK(left_arm_group_, target, left_tip_, extract_kdl_timeout_);
     }
@@ -1777,13 +2029,15 @@ private:
     out->pitch_delta_rad = pitch_delta_rad;
     out->target_pose = target_pose;
 
-    auto state = std::make_shared<moveit::core::RobotState>(current_state);
-    state->setVariablePosition("updown", current_updown(current_state));
-    state->update();
-
     const Eigen::Isometry3d target = pose_to_eigen(target_pose);
+    auto state = std::make_shared<moveit::core::RobotState>(current_state);
     bool ik_ok = false;
-    {
+    const ArmKdlChain& chain = side == "left" ? left_kdl_chain_ : right_kdl_chain_;
+    if (extract_use_independent_kdl_ && chain.valid) {
+      ik_ok = solve_extract_candidate_independent_kdl(side, chain, current_state, target, *state);
+    } else {
+      state->setVariablePosition("updown", current_updown(current_state));
+      state->update();
       std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
       ik_ok = state->setFromIK(arm_group, target, tip, extract_kdl_timeout_);
     }
@@ -4240,10 +4494,9 @@ private:
     last_commanded_state_.reset();
 
     if (extract_demo_all_rows_) {
-      const std::vector<std::pair<int, int>> pairs{{2, 4}, {7, 9}, {12, 14}, {17, 19}};
       bool all_ok = true;
       std::string first_error;
-      for (const auto& [left_box_id, right_box_id] : pairs) {
+      for (const auto& [left_box_id, right_box_id] : extract_demo_pair_sequence_) {
         const bool ok = run_left_extract_pair(left_box_id, right_box_id);
         all_ok = all_ok && ok;
         if (!ok && first_error.empty()) {
@@ -4253,12 +4506,16 @@ private:
         last_commanded_state_.reset();
       }
       if (record_stream_) {
+        nlohmann::json pair_json = nlohmann::json::array();
+        for (const auto& [left_box_id, right_box_id] : extract_demo_pair_sequence_) {
+          pair_json.push_back({left_box_id, right_box_id});
+        }
         record_stream_ << nlohmann::json({
           {"type", "summary"},
           {"success", all_ok},
           {"error", all_ok ? "" : first_error},
           {"stages", record_stage_index_},
-          {"pairs", nlohmann::json::array({{2, 4}, {7, 9}, {12, 14}, {17, 19}})}
+          {"pairs", pair_json}
         }).dump() << '\n';
         record_stream_.flush();
       }
@@ -4439,7 +4696,7 @@ private:
     last_error_.clear();
     last_commanded_state_.reset();
 
-    const auto pairs = make_pick_pairs(include_top_suction_);
+    const auto pairs = make_pick_pairs(include_top_suction_, extract_demo_pair_sequence_);
     const int rounds_to_run = std::min<int>(std::max(1, max_rounds_), static_cast<int>(pairs.size()));
     RCLCPP_INFO(get_logger(), "Starting box-stack flow: rounds=%d/%zu execute=%s", rounds_to_run, pairs.size(),
                 execute_ ? "true" : "false");
@@ -4507,6 +4764,7 @@ private:
   double static_box_obstacle_inset_ = 0.002;
   int extract_demo_left_box_id_ = 2;
   int extract_demo_right_box_id_ = 4;
+  std::vector<std::pair<int, int>> extract_demo_pair_sequence_{{2, 4}, {7, 9}, {12, 14}, {17, 19}};
   bool extract_demo_all_rows_ = false;
   double extract_step_x_ = 0.03;
   double extract_max_x_ = 0.36;
@@ -4547,6 +4805,11 @@ private:
   bool extract_loaded_sort_by_pose_distance_ = false;
   bool extract_loaded_stop_on_first_success_ = false;
   double extract_loaded_target_updown_ = 0.3;
+  bool extract_use_independent_kdl_ = false;
+  int extract_independent_kdl_max_iterations_ = 120;
+  double extract_independent_kdl_eps_ = 1e-5;
+  int extract_independent_kdl_seed_attempts_ = 1;
+  double extract_independent_kdl_seed_jitter_ = 8.0 * M_PI / 180.0;
   bool record_tip_error_ik_candidates_ = false;
   size_t record_tip_error_ik_candidate_limit_ = 80;
   std::string record_jsonl_path_;
@@ -4581,6 +4844,8 @@ private:
   moveit::core::RobotStatePtr last_commanded_state_;
   std::unique_ptr<ik_benchmark::ParallelUpdownAwareIkSolver> optimized_ik_solver_;
   std::ofstream record_stream_;
+  ArmKdlChain left_kdl_chain_;
+  ArmKdlChain right_kdl_chain_;
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr demo_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr box_stack_srv_;

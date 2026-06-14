@@ -3509,39 +3509,63 @@ private:
     IkDedupStats dedup_stats;
     legal_candidates = select_benchmark_ik_candidates(legal_candidates, &dedup_stats);
 
-    std::vector<ExtractRolloutTiming> timings;
-    timings.reserve(legal_candidates.size());
-    auto previous_start = std::chrono::steady_clock::now();
+    std::vector<ExtractRolloutTiming> timings(legal_candidates.size());
     bool any_success = false;
-    for (size_t i = 0; i < legal_candidates.size(); ++i) {
-      const auto start = std::chrono::steady_clock::now();
-      auto state = state_from_ik_candidate(seed_state, legal_candidates[i]);
-      std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)> record_step;
-      if (extract_benchmark_record_rollouts_) {
-        const std::vector<AttachedBoxSpec> boxes{left_box, right_box};
-        record_step = [&, boxes](size_t step_index, const moveit::core::RobotState& rollout_state, const nlohmann::json& extra) {
-          record_extract_keyframe(
-            prefix + "/candidate_" + std::to_string(i) + "/step_" + std::to_string(step_index),
-            rollout_state,
-            boxes,
-            extra);
-        };
+    const size_t requested_extract_workers = std::max<size_t>(1, extract_benchmark_extract_workers_);
+    const size_t used_extract_workers = extract_benchmark_record_rollouts_
+      ? 1
+      : std::max<size_t>(1, std::min(requested_extract_workers, legal_candidates.size()));
+    const auto extract_wall_start = std::chrono::steady_clock::now();
+    if (used_extract_workers <= 1) {
+      auto previous_start = extract_wall_start;
+      for (size_t i = 0; i < legal_candidates.size(); ++i) {
+        const auto start = std::chrono::steady_clock::now();
+        auto timing = run_dual_extract_candidate(
+          prefix, seed_state, legal_candidates, left_box, left_box_id, right_box, right_box_id,
+          i, extract_benchmark_record_rollouts_);
+        timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
+        previous_start = start;
+        timings[i] = std::move(timing);
       }
-      auto timing = rollout_dual_extract_from_state(
-        state, left_box, left_box_id, right_box, right_box_id, i, legal_candidates[i], record_step);
-      if (timing.success && timing.final_state) {
-        fill_loaded_pose_distance_metrics(timing);
+      if (!timings.empty()) {
+        timings.front().interval_ms = 0.0;
       }
-      timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
-      previous_start = start;
-      any_success = any_success || timing.success;
-      timings.push_back(std::move(timing));
+    } else {
+      std::atomic<size_t> next_index{0};
+      std::vector<std::thread> workers;
+      workers.reserve(used_extract_workers);
+      for (size_t worker_index = 0; worker_index < used_extract_workers; ++worker_index) {
+        workers.emplace_back([&, worker_index]() {
+          (void)worker_index;
+          while (true) {
+            const size_t i = next_index.fetch_add(1);
+            if (i >= legal_candidates.size()) {
+              break;
+            }
+            timings[i] = run_dual_extract_candidate(
+              prefix, seed_state, legal_candidates, left_box, left_box_id, right_box, right_box_id,
+              i, false);
+          }
+        });
+      }
+      for (auto& worker : workers) {
+        if (worker.joinable()) {
+          worker.join();
+        }
+      }
+      for (auto& timing : timings) {
+        timing.interval_ms = 0.0;
+      }
     }
-    if (!timings.empty()) {
-      timings.front().interval_ms = 0.0;
+    const auto extract_wall_end = std::chrono::steady_clock::now();
+    const double extract_wall_ms =
+      std::chrono::duration<double, std::milli>(extract_wall_end - extract_wall_start).count();
+    for (const auto& timing : timings) {
+      any_success = any_success || timing.success;
     }
 
     size_t loaded_plan_requests = 0;
+    double loaded_plan_wall_ms = 0.0;
     std::vector<size_t> loaded_plan_indices;
     if (extract_benchmark_plan_loaded_after_success_) {
       for (size_t i = 0; i < timings.size(); ++i) {
@@ -3569,6 +3593,7 @@ private:
       const size_t loaded_limit = extract_loaded_candidate_limit_ > 0
         ? std::min(extract_loaded_candidate_limit_, loaded_plan_indices.size())
         : loaded_plan_indices.size();
+      const auto loaded_plan_wall_start = std::chrono::steady_clock::now();
       for (size_t rank = 0; rank < loaded_plan_indices.size(); ++rank) {
         auto& timing = timings[loaded_plan_indices[rank]];
         timing.loaded_plan_rank = rank + 1;
@@ -3580,10 +3605,21 @@ private:
             std::vector<AttachedBoxSpec>{left_box, right_box},
             &timing);
           timing.loaded_plan_rank = rank + 1;
+          if (extract_loaded_stop_on_first_success_ && timing.loaded_plan_success) {
+            for (size_t rest_rank = rank + 1; rest_rank < loaded_plan_indices.size(); ++rest_rank) {
+              auto& skipped = timings[loaded_plan_indices[rest_rank]];
+              skipped.loaded_plan_rank = rest_rank + 1;
+              skipped.loaded_plan_failure_reason = "loaded_plan_skipped_after_first_success";
+            }
+            break;
+          }
         } else {
           timing.loaded_plan_failure_reason = "loaded_plan_skipped_by_limit";
         }
       }
+      const auto loaded_plan_wall_end = std::chrono::steady_clock::now();
+      loaded_plan_wall_ms =
+        std::chrono::duration<double, std::milli>(loaded_plan_wall_end - loaded_plan_wall_start).count();
     }
 
     write_extract_benchmark_csv(timings);
@@ -3611,13 +3647,16 @@ private:
     const double mean_loaded_plan_ms = loaded_plan_attempted_count > 0
       ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
       : 0.0;
+    const double task_wall_ms =
+      ik_result.wall_ms + dedup_stats.elapsed_ms + extract_wall_ms + loaded_plan_wall_ms;
     RCLCPP_INFO(get_logger(),
-                "[%s/dual_extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
+                "[%s/dual_extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f extract=%zu workers wall=%.3fms success_any=%s loaded_plan=%zu/%zu wall=%.3fms task_wall=%.3fms mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
                 prefix.c_str(), original_legal_count, timings.size(),
                 dedup_stats.enabled ? "true" : "false", dedup_stats.unique_count,
                 dedup_stats.removed_count, dedup_stats.elapsed_ms,
+                used_extract_workers, extract_wall_ms,
                 any_success ? "true" : "false",
-                loaded_plan_success_count, loaded_plan_attempted_count,
+                loaded_plan_success_count, loaded_plan_attempted_count, loaded_plan_wall_ms, task_wall_ms,
                 mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
 
     if (record_stream_) {
@@ -3636,16 +3675,26 @@ private:
         {"ik_dedup_removed_count", dedup_stats.removed_count},
         {"ik_dedup_selected_count", dedup_stats.selected_count},
         {"ik_dedup_ms", dedup_stats.elapsed_ms},
+        {"ik_wall_ms", ik_result.wall_ms},
+        {"extract_parallel_requested_workers", requested_extract_workers},
+        {"extract_parallel_used_workers", used_extract_workers},
+        {"extract_parallel_enabled", used_extract_workers > 1},
+        {"extract_wall_ms", extract_wall_ms},
+        {"extract_sum_rollout_ms", total_rollout_ms},
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
         {"loaded_plan_after_success", extract_benchmark_plan_loaded_after_success_},
         {"loaded_plan_candidate_limit", extract_loaded_candidate_limit_},
         {"loaded_plan_sort_by_pose_distance", extract_loaded_sort_by_pose_distance_},
+        {"loaded_plan_stop_on_first_success", extract_loaded_stop_on_first_success_},
         {"loaded_plan_sorted_success_candidate_count", loaded_plan_indices.size()},
         {"loaded_plan_attempted_count", loaded_plan_attempted_count},
         {"loaded_plan_success_count", loaded_plan_success_count},
+        {"loaded_plan_wall_ms", loaded_plan_wall_ms},
+        {"loaded_plan_sum_ms", total_loaded_plan_ms},
         {"mean_loaded_plan_ms", mean_loaded_plan_ms},
+        {"task_wall_ms", task_wall_ms},
         {"csv_path", extract_benchmark_csv_path_},
         {"rollouts_recorded", extract_benchmark_record_rollouts_},
         {"ik_candidate_rejection_counts", ik_candidate_rejection_counts_json(ik_result)}

@@ -1683,7 +1683,11 @@ private:
     state->update();
 
     const Eigen::Isometry3d target = pose_to_eigen(left_pose);
-    const bool ik_ok = state->setFromIK(left_arm_group_, target, left_tip_, extract_kdl_timeout_);
+    bool ik_ok = false;
+    {
+      std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
+      ik_ok = state->setFromIK(left_arm_group_, target, left_tip_, extract_kdl_timeout_);
+    }
     if (!ik_ok) {
       out->rejection_reason = "left_kdl_no_solution";
       return false;
@@ -1778,7 +1782,11 @@ private:
     state->update();
 
     const Eigen::Isometry3d target = pose_to_eigen(target_pose);
-    const bool ik_ok = state->setFromIK(arm_group, target, tip, extract_kdl_timeout_);
+    bool ik_ok = false;
+    {
+      std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
+      ik_ok = state->setFromIK(arm_group, target, tip, extract_kdl_timeout_);
+    }
     if (!ik_ok) {
       out->rejection_reason = side + "_kdl_no_solution";
       return false;
@@ -3425,6 +3433,8 @@ private:
     double total_loaded_plan_ms = 0.0;
     size_t loaded_plan_attempted_count = 0;
     size_t loaded_plan_success_count = 0;
+    size_t loaded_plan_first_success_rank = 0;
+    size_t loaded_plan_first_success_candidate_order = 0;
     for (const auto& timing : timings) {
       total_interval_ms += timing.interval_ms;
       total_rollout_ms += timing.rollout_ms;
@@ -3434,6 +3444,10 @@ private:
       }
       if (timing.loaded_plan_success) {
         ++loaded_plan_success_count;
+        if (loaded_plan_first_success_rank == 0) {
+          loaded_plan_first_success_rank = timing.loaded_plan_rank;
+          loaded_plan_first_success_candidate_order = timing.candidate_order;
+        }
       }
     }
     const double mean_interval_ms = timings.size() > 1
@@ -3629,6 +3643,8 @@ private:
     double total_loaded_plan_ms = 0.0;
     size_t loaded_plan_attempted_count = 0;
     size_t loaded_plan_success_count = 0;
+    size_t loaded_plan_first_success_rank = 0;
+    size_t loaded_plan_first_success_candidate_order = 0;
     for (const auto& timing : timings) {
       total_interval_ms += timing.interval_ms;
       total_rollout_ms += timing.rollout_ms;
@@ -3638,6 +3654,10 @@ private:
       }
       if (timing.loaded_plan_success) {
         ++loaded_plan_success_count;
+        if (loaded_plan_first_success_rank == 0) {
+          loaded_plan_first_success_rank = timing.loaded_plan_rank;
+          loaded_plan_first_success_candidate_order = timing.candidate_order;
+        }
       }
     }
     const double mean_interval_ms = timings.size() > 1
@@ -3649,6 +3669,14 @@ private:
       : 0.0;
     const double task_wall_ms =
       ik_result.wall_ms + dedup_stats.elapsed_ms + extract_wall_ms + loaded_plan_wall_ms;
+    const bool benchmark_success = extract_benchmark_plan_loaded_after_success_
+      ? loaded_plan_success_count > 0
+      : any_success;
+    if (!benchmark_success) {
+      last_error_ = prefix + "/dual_extract_benchmark: " +
+        std::string(any_success ? "loaded_plan_failed" : "extract_failed");
+    }
+
     RCLCPP_INFO(get_logger(),
                 "[%s/dual_extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f extract=%zu workers wall=%.3fms success_any=%s loaded_plan=%zu/%zu wall=%.3fms task_wall=%.3fms mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
                 prefix.c_str(), original_legal_count, timings.size(),
@@ -3662,6 +3690,7 @@ private:
     if (record_stream_) {
       record_stream_ << nlohmann::json({
         {"type", "extract_benchmark_summary"},
+        {"stage", prefix},
         {"mode", "dual_extract"},
         {"dual_async", extract_benchmark_dual_async_},
         {"legal_ik_count", original_legal_count},
@@ -3681,6 +3710,7 @@ private:
         {"extract_parallel_enabled", used_extract_workers > 1},
         {"extract_wall_ms", extract_wall_ms},
         {"extract_sum_rollout_ms", total_rollout_ms},
+        {"task_success", benchmark_success},
         {"success_any", any_success},
         {"mean_interval_ms", mean_interval_ms},
         {"mean_rollout_ms", mean_rollout_ms},
@@ -3691,6 +3721,8 @@ private:
         {"loaded_plan_sorted_success_candidate_count", loaded_plan_indices.size()},
         {"loaded_plan_attempted_count", loaded_plan_attempted_count},
         {"loaded_plan_success_count", loaded_plan_success_count},
+        {"loaded_plan_first_success_rank", loaded_plan_first_success_rank},
+        {"loaded_plan_first_success_candidate_order", loaded_plan_first_success_candidate_order},
         {"loaded_plan_wall_ms", loaded_plan_wall_ms},
         {"loaded_plan_sum_ms", total_loaded_plan_ms},
         {"mean_loaded_plan_ms", mean_loaded_plan_ms},
@@ -3701,7 +3733,7 @@ private:
       }).dump() << '\n';
       record_stream_.flush();
     }
-    return any_success;
+    return benchmark_success;
   }
 
   bool record_extract_keyframe(
@@ -4557,6 +4589,7 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   sensor_msgs::msg::JointState::SharedPtr latest_joint_state_;
   std::mutex joint_state_mutex_;
+  mutable std::mutex extract_kdl_mutex_;
 };
 
 int main(int argc, char** argv)

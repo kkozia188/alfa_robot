@@ -9,24 +9,32 @@
  */
 
 #include "ik_benchmark/parallel_updown_aware_ik_solver.h"
+#include "alfa_robot_moveit_config/box_stack_flow_orchestrator.hpp"
+#include "alfa_robot_moveit_config/extract_benchmark_runner.hpp"
+#include "alfa_robot_moveit_config/extract_benchmark_csv_writer.hpp"
+#include "alfa_robot_moveit_config/extract_benchmark_summary.hpp"
+#include "alfa_robot_moveit_config/extract_candidate_scorer.hpp"
+#include "alfa_robot_moveit_config/extract_candidate_solver.hpp"
+#include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
+#include "alfa_robot_moveit_config/extract_motion_planner.hpp"
+#include "alfa_robot_moveit_config/extract_planner_types.hpp"
+#include "alfa_robot_moveit_config/extract_rollout_planner.hpp"
+#include "alfa_robot_moveit_config/ik_candidate_selector.hpp"
+#include "alfa_robot_moveit_config/loaded_pose_planner.hpp"
+#include "alfa_robot_moveit_config/loaded_pose_selector.hpp"
+#include "alfa_robot_moveit_config/motion_flow_recorder.hpp"
+#include "alfa_robot_moveit_config/motion_scene_adapter.hpp"
+#include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
+#include "alfa_robot_moveit_config/motion_core/scene_geometry.hpp"
+#include "alfa_robot_moveit_config/motion_core/task_geometry.hpp"
+#include "alfa_robot_moveit_config/optimized_dual_ik_solver.hpp"
 
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <moveit/planning_scene_monitor/planning_scene_monitor.h>
 #include <moveit/robot_state/robot_state.h>
-#include <kdl/chainfksolverpos_recursive.hpp>
-#include <kdl/chainiksolverpos_nr_jl.hpp>
-#include <kdl/chainiksolvervel_pinv.hpp>
-#include <kdl/frames.hpp>
-#include <kdl/jntarray.hpp>
-#include <kdl/tree.hpp>
-#include <kdl_parser/kdl_parser.hpp>
 #include <geometry_msgs/msg/pose.hpp>
-#include <moveit_msgs/msg/collision_object.hpp>
-#include <moveit_msgs/msg/attached_collision_object.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
-#include <shape_msgs/msg/solid_primitive.hpp>
 #include <std_srvs/srv/trigger.hpp>
 
 #include <Eigen/Geometry>
@@ -36,16 +44,13 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
-#include <fstream>
 #include <functional>
 #include <limits>
 #include <map>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
-#include <iomanip>
 #include <random>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -53,352 +58,79 @@
 namespace
 {
 
-struct BoxSpec
-{
-  int id = 0;
-  double x = 0.0;
-  double y = 0.0;
-  double z = 0.0;
-};
-
-struct PickPair
-{
-  int round = 0;
-  int left_box = 0;
-  int right_box = 0;
-  bool top_suction = false;
-};
-
-struct ContainerPanel
-{
-  std::string id;
-  std::array<double, 3> center;
-  std::array<double, 3> size;
-};
-
-struct StaticBoxObstacle
-{
-  std::string id;
-  std::array<double, 3> center;
-  std::array<double, 3> size;
-};
-
-struct AttachedBoxSpec
-{
-  std::string id;
-  std::string link_name;
-  std::array<double, 3> center_in_link;
-  std::array<double, 3> size;
-};
-
-struct AxisAlignedBox
-{
-  std::array<double, 3> center;
-  std::array<double, 3> size;
-};
-
-
-struct ExtractCandidate
-{
-  size_t step_index = 0;
-  size_t candidate_index = 0;
-  double retreat_x = 0.0;
-  double retreat_delta_x = 0.0;
-  double lift_z = 0.0;
-  double lift_delta_z = 0.0;
-  double pitch_up_rad = 0.0;
-  double pitch_delta_rad = 0.0;
-  geometry_msgs::msg::Pose target_pose;
-  bool ik_success = false;
-  bool state_valid = false;
-  bool carried_clear = false;
-  bool detached_from_neighbors = false;
-  std::string rejection_reason;
-  moveit::core::RobotStatePtr state;
-};
-
-struct DualExtractStepCandidate
-{
-  ExtractCandidate left;
-  ExtractCandidate right;
-  moveit::core::RobotStatePtr state;
-  bool state_valid = false;
-  bool left_detached = false;
-  bool right_detached = false;
-  double score = std::numeric_limits<double>::infinity();
-  std::string rejection_reason;
-};
-
-struct ArmExtractPath
-{
-  bool success = false;
-  std::string failure_reason;
-  std::vector<moveit::core::RobotStatePtr> states;
-  std::vector<ExtractCandidate> selected_candidates;
-  double final_retreat_x = 0.0;
-  double final_lift_z = 0.0;
-  double final_pitch_deg = 0.0;
-  size_t accepted_steps = 0;
-  size_t failed_steps = 0;
-};
-
-struct ArmKdlChain
-{
-  std::string side;
-  std::string base_link;
-  std::string tip_link;
-  KDL::Chain chain;
-  std::vector<std::string> joint_names;
-  KDL::JntArray lower;
-  KDL::JntArray upper;
-  bool valid = false;
-};
-
-struct ExtractMotionDelta
-{
-  double retreat_ratio = 1.0;
-  double lift_ratio = 0.0;
-  double pitch_delta_deg = 0.0;
-};
-
-std::vector<double> deg_to_rad(const std::vector<double>& degrees)
-{
-  std::vector<double> radians;
-  radians.reserve(degrees.size());
-  for (double degree : degrees) {
-    radians.push_back(degree * M_PI / 180.0);
-  }
-  return radians;
-}
-
-std::string trim_copy(std::string value)
-{
-  const auto first = value.find_first_not_of(" \t\r\n");
-  if (first == std::string::npos) return "";
-  const auto last = value.find_last_not_of(" \t\r\n");
-  return value.substr(first, last - first + 1);
-}
-
-std::vector<double> parse_degrees_list(std::string value)
-{
-  value = trim_copy(value);
-  if (!value.empty() && value.front() == '[') value.erase(value.begin());
-  if (!value.empty() && value.back() == ']') value.pop_back();
-  std::vector<double> result;
-  std::stringstream stream(value);
-  std::string token;
-  while (std::getline(stream, token, ',')) {
-    token = trim_copy(token);
-    if (!token.empty()) {
-      result.push_back(std::stod(token));
-    }
-  }
-  return result;
-}
-
-std::vector<std::vector<double>> parse_pose_family_degrees(const std::string& value)
-{
-  std::vector<std::vector<double>> family;
-  std::stringstream stream(value);
-  std::string segment;
-  while (std::getline(stream, segment, ';')) {
-    auto pose_deg = parse_degrees_list(segment);
-    if (pose_deg.size() != 6) {
-      continue;
-    }
-    family.push_back(deg_to_rad(pose_deg));
-  }
-  return family;
-}
-
-nlohmann::json pose_family_degrees_json(const std::vector<std::vector<double>>& family)
-{
-  nlohmann::json out = nlohmann::json::array();
-  for (const auto& pose : family) {
-    nlohmann::json pose_json = nlohmann::json::array();
-    for (double value : pose) {
-      pose_json.push_back(value * 180.0 / M_PI);
-    }
-    out.push_back(pose_json);
-  }
-  return out;
-}
-
-nlohmann::json pose_degrees_json(const std::vector<double>& pose)
-{
-  nlohmann::json out = nlohmann::json::array();
-  for (double value : pose) {
-    out.push_back(value * 180.0 / M_PI);
-  }
-  return out;
-}
-
-double shortest_angular_distance(double a, double b)
-{
-  return std::abs(std::atan2(std::sin(a - b), std::cos(a - b)));
-}
-
-std::string format_degrees(const std::vector<std::string>& names, const std::vector<double>& values)
-{
-  std::ostringstream oss;
-  const size_t count = std::min(names.size(), values.size());
-  for (size_t i = 0; i < count; ++i) {
-    if (i > 0) oss << ", ";
-    oss << names[i] << "=" << values[i] * 180.0 / M_PI;
-  }
-  return oss.str();
-}
-
-Eigen::Quaterniond forward_x_orientation()
-{
-  // tool +Z -> world/base +X, same convention as the previous box-stack benchmark.
-  return Eigen::Quaterniond(0.70710678, 0.0, 0.70710678, 0.0);
-}
-
-Eigen::Quaterniond top_suction_orientation()
-{
-  // tool +Z -> world/base -Z.
-  return Eigen::Quaterniond(0.0, 1.0, 0.0, 0.0);
-}
-
-Eigen::Quaterniond pitch_up_orientation(double pitch_up_rad)
-{
-  // Relax the extraction grasp by pitching tool +Z upward in world/base frame.
-  // Eigen's positive Y rotation maps +X toward -Z, which is a downward press for
-  // our front grasp. Use the opposite sign so a positive parameter means "lift
-  // the tool normal toward +Z".
-  Eigen::Quaterniond q = Eigen::AngleAxisd(-pitch_up_rad, Eigen::Vector3d::UnitY()) * forward_x_orientation();
-  q.normalize();
-  return q;
-}
-
-geometry_msgs::msg::Pose make_pose(double x, double y, double z, const Eigen::Quaterniond& quat)
-{
-  geometry_msgs::msg::Pose pose;
-  pose.position.x = x;
-  pose.position.y = y;
-  pose.position.z = z;
-  Eigen::Quaterniond q = quat;
-  q.normalize();
-  pose.orientation.w = q.w();
-  pose.orientation.x = q.x();
-  pose.orientation.y = q.y();
-  pose.orientation.z = q.z();
-  return pose;
-}
-
-geometry_msgs::msg::Pose make_identity_pose(double x, double y, double z)
-{
-  geometry_msgs::msg::Pose pose;
-  pose.position.x = x;
-  pose.position.y = y;
-  pose.position.z = z;
-  pose.orientation.w = 1.0;
-  return pose;
-}
-
-Eigen::Isometry3d pose_to_eigen(const geometry_msgs::msg::Pose& pose)
-{
-  Eigen::Quaterniond q(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
-  q.normalize();
-  Eigen::Isometry3d tf = Eigen::Isometry3d::Identity();
-  tf.translation() = Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z);
-  tf.linear() = q.toRotationMatrix();
-  return tf;
-}
-
-std::map<int, BoxSpec> make_boxes(double front_x)
-{
-  const std::vector<std::vector<std::pair<int, double>>> rows_top_to_bottom = {
-    {{1, 0.8}, {2, 0.4}, {3, 0.0}, {4, -0.4}, {5, -0.8}},
-    {{6, 0.8}, {7, 0.4}, {8, 0.0}, {9, -0.4}, {10, -0.8}},
-    {{11, 0.8}, {12, 0.4}, {13, 0.0}, {14, -0.4}, {15, -0.8}},
-    {{16, 0.8}, {17, 0.4}, {18, 0.0}, {19, -0.4}, {20, -0.8}},
-    {{21, 0.8}, {22, 0.4}, {23, 0.0}, {24, -0.4}, {25, -0.8}},
-  };
-
-  std::map<int, BoxSpec> boxes;
-  for (size_t row = 0; row < rows_top_to_bottom.size(); ++row) {
-    const double z = 0.2 + 0.4 * static_cast<double>(rows_top_to_bottom.size() - 1 - row);
-    for (const auto& [id, y] : rows_top_to_bottom[row]) {
-      boxes[id] = BoxSpec{id, front_x, y, z};
-    }
-  }
-  return boxes;
-}
-
-std::vector<std::pair<int, int>> parse_box_pair_list(const std::string& value)
-{
-  std::vector<std::pair<int, int>> pairs;
-  std::stringstream stream(value);
-  std::string segment;
-  while (std::getline(stream, segment, ';')) {
-    segment = trim_copy(segment);
-    if (segment.empty()) continue;
-    const auto comma = segment.find(',');
-    const auto slash = segment.find('/');
-    const auto sep = comma == std::string::npos ? slash : comma;
-    if (sep == std::string::npos) continue;
-    const std::string left = trim_copy(segment.substr(0, sep));
-    const std::string right = trim_copy(segment.substr(sep + 1));
-    if (left.empty() || right.empty()) continue;
-    pairs.push_back({std::stoi(left), std::stoi(right)});
-  }
-  return pairs;
-}
-
-std::vector<PickPair> make_pick_pairs(bool include_top_suction, const std::vector<std::pair<int, int>>& front_pairs)
-{
-  std::vector<PickPair> pairs;
-  pairs.reserve(front_pairs.size() + 1);
-  for (size_t index = 0; index < front_pairs.size(); ++index) {
-    pairs.push_back({
-      static_cast<int>(index + 1),
-      front_pairs[index].first,
-      front_pairs[index].second,
-      false,
-    });
-  }
-  if (include_top_suction) {
-    const int round = static_cast<int>(pairs.size() + 1);
-    pairs.push_back({round, 22, 24, true});
-  }
-  return pairs;
-}
-
-nlohmann::json pose_json(const geometry_msgs::msg::Pose& pose)
-{
-  return {
-    {"position", {pose.position.x, pose.position.y, pose.position.z}},
-    {"orientation_xyzw", {pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w}},
-  };
-}
-
-nlohmann::json vector_json(const std::vector<double>& values)
-{
-  nlohmann::json out = nlohmann::json::array();
-  for (double value : values) out.push_back(value);
-  return out;
-}
-
-nlohmann::json names_values_json(const std::vector<std::string>& names, const std::vector<double>& values)
-{
-  nlohmann::json out = nlohmann::json::object();
-  const size_t count = std::min(names.size(), values.size());
-  for (size_t i = 0; i < count; ++i) out[names[i]] = values[i];
-  return out;
-}
-
-double pose_position_error(const Eigen::Isometry3d& target, const Eigen::Isometry3d& actual)
-{
-  return (target.translation() - actual.translation()).norm();
-}
-
-double pose_orientation_error(const Eigen::Isometry3d& target, const Eigen::Isometry3d& actual)
-{
-  Eigen::AngleAxisd aa(target.linear().transpose() * actual.linear());
-  return aa.angle();
-}
+using alfa_robot::motion::AttachedBoxSpec;
+using alfa_robot::motion::ArmExtractPath;
+using alfa_robot::motion::ExtractBenchmarkRunner;
+using alfa_robot::motion::ExtractBenchmarkRunnerCallbacks;
+using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
+using alfa_robot::motion::ExtractCandidateScorer;
+using alfa_robot::motion::ExtractCandidateScorerConfig;
+using alfa_robot::motion::ExtractCandidateSolver;
+using alfa_robot::motion::ExtractCandidateSolverConfig;
+using alfa_robot::motion::ExtractCandidateSolveRequest;
+using alfa_robot::motion::ExtractDemoCallbacks;
+using alfa_robot::motion::ExtractDemoConfig;
+using alfa_robot::motion::ExtractDemoOrchestrator;
+using alfa_robot::motion::ExtractMotionPlanner;
+using alfa_robot::motion::ExtractMotionPlannerConfig;
+using alfa_robot::motion::ExtractRolloutPlanner;
+using alfa_robot::motion::ExtractRolloutPlannerConfig;
+using alfa_robot::motion::DualExtractStepCandidate;
+using alfa_robot::motion::ExtractCandidate;
+using alfa_robot::motion::ExtractRolloutTiming;
+using alfa_robot::motion::AxisAlignedBox;
+using alfa_robot::motion::BoxStackFlowCallbacks;
+using alfa_robot::motion::BoxStackFlowConfig;
+using alfa_robot::motion::BoxStackFlowOrchestrator;
+using alfa_robot::motion::BoxSpec;
+using alfa_robot::motion::BoxWallGeometryConfig;
+using alfa_robot::motion::CarriedBoxGeometryConfig;
+using alfa_robot::motion::ContainerGeometryConfig;
+using alfa_robot::motion::ContainerPanel;
+using alfa_robot::motion::LoadedPoseBatchPlanOptions;
+using alfa_robot::motion::LoadedPoseBatchPlanResult;
+using alfa_robot::motion::IkCandidateSelectionStats;
+using alfa_robot::motion::IkCandidateSelector;
+using alfa_robot::motion::IkCandidateSelectorConfig;
+using alfa_robot::motion::LoadedPosePlanner;
+using alfa_robot::motion::LoadedPosePlannerConfig;
+using alfa_robot::motion::LoadedPoseSelection;
+using alfa_robot::motion::LoadedPoseSelector;
+using alfa_robot::motion::LoadedPoseSelectorConfig;
+using alfa_robot::motion::MotionSceneAdapter;
+using alfa_robot::motion::MotionSceneAdapterConfig;
+using alfa_robot::motion::MotionFlowRecorder;
+using alfa_robot::motion::OptimizedDualIkSolver;
+using alfa_robot::motion::OptimizedDualIkSolverConfig;
+using alfa_robot::motion::OptimizedDualIkSolveRequest;
+using alfa_robot::motion::PickPair;
+using alfa_robot::motion::StaticBoxObstacle;
+using alfa_robot::motion::aabb_from_attached_box_transform;
+using alfa_robot::motion::aabb_overlaps;
+using alfa_robot::motion::carried_box_detached_from_neighbors;
+using alfa_robot::motion::deg_to_rad;
+using alfa_robot::motion::format_degrees;
+using alfa_robot::motion::forward_x_orientation;
+using alfa_robot::motion::make_attached_box_spec;
+using alfa_robot::motion::make_boxes;
+using alfa_robot::motion::make_box_wall_obstacles_for_opening;
+using alfa_robot::motion::make_container_panels;
+using alfa_robot::motion::make_identity_pose;
+using alfa_robot::motion::make_pick_pairs;
+using alfa_robot::motion::make_pose;
+using alfa_robot::motion::names_values_json;
+using alfa_robot::motion::parse_box_pair_list;
+using alfa_robot::motion::parse_pose_family_degrees;
+using alfa_robot::motion::pitch_up_orientation;
+using alfa_robot::motion::pose_degrees_json;
+using alfa_robot::motion::pose_family_degrees_json;
+using alfa_robot::motion::pose_json;
+using alfa_robot::motion::pose_orientation_error;
+using alfa_robot::motion::pose_position_error;
+using alfa_robot::motion::pose_to_eigen;
+using alfa_robot::motion::shortest_angular_distance;
+using alfa_robot::motion::top_suction_orientation;
+using alfa_robot::motion::vector_json;
 
 }  // namespace
 
@@ -590,6 +322,12 @@ public:
     left_loaded_arm_ = left_loaded_pose_family_[left_preferred_loaded_pose_index_];
     right_loaded_arm_ = right_loaded_pose_family_[right_preferred_loaded_pose_index_];
 
+    loaded_pose_selector_config_.left_pose_family = left_loaded_pose_family_;
+    loaded_pose_selector_config_.right_pose_family = right_loaded_pose_family_;
+    loaded_pose_selector_config_.left_preferred_index = left_preferred_loaded_pose_index_;
+    loaded_pose_selector_config_.right_preferred_index = right_preferred_loaded_pose_index_;
+    loaded_pose_selector_config_.target_updown = extract_loaded_target_updown_;
+
     joint_state_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions joint_state_sub_options;
     joint_state_sub_options.callback_group = joint_state_callback_group_;
@@ -628,14 +366,11 @@ public:
       throw std::runtime_error("Missing single-arm JointModelGroup left_v5_arm/right_v5_arm");
     }
 
-    if (extract_use_independent_kdl_) {
-      if (!init_arm_kdl_chain("left", &left_kdl_chain_) ||
-          !init_arm_kdl_chain("right", &right_kdl_chain_)) {
-        throw std::runtime_error("Failed to initialize independent KDL chains");
-      }
-    }
+    loaded_pose_selector_config_.enforce_bounds_group = joint_group_;
+    loaded_pose_selector_ = std::make_unique<LoadedPoseSelector>(loaded_pose_selector_config_);
 
     optimized_ik_solver_ = std::make_unique<ik_benchmark::ParallelUpdownAwareIkSolver>(ik_config_);
+    optimized_dual_ik_solver_ = std::make_unique<OptimizedDualIkSolver>(optimized_dual_ik_solver_config());
 
     planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
       shared_from_this(), "robot_description");
@@ -648,7 +383,17 @@ public:
       planning_scene_monitor_->requestPlanningSceneState();
     }
 
-    planning_scene_interface_ = std::make_unique<moveit::planning_interface::PlanningSceneInterface>();
+    scene_adapter_ = std::make_unique<MotionSceneAdapter>(motion_scene_adapter_config());
+    loaded_pose_planner_ = std::make_unique<LoadedPosePlanner>(loaded_pose_planner_config());
+    extract_motion_planner_ = std::make_unique<ExtractMotionPlanner>(extract_motion_planner_config());
+    extract_candidate_scorer_ = std::make_unique<ExtractCandidateScorer>(extract_candidate_scorer_config());
+    extract_candidate_solver_ = std::make_unique<ExtractCandidateSolver>(extract_candidate_solver_config());
+    std::string extract_solver_error;
+    if (!extract_candidate_solver_->initialize(&extract_solver_error)) {
+      throw std::runtime_error("Failed to initialize extract candidate solver: " + extract_solver_error);
+    }
+    extract_rollout_planner_ = std::make_unique<ExtractRolloutPlanner>(extract_rollout_planner_config());
+    ik_candidate_selector_ = std::make_unique<IkCandidateSelector>(ik_candidate_selector_config());
     apply_container_obstacles();
     set_static_box_wall_opening(extract_demo_left_box_id_, extract_demo_right_box_id_, "initial");
 
@@ -780,28 +525,401 @@ private:
     return !scene->isStateColliding(state, joint_group_->getName());
   }
 
+  ContainerGeometryConfig container_geometry_config() const
+  {
+    return {
+      container_center_x_,
+      container_center_y_,
+      container_width_,
+      container_height_,
+      container_length_,
+      container_wall_thickness_,
+      container_floor_z_,
+    };
+  }
+
+  BoxWallGeometryConfig box_wall_geometry_config() const
+  {
+    return {
+      box_front_x_,
+      container_center_y_,
+      container_width_,
+      container_floor_z_,
+      carried_box_width_,
+      carried_box_height_,
+      carried_box_depth_,
+      static_box_obstacle_inset_,
+    };
+  }
+
+  CarriedBoxGeometryConfig carried_box_geometry_config() const
+  {
+    return {
+      carried_box_width_,
+      carried_box_height_,
+      carried_box_depth_,
+    };
+  }
+
+  ExtractMotionPlannerConfig extract_motion_planner_config() const
+  {
+    return {
+      extract_step_x_,
+      extract_max_x_,
+    };
+  }
+
+  ExtractCandidateScorerConfig extract_candidate_scorer_config() const
+  {
+    return {
+      left_arm_group_,
+      right_arm_group_,
+      left_tip_,
+      right_tip_,
+      extract_step_x_,
+      extract_score_lift_weight_,
+      extract_score_pitch_weight_,
+      extract_score_retreat_continuity_weight_,
+      extract_score_joint_delta_weight_,
+      extract_score_tip_position_delta_weight_,
+      extract_score_tip_orientation_delta_weight_,
+    };
+  }
+
+  ExtractCandidateSolverConfig extract_candidate_solver_config() const
+  {
+    return {
+      robot_model_,
+      joint_group_,
+      left_arm_group_,
+      right_arm_group_,
+      left_tip_,
+      right_tip_,
+      extract_use_independent_kdl_,
+      extract_kdl_timeout_,
+      extract_position_tolerance_,
+      extract_orientation_tolerance_,
+      extract_max_tip_z_drop_,
+      extract_min_tool_normal_z_,
+      extract_max_joint_delta_,
+      extract_independent_kdl_max_iterations_,
+      extract_independent_kdl_eps_,
+      extract_independent_kdl_seed_attempts_,
+      extract_independent_kdl_seed_jitter_,
+    };
+  }
+
+  ExtractRolloutPlannerConfig extract_rollout_planner_config()
+  {
+    ExtractRolloutPlannerConfig config;
+    config.motion_planner = extract_motion_planner_.get();
+    config.candidate_solver = extract_candidate_solver_.get();
+    config.candidate_scorer = extract_candidate_scorer_.get();
+    config.joint_group = joint_group_;
+    config.left_arm_group = left_arm_group_;
+    config.right_arm_group = right_arm_group_;
+    config.left_tip = left_tip_;
+    config.right_tip = right_tip_;
+    config.fail_fast = extract_fail_fast_;
+    config.dual_async = extract_benchmark_dual_async_;
+    config.success_extra_steps = extract_success_extra_steps_;
+    config.single_clear_callback =
+      [this](
+        const moveit::core::RobotState& state,
+        const AttachedBoxSpec& box,
+        int box_id,
+        bool* detached,
+        std::string* reason) {
+        return state_clear_for_single_extract(state, box, box_id, detached, reason);
+      };
+    config.dual_clear_callback =
+      [this](
+        const moveit::core::RobotState& state,
+        const AttachedBoxSpec& left_box,
+        int left_box_id,
+        const AttachedBoxSpec& right_box,
+        int right_box_id,
+        bool* left_detached,
+        bool* right_detached,
+        std::string* reason) {
+        return state_clear_for_dual_extract(
+          state, left_box, left_box_id, right_box, right_box_id,
+          left_detached, right_detached, reason);
+      };
+    return config;
+  }
+
+  IkCandidateSelectorConfig ik_candidate_selector_config() const
+  {
+    return {
+      extract_ik_dedup_enabled_,
+      extract_ik_dedup_joint_threshold_,
+      extract_ik_dedup_h_threshold_,
+      extract_benchmark_candidate_limit_,
+    };
+  }
+
+  OptimizedDualIkSolverConfig optimized_dual_ik_solver_config() const
+  {
+    return {
+      optimized_ik_solver_.get(),
+      robot_model_.get(),
+      joint_group_,
+      fixed_updown_,
+    };
+  }
+
+  MotionSceneAdapterConfig motion_scene_adapter_config() const
+  {
+    MotionSceneAdapterConfig config;
+    config.enable_container_obstacle = enable_container_obstacle_;
+    config.frame = container_frame_;
+    config.container = container_geometry_config();
+    config.enable_static_box_obstacles = enable_static_box_obstacles_;
+    config.box_wall = box_wall_geometry_config();
+    config.enable_attached_box_collision = enable_attached_box_collision_;
+    config.carried_box = carried_box_geometry_config();
+    config.left_tip = left_tip_;
+    config.right_tip = right_tip_;
+    return config;
+  }
+
+  LoadedPosePlannerConfig loaded_pose_planner_config()
+  {
+    LoadedPosePlannerConfig config;
+    config.move_group = loaded_move_group_.get();
+    config.selector = loaded_pose_selector_.get();
+    config.scene_adapter = scene_adapter_.get();
+    config.target_joint_names = arm_joint_target_names();
+    config.clearance_callback = [this](
+      const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+      const moveit::core::RobotState& start_state,
+      std::string* reason) {
+      return planned_carried_boxes_clear_static_obstacles(plan, start_state, reason);
+    };
+    config.record_callback = [this](
+      const std::string& stage_name,
+      const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+      const moveit::core::RobotState& start_state,
+      const moveit::core::RobotState& goal_state,
+      const std::vector<std::string>& target_names,
+      const nlohmann::json& extra) {
+      if (recording_enabled()) {
+        record_stage(stage_name, plan, start_state, goal_state, target_names, extra);
+      }
+    };
+    return config;
+  }
+
+  LoadedPoseBatchPlanOptions loaded_pose_batch_plan_options() const
+  {
+    LoadedPoseBatchPlanOptions options;
+    options.enabled = extract_benchmark_plan_loaded_after_success_;
+    options.sort_by_pose_distance = extract_loaded_sort_by_pose_distance_;
+    options.stop_on_first_success = extract_loaded_stop_on_first_success_;
+    options.candidate_limit = extract_loaded_candidate_limit_;
+    return options;
+  }
+
+  BoxStackFlowConfig box_stack_flow_config() const
+  {
+    return {
+      box_front_x_,
+      fixed_updown_,
+      include_top_suction_,
+      max_rounds_,
+      left_pregrasp_arm_,
+      right_pregrasp_arm_,
+      left_loaded_arm_,
+      right_loaded_arm_,
+      extract_demo_pair_sequence_,
+    };
+  }
+
+  BoxStackFlowCallbacks box_stack_flow_callbacks()
+  {
+    BoxStackFlowCallbacks callbacks;
+    callbacks.clear_scene = [this]() {
+      clear_carried_boxes_from_scene();
+    };
+    callbacks.set_wall_opening = [this](int left_box_id, int right_box_id, const std::string& reason) {
+      return set_static_box_wall_opening(left_box_id, right_box_id, reason);
+    };
+    callbacks.plan_joint_target = [this](
+      const std::string& stage_name,
+      double updown,
+      const std::vector<double>& left_arm,
+      const std::vector<double>& right_arm) {
+      return plan_to_joint_target(stage_name, make_dual_arm_joint_target(updown, left_arm, right_arm));
+    };
+    callbacks.plan_grasp_ik = [this](
+      const std::string& stage_name,
+      const BoxSpec& left_box,
+      const BoxSpec& right_box,
+      bool top_suction) {
+      const auto left_pose = top_suction ? top_suction_pose(left_box) : front_grasp_pose(left_box);
+      const auto right_pose = top_suction ? top_suction_pose(right_box) : front_grasp_pose(right_box);
+      return plan_dual_tip_ik(stage_name, left_pose, right_pose, top_suction);
+    };
+    callbacks.attach_boxes = [this](int left_box_id, int right_box_id, bool top_suction) {
+      return attach_carried_boxes(left_box_id, right_box_id, top_suction);
+    };
+    callbacks.validate_attached_boxes = [this](const std::string& stage_name) {
+      if (auto attached_state = get_current_robot_state()) {
+        std::string carried_collision_reason;
+        if (!carried_boxes_clear_static_obstacles(*attached_state, &carried_collision_reason)) {
+          return fail(stage_name + ": carried box collides with static box obstacle (" +
+                      carried_collision_reason + ")");
+        }
+      }
+      return true;
+    };
+    callbacks.detach_boxes = [this]() {
+      return detach_carried_boxes();
+    };
+    callbacks.info = [this](const std::string& message) {
+      RCLCPP_INFO(get_logger(), "%s", message.c_str());
+    };
+    callbacks.fail = [this](const std::string& message) {
+      return fail(message);
+    };
+    return callbacks;
+  }
+
+  ExtractDemoConfig extract_demo_config() const
+  {
+    return {
+      extract_demo_all_rows_,
+      extract_demo_left_box_id_,
+      extract_demo_right_box_id_,
+      extract_demo_pair_sequence_,
+    };
+  }
+
+  ExtractDemoCallbacks extract_demo_callbacks()
+  {
+    ExtractDemoCallbacks callbacks;
+    callbacks.clear_scene = [this]() {
+      clear_carried_boxes_from_scene();
+    };
+    callbacks.reset_commanded_state = [this]() {
+      last_commanded_state_.reset();
+    };
+    callbacks.run_pair = [this](int left_box_id, int right_box_id) {
+      return run_left_extract_pair(left_box_id, right_box_id);
+    };
+    callbacks.record_summary = [this](
+      bool success,
+      const std::string& error,
+      const std::vector<std::pair<int, int>>& pairs) {
+      if (!recording_enabled()) return;
+      nlohmann::json pair_json = nlohmann::json::array();
+      for (const auto& [left_box_id, right_box_id] : pairs) {
+        pair_json.push_back({left_box_id, right_box_id});
+      }
+      recorder_->write(nlohmann::json({
+        {"type", "summary"},
+        {"success", success},
+        {"error", error},
+        {"stages", recorded_stage_count()},
+        {"pairs", pair_json}
+      }));
+    };
+    callbacks.last_error = [this]() {
+      return last_error_;
+    };
+    callbacks.set_last_error = [this](const std::string& error) {
+      last_error_ = error;
+    };
+    return callbacks;
+  }
+
+  ExtractBenchmarkRunnerConfig extract_benchmark_runner_config() const
+  {
+    ExtractBenchmarkRunnerConfig config;
+    config.candidate_selector = ik_candidate_selector_.get();
+    config.loaded_pose_planner = loaded_pose_planner_.get();
+    config.logger = get_logger();
+    config.record_tip_error_ik_candidates = record_tip_error_ik_candidates_;
+    config.record_rollouts = extract_benchmark_record_rollouts_;
+    config.dual_async = extract_benchmark_dual_async_;
+    config.plan_loaded_after_success = extract_benchmark_plan_loaded_after_success_;
+    config.candidate_limit = extract_benchmark_candidate_limit_;
+    config.extract_workers = extract_benchmark_extract_workers_;
+    config.dedup_joint_threshold_rad = extract_ik_dedup_joint_threshold_;
+    config.dedup_h_threshold = extract_ik_dedup_h_threshold_;
+    config.csv_path = extract_benchmark_csv_path_;
+    config.loaded_options = loaded_pose_batch_plan_options();
+    return config;
+  }
+
+  ExtractBenchmarkRunnerCallbacks extract_benchmark_runner_callbacks()
+  {
+    ExtractBenchmarkRunnerCallbacks callbacks;
+    callbacks.state_from_candidate = [this](
+      const moveit::core::RobotState& seed_state,
+      const ik_benchmark::UpdownAwareIkCandidate& candidate) {
+      return state_from_ik_candidate(seed_state, candidate);
+    };
+    callbacks.rollout_left = [this](
+      const moveit::core::RobotState& start_state,
+      const AttachedBoxSpec& left_box,
+      int left_box_id,
+      size_t candidate_order,
+      const ik_benchmark::UpdownAwareIkCandidate& ik_candidate,
+      const std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)>& record_step) {
+      return rollout_left_extract_from_state(start_state, left_box, left_box_id, candidate_order, ik_candidate, record_step);
+    };
+    callbacks.rollout_dual = [this](
+      const moveit::core::RobotState& start_state,
+      const AttachedBoxSpec& left_box,
+      int left_box_id,
+      const AttachedBoxSpec& right_box,
+      int right_box_id,
+      size_t candidate_order,
+      const ik_benchmark::UpdownAwareIkCandidate& ik_candidate,
+      const std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)>& record_step) {
+      return rollout_dual_extract_from_state(
+        start_state, left_box, left_box_id, right_box, right_box_id,
+        candidate_order, ik_candidate, record_step);
+    };
+    callbacks.fill_loaded_metrics = [this](ExtractRolloutTiming& timing) {
+      fill_loaded_pose_distance_metrics(timing);
+    };
+    callbacks.record_keyframe = [this](
+      const std::string& stage_name,
+      const moveit::core::RobotState& state,
+      const std::vector<AttachedBoxSpec>& boxes,
+      const nlohmann::json& extra) {
+      record_extract_keyframe(stage_name, state, boxes, extra);
+    };
+    callbacks.record_tip_errors = [this](
+      const std::string& prefix,
+      const moveit::core::RobotState& seed_state,
+      const ik_benchmark::UpdownAwareIkResult& ik_result,
+      const AttachedBoxSpec& left_box) {
+      record_tip_error_ik_candidates(prefix, seed_state, ik_result, left_box);
+    };
+    callbacks.record_summary = [this](const nlohmann::json& summary) {
+      if (recording_enabled()) {
+        recorder_->write(summary);
+      }
+    };
+    callbacks.rejection_counts_json = [this](const ik_benchmark::UpdownAwareIkResult& result) {
+      return ik_candidate_rejection_counts_json(result);
+    };
+    callbacks.fail = [this](const std::string& message) {
+      return fail(message);
+    };
+    callbacks.set_last_error = [this](const std::string& message) {
+      last_error_ = message;
+    };
+    return callbacks;
+  }
+
   std::vector<ContainerPanel> container_panels() const
   {
-    const double half_width = container_width_ * 0.5;
-    const double half_thickness = container_wall_thickness_ * 0.5;
-    const double z_center = container_floor_z_ + container_height_ * 0.5;
-    return {
-      {
-        "container_left_wall",
-        {container_center_x_, container_center_y_ + half_width + half_thickness, z_center},
-        {container_length_, container_wall_thickness_, container_height_},
-      },
-      {
-        "container_right_wall",
-        {container_center_x_, container_center_y_ - half_width - half_thickness, z_center},
-        {container_length_, container_wall_thickness_, container_height_},
-      },
-      {
-        "container_ceiling",
-        {container_center_x_, container_center_y_, container_floor_z_ + container_height_ + half_thickness},
-        {container_length_, container_width_ + 2.0 * container_wall_thickness_, container_wall_thickness_},
-      },
-    };
+    return scene_adapter_ ? scene_adapter_->containerPanels() : make_container_panels(container_geometry_config());
   }
 
   void apply_container_obstacles()
@@ -810,199 +928,46 @@ private:
       RCLCPP_INFO(get_logger(), "Container obstacle disabled");
       return;
     }
-    if (!planning_scene_interface_) return;
+    if (!scene_adapter_) return;
 
-    std::vector<moveit_msgs::msg::CollisionObject> objects;
-    for (const auto& panel : container_panels()) {
-      shape_msgs::msg::SolidPrimitive primitive;
-      primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
-      primitive.dimensions = {panel.size[0], panel.size[1], panel.size[2]};
-
-      moveit_msgs::msg::CollisionObject object;
-      object.header.frame_id = container_frame_;
-      object.id = panel.id;
-      object.primitives.push_back(primitive);
-      object.primitive_poses.push_back(make_identity_pose(panel.center[0], panel.center[1], panel.center[2]));
-      object.operation = moveit_msgs::msg::CollisionObject::ADD;
-      objects.push_back(object);
-    }
-
-    if (planning_scene_interface_->applyCollisionObjects(objects)) {
+    if (scene_adapter_->applyContainerObstacles()) {
       RCLCPP_INFO(get_logger(),
                   "Applied container obstacle: frame=%s length=%.2f width=%.2f height=%.2f panels=%zu",
-                  container_frame_.c_str(), container_length_, container_width_, container_height_, objects.size());
+                  container_frame_.c_str(), container_length_, container_width_, container_height_,
+                  container_panels().size());
     } else {
       RCLCPP_WARN(get_logger(), "Failed to apply container obstacle collision objects");
     }
   }
 
-  void add_static_wall_piece(
-    std::vector<StaticBoxObstacle>& obstacles,
-    const std::string& id,
-    double x_min,
-    double x_max,
-    double y_min,
-    double y_max,
-    double z_min,
-    double z_max) const
+  std::vector<StaticBoxObstacle> make_static_box_wall_obstacles_for_opening(int left_box_id, int right_box_id) const
   {
-    if (x_max < x_min) std::swap(x_min, x_max);
-    if (y_max < y_min) std::swap(y_min, y_max);
-    if (z_max < z_min) std::swap(z_min, z_max);
-    if ((x_max - x_min) < 1e-4 || (y_max - y_min) < 1e-4 || (z_max - z_min) < 1e-4) {
-      return;
-    }
-
-    obstacles.push_back({
-      id,
-      {0.5 * (x_min + x_max), 0.5 * (y_min + y_max), 0.5 * (z_min + z_max)},
-      {x_max - x_min, y_max - y_min, z_max - z_min},
-    });
-  }
-
-  std::vector<StaticBoxObstacle> make_box_wall_obstacles_for_opening(int left_box_id, int right_box_id) const
-  {
-    std::vector<StaticBoxObstacle> obstacles;
-    if (!enable_static_box_obstacles_) return obstacles;
-
-    const auto boxes = make_boxes(box_front_x_);
-    const auto left_it = boxes.find(left_box_id);
-    const auto right_it = boxes.find(right_box_id);
-    if (left_it == boxes.end() || right_it == boxes.end()) return obstacles;
-
-    const BoxSpec& first = left_it->second;
-    const BoxSpec& second = right_it->second;
-    const BoxSpec& positive_y_box = first.y >= second.y ? first : second;
-    const BoxSpec& negative_y_box = first.y >= second.y ? second : first;
-
-    const double half_width = carried_box_width_ * 0.5;
-    const double half_height = carried_box_height_ * 0.5;
-    const double inset = std::max(0.0, static_box_obstacle_inset_);
-    const double x_min = std::min(first.x, second.x);
-    const double x_max = std::max(first.x, second.x) + carried_box_depth_;
-    const double inner_y_min = container_center_y_ - container_width_ * 0.5;
-    const double inner_y_max = container_center_y_ + container_width_ * 0.5;
-    const double z_min = std::min(first.z, second.z) - half_height;
-    const double z_max = std::max(first.z, second.z) + half_height;
-
-    const double positive_hole_y_min = positive_y_box.y - half_width;
-    const double positive_hole_y_max = positive_y_box.y + half_width;
-    const double negative_hole_y_min = negative_y_box.y - half_width;
-    const double negative_hole_y_max = negative_y_box.y + half_width;
-    const std::string prefix = "box_wall_L" + std::to_string(left_box_id) +
-                               "_R" + std::to_string(right_box_id);
-
-    add_static_wall_piece(
-      obstacles, prefix + "_left_side",
-      x_min, x_max,
-      positive_hole_y_max + inset, inner_y_max,
-      z_min, z_max);
-    const double between_y_min = negative_hole_y_max + inset;
-    const double between_y_max = positive_hole_y_min - inset;
-    if (between_y_max > between_y_min) {
-      add_static_wall_piece(
-        obstacles, prefix + "_between",
-        x_min, x_max,
-        between_y_min, between_y_max,
-        z_min, z_max);
-    }
-    add_static_wall_piece(
-      obstacles, prefix + "_right_side",
-      x_min, x_max,
-      inner_y_min, negative_hole_y_min - inset,
-      z_min, z_max);
-    add_static_wall_piece(
-      obstacles, prefix + "_below",
-      x_min, x_max,
-      inner_y_min, inner_y_max,
-      container_floor_z_, z_min - inset);
-
-    return obstacles;
+    if (!enable_static_box_obstacles_) return {};
+    return make_box_wall_obstacles_for_opening(left_box_id, right_box_id, box_wall_geometry_config());
   }
 
   std::vector<StaticBoxObstacle> static_box_obstacles() const
   {
-    if (!enable_static_box_obstacles_) return {};
-    return current_static_box_obstacles_;
+    if (!enable_static_box_obstacles_ || !scene_adapter_) return {};
+    return scene_adapter_->staticBoxObstacles();
   }
 
-  void clear_applied_static_box_obstacles()
+  const std::vector<AttachedBoxSpec>& active_attached_boxes() const
   {
-    if (!planning_scene_interface_ || applied_static_box_obstacle_ids_.empty()) return;
-
-    std::vector<moveit_msgs::msg::CollisionObject> remove_objects;
-    remove_objects.reserve(applied_static_box_obstacle_ids_.size());
-    for (const auto& id : applied_static_box_obstacle_ids_) {
-      moveit_msgs::msg::CollisionObject object;
-      object.header.frame_id = container_frame_;
-      object.id = id;
-      object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
-      remove_objects.push_back(object);
-    }
-    planning_scene_interface_->applyCollisionObjects(remove_objects);
-    applied_static_box_obstacle_ids_.clear();
-  }
-
-  void apply_static_box_obstacles()
-  {
-    clear_applied_static_box_obstacles();
-    if (!enable_static_box_obstacles_) {
-      current_static_box_obstacles_.clear();
-      active_static_left_box_id_ = 0;
-      active_static_right_box_id_ = 0;
-      RCLCPP_INFO(get_logger(), "Static box-wall obstacles disabled");
-      return;
-    }
-    if (!planning_scene_interface_) return;
-
-    std::vector<moveit_msgs::msg::CollisionObject> objects;
-    for (const auto& box : static_box_obstacles()) {
-      shape_msgs::msg::SolidPrimitive primitive;
-      primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
-      primitive.dimensions = {box.size[0], box.size[1], box.size[2]};
-
-      moveit_msgs::msg::CollisionObject object;
-      object.header.frame_id = container_frame_;
-      object.id = box.id;
-      object.primitives.push_back(primitive);
-      object.primitive_poses.push_back(make_identity_pose(box.center[0], box.center[1], box.center[2]));
-      object.operation = moveit_msgs::msg::CollisionObject::ADD;
-      objects.push_back(object);
-    }
-
-    if (objects.empty()) {
-      RCLCPP_WARN(get_logger(), "Static box-wall obstacles requested but no wall pieces were generated");
-      return;
-    }
-
-    if (planning_scene_interface_->applyCollisionObjects(objects)) {
-      applied_static_box_obstacle_ids_.clear();
-      for (const auto& object : objects) {
-        applied_static_box_obstacle_ids_.push_back(object.id);
-      }
-      RCLCPP_INFO(get_logger(),
-                  "Applied dynamic box-wall obstacles: opening=(L%d,R%d) pieces=%zu inset=%.4fm",
-                  active_static_left_box_id_, active_static_right_box_id_, objects.size(), static_box_obstacle_inset_);
-    } else {
-      RCLCPP_WARN(get_logger(), "Failed to apply dynamic box-wall obstacles");
-    }
+    static const std::vector<AttachedBoxSpec> empty;
+    return scene_adapter_ ? scene_adapter_->activeAttachedBoxes() : empty;
   }
 
   bool set_static_box_wall_opening(int left_box_id, int right_box_id, const std::string& reason)
   {
     if (!enable_static_box_obstacles_) {
-      current_static_box_obstacles_.clear();
-      active_static_left_box_id_ = 0;
-      active_static_right_box_id_ = 0;
-      apply_static_box_obstacles();
+      if (scene_adapter_) scene_adapter_->setStaticBoxWallOpening(left_box_id, right_box_id);
+      RCLCPP_INFO(get_logger(), "Static box-wall obstacles disabled");
       return true;
     }
 
-    active_static_left_box_id_ = left_box_id;
-    active_static_right_box_id_ = right_box_id;
-    current_static_box_obstacles_ = make_box_wall_obstacles_for_opening(left_box_id, right_box_id);
-    apply_static_box_obstacles();
-    if (current_static_box_obstacles_.empty()) {
+    const bool applied = scene_adapter_ && scene_adapter_->setStaticBoxWallOpening(left_box_id, right_box_id);
+    if (!applied || static_box_obstacles().empty()) {
       RCLCPP_WARN(get_logger(), "No dynamic box wall for opening L%d/R%d (%s)",
                   left_box_id, right_box_id, reason.c_str());
       return false;
@@ -1012,142 +977,30 @@ private:
     return true;
   }
 
-  AttachedBoxSpec make_attached_box_spec(const std::string& side, int box_id, bool top_suction) const
+  AttachedBoxSpec make_carried_box_spec(const std::string& side, int box_id, bool top_suction) const
   {
-    AttachedBoxSpec spec;
-    spec.id = "carried_" + side + "_box_" + std::to_string(box_id);
-    spec.link_name = side + "_v5_tool0";
-    if (top_suction) {
-      spec.center_in_link = {0.0, 0.0, carried_box_height_ * 0.5};
-      spec.size = {carried_box_depth_, carried_box_width_, carried_box_height_};
-    } else {
-      spec.center_in_link = {0.0, 0.0, carried_box_depth_ * 0.5};
-      spec.size = {carried_box_width_, carried_box_height_, carried_box_depth_};
-    }
-    return spec;
-  }
-
-  moveit_msgs::msg::AttachedCollisionObject make_attached_collision_object(
-    const AttachedBoxSpec& spec, int operation) const
-  {
-    moveit_msgs::msg::AttachedCollisionObject attached;
-    attached.link_name = spec.link_name;
-    attached.touch_links = {spec.link_name};
-    if (spec.link_name.rfind("left_", 0) == 0) {
-      attached.touch_links.push_back("left_v5_link6");
-      attached.touch_links.push_back("left_v5_link5");
-    } else if (spec.link_name.rfind("right_", 0) == 0) {
-      attached.touch_links.push_back("right_v5_link6");
-      attached.touch_links.push_back("right_v5_link5");
-    }
-
-    attached.object.header.frame_id = spec.link_name;
-    attached.object.id = spec.id;
-    attached.object.operation = operation;
-    if (operation == moveit_msgs::msg::CollisionObject::ADD) {
-      shape_msgs::msg::SolidPrimitive primitive;
-      primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
-      primitive.dimensions = {spec.size[0], spec.size[1], spec.size[2]};
-      attached.object.primitives.push_back(primitive);
-      attached.object.primitive_poses.push_back(
-        make_identity_pose(spec.center_in_link[0], spec.center_in_link[1], spec.center_in_link[2]));
-    }
-    return attached;
-  }
-
-  bool apply_attached_box_state(
-    const std::vector<AttachedBoxSpec>& specs, int operation, const std::string& action_name)
-  {
-    if (!enable_attached_box_collision_) return true;
-    if (!planning_scene_interface_) return true;
-    if (specs.empty()) return true;
-
-    std::vector<moveit_msgs::msg::AttachedCollisionObject> objects;
-    objects.reserve(specs.size());
-    for (const auto& spec : specs) {
-      objects.push_back(make_attached_collision_object(spec, operation));
-    }
-    if (!planning_scene_interface_->applyAttachedCollisionObjects(objects)) {
-      return fail(action_name + ": failed to update attached carried boxes");
-    }
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
-    return true;
-  }
-
-  Eigen::Vector3d transform_point(const Eigen::Isometry3d& transform, const std::array<double, 3>& point) const
-  {
-    return transform * Eigen::Vector3d(point[0], point[1], point[2]);
+    return scene_adapter_
+      ? scene_adapter_->makeCarriedBoxSpec(side, box_id, top_suction)
+      : make_attached_box_spec(side, box_id, top_suction, carried_box_geometry_config());
   }
 
   AxisAlignedBox attached_box_world_aabb(
     const moveit::core::RobotState& state,
     const AttachedBoxSpec& box) const
   {
-    const Eigen::Isometry3d& link_tf = state.getGlobalLinkTransform(box.link_name);
-    Eigen::Vector3d min_corner(
-      std::numeric_limits<double>::infinity(),
-      std::numeric_limits<double>::infinity(),
-      std::numeric_limits<double>::infinity());
-    Eigen::Vector3d max_corner(
-      -std::numeric_limits<double>::infinity(),
-      -std::numeric_limits<double>::infinity(),
-      -std::numeric_limits<double>::infinity());
-
-    for (double sx : {-0.5, 0.5}) {
-      for (double sy : {-0.5, 0.5}) {
-        for (double sz : {-0.5, 0.5}) {
-          const std::array<double, 3> local_corner = {
-            box.center_in_link[0] + sx * box.size[0],
-            box.center_in_link[1] + sy * box.size[1],
-            box.center_in_link[2] + sz * box.size[2],
-          };
-          const Eigen::Vector3d world_corner = transform_point(link_tf, local_corner);
-          min_corner = min_corner.cwiseMin(world_corner);
-          max_corner = max_corner.cwiseMax(world_corner);
-        }
-      }
-    }
-
-    const Eigen::Vector3d center = 0.5 * (min_corner + max_corner);
-    const Eigen::Vector3d size = max_corner - min_corner;
-    return {{
-      center.x(), center.y(), center.z()
-    }, {
-      size.x(), size.y(), size.z()
-    }};
+    return aabb_from_attached_box_transform(state.getGlobalLinkTransform(box.link_name), box);
   }
 
-  bool aabb_overlaps(const AxisAlignedBox& lhs, const AxisAlignedBox& rhs) const
+  bool apply_attached_box_state(
+    const std::vector<AttachedBoxSpec>& specs, int operation, const std::string& action_name)
   {
-    for (size_t i = 0; i < 3; ++i) {
-      if (std::abs(lhs.center[i] - rhs.center[i]) > 0.5 * (lhs.size[i] + rhs.size[i])) {
-        return false;
-      }
+    if (!enable_attached_box_collision_) return true;
+    if (specs.empty()) return true;
+    if (!scene_adapter_) return true;
+    if (!scene_adapter_->applyAttachedBoxState(specs, operation)) {
+      return fail(action_name + ": failed to update attached carried boxes");
     }
     return true;
-  }
-
-  bool carried_boxes_clear_static_obstacles(
-    const moveit::core::RobotState& state,
-    std::string* reason) const
-  {
-    if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
-
-    for (const auto& carried_box : active_attached_boxes_) {
-      if (!carried_box_clear_scene_obstacles(state, carried_box, reason)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  AxisAlignedBox expanded_aabb(const AxisAlignedBox& box, double margin) const
-  {
-    return {box.center, {
-      box.size[0] + 2.0 * margin,
-      box.size[1] + 2.0 * margin,
-      box.size[2] + 2.0 * margin,
-    }};
   }
 
   bool carried_box_detached_from_neighbors(
@@ -1156,47 +1009,16 @@ private:
     int box_id,
     std::string* reason) const
   {
-    const int column = (box_id - 1) % 5 + 1;
-    const int row = (box_id - 1) / 5;
-    std::vector<int> neighbor_ids;
-    if (column > 1) neighbor_ids.push_back(row * 5 + column - 1);
-    if (column < 5) neighbor_ids.push_back(row * 5 + column + 1);
-
-    const auto boxes = make_boxes(box_front_x_);
-    const AxisAlignedBox carried = expanded_aabb(attached_box_world_aabb(state, carried_box), extract_neighbor_margin_);
-    const double carried_min_x = carried.center[0] - 0.5 * carried.size[0];
-    const double carried_max_x = carried.center[0] + 0.5 * carried.size[0];
-    const double carried_min_z = carried.center[2] - 0.5 * carried.size[2];
-    const double carried_max_z = carried.center[2] + 0.5 * carried.size[2];
-    for (int neighbor_id : neighbor_ids) {
-      const auto it = boxes.find(neighbor_id);
-      if (it == boxes.end()) continue;
-      const AxisAlignedBox neighbor = expanded_aabb({{
-        it->second.x + carried_box_depth_ * 0.5,
-        it->second.y,
-        it->second.z,
-      }, {
-        carried_box_depth_,
-        carried_box_width_,
-        carried_box_height_,
-      }}, extract_neighbor_margin_);
-      const double neighbor_min_x = neighbor.center[0] - 0.5 * neighbor.size[0];
-      const double neighbor_max_x = neighbor.center[0] + 0.5 * neighbor.size[0];
-      const double neighbor_min_z = neighbor.center[2] - 0.5 * neighbor.size[2];
-      const double neighbor_max_z = neighbor.center[2] + 0.5 * neighbor.size[2];
-      const bool side_face_projection_overlaps =
-        carried_min_x <= neighbor_max_x &&
-        carried_max_x >= neighbor_min_x &&
-        carried_min_z <= neighbor_max_z &&
-        carried_max_z >= neighbor_min_z;
-      if (side_face_projection_overlaps) {
-        if (reason) {
-          *reason = carried_box.id + " side face still overlaps neighbor box " + std::to_string(neighbor_id);
-        }
-        return false;
-      }
-    }
-    return true;
+    return alfa_robot::motion::carried_box_detached_from_neighbors(
+      attached_box_world_aabb(state, carried_box),
+      box_id,
+      box_front_x_,
+      carried_box_width_,
+      carried_box_height_,
+      carried_box_depth_,
+      extract_neighbor_margin_,
+      carried_box.id,
+      reason);
   }
 
   bool left_carried_box_detached_from_neighbors(
@@ -1206,6 +1028,20 @@ private:
     std::string* reason) const
   {
     return carried_box_detached_from_neighbors(state, carried_box, left_box_id, reason);
+  }
+
+  bool carried_boxes_clear_static_obstacles(
+    const moveit::core::RobotState& state,
+    std::string* reason) const
+  {
+    if (!enable_attached_box_collision_ || active_attached_boxes().empty()) return true;
+
+    for (const auto& carried_box : active_attached_boxes()) {
+      if (!carried_box_clear_scene_obstacles(state, carried_box, reason)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool carried_box_clear_scene_obstacles(
@@ -1329,7 +1165,7 @@ private:
     const moveit::core::RobotState& start_state,
     std::string* reason) const
   {
-    if (!enable_attached_box_collision_ || active_attached_boxes_.empty()) return true;
+    if (!enable_attached_box_collision_ || active_attached_boxes().empty()) return true;
 
     const auto& trajectory = plan.trajectory_.joint_trajectory;
     for (size_t point_index = 0; point_index < trajectory.points.size(); ++point_index) {
@@ -1355,34 +1191,9 @@ private:
   bool remove_carried_box_ids(const std::vector<std::string>& ids, const std::string& action_name)
   {
     if (!enable_attached_box_collision_) return true;
-    if (!planning_scene_interface_) return true;
     if (ids.empty()) return true;
-
-    std::vector<moveit_msgs::msg::AttachedCollisionObject> attached_removes;
-    attached_removes.reserve(ids.size());
-    for (const auto& id : ids) {
-      moveit_msgs::msg::AttachedCollisionObject attached;
-      attached.link_name = id.find("_right_") != std::string::npos ? right_tip_ : left_tip_;
-      attached.object.header.frame_id = attached.link_name;
-      attached.object.id = id;
-      attached.object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
-      attached_removes.push_back(attached);
-    }
-
-    std::vector<moveit_msgs::msg::CollisionObject> world_removes;
-    world_removes.reserve(ids.size());
-    for (const auto& id : ids) {
-      moveit_msgs::msg::CollisionObject object;
-      object.header.frame_id = container_frame_;
-      object.id = id;
-      object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
-      world_removes.push_back(object);
-    }
-
-    const bool attached_ok = planning_scene_interface_->applyAttachedCollisionObjects(attached_removes);
-    planning_scene_interface_->applyCollisionObjects(world_removes);
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
-    if (!attached_ok) {
+    if (!scene_adapter_) return true;
+    if (!scene_adapter_->removeCarriedBoxIds(ids)) {
       return fail(action_name + ": failed to remove carried boxes from planning scene");
     }
     return true;
@@ -1391,18 +1202,15 @@ private:
   bool clear_carried_boxes_from_scene()
   {
     if (!enable_attached_box_collision_) return true;
-    if (active_attached_boxes_.empty()) return true;
+    if (!scene_adapter_ || scene_adapter_->activeAttachedBoxes().empty()) return true;
     return detach_carried_boxes();
   }
 
   bool attach_carried_boxes(int left_box_id, int right_box_id, bool top_suction)
   {
-    active_attached_boxes_ = {
-      make_attached_box_spec("left", left_box_id, top_suction),
-      make_attached_box_spec("right", right_box_id, top_suction),
-    };
-    if (!apply_attached_box_state(active_attached_boxes_, moveit_msgs::msg::CollisionObject::ADD, "attach_carried_boxes")) {
-      active_attached_boxes_.clear();
+    if (!scene_adapter_) return true;
+    if (!scene_adapter_->attachCarriedBoxes(left_box_id, right_box_id, top_suction)) {
+      return fail("attach_carried_boxes: failed to update attached carried boxes");
       return false;
     }
     RCLCPP_INFO(get_logger(), "Attached carried boxes: left=%d right=%d mode=%s",
@@ -1412,16 +1220,11 @@ private:
 
   bool detach_carried_boxes()
   {
-    if (active_attached_boxes_.empty()) return true;
-    std::vector<std::string> ids;
-    ids.reserve(active_attached_boxes_.size());
-    for (const auto& box : active_attached_boxes_) {
-      ids.push_back(box.id);
-    }
-    if (!remove_carried_box_ids(ids, "detach_carried_boxes")) {
+    if (!scene_adapter_ || scene_adapter_->activeAttachedBoxes().empty()) return true;
+    if (!scene_adapter_->detachCarriedBoxes()) {
+      return fail("detach_carried_boxes: failed to remove carried boxes from planning scene");
       return false;
     }
-    active_attached_boxes_.clear();
     RCLCPP_INFO(get_logger(), "Detached carried boxes");
     return true;
   }
@@ -1478,47 +1281,26 @@ private:
     if (!start_state) {
       return fail(stage_name + ": cannot get start state");
     }
-    if (!optimized_ik_solver_) {
+    if (!optimized_dual_ik_solver_ || !optimized_dual_ik_solver_->ready()) {
       return fail(stage_name + ": optimized IK solver is not initialized");
     }
-
-    ik_benchmark::UpdownAwareIkRequest request;
-    request.left_target = pose_to_eigen(left_pose);
-    request.right_target = pose_to_eigen(right_pose);
-    request.current_h = current_updown(*start_state);
-    request.grasp_mode = top_suction
-      ? ik_benchmark::UpdownAwareIkRequest::GraspMode::TopSuction
-      : ik_benchmark::UpdownAwareIkRequest::GraspMode::Front;
-    request.current_arm_joints = state_values(*start_state, optimized_ik_solver_->fixedVariableNames());
-    request.current_full_joints = state_values(*start_state, optimized_ik_solver_->freeVariableNames());
 
     RCLCPP_INFO(get_logger(), "[%s] optimized IK L=(%.3f, %.3f, %.3f) R=(%.3f, %.3f, %.3f) current_h=%.3f",
                 stage_name.c_str(),
                 left_pose.position.x, left_pose.position.y, left_pose.position.z,
-                right_pose.position.x, right_pose.position.y, right_pose.position.z, request.current_h);
+                right_pose.position.x, right_pose.position.y, right_pose.position.z, current_updown(*start_state));
 
-    const auto result = optimized_ik_solver_->solve(request);
-    if (!result.success) {
-      std::ostringstream oss;
-      oss << stage_name << ": optimized IK failed reason=" << result.failure_reason
-          << " trials=" << result.trial_count << " legal=" << result.legal_count
-          << " wall_ms=" << result.wall_ms;
-      return fail(oss.str());
+    const auto solved = optimized_dual_ik_solver_->solve(
+      OptimizedDualIkSolveRequest{stage_name, left_pose, right_pose, top_suction, start_state.get()},
+      "optimized_dual_tip_ik");
+    if (!solved.success) {
+      return fail(stage_name + ": " + solved.failure_reason);
     }
 
-    moveit::core::RobotState goal_state(*start_state);
-    for (size_t i = 0; i < result.selected.full_joint_names.size() && i < result.selected.full_joint_values.size(); ++i) {
-      const auto& name = result.selected.full_joint_names[i];
-      if (is_robot_variable(name)) {
-        goal_state.setVariablePosition(name, result.selected.full_joint_values[i]);
-      }
-    }
-    goal_state.enforceBounds(joint_group_);
-    goal_state.update();
-
-    if (!is_state_valid(goal_state, check_goal_collision_)) {
+    if (!is_state_valid(*solved.goal_state, check_goal_collision_)) {
       return fail(stage_name + ": selected IK state out of bounds or colliding");
     }
+    const auto& result = solved.ik_result;
 
     RCLCPP_INFO(get_logger(),
                 "[%s] IK selected h=%.3f score=%.3f path=%s h_index=%zu seed_index=%zu trials=%zu legal=%zu wall=%.1fms",
@@ -1526,44 +1308,8 @@ private:
                 result.selected.h_index, result.selected.seed_index, result.trial_count, result.legal_count,
                 result.wall_ms);
 
-    nlohmann::json extra = {
-      {"stage_kind", "optimized_dual_tip_ik"},
-      {"grasp_mode", top_suction ? "top_suction" : "front"},
-      {"left_target", pose_json(left_pose)},
-      {"right_target", pose_json(right_pose)},
-      {"ik", {
-        {"strategy", "fixed_discrete_h_multi_seed_cost_scorer"},
-        {"success", result.success},
-        {"fallback_used", result.fallback_used},
-        {"failure_reason", result.failure_reason},
-        {"trial_count", result.trial_count},
-        {"legal_count", result.legal_count},
-        {"timeout_like_count", result.timeout_like_count},
-        {"wall_ms", result.wall_ms},
-        {"sum_solve_ms", result.sum_solve_ms},
-        {"h_interval", {{"lower", result.h_interval_lower}, {"upper", result.h_interval_upper}, {"center", result.h_center}}},
-        {"h_candidates", vector_json(result.h_candidates)},
-        {"candidate_rejection_counts", ik_candidate_rejection_counts_json(result)},
-        {"selected", {
-          {"h", result.selected.h},
-          {"h_index", result.selected.h_index},
-          {"seed_index", result.selected.seed_index},
-          {"score", result.selected.score},
-          {"solver_path", result.selected.solver_path},
-          {"target_order", result.selected.target_order},
-          {"direct_pos_error", result.selected.direct_pos_error},
-          {"direct_ori_error", result.selected.direct_ori_error},
-          {"updown_delta", result.selected.updown_delta},
-          {"joint_delta", result.selected.joint_delta},
-          {"collision_free", result.selected.collision_free},
-          {"collision_pairs", result.selected.collision_pairs},
-          {"joint_names", result.selected.full_joint_names},
-          {"joint_values", result.selected.full_joint_values}
-        }}
-      }}
-    };
-
-    return plan_to_goal_state(stage_name, *start_state, goal_state, result.selected.full_joint_names, extra);
+    return plan_to_goal_state(stage_name, *start_state, *solved.goal_state,
+                              result.selected.full_joint_names, solved.extra);
   }
 
   bool solve_dual_tip_ik_state(
@@ -1576,49 +1322,30 @@ private:
     nlohmann::json* extra_out,
     ik_benchmark::UpdownAwareIkResult* result_out = nullptr)
   {
-    if (!optimized_ik_solver_) {
+    if (!optimized_dual_ik_solver_ || !optimized_dual_ik_solver_->ready()) {
       return fail(stage_name + ": optimized IK solver is not initialized");
     }
     if (!goal_state) {
       return fail(stage_name + ": output goal_state is null");
     }
 
-    ik_benchmark::UpdownAwareIkRequest request;
-    request.left_target = pose_to_eigen(left_pose);
-    request.right_target = pose_to_eigen(right_pose);
-    request.current_h = current_updown(seed_state);
-    request.grasp_mode = top_suction
-      ? ik_benchmark::UpdownAwareIkRequest::GraspMode::TopSuction
-      : ik_benchmark::UpdownAwareIkRequest::GraspMode::Front;
-    request.current_arm_joints = state_values(seed_state, optimized_ik_solver_->fixedVariableNames());
-    request.current_full_joints = state_values(seed_state, optimized_ik_solver_->freeVariableNames());
-
     RCLCPP_INFO(get_logger(), "[%s] direct optimized IK L=(%.3f, %.3f, %.3f) R=(%.3f, %.3f, %.3f) current_h=%.3f",
                 stage_name.c_str(),
                 left_pose.position.x, left_pose.position.y, left_pose.position.z,
-                right_pose.position.x, right_pose.position.y, right_pose.position.z, request.current_h);
+                right_pose.position.x, right_pose.position.y, right_pose.position.z, current_updown(seed_state));
 
-    const auto result = optimized_ik_solver_->solve(request);
+    const auto solved = optimized_dual_ik_solver_->solve(
+      OptimizedDualIkSolveRequest{stage_name, left_pose, right_pose, top_suction, &seed_state},
+      "optimized_dual_tip_ik_direct_seed");
+    const auto& result = solved.ik_result;
     if (result_out) {
       *result_out = result;
     }
-    if (!result.success) {
-      std::ostringstream oss;
-      oss << stage_name << ": optimized IK failed reason=" << result.failure_reason
-          << " trials=" << result.trial_count << " legal=" << result.legal_count
-          << " wall_ms=" << result.wall_ms;
-      return fail(oss.str());
+    if (!solved.success) {
+      return fail(stage_name + ": " + solved.failure_reason);
     }
 
-    *goal_state = seed_state;
-    for (size_t i = 0; i < result.selected.full_joint_names.size() && i < result.selected.full_joint_values.size(); ++i) {
-      const auto& name = result.selected.full_joint_names[i];
-      if (is_robot_variable(name)) {
-        goal_state->setVariablePosition(name, result.selected.full_joint_values[i]);
-      }
-    }
-    goal_state->enforceBounds(joint_group_);
-    goal_state->update();
+    *goal_state = *solved.goal_state;
 
     if (!is_state_valid(*goal_state, check_goal_collision_)) {
       return fail(stage_name + ": selected IK state out of bounds or colliding");
@@ -1631,42 +1358,7 @@ private:
                 result.wall_ms);
 
     if (extra_out) {
-      *extra_out = {
-        {"stage_kind", "optimized_dual_tip_ik_direct_seed"},
-        {"grasp_mode", top_suction ? "top_suction" : "front"},
-        {"left_target", pose_json(left_pose)},
-        {"right_target", pose_json(right_pose)},
-        {"ik", {
-          {"strategy", "fixed_discrete_h_multi_seed_cost_scorer"},
-          {"success", result.success},
-          {"fallback_used", result.fallback_used},
-          {"failure_reason", result.failure_reason},
-          {"trial_count", result.trial_count},
-          {"legal_count", result.legal_count},
-          {"timeout_like_count", result.timeout_like_count},
-          {"wall_ms", result.wall_ms},
-          {"sum_solve_ms", result.sum_solve_ms},
-          {"h_interval", {{"lower", result.h_interval_lower}, {"upper", result.h_interval_upper}, {"center", result.h_center}}},
-          {"h_candidates", vector_json(result.h_candidates)},
-          {"candidate_rejection_counts", ik_candidate_rejection_counts_json(result)},
-          {"selected", {
-            {"h", result.selected.h},
-            {"h_index", result.selected.h_index},
-            {"seed_index", result.selected.seed_index},
-            {"score", result.selected.score},
-            {"solver_path", result.selected.solver_path},
-            {"target_order", result.selected.target_order},
-            {"direct_pos_error", result.selected.direct_pos_error},
-            {"direct_ori_error", result.selected.direct_ori_error},
-            {"updown_delta", result.selected.updown_delta},
-            {"joint_delta", result.selected.joint_delta},
-            {"collision_free", result.selected.collision_free},
-            {"collision_pairs", result.selected.collision_pairs},
-            {"joint_names", result.selected.full_joint_names},
-            {"joint_values", result.selected.full_joint_values}
-          }}
-        }}
-      };
+      *extra_out = solved.extra;
     }
     return true;
   }
@@ -1679,951 +1371,11 @@ private:
     return make_pose(tf.translation().x(), tf.translation().y(), tf.translation().z(), q);
   }
 
-  KDL::Frame eigen_to_kdl_frame(const Eigen::Isometry3d& transform) const
-  {
-    const Eigen::Matrix3d rotation = transform.linear();
-    return KDL::Frame(
-      KDL::Rotation(
-        rotation(0, 0), rotation(0, 1), rotation(0, 2),
-        rotation(1, 0), rotation(1, 1), rotation(1, 2),
-        rotation(2, 0), rotation(2, 1), rotation(2, 2)),
-      KDL::Vector(
-        transform.translation().x(),
-        transform.translation().y(),
-        transform.translation().z()));
-  }
-
-  Eigen::Isometry3d kdl_frame_to_eigen(const KDL::Frame& frame) const
-  {
-    Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
-    for (int row = 0; row < 3; ++row) {
-      for (int col = 0; col < 3; ++col) {
-        transform.linear()(row, col) = frame.M(row, col);
-      }
-    }
-    transform.translation() = Eigen::Vector3d(frame.p.x(), frame.p.y(), frame.p.z());
-    return transform;
-  }
-
-  bool init_arm_kdl_chain(const std::string& side, ArmKdlChain* out) const
-  {
-    if (!out || !robot_model_) return false;
-    const auto* group = side == "left" ? left_arm_group_ : right_arm_group_;
-    if (!group) return false;
-
-    const std::string base_link = side == "left" ? "left_v5_link0" : "right_v5_link0";
-    const std::string tip_link = side == "left" ? left_tip_ : right_tip_;
-
-    KDL::Tree tree;
-    if (!kdl_parser::treeFromUrdfModel(*robot_model_->getURDF(), tree)) {
-      RCLCPP_ERROR(get_logger(), "Failed to build KDL tree from URDF");
-      return false;
-    }
-
-    KDL::Chain chain;
-    if (!tree.getChain(base_link, tip_link, chain)) {
-      RCLCPP_ERROR(get_logger(), "Failed to get KDL chain %s -> %s", base_link.c_str(), tip_link.c_str());
-      return false;
-    }
-
-    out->side = side;
-    out->base_link = base_link;
-    out->tip_link = tip_link;
-    out->chain = chain;
-    out->joint_names.clear();
-    out->joint_names.reserve(chain.getNrOfJoints());
-
-    for (unsigned int segment_index = 0; segment_index < chain.getNrOfSegments(); ++segment_index) {
-      const auto& segment = chain.getSegment(segment_index);
-      const auto& joint = segment.getJoint();
-      if (joint.getType() != KDL::Joint::None) {
-        out->joint_names.push_back(joint.getName());
-      }
-    }
-
-    if (out->joint_names.size() != chain.getNrOfJoints()) {
-      RCLCPP_ERROR(get_logger(), "KDL chain %s joint name count mismatch: names=%zu joints=%u",
-                   side.c_str(), out->joint_names.size(), chain.getNrOfJoints());
-      return false;
-    }
-
-    out->lower.resize(chain.getNrOfJoints());
-    out->upper.resize(chain.getNrOfJoints());
-    for (unsigned int i = 0; i < chain.getNrOfJoints(); ++i) {
-      const auto& name = out->joint_names[i];
-      const auto& bounds = robot_model_->getVariableBounds(name);
-      out->lower(i) = bounds.position_bounded_ ? bounds.min_position_ : -M_PI;
-      out->upper(i) = bounds.position_bounded_ ? bounds.max_position_ : M_PI;
-    }
-
-    out->valid = true;
-    RCLCPP_INFO(get_logger(), "Independent KDL chain ready: %s %s -> %s joints=%u",
-                side.c_str(), base_link.c_str(), tip_link.c_str(), chain.getNrOfJoints());
-    return true;
-  }
-
-  bool solve_extract_candidate_independent_kdl(
-    const std::string& side,
-    const ArmKdlChain& chain,
-    const moveit::core::RobotState& current_state,
-    const Eigen::Isometry3d& target_world,
-    moveit::core::RobotState& state) const
-  {
-    if (!chain.valid || chain.joint_names.empty()) return false;
-
-    state = current_state;
-    state.setVariablePosition("updown", current_updown(current_state));
-    state.update();
-
-    const Eigen::Isometry3d& base_world = state.getGlobalLinkTransform(chain.base_link);
-    const Eigen::Isometry3d target_in_base = base_world.inverse() * target_world;
-
-    KDL::JntArray seed(chain.chain.getNrOfJoints());
-    for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
-      seed(i) = current_state.getVariablePosition(chain.joint_names[i]);
-    }
-
-    KDL::ChainFkSolverPos_recursive fk_solver(chain.chain);
-    const int max_iterations = std::max(1, extract_independent_kdl_max_iterations_);
-    const double eps = std::max(1e-9, extract_independent_kdl_eps_);
-    const KDL::Frame target_frame = eigen_to_kdl_frame(target_in_base);
-
-    KDL::JntArray best_solution(chain.chain.getNrOfJoints());
-    double best_error = std::numeric_limits<double>::infinity();
-    bool found = false;
-
-    const uint32_t seed_base =
-      static_cast<uint32_t>(std::hash<std::string>{}(side) ^
-                            static_cast<size_t>(std::llround(target_world.translation().x() * 1000000.0)) ^
-                            (static_cast<size_t>(std::llround(target_world.translation().y() * 1000000.0)) << 1) ^
-                            (static_cast<size_t>(std::llround(target_world.translation().z() * 1000000.0)) << 2));
-    std::mt19937 rng(seed_base);
-    std::uniform_real_distribution<double> jitter_dist(
-      -std::abs(extract_independent_kdl_seed_jitter_),
-      std::abs(extract_independent_kdl_seed_jitter_));
-
-    for (int attempt = 0; attempt < std::max(1, extract_independent_kdl_seed_attempts_); ++attempt) {
-      KDL::JntArray attempt_seed = seed;
-      if (attempt > 0) {
-        for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
-          double value = seed(i) + jitter_dist(rng);
-          value = std::max(chain.lower(i), std::min(chain.upper(i), value));
-          attempt_seed(i) = value;
-        }
-      }
-
-      KDL::JntArray solution(chain.chain.getNrOfJoints());
-      KDL::ChainIkSolverVel_pinv vel_solver(chain.chain);
-      KDL::ChainIkSolverPos_NR_JL ik_solver(
-        chain.chain, chain.lower, chain.upper, fk_solver, vel_solver, max_iterations, eps);
-
-      const int rc = ik_solver.CartToJnt(attempt_seed, target_frame, solution);
-      if (rc < 0) {
-        continue;
-      }
-
-      KDL::Frame achieved;
-      if (fk_solver.JntToCart(solution, achieved) < 0) {
-        continue;
-      }
-      const Eigen::Isometry3d achieved_eigen = kdl_frame_to_eigen(achieved);
-      const double error = pose_position_error(target_in_base, achieved_eigen) +
-                           pose_orientation_error(target_in_base, achieved_eigen);
-      if (error < best_error) {
-        best_error = error;
-        best_solution = solution;
-        found = true;
-      }
-      if (pose_position_error(target_in_base, achieved_eigen) <= extract_position_tolerance_ &&
-          pose_orientation_error(target_in_base, achieved_eigen) <= extract_orientation_tolerance_) {
-        break;
-      }
-    }
-
-    if (!found) {
-      return false;
-    }
-
-    for (unsigned int i = 0; i < chain.chain.getNrOfJoints(); ++i) {
-      state.setVariablePosition(chain.joint_names[i], best_solution(i));
-    }
-    state.setVariablePosition("updown", current_updown(current_state));
-    state.enforceBounds(joint_group_);
-    state.update();
-
-    (void)side;
-    return true;
-  }
-
-  bool solve_extract_candidate(
-    const moveit::core::RobotState& current_state,
-    const geometry_msgs::msg::Pose& left_pose,
-    const geometry_msgs::msg::Pose& right_hold_pose,
-    size_t step_index,
-    size_t candidate_index,
-    double retreat_x,
-    double lift_z,
-    double pitch_up_rad,
-    ExtractCandidate* out) const
-  {
-    if (!out || !optimized_ik_solver_) return false;
-    out->step_index = step_index;
-    out->candidate_index = candidate_index;
-    out->retreat_x = retreat_x;
-    out->lift_z = lift_z;
-    out->pitch_up_rad = pitch_up_rad;
-    out->target_pose = left_pose;
-
-    ik_benchmark::UpdownAwareIkRequest request;
-    request.left_target = pose_to_eigen(left_pose);
-    request.right_target = pose_to_eigen(right_hold_pose);
-    request.current_h = current_updown(current_state);
-    request.grasp_mode = ik_benchmark::UpdownAwareIkRequest::GraspMode::Front;
-    request.current_arm_joints = state_values(current_state, optimized_ik_solver_->fixedVariableNames());
-    request.current_full_joints = state_values(current_state, optimized_ik_solver_->freeVariableNames());
-
-    auto result = optimized_ik_solver_->solve(request);
-    if (!result.success) {
-      out->rejection_reason = "ik_failed:" + result.failure_reason;
-      return false;
-    }
-    out->ik_success = true;
-
-    out->state = std::make_shared<moveit::core::RobotState>(current_state);
-    for (size_t i = 0; i < result.selected.full_joint_names.size() && i < result.selected.full_joint_values.size(); ++i) {
-      const auto& name = result.selected.full_joint_names[i];
-      if (!is_robot_variable(name)) continue;
-      if (name.rfind("right_v5_", 0) == 0) continue;
-      if (name == "updown") continue;
-      out->state->setVariablePosition(name, result.selected.full_joint_values[i]);
-    }
-    out->state->enforceBounds(joint_group_);
-    out->state->update();
-    return true;
-  }
-
-  bool solve_left_extract_candidate_kdl(
-    const moveit::core::RobotState& current_state,
-    const geometry_msgs::msg::Pose& left_pose,
-    size_t step_index,
-    size_t candidate_index,
-    double retreat_x,
-    double retreat_delta_x,
-    double lift_z,
-    double lift_delta_z,
-    double pitch_up_rad,
-    double pitch_delta_rad,
-    double min_allowed_tip_z,
-    const AttachedBoxSpec& left_box,
-    int left_box_id,
-    ExtractCandidate* out) const
-  {
-    if (!out || !left_arm_group_) return false;
-    out->step_index = step_index;
-    out->candidate_index = candidate_index;
-    out->retreat_x = retreat_x;
-    out->retreat_delta_x = retreat_delta_x;
-    out->lift_z = lift_z;
-    out->lift_delta_z = lift_delta_z;
-    out->pitch_up_rad = pitch_up_rad;
-    out->pitch_delta_rad = pitch_delta_rad;
-    out->target_pose = left_pose;
-
-    const Eigen::Isometry3d target = pose_to_eigen(left_pose);
-    auto state = std::make_shared<moveit::core::RobotState>(current_state);
-    bool ik_ok = false;
-    if (extract_use_independent_kdl_ && left_kdl_chain_.valid) {
-      ik_ok = solve_extract_candidate_independent_kdl("left", left_kdl_chain_, current_state, target, *state);
-    } else {
-      state->setVariablePosition("updown", current_updown(current_state));
-      state->update();
-      std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
-      ik_ok = state->setFromIK(left_arm_group_, target, left_tip_, extract_kdl_timeout_);
-    }
-    if (!ik_ok) {
-      out->rejection_reason = "left_kdl_no_solution";
-      return false;
-    }
-
-    state->setVariablePosition("updown", current_updown(current_state));
-    state->enforceBounds(joint_group_);
-    state->update();
-
-    const Eigen::Isometry3d& actual = state->getGlobalLinkTransform(left_tip_);
-    const double pos_error = pose_position_error(target, actual);
-    const double ori_error = pose_orientation_error(target, actual);
-    if (pos_error > extract_position_tolerance_ || ori_error > extract_orientation_tolerance_) {
-      std::ostringstream oss;
-      oss << "left_kdl_tip_error pos=" << pos_error << " ori=" << ori_error;
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    const Eigen::Vector3d tool_normal = actual.linear() * Eigen::Vector3d::UnitZ();
-    if (tool_normal.z() < extract_min_tool_normal_z_) {
-      std::ostringstream oss;
-      oss << "tool_normal_down z=" << tool_normal.z();
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    if (actual.translation().z() + extract_max_tip_z_drop_ < min_allowed_tip_z) {
-      std::ostringstream oss;
-      oss << "tip_z_dropped z=" << actual.translation().z() << " min=" << min_allowed_tip_z;
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    if (extract_max_joint_delta_ > 0.0) {
-      const double joint_delta = extract_left_arm_joint_delta(current_state, *state);
-      if (joint_delta > extract_max_joint_delta_) {
-        std::ostringstream oss;
-        oss << "joint_delta_too_large delta=" << joint_delta << " limit=" << extract_max_joint_delta_;
-        out->rejection_reason = oss.str();
-        return false;
-      }
-    }
-
-    bool detached = false;
-    std::string reason;
-    if (!state_clear_for_extract(*state, left_box, left_box_id, &detached, &reason)) {
-      out->rejection_reason = reason;
-      return false;
-    }
-
-    out->ik_success = true;
-    out->state_valid = true;
-    out->carried_clear = true;
-    out->detached_from_neighbors = detached;
-    out->state = state;
-    return true;
-  }
-
-  bool solve_extract_candidate_kdl_for_side(
-    const std::string& side,
-    const moveit::core::RobotState& current_state,
-    const geometry_msgs::msg::Pose& target_pose,
-    size_t step_index,
-    size_t candidate_index,
-    double retreat_x,
-    double retreat_delta_x,
-    double lift_z,
-    double lift_delta_z,
-    double pitch_up_rad,
-    double pitch_delta_rad,
-    double min_allowed_tip_z,
-    const AttachedBoxSpec& carried_box,
-    int box_id,
-    ExtractCandidate* out) const
-  {
-    const auto* arm_group = side == "left" ? left_arm_group_ : right_arm_group_;
-    const std::string& tip = side == "left" ? left_tip_ : right_tip_;
-    if (!out || !arm_group) return false;
-    out->step_index = step_index;
-    out->candidate_index = candidate_index;
-    out->retreat_x = retreat_x;
-    out->retreat_delta_x = retreat_delta_x;
-    out->lift_z = lift_z;
-    out->lift_delta_z = lift_delta_z;
-    out->pitch_up_rad = pitch_up_rad;
-    out->pitch_delta_rad = pitch_delta_rad;
-    out->target_pose = target_pose;
-
-    const Eigen::Isometry3d target = pose_to_eigen(target_pose);
-    auto state = std::make_shared<moveit::core::RobotState>(current_state);
-    bool ik_ok = false;
-    const ArmKdlChain& chain = side == "left" ? left_kdl_chain_ : right_kdl_chain_;
-    if (extract_use_independent_kdl_ && chain.valid) {
-      ik_ok = solve_extract_candidate_independent_kdl(side, chain, current_state, target, *state);
-    } else {
-      state->setVariablePosition("updown", current_updown(current_state));
-      state->update();
-      std::lock_guard<std::mutex> lock(extract_kdl_mutex_);
-      ik_ok = state->setFromIK(arm_group, target, tip, extract_kdl_timeout_);
-    }
-    if (!ik_ok) {
-      out->rejection_reason = side + "_kdl_no_solution";
-      return false;
-    }
-
-    state->setVariablePosition("updown", current_updown(current_state));
-    state->enforceBounds(joint_group_);
-    state->update();
-
-    const Eigen::Isometry3d& actual = state->getGlobalLinkTransform(tip);
-    const double pos_error = pose_position_error(target, actual);
-    const double ori_error = pose_orientation_error(target, actual);
-    if (pos_error > extract_position_tolerance_ || ori_error > extract_orientation_tolerance_) {
-      std::ostringstream oss;
-      oss << side << "_kdl_tip_error pos=" << pos_error << " ori=" << ori_error;
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    const Eigen::Vector3d tool_normal = actual.linear() * Eigen::Vector3d::UnitZ();
-    if (tool_normal.z() < extract_min_tool_normal_z_) {
-      std::ostringstream oss;
-      oss << side << "_tool_normal_down z=" << tool_normal.z();
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    if (actual.translation().z() + extract_max_tip_z_drop_ < min_allowed_tip_z) {
-      std::ostringstream oss;
-      oss << side << "_tip_z_dropped z=" << actual.translation().z() << " min=" << min_allowed_tip_z;
-      out->rejection_reason = oss.str();
-      return false;
-    }
-
-    if (extract_max_joint_delta_ > 0.0) {
-      const double joint_delta = extract_arm_joint_delta(side, current_state, *state);
-      if (joint_delta > extract_max_joint_delta_) {
-        std::ostringstream oss;
-        oss << side << "_joint_delta_too_large delta=" << joint_delta << " limit=" << extract_max_joint_delta_;
-        out->rejection_reason = oss.str();
-        return false;
-      }
-    }
-
-    bool detached = false;
-    std::string reason;
-    if (!state_clear_for_single_extract(*state, carried_box, box_id, &detached, &reason)) {
-      out->rejection_reason = reason;
-      return false;
-    }
-
-    out->ik_success = true;
-    out->state_valid = true;
-    out->carried_clear = true;
-    out->detached_from_neighbors = detached;
-    out->state = state;
-    return true;
-  }
-
-  double extract_left_arm_joint_delta(
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    if (!left_arm_group_) return 0.0;
-    double sum = 0.0;
-    const auto& names = left_arm_group_->getVariableNames();
-    for (const auto& name : names) {
-      if (!is_robot_variable(name)) continue;
-      const double delta = to.getVariablePosition(name) - from.getVariablePosition(name);
-      sum += delta * delta;
-    }
-    return std::sqrt(sum);
-  }
-
-  double extract_arm_joint_delta(
-    const std::string& side,
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    const auto* group = side == "left" ? left_arm_group_ : right_arm_group_;
-    if (!group) return 0.0;
-    double sum = 0.0;
-    const auto& names = group->getVariableNames();
-    for (const auto& name : names) {
-      if (!is_robot_variable(name)) continue;
-      const double delta = to.getVariablePosition(name) - from.getVariablePosition(name);
-      sum += delta * delta;
-    }
-    return std::sqrt(sum);
-  }
-
-  double extract_tip_position_delta(
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    const auto& from_tf = from.getGlobalLinkTransform(left_tip_);
-    const auto& to_tf = to.getGlobalLinkTransform(left_tip_);
-    return (to_tf.translation() - from_tf.translation()).norm();
-  }
-
-  double extract_tip_position_delta_for_side(
-    const std::string& side,
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    const std::string& tip = side == "left" ? left_tip_ : right_tip_;
-    const auto& from_tf = from.getGlobalLinkTransform(tip);
-    const auto& to_tf = to.getGlobalLinkTransform(tip);
-    return (to_tf.translation() - from_tf.translation()).norm();
-  }
-
-  double extract_tip_orientation_delta(
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    const auto& from_tf = from.getGlobalLinkTransform(left_tip_);
-    const auto& to_tf = to.getGlobalLinkTransform(left_tip_);
-    return pose_orientation_error(from_tf, to_tf);
-  }
-
-  double extract_tip_orientation_delta_for_side(
-    const std::string& side,
-    const moveit::core::RobotState& from,
-    const moveit::core::RobotState& to) const
-  {
-    const std::string& tip = side == "left" ? left_tip_ : right_tip_;
-    const auto& from_tf = from.getGlobalLinkTransform(tip);
-    const auto& to_tf = to.getGlobalLinkTransform(tip);
-    return pose_orientation_error(from_tf, to_tf);
-  }
-
-  double extract_candidate_score(
-    const ExtractCandidate& candidate,
-    const moveit::core::RobotState& current_state,
-    double last_retreat_x) const
-  {
-    if (!candidate.state_valid || !candidate.state) {
-      return std::numeric_limits<double>::infinity();
-    }
-
-    const double retreat_continuity =
-      std::abs((candidate.retreat_x - last_retreat_x) - extract_step_x_);
-    const double joint_delta = extract_left_arm_joint_delta(current_state, *candidate.state);
-    const double tip_position_delta = extract_tip_position_delta(current_state, *candidate.state);
-    const double tip_orientation_delta = extract_tip_orientation_delta(current_state, *candidate.state);
-
-    return extract_score_lift_weight_ * candidate.lift_z +
-           extract_score_pitch_weight_ * std::abs(candidate.pitch_up_rad) +
-           extract_score_retreat_continuity_weight_ * retreat_continuity +
-           extract_score_joint_delta_weight_ * joint_delta +
-           extract_score_tip_position_delta_weight_ * tip_position_delta +
-           extract_score_tip_orientation_delta_weight_ * tip_orientation_delta;
-  }
-
-  double extract_candidate_score_for_side(
-    const std::string& side,
-    const ExtractCandidate& candidate,
-    const moveit::core::RobotState& current_state,
-    double last_retreat_x) const
-  {
-    if (!candidate.state_valid || !candidate.state) {
-      return std::numeric_limits<double>::infinity();
-    }
-
-    const double retreat_continuity =
-      std::abs((candidate.retreat_x - last_retreat_x) - extract_step_x_);
-    const double joint_delta = extract_arm_joint_delta(side, current_state, *candidate.state);
-    const double tip_position_delta = extract_tip_position_delta_for_side(side, current_state, *candidate.state);
-    const double tip_orientation_delta = extract_tip_orientation_delta_for_side(side, current_state, *candidate.state);
-
-    return extract_score_lift_weight_ * candidate.lift_z +
-           extract_score_pitch_weight_ * std::abs(candidate.pitch_up_rad) +
-           extract_score_retreat_continuity_weight_ * retreat_continuity +
-           extract_score_joint_delta_weight_ * joint_delta +
-           extract_score_tip_position_delta_weight_ * tip_position_delta +
-           extract_score_tip_orientation_delta_weight_ * tip_orientation_delta;
-  }
-
-  std::vector<ExtractMotionDelta> extract_motion_deltas() const
-  {
-    return {
-      {1.0, 0.0, 0.0},
-      {0.8, 0.6, 0.0},
-      {0.6, 0.8, 0.0},
-      {0.0, 1.0, 0.0},
-    };
-  }
-
-  std::vector<double> extract_pitch_delta_degrees(double current_pitch_rad) const
-  {
-    const double current_pitch_deg = current_pitch_rad * 180.0 / M_PI;
-    std::vector<double> deltas{0.0, 1.0};
-    if (current_pitch_deg >= 1.0) {
-      deltas.push_back(-1.0);
-    }
-    deltas.push_back(3.0);
-    if (current_pitch_deg >= 3.0) {
-      deltas.push_back(-3.0);
-    }
-    return deltas;
-  }
-
-  double extract_current_pitch_up_rad(const moveit::core::RobotState& state) const
-  {
-    const Eigen::Vector3d tool_normal =
-      state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ();
-    const double x = std::max(0.0, tool_normal.x());
-    const double z = tool_normal.z();
-    return std::max(0.0, std::atan2(z, x));
-  }
-
-  double extract_current_pitch_up_rad_for_side(const std::string& side, const moveit::core::RobotState& state) const
-  {
-    const std::string& tip = side == "left" ? left_tip_ : right_tip_;
-    const Eigen::Vector3d tool_normal =
-      state.getGlobalLinkTransform(tip).linear() * Eigen::Vector3d::UnitZ();
-    const double x = std::max(0.0, tool_normal.x());
-    const double z = tool_normal.z();
-    return std::max(0.0, std::atan2(z, x));
-  }
-
-  std::vector<ExtractCandidate> make_left_extract_candidates(
-    const moveit::core::RobotState& current_state,
-    const BoxSpec& source_box,
-    const AttachedBoxSpec& left_box,
-    int left_box_id,
-    size_t step,
-    double last_retreat_x,
-    double current_lift_z,
-    double min_allowed_tip_z) const
-  {
-    std::vector<ExtractCandidate> candidates;
-    size_t candidate_index = 0;
-    const double current_pitch = extract_current_pitch_up_rad(current_state);
-
-    for (double pitch_delta_deg : extract_pitch_delta_degrees(current_pitch)) {
-      std::vector<ExtractCandidate> layer_candidates;
-      const double pitch_delta = pitch_delta_deg * M_PI / 180.0;
-      const double pitch_rad = std::max(0.0, current_pitch + pitch_delta);
-      for (const auto& delta : extract_motion_deltas()) {
-        const double retreat_delta = std::max(0.0, delta.retreat_ratio * extract_step_x_);
-        const double retreat_x = std::min(extract_max_x_, last_retreat_x + retreat_delta);
-        if (retreat_x <= last_retreat_x + 1e-6 && last_retreat_x >= extract_max_x_ - 1e-6) {
-          continue;
-        }
-
-        const double lift_delta = std::max(0.0, delta.lift_ratio * extract_step_x_);
-        const double lift_z = current_lift_z + lift_delta;
-        const BoxSpec shifted_box{left_box_id, source_box.x - retreat_x, source_box.y, source_box.z + lift_z};
-        const auto left_pose = make_pose(shifted_box.x, shifted_box.y, shifted_box.z, pitch_up_orientation(pitch_rad));
-
-        ExtractCandidate candidate;
-        solve_left_extract_candidate_kdl(current_state, left_pose, step, candidate_index,
-                                         retreat_x, retreat_x - last_retreat_x,
-                                         lift_z, lift_delta, pitch_rad, pitch_delta,
-                                         min_allowed_tip_z, left_box, left_box_id, &candidate);
-        layer_candidates.push_back(candidate);
-        ++candidate_index;
-      }
-
-      const bool layer_has_valid = std::any_of(
-        layer_candidates.begin(), layer_candidates.end(),
-        [](const ExtractCandidate& candidate) { return candidate.state_valid; });
-      candidates.insert(candidates.end(), layer_candidates.begin(), layer_candidates.end());
-      if (layer_has_valid) {
-        break;
-      }
-    }
-
-    return candidates;
-  }
-
-  std::vector<ExtractCandidate> make_extract_candidates_for_side(
-    const std::string& side,
-    const moveit::core::RobotState& current_state,
-    const BoxSpec& source_box,
-    const AttachedBoxSpec& carried_box,
-    int box_id,
-    size_t step,
-    double last_retreat_x,
-    double current_lift_z,
-    double min_allowed_tip_z) const
-  {
-    std::vector<ExtractCandidate> candidates;
-    size_t candidate_index = 0;
-    const double current_pitch = extract_current_pitch_up_rad_for_side(side, current_state);
-
-    for (double pitch_delta_deg : extract_pitch_delta_degrees(current_pitch)) {
-      std::vector<ExtractCandidate> layer_candidates;
-      const double pitch_delta = pitch_delta_deg * M_PI / 180.0;
-      const double pitch_rad = std::max(0.0, current_pitch + pitch_delta);
-      for (const auto& delta : extract_motion_deltas()) {
-        const double retreat_delta = std::max(0.0, delta.retreat_ratio * extract_step_x_);
-        const double retreat_x = std::min(extract_max_x_, last_retreat_x + retreat_delta);
-        if (retreat_x <= last_retreat_x + 1e-6 && last_retreat_x >= extract_max_x_ - 1e-6) {
-          continue;
-        }
-
-        const double lift_delta = std::max(0.0, delta.lift_ratio * extract_step_x_);
-        const double lift_z = current_lift_z + lift_delta;
-        const BoxSpec shifted_box{box_id, source_box.x - retreat_x, source_box.y, source_box.z + lift_z};
-        const auto target_pose = make_pose(shifted_box.x, shifted_box.y, shifted_box.z, pitch_up_orientation(pitch_rad));
-
-        ExtractCandidate candidate;
-        solve_extract_candidate_kdl_for_side(side, current_state, target_pose, step, candidate_index,
-                                             retreat_x, retreat_x - last_retreat_x,
-                                             lift_z, lift_delta, pitch_rad, pitch_delta,
-                                             min_allowed_tip_z, carried_box, box_id, &candidate);
-        layer_candidates.push_back(candidate);
-        ++candidate_index;
-      }
-
-      const bool layer_has_valid = std::any_of(
-        layer_candidates.begin(), layer_candidates.end(),
-        [](const ExtractCandidate& candidate) { return candidate.state_valid; });
-      candidates.insert(candidates.end(), layer_candidates.begin(), layer_candidates.end());
-      if (layer_has_valid) {
-        break;
-      }
-    }
-
-    return candidates;
-  }
-
-  void copy_arm_state(
-    const std::string& side,
-    const moveit::core::RobotState& from,
-    moveit::core::RobotState& to) const
-  {
-    const auto* group = side == "left" ? left_arm_group_ : right_arm_group_;
-    if (!group) return;
-    for (const auto& name : group->getVariableNames()) {
-      if (is_robot_variable(name)) {
-        to.setVariablePosition(name, from.getVariablePosition(name));
-      }
-    }
-  }
-
-  std::vector<ExtractCandidate> top_valid_extract_candidates(
-    const std::string& side,
-    const std::vector<ExtractCandidate>& candidates,
-    const moveit::core::RobotState& current_state,
-    double last_retreat_x,
-    size_t limit = 6) const
-  {
-    std::vector<ExtractCandidate> valid;
-    for (const auto& candidate : candidates) {
-      if (candidate.state_valid && candidate.state) {
-        valid.push_back(candidate);
-      }
-    }
-    std::sort(valid.begin(), valid.end(),
-              [&](const ExtractCandidate& a, const ExtractCandidate& b) {
-                return extract_candidate_score_for_side(side, a, current_state, last_retreat_x) <
-                       extract_candidate_score_for_side(side, b, current_state, last_retreat_x);
-              });
-    if (valid.size() > limit) {
-      valid.resize(limit);
-    }
-    return valid;
-  }
-
-  ArmExtractPath rollout_arm_extract_path(
-    const std::string& side,
-    const moveit::core::RobotState& start_state,
-    const AttachedBoxSpec& carried_box,
-    int box_id) const
-  {
-    ArmExtractPath path;
-    const auto boxes = make_boxes(box_front_x_);
-    const auto source_it = boxes.find(box_id);
-    if (source_it == boxes.end()) {
-      path.failure_reason = "unknown_box_id";
-      return path;
-    }
-
-    moveit::core::RobotState current_state(start_state);
-    double last_retreat_x = 0.0;
-    double current_lift_z = 0.0;
-    double min_allowed_tip_z =
-      current_state.getGlobalLinkTransform(side == "left" ? left_tip_ : right_tip_).translation().z();
-    const size_t max_steps = static_cast<size_t>(
-      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
-
-    path.states.push_back(std::make_shared<moveit::core::RobotState>(current_state));
-    bool detached_seen = false;
-    size_t extra_steps_after_detached = 0;
-    for (size_t step = 1; step <= max_steps; ++step) {
-      const auto candidates =
-        make_extract_candidates_for_side(side, current_state, source_it->second, carried_box, box_id,
-                                         step, last_retreat_x, current_lift_z, min_allowed_tip_z);
-      auto best_it = std::min_element(
-        candidates.begin(), candidates.end(),
-        [&](const ExtractCandidate& a, const ExtractCandidate& b) {
-          return extract_candidate_score_for_side(side, a, current_state, last_retreat_x) <
-                 extract_candidate_score_for_side(side, b, current_state, last_retreat_x);
-        });
-      if (best_it == candidates.end() || !best_it->state_valid || !best_it->state) {
-        ++path.failed_steps;
-        std::map<std::string, size_t> rejection_counts;
-        for (const auto& candidate : candidates) {
-          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
-          rejection_counts[key]++;
-        }
-        if (!rejection_counts.empty()) {
-          size_t best_count = 0;
-          for (const auto& [reason, count] : rejection_counts) {
-            if (count > best_count) {
-              best_count = count;
-              path.failure_reason = side + ":" + reason;
-            }
-          }
-        } else {
-          path.failure_reason = side + ":no_valid_candidate";
-        }
-        if (detached_seen && path.success) {
-          path.failure_reason.clear();
-        }
-        break;
-      }
-
-      current_state = *best_it->state;
-      min_allowed_tip_z =
-        std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(side == "left" ? left_tip_ : right_tip_).translation().z());
-      last_retreat_x = best_it->retreat_x;
-      current_lift_z = best_it->lift_z;
-      path.final_retreat_x = best_it->retreat_x;
-      path.final_lift_z = best_it->lift_z;
-      path.final_pitch_deg = best_it->pitch_up_rad * 180.0 / M_PI;
-      path.selected_candidates.push_back(*best_it);
-      path.states.push_back(std::make_shared<moveit::core::RobotState>(current_state));
-      ++path.accepted_steps;
-
-      if (best_it->detached_from_neighbors) {
-        detached_seen = true;
-        path.success = true;
-        path.failure_reason.clear();
-      }
-      if (detached_seen) {
-        ++extra_steps_after_detached;
-      }
-      if (detached_seen && extra_steps_after_detached > extract_success_extra_steps_) {
-        path.success = true;
-        path.failure_reason.clear();
-        break;
-      }
-    }
-
-    if (!path.success && path.failure_reason.empty()) {
-      path.failure_reason = side + ":reached_max_retreat_without_neighbor_detachment";
-    }
-    return path;
-  }
-
-  moveit::core::RobotState combine_async_arm_states(
-    const moveit::core::RobotState& base_state,
-    const ArmExtractPath& left_path,
-    const ArmExtractPath& right_path,
-    size_t left_index,
-    size_t right_index) const
-  {
-    moveit::core::RobotState state(base_state);
-    const auto& left_state = *left_path.states[std::min(left_index, left_path.states.size() - 1)];
-    const auto& right_state = *right_path.states[std::min(right_index, right_path.states.size() - 1)];
-    copy_arm_state("left", left_state, state);
-    copy_arm_state("right", right_state, state);
-    state.setVariablePosition("updown", current_updown(base_state));
-    state.enforceBounds(joint_group_);
-    state.update();
-    return state;
-  }
-
-  bool validate_async_extract_path(
-    const moveit::core::RobotState& start_state,
-    const ArmExtractPath& left_path,
-    const ArmExtractPath& right_path,
-    const AttachedBoxSpec& left_box,
-    int left_box_id,
-    const AttachedBoxSpec& right_box,
-    int right_box_id,
-    std::vector<moveit::core::RobotStatePtr>* combined_states,
-    std::string* reason) const
-  {
-    if (!left_path.success) {
-      if (reason) *reason = left_path.failure_reason.empty() ? "left_async_extract_failed" : left_path.failure_reason;
-      return false;
-    }
-    if (!right_path.success) {
-      if (reason) *reason = right_path.failure_reason.empty() ? "right_async_extract_failed" : right_path.failure_reason;
-      return false;
-    }
-    if (left_path.states.empty() || right_path.states.empty()) {
-      if (reason) *reason = "empty_async_extract_path";
-      return false;
-    }
-
-    const size_t step_count = std::max(left_path.states.size(), right_path.states.size());
-    if (combined_states) {
-      combined_states->clear();
-      combined_states->reserve(step_count);
-    }
-    for (size_t step = 0; step < step_count; ++step) {
-      auto state = std::make_shared<moveit::core::RobotState>(
-        combine_async_arm_states(start_state, left_path, right_path, step, step));
-      bool left_detached = false;
-      bool right_detached = false;
-      std::string state_reason;
-      if (!state_clear_for_dual_extract(*state, left_box, left_box_id, right_box, right_box_id,
-                                        &left_detached, &right_detached, &state_reason)) {
-        if (reason) *reason = "async_combined_step_" + std::to_string(step) + ":" + state_reason;
-        return false;
-      }
-      if (combined_states) {
-        combined_states->push_back(state);
-      }
-    }
-    return true;
-  }
-
-  DualExtractStepCandidate select_dual_extract_step_candidate(
-    const moveit::core::RobotState& current_state,
-    const std::vector<ExtractCandidate>& left_candidates,
-    const std::vector<ExtractCandidate>& right_candidates,
-    double left_last_retreat_x,
-    double right_last_retreat_x,
-    const AttachedBoxSpec& left_box,
-    int left_box_id,
-    const AttachedBoxSpec& right_box,
-    int right_box_id) const
-  {
-    DualExtractStepCandidate best;
-    const auto left_valid = top_valid_extract_candidates("left", left_candidates, current_state, left_last_retreat_x);
-    const auto right_valid = top_valid_extract_candidates("right", right_candidates, current_state, right_last_retreat_x);
-    if (left_valid.empty() || right_valid.empty()) {
-      best.rejection_reason = left_valid.empty() ? "no_valid_left_extract_candidate" : "no_valid_right_extract_candidate";
-      return best;
-    }
-
-    for (const auto& left_candidate : left_valid) {
-      for (const auto& right_candidate : right_valid) {
-        auto state = std::make_shared<moveit::core::RobotState>(current_state);
-        copy_arm_state("left", *left_candidate.state, *state);
-        copy_arm_state("right", *right_candidate.state, *state);
-        state->setVariablePosition("updown", current_updown(current_state));
-        state->enforceBounds(joint_group_);
-        state->update();
-
-        bool left_detached = false;
-        bool right_detached = false;
-        std::string reason;
-        if (!state_clear_for_dual_extract(*state, left_box, left_box_id, right_box, right_box_id,
-                                          &left_detached, &right_detached, &reason)) {
-          if (best.rejection_reason.empty()) {
-            best.rejection_reason = reason;
-          }
-          continue;
-        }
-
-        const double score =
-          extract_candidate_score_for_side("left", left_candidate, current_state, left_last_retreat_x) +
-          extract_candidate_score_for_side("right", right_candidate, current_state, right_last_retreat_x) +
-          0.2 * std::abs(left_candidate.retreat_x - right_candidate.retreat_x) +
-          0.2 * std::abs(left_candidate.lift_z - right_candidate.lift_z);
-        if (!best.state_valid || score < best.score) {
-          best.left = left_candidate;
-          best.right = right_candidate;
-          best.state = state;
-          best.state_valid = true;
-          best.left_detached = left_detached;
-          best.right_detached = right_detached;
-          best.score = score;
-          best.rejection_reason.clear();
-        }
-      }
-    }
-    if (!best.state_valid && best.rejection_reason.empty()) {
-      best.rejection_reason = "no_collision_free_dual_extract_candidate";
-    }
-    return best;
-  }
-
   nlohmann::json ik_candidate_rejection_counts_json(const ik_benchmark::UpdownAwareIkResult& result) const
   {
+    if (optimized_dual_ik_solver_) {
+      return optimized_dual_ik_solver_->candidateRejectionCountsJson(result);
+    }
     std::map<std::string, size_t> counts;
     for (const auto& candidate : result.candidates) {
       if (candidate.legal) {
@@ -2657,151 +1409,6 @@ private:
     return state;
   }
 
-  struct IkDedupStats
-  {
-    bool enabled = false;
-    size_t input_count = 0;
-    size_t unique_count = 0;
-    size_t selected_count = 0;
-    size_t removed_count = 0;
-    double elapsed_ms = 0.0;
-  };
-
-  static double wrapped_angle_delta(double lhs, double rhs)
-  {
-    double delta = std::fmod(lhs - rhs + M_PI, 2.0 * M_PI);
-    if (delta < 0.0) {
-      delta += 2.0 * M_PI;
-    }
-    return std::abs(delta - M_PI);
-  }
-
-  std::optional<double> candidate_joint_value(
-    const ik_benchmark::UpdownAwareIkCandidate& candidate,
-    const std::string& joint_name) const
-  {
-    for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
-      if (candidate.full_joint_names[i] == joint_name) {
-        return candidate.full_joint_values[i];
-      }
-    }
-    return std::nullopt;
-  }
-
-  bool ik_candidates_similar(
-    const ik_benchmark::UpdownAwareIkCandidate& candidate,
-    const ik_benchmark::UpdownAwareIkCandidate& kept) const
-  {
-    if (extract_ik_dedup_h_threshold_ >= 0.0 &&
-        std::abs(candidate.h - kept.h) > extract_ik_dedup_h_threshold_) {
-      return false;
-    }
-    if (extract_ik_dedup_joint_threshold_ <= 0.0) {
-      return false;
-    }
-
-    static const std::array<const char*, 12> arm_joints = {
-      "left_v5_joint1", "left_v5_joint2", "left_v5_joint3",
-      "left_v5_joint4", "left_v5_joint5", "left_v5_joint6",
-      "right_v5_joint1", "right_v5_joint2", "right_v5_joint3",
-      "right_v5_joint4", "right_v5_joint5", "right_v5_joint6",
-    };
-
-    size_t compared = 0;
-    for (const auto* joint_name : arm_joints) {
-      const auto lhs = candidate_joint_value(candidate, joint_name);
-      const auto rhs = candidate_joint_value(kept, joint_name);
-      if (!lhs || !rhs) {
-        continue;
-      }
-      ++compared;
-      if (wrapped_angle_delta(*lhs, *rhs) > extract_ik_dedup_joint_threshold_) {
-        return false;
-      }
-    }
-    return compared > 0;
-  }
-
-  std::vector<ik_benchmark::UpdownAwareIkCandidate> select_benchmark_ik_candidates(
-    const std::vector<ik_benchmark::UpdownAwareIkCandidate>& sorted_legal_candidates,
-    IkDedupStats* stats) const
-  {
-    IkDedupStats local_stats;
-    local_stats.enabled = extract_ik_dedup_enabled_ && extract_ik_dedup_joint_threshold_ > 0.0;
-    local_stats.input_count = sorted_legal_candidates.size();
-
-    std::vector<ik_benchmark::UpdownAwareIkCandidate> selected;
-    if (local_stats.enabled) {
-      const auto start = std::chrono::steady_clock::now();
-      selected.reserve(sorted_legal_candidates.size());
-      for (const auto& candidate : sorted_legal_candidates) {
-        bool duplicate = false;
-        for (const auto& kept : selected) {
-          if (ik_candidates_similar(candidate, kept)) {
-            duplicate = true;
-            break;
-          }
-        }
-        if (!duplicate) {
-          selected.push_back(candidate);
-        }
-      }
-      local_stats.elapsed_ms = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - start).count();
-    } else {
-      selected = sorted_legal_candidates;
-    }
-
-    local_stats.unique_count = selected.size();
-    local_stats.removed_count = local_stats.input_count > local_stats.unique_count
-      ? local_stats.input_count - local_stats.unique_count
-      : 0;
-    if (extract_benchmark_candidate_limit_ > 0 && selected.size() > extract_benchmark_candidate_limit_) {
-      selected.resize(extract_benchmark_candidate_limit_);
-    }
-    local_stats.selected_count = selected.size();
-    if (stats) {
-      *stats = local_stats;
-    }
-    return selected;
-  }
-
-  struct ExtractRolloutTiming
-  {
-    size_t candidate_order = 0;
-    size_t h_index = 0;
-    size_t seed_index = 0;
-    double h = 0.0;
-    double ik_score = 0.0;
-    double ik_solve_ms = 0.0;
-    double rollout_ms = 0.0;
-    double interval_ms = 0.0;
-    bool success = false;
-    bool loaded_plan_attempted = false;
-    bool loaded_plan_success = false;
-    double loaded_plan_ms = 0.0;
-    size_t loaded_plan_points = 0;
-    size_t selected_left_loaded_pose_index = 0;
-    size_t selected_right_loaded_pose_index = 0;
-    double selected_left_loaded_pose_distance = 0.0;
-    double selected_right_loaded_pose_distance = 0.0;
-    double loaded_pose_distance_sum = 0.0;
-    double loaded_pose_distance_l2 = 0.0;
-    double loaded_pose_max_joint_delta = 0.0;
-    size_t loaded_plan_rank = 0;
-    size_t accepted_steps = 0;
-    size_t failed_steps = 0;
-    double final_retreat_x = 0.0;
-    double final_lift_z = 0.0;
-    double final_pitch_deg = 0.0;
-    double right_final_retreat_x = 0.0;
-    double right_final_lift_z = 0.0;
-    double right_final_pitch_deg = 0.0;
-    std::string failure_reason;
-    std::string loaded_plan_failure_reason;
-    moveit::core::RobotStatePtr final_state;
-  };
-
   std::vector<std::string> arm_joint_target_names() const
   {
     return {
@@ -2813,259 +1420,22 @@ private:
     };
   }
 
-  double arm_pose_distance(
-    const moveit::core::RobotState& state,
-    const std::string& prefix,
-    const std::vector<double>& pose) const
-  {
-    if (pose.size() < 6) return std::numeric_limits<double>::infinity();
-    double squared_sum = 0.0;
-    for (size_t i = 0; i < 6; ++i) {
-      const std::string joint_name = prefix + "_v5_joint" + std::to_string(i + 1);
-      if (!is_robot_variable(joint_name)) {
-        return std::numeric_limits<double>::infinity();
-      }
-      const double diff = shortest_angular_distance(state.getVariablePosition(joint_name), pose[i]);
-      squared_sum += diff * diff;
-    }
-    return std::sqrt(squared_sum);
-  }
-
-  std::array<double, 3> loaded_pose_distance_metrics(
-    const moveit::core::RobotState& state,
-    size_t left_index,
-    size_t right_index) const
-  {
-    if (left_index >= left_loaded_pose_family_.size() || right_index >= right_loaded_pose_family_.size()) {
-      return {
-        std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity(),
-        std::numeric_limits<double>::infinity()
-      };
-    }
-    const auto& left_pose = left_loaded_pose_family_[left_index];
-    const auto& right_pose = right_loaded_pose_family_[right_index];
-    double abs_sum = 0.0;
-    double squared_sum = 0.0;
-    double max_delta = 0.0;
-    for (size_t i = 0; i < 6; ++i) {
-      const std::array<std::pair<std::string, const std::vector<double>*>, 2> arms = {{
-        {std::string("left_v5_joint") + std::to_string(i + 1), &left_pose},
-        {std::string("right_v5_joint") + std::to_string(i + 1), &right_pose},
-      }};
-      for (const auto& [joint_name, pose] : arms) {
-        if (!is_robot_variable(joint_name) || pose->size() <= i) {
-          return {
-            std::numeric_limits<double>::infinity(),
-            std::numeric_limits<double>::infinity(),
-            std::numeric_limits<double>::infinity()
-          };
-        }
-        const double delta = std::abs(shortest_angular_distance(state.getVariablePosition(joint_name), (*pose)[i]));
-        abs_sum += delta;
-        squared_sum += delta * delta;
-        max_delta = std::max(max_delta, delta);
-      }
-    }
-    return {abs_sum, std::sqrt(squared_sum), max_delta};
-  }
-
   void fill_loaded_pose_distance_metrics(ExtractRolloutTiming& timing) const
   {
     if (!timing.final_state) {
       return;
     }
-    timing.selected_left_loaded_pose_index = nearest_loaded_pose_index(
-      *timing.final_state, "left", left_loaded_pose_family_, &timing.selected_left_loaded_pose_distance);
-    timing.selected_right_loaded_pose_index = nearest_loaded_pose_index(
-      *timing.final_state, "right", right_loaded_pose_family_, &timing.selected_right_loaded_pose_distance);
-    const auto metrics = loaded_pose_distance_metrics(
-      *timing.final_state,
-      timing.selected_left_loaded_pose_index,
-      timing.selected_right_loaded_pose_index);
-    timing.loaded_pose_distance_sum = metrics[0];
-    timing.loaded_pose_distance_l2 = metrics[1];
-    timing.loaded_pose_max_joint_delta = metrics[2];
-  }
-
-  size_t nearest_loaded_pose_index(
-    const moveit::core::RobotState& state,
-    const std::string& prefix,
-    const std::vector<std::vector<double>>& family,
-    double* distance = nullptr) const
-  {
-    size_t best_index = 0;
-    double best_distance = std::numeric_limits<double>::infinity();
-    for (size_t i = 0; i < family.size(); ++i) {
-      const double candidate_distance = arm_pose_distance(state, prefix, family[i]);
-      if (candidate_distance < best_distance) {
-        best_distance = candidate_distance;
-        best_index = i;
-      }
+    if (!loaded_pose_selector_) {
+      return;
     }
-    if (distance) {
-      *distance = best_distance;
-    }
-    return best_index;
-  }
-
-  moveit::core::RobotState loaded_goal_from_extract_state(
-    const moveit::core::RobotState& extract_state,
-    size_t* selected_left_index = nullptr,
-    size_t* selected_right_index = nullptr,
-    double* selected_left_distance = nullptr,
-    double* selected_right_distance = nullptr) const
-  {
-    moveit::core::RobotState goal_state(extract_state);
-    const size_t left_index = nearest_loaded_pose_index(
-      extract_state, "left", left_loaded_pose_family_, selected_left_distance);
-    const size_t right_index = nearest_loaded_pose_index(
-      extract_state, "right", right_loaded_pose_family_, selected_right_distance);
-    if (selected_left_index) *selected_left_index = left_index;
-    if (selected_right_index) *selected_right_index = right_index;
-    const auto& left_pose = left_loaded_pose_family_[left_index];
-    const auto& right_pose = right_loaded_pose_family_[right_index];
-    if (is_robot_variable("updown")) {
-      goal_state.setVariablePosition("updown", extract_loaded_target_updown_);
-    }
-    for (size_t i = 0; i < left_pose.size(); ++i) {
-      goal_state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_pose[i]);
-    }
-    for (size_t i = 0; i < right_pose.size(); ++i) {
-      goal_state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pose[i]);
-    }
-    goal_state.enforceBounds(joint_group_);
-    goal_state.update();
-    return goal_state;
-  }
-
-  bool plan_loaded_from_extract_state(
-    const std::string& stage_name,
-    const moveit::core::RobotState& extract_state,
-    const std::vector<AttachedBoxSpec>& carried_boxes,
-    ExtractRolloutTiming* timing)
-  {
-    if (!loaded_move_group_) {
-      if (timing) timing->loaded_plan_failure_reason = "loaded_move_group_not_initialized";
-      return false;
-    }
-
-    const auto saved_boxes = active_attached_boxes_;
-    active_attached_boxes_ = carried_boxes;
-
-    auto restore_boxes = [&]() {
-      std::vector<std::string> ids;
-      ids.reserve(carried_boxes.size());
-      for (const auto& box : carried_boxes) ids.push_back(box.id);
-      remove_carried_box_ids(ids, "extract_loaded_plan_detach_box");
-      active_attached_boxes_ = saved_boxes;
-    };
-
-    if (!apply_attached_box_state(active_attached_boxes_, moveit_msgs::msg::CollisionObject::ADD,
-                                  "extract_loaded_plan_attach_box")) {
-      if (timing) timing->loaded_plan_failure_reason = "failed_to_attach_box_for_loaded_plan";
-      restore_boxes();
-      return false;
-    }
-
-    size_t selected_left_loaded_pose_index = 0;
-    size_t selected_right_loaded_pose_index = 0;
-    double selected_left_loaded_pose_distance = 0.0;
-    double selected_right_loaded_pose_distance = 0.0;
-    moveit::core::RobotState goal_state = loaded_goal_from_extract_state(
-      extract_state,
-      &selected_left_loaded_pose_index,
-      &selected_right_loaded_pose_index,
-      &selected_left_loaded_pose_distance,
-      &selected_right_loaded_pose_distance);
-    const auto loaded_pose_metrics = loaded_pose_distance_metrics(
-      extract_state,
-      selected_left_loaded_pose_index,
-      selected_right_loaded_pose_index);
-    const auto target_names = arm_joint_target_names();
-
-    loaded_move_group_->setStartState(extract_state);
-    loaded_move_group_->setJointValueTarget(goal_state);
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    const auto t0 = std::chrono::steady_clock::now();
-    const auto plan_result = loaded_move_group_->plan(plan);
-    const auto t1 = std::chrono::steady_clock::now();
-    const double plan_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-    if (timing) {
-      timing->loaded_plan_attempted = true;
-      timing->loaded_plan_ms = plan_ms;
-      timing->loaded_plan_points = plan.trajectory_.joint_trajectory.points.size();
-      timing->selected_left_loaded_pose_index = selected_left_loaded_pose_index;
-      timing->selected_right_loaded_pose_index = selected_right_loaded_pose_index;
-      timing->selected_left_loaded_pose_distance = selected_left_loaded_pose_distance;
-      timing->selected_right_loaded_pose_distance = selected_right_loaded_pose_distance;
-      timing->loaded_pose_distance_sum = loaded_pose_metrics[0];
-      timing->loaded_pose_distance_l2 = loaded_pose_metrics[1];
-      timing->loaded_pose_max_joint_delta = loaded_pose_metrics[2];
-    }
-
-    if (plan_result != moveit::core::MoveItErrorCode::SUCCESS) {
-      if (timing) {
-        timing->loaded_plan_failure_reason = "moveit_planning_failed_code_" + std::to_string(plan_result.val);
-      }
-      restore_boxes();
-      return false;
-    }
-
-    std::string carried_collision_reason;
-    const bool carried_clear = planned_carried_boxes_clear_static_obstacles(plan, extract_state, &carried_collision_reason);
-    if (!carried_clear) {
-      if (timing) {
-        timing->loaded_plan_failure_reason = carried_collision_reason;
-      }
-    }
-
-    if (record_stream_) {
-      nlohmann::json extra = {
-        {"stage_kind", "post_extract_loaded_plan"},
-        {"valid", carried_clear},
-        {"loaded_plan_ms", plan_ms},
-        {"loaded_plan_points", plan.trajectory_.joint_trajectory.points.size()},
-        {"start_updown", current_updown(extract_state)},
-        {"target_updown", current_updown(goal_state)},
-        {"carried_box_count", carried_boxes.size()},
-        {"loaded_plan_rank", timing ? timing->loaded_plan_rank : 0},
-        {"loaded_pose_distance_sum", loaded_pose_metrics[0]},
-        {"loaded_pose_distance_l2", loaded_pose_metrics[1]},
-        {"loaded_pose_max_joint_delta", loaded_pose_metrics[2]},
-        {"loaded_pose_max_joint_delta_deg", loaded_pose_metrics[2] * 180.0 / M_PI},
-        {"selected_left_loaded_pose_index", selected_left_loaded_pose_index},
-        {"selected_right_loaded_pose_index", selected_right_loaded_pose_index},
-        {"selected_left_loaded_pose_distance", selected_left_loaded_pose_distance},
-        {"selected_right_loaded_pose_distance", selected_right_loaded_pose_distance},
-        {"selected_left_loaded_pose_deg", pose_degrees_json(left_loaded_pose_family_[selected_left_loaded_pose_index])},
-        {"selected_right_loaded_pose_deg", pose_degrees_json(right_loaded_pose_family_[selected_right_loaded_pose_index])},
-        {"failure_reason", carried_clear ? "" : carried_collision_reason}
-      };
-      record_stage(stage_name, plan, extract_state, goal_state, target_names, extra);
-    }
-
-    if (!carried_clear) {
-      restore_boxes();
-      return false;
-    }
-
-    if (timing) {
-      timing->loaded_plan_success = true;
-      timing->loaded_plan_failure_reason.clear();
-    }
-    restore_boxes();
-    return true;
-  }
-
-  bool plan_loaded_from_extract_state(
-    const std::string& stage_name,
-    const moveit::core::RobotState& extract_state,
-    const AttachedBoxSpec& left_box,
-    ExtractRolloutTiming* timing)
-  {
-    return plan_loaded_from_extract_state(stage_name, extract_state, std::vector<AttachedBoxSpec>{left_box}, timing);
+    const auto selection = loaded_pose_selector_->select(*timing.final_state);
+    timing.selected_left_loaded_pose_index = selection.left_index;
+    timing.selected_right_loaded_pose_index = selection.right_index;
+    timing.selected_left_loaded_pose_distance = selection.left_distance;
+    timing.selected_right_loaded_pose_distance = selection.right_distance;
+    timing.loaded_pose_distance_sum = selection.distance_sum;
+    timing.loaded_pose_distance_l2 = selection.distance_l2;
+    timing.loaded_pose_max_joint_delta = selection.max_joint_delta;
   }
 
   ExtractRolloutTiming rollout_left_extract_from_state(
@@ -3076,163 +1446,31 @@ private:
     const ik_benchmark::UpdownAwareIkCandidate& ik_candidate,
     const std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)>& record_step = {}) const
   {
-    ExtractRolloutTiming timing;
-    timing.candidate_order = candidate_order;
-    timing.h_index = ik_candidate.h_index;
-    timing.seed_index = ik_candidate.seed_index;
-    timing.h = ik_candidate.h;
-    timing.ik_score = ik_candidate.score;
-    timing.ik_solve_ms = ik_candidate.solve_ms;
-
     const auto boxes = make_boxes(box_front_x_);
     const auto left_it = boxes.find(left_box_id);
     if (left_it == boxes.end()) {
+      ExtractRolloutTiming timing;
+      timing.candidate_order = candidate_order;
+      timing.h_index = ik_candidate.h_index;
+      timing.seed_index = ik_candidate.seed_index;
+      timing.h = ik_candidate.h;
+      timing.ik_score = ik_candidate.score;
+      timing.ik_solve_ms = ik_candidate.solve_ms;
       timing.failure_reason = "unknown_left_box_id";
       return timing;
     }
-
-    const auto t0 = std::chrono::steady_clock::now();
-    moveit::core::RobotState current_state(start_state);
-    double last_retreat_x = 0.0;
-    double current_lift_z = 0.0;
-    double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
-    const size_t max_steps = static_cast<size_t>(
-      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
-
-    if (record_step) {
-      nlohmann::json extra = {
-        {"stage_kind", "left_extract_all_legal_ik_start"},
-        {"candidate_order", candidate_order},
-        {"h_index", ik_candidate.h_index},
-        {"seed_index", ik_candidate.seed_index},
-        {"h", ik_candidate.h},
-        {"ik_score", ik_candidate.score},
-        {"ik_solve_ms", ik_candidate.solve_ms},
-        {"accepted", true},
-        {"step", 0},
-        {"retreat_x", 0.0},
-        {"lift_z", 0.0},
-        {"pitch_up_deg", 0.0},
-        {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
-        {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
-        {"detached_from_neighbors", false}
-      };
-      record_step(0, current_state, extra);
-    }
-
-    for (size_t step = 1; step <= max_steps; ++step) {
-      std::vector<ExtractCandidate> candidates =
-        make_left_extract_candidates(current_state, left_it->second, left_box, left_box_id,
-                                     step, last_retreat_x, current_lift_z, min_allowed_tip_z);
-
-      auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
-        return extract_candidate_score(a, current_state, last_retreat_x) <
-               extract_candidate_score(b, current_state, last_retreat_x);
-      });
-
-      if (best_it == candidates.end() || !best_it->state_valid) {
-        ++timing.failed_steps;
-        std::map<std::string, size_t> rejection_counts;
-        for (const auto& candidate : candidates) {
-          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
-          rejection_counts[key]++;
-        }
-        if (!rejection_counts.empty()) {
-          timing.failure_reason = rejection_counts.begin()->first;
-          size_t best_count = 0;
-          for (const auto& [reason, count] : rejection_counts) {
-            if (count > best_count) {
-              best_count = count;
-              timing.failure_reason = reason;
-            }
-          }
-        } else {
-          timing.failure_reason = "no_valid_candidate";
-        }
-        if (record_step) {
-          nlohmann::json rejection_json = nlohmann::json::object();
-          for (const auto& [reason, count] : rejection_counts) {
-            rejection_json[reason] = count;
-          }
-          nlohmann::json extra = {
-            {"stage_kind", "left_extract_all_legal_ik_failed_step"},
-            {"candidate_order", candidate_order},
-            {"h_index", ik_candidate.h_index},
-            {"seed_index", ik_candidate.seed_index},
-            {"h", ik_candidate.h},
-            {"ik_score", ik_candidate.score},
-            {"ik_solve_ms", ik_candidate.solve_ms},
-            {"step", step},
-            {"retreat_x", last_retreat_x},
-            {"accepted", false},
-            {"candidate_count", candidates.size()},
-            {"rejection_counts", rejection_json},
-            {"failure_reason", timing.failure_reason}
-          };
-          record_step(step, current_state, extra);
-        }
-        if (extract_fail_fast_) break;
-        continue;
-      }
-
-      const double selected_score = extract_candidate_score(*best_it, current_state, last_retreat_x);
-      const double selected_joint_delta = extract_left_arm_joint_delta(current_state, *best_it->state);
-      const double selected_tip_position_delta = extract_tip_position_delta(current_state, *best_it->state);
-      const double selected_tip_orientation_delta = extract_tip_orientation_delta(current_state, *best_it->state);
-
-      current_state = *best_it->state;
-      min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
-      last_retreat_x = best_it->retreat_x;
-      current_lift_z = best_it->lift_z;
-      timing.final_retreat_x = best_it->retreat_x;
-      timing.final_lift_z = best_it->lift_z;
-      timing.final_pitch_deg = best_it->pitch_up_rad * 180.0 / M_PI;
-      ++timing.accepted_steps;
-
-      if (record_step) {
-        nlohmann::json extra = {
-          {"stage_kind", "left_extract_all_legal_ik_step"},
-          {"candidate_order", candidate_order},
-          {"h_index", ik_candidate.h_index},
-          {"seed_index", ik_candidate.seed_index},
-          {"h", ik_candidate.h},
-          {"ik_score", ik_candidate.score},
-          {"ik_solve_ms", ik_candidate.solve_ms},
-          {"step", step},
-          {"candidate_index", best_it->candidate_index},
-          {"retreat_x", best_it->retreat_x},
-          {"retreat_delta_x", best_it->retreat_delta_x},
-          {"lift_z", best_it->lift_z},
-          {"lift_delta_z", best_it->lift_delta_z},
-          {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
-          {"pitch_delta_deg", best_it->pitch_delta_rad * 180.0 / M_PI},
-          {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
-          {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
-          {"detached_from_neighbors", best_it->detached_from_neighbors},
-          {"candidate_count", candidates.size()},
-          {"score", selected_score},
-          {"joint_delta", selected_joint_delta},
-          {"tip_position_delta", selected_tip_position_delta},
-          {"tip_orientation_delta", selected_tip_orientation_delta},
-          {"accepted", true}
-        };
-        record_step(step, current_state, extra);
-      }
-
-      if (best_it->detached_from_neighbors) {
-        timing.success = true;
-        timing.failure_reason.clear();
-        timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
-        break;
-      }
-    }
-
-    if (!timing.success && timing.failure_reason.empty()) {
-      timing.failure_reason = "reached_max_retreat_without_neighbor_detachment";
-    }
-    const auto t1 = std::chrono::steady_clock::now();
-    timing.rollout_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    return timing;
+    return extract_rollout_planner_->rolloutLeft(
+      start_state,
+      left_it->second,
+      left_box,
+      left_box_id,
+      candidate_order,
+      ik_candidate.h_index,
+      ik_candidate.seed_index,
+      ik_candidate.h,
+      ik_candidate.score,
+      ik_candidate.solve_ms,
+      record_step);
   }
 
   ExtractRolloutTiming rollout_dual_extract_from_state(
@@ -3245,338 +1483,35 @@ private:
     const ik_benchmark::UpdownAwareIkCandidate& ik_candidate,
     const std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)>& record_step = {}) const
   {
-    ExtractRolloutTiming timing;
-    timing.candidate_order = candidate_order;
-    timing.h_index = ik_candidate.h_index;
-    timing.seed_index = ik_candidate.seed_index;
-    timing.h = ik_candidate.h;
-    timing.ik_score = ik_candidate.score;
-    timing.ik_solve_ms = ik_candidate.solve_ms;
-
     const auto boxes = make_boxes(box_front_x_);
     const auto left_it = boxes.find(left_box_id);
     const auto right_it = boxes.find(right_box_id);
     if (left_it == boxes.end() || right_it == boxes.end()) {
+      ExtractRolloutTiming timing;
+      timing.candidate_order = candidate_order;
+      timing.h_index = ik_candidate.h_index;
+      timing.seed_index = ik_candidate.seed_index;
+      timing.h = ik_candidate.h;
+      timing.ik_score = ik_candidate.score;
+      timing.ik_solve_ms = ik_candidate.solve_ms;
       timing.failure_reason = "unknown_box_id";
       return timing;
     }
-
-    const auto t0 = std::chrono::steady_clock::now();
-    moveit::core::RobotState current_state(start_state);
-    if (extract_benchmark_dual_async_) {
-      const auto left_path = rollout_arm_extract_path("left", start_state, left_box, left_box_id);
-      const auto right_path = rollout_arm_extract_path("right", start_state, right_box, right_box_id);
-      timing.accepted_steps = left_path.accepted_steps + right_path.accepted_steps;
-      timing.failed_steps = left_path.failed_steps + right_path.failed_steps;
-      timing.final_retreat_x = left_path.final_retreat_x;
-      timing.final_lift_z = left_path.final_lift_z;
-      timing.final_pitch_deg = left_path.final_pitch_deg;
-      timing.right_final_retreat_x = right_path.final_retreat_x;
-      timing.right_final_lift_z = right_path.final_lift_z;
-      timing.right_final_pitch_deg = right_path.final_pitch_deg;
-
-      std::vector<moveit::core::RobotStatePtr> combined_states;
-      std::string async_reason;
-      const bool async_valid = validate_async_extract_path(
-        start_state, left_path, right_path, left_box, left_box_id, right_box, right_box_id,
-        &combined_states, &async_reason);
-      if (!async_valid) {
-        timing.failure_reason = async_reason;
-      } else {
-        timing.success = true;
-        timing.failure_reason.clear();
-        timing.final_state = combined_states.empty() ? std::make_shared<moveit::core::RobotState>(start_state) : combined_states.back();
-      }
-
-      if (record_step) {
-        nlohmann::json start_extra = {
-          {"stage_kind", "dual_extract_async_start"},
-          {"candidate_order", candidate_order},
-          {"h_index", ik_candidate.h_index},
-          {"seed_index", ik_candidate.seed_index},
-          {"h", ik_candidate.h},
-          {"ik_score", ik_candidate.score},
-          {"ik_solve_ms", ik_candidate.solve_ms},
-          {"accepted", true},
-          {"step", 0},
-          {"left_path_success", left_path.success},
-          {"right_path_success", right_path.success},
-          {"left_path_steps", left_path.accepted_steps},
-          {"right_path_steps", right_path.accepted_steps},
-          {"async_valid", async_valid},
-          {"failure_reason", timing.failure_reason}
-        };
-        record_step(0, start_state, start_extra);
-        const size_t recorded_step_count = std::max(
-          combined_states.size(),
-          std::max(left_path.states.empty() ? 0 : left_path.states.size() - 1,
-                   right_path.states.empty() ? 0 : right_path.states.size() - 1));
-        for (size_t step = 1; step <= recorded_step_count; ++step) {
-          const auto left_index = std::min(step, left_path.selected_candidates.size());
-          const auto right_index = std::min(step, right_path.selected_candidates.size());
-          auto display_state = combined_states.empty() || step > combined_states.size()
-            ? std::make_shared<moveit::core::RobotState>(
-                combine_async_arm_states(start_state, left_path, right_path, left_index, right_index))
-            : combined_states[step - 1];
-          nlohmann::json extra = {
-            {"stage_kind", "dual_extract_async_step"},
-            {"candidate_order", candidate_order},
-            {"h_index", ik_candidate.h_index},
-            {"seed_index", ik_candidate.seed_index},
-            {"h", ik_candidate.h},
-            {"ik_score", ik_candidate.score},
-            {"ik_solve_ms", ik_candidate.solve_ms},
-            {"step", step},
-            {"accepted", true},
-            {"left_path_success", left_path.success},
-            {"right_path_success", right_path.success},
-            {"left_path_steps", left_path.accepted_steps},
-            {"right_path_steps", right_path.accepted_steps},
-            {"async_valid", async_valid},
-            {"failure_reason", timing.failure_reason}
-          };
-          if (left_index > 0 && left_index <= left_path.selected_candidates.size()) {
-            const auto& left = left_path.selected_candidates[left_index - 1];
-            extra["left_retreat_x"] = left.retreat_x;
-            extra["left_lift_z"] = left.lift_z;
-            extra["left_pitch_up_deg"] = left.pitch_up_rad * 180.0 / M_PI;
-            extra["left_detached_from_neighbors"] = left.detached_from_neighbors;
-          }
-          if (right_index > 0 && right_index <= right_path.selected_candidates.size()) {
-            const auto& right = right_path.selected_candidates[right_index - 1];
-            extra["right_retreat_x"] = right.retreat_x;
-            extra["right_lift_z"] = right.lift_z;
-            extra["right_pitch_up_deg"] = right.pitch_up_rad * 180.0 / M_PI;
-            extra["right_detached_from_neighbors"] = right.detached_from_neighbors;
-          }
-          record_step(step, *display_state, extra);
-        }
-      }
-
-      const auto t1 = std::chrono::steady_clock::now();
-      timing.rollout_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-      return timing;
-    }
-
-    double left_last_retreat_x = 0.0;
-    double right_last_retreat_x = 0.0;
-    double left_lift_z = 0.0;
-    double right_lift_z = 0.0;
-    double left_min_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
-    double right_min_tip_z = current_state.getGlobalLinkTransform(right_tip_).translation().z();
-    const size_t max_steps = static_cast<size_t>(
-      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
-
-    if (record_step) {
-      nlohmann::json extra = {
-        {"stage_kind", "dual_extract_all_legal_ik_start"},
-        {"candidate_order", candidate_order},
-        {"h_index", ik_candidate.h_index},
-        {"seed_index", ik_candidate.seed_index},
-        {"h", ik_candidate.h},
-        {"ik_score", ik_candidate.score},
-        {"ik_solve_ms", ik_candidate.solve_ms},
-        {"accepted", true},
-        {"step", 0},
-        {"left_retreat_x", 0.0},
-        {"right_retreat_x", 0.0},
-        {"left_lift_z", 0.0},
-        {"right_lift_z", 0.0},
-        {"left_detached_from_neighbors", false},
-        {"right_detached_from_neighbors", false}
-      };
-      record_step(0, current_state, extra);
-    }
-
-    for (size_t step = 1; step <= max_steps; ++step) {
-      const auto left_candidates =
-        make_extract_candidates_for_side("left", current_state, left_it->second, left_box, left_box_id,
-                                         step, left_last_retreat_x, left_lift_z, left_min_tip_z);
-      const auto right_candidates =
-        make_extract_candidates_for_side("right", current_state, right_it->second, right_box, right_box_id,
-                                         step, right_last_retreat_x, right_lift_z, right_min_tip_z);
-      const auto best = select_dual_extract_step_candidate(
-        current_state,
-        left_candidates,
-        right_candidates,
-        left_last_retreat_x,
-        right_last_retreat_x,
-        left_box,
-        left_box_id,
-        right_box,
-        right_box_id);
-
-      if (!best.state_valid || !best.state) {
-        ++timing.failed_steps;
-        timing.failure_reason = best.rejection_reason.empty() ? "no_valid_dual_extract_candidate" : best.rejection_reason;
-        if (record_step) {
-          nlohmann::json extra = {
-            {"stage_kind", "dual_extract_all_legal_ik_failed_step"},
-            {"candidate_order", candidate_order},
-            {"h_index", ik_candidate.h_index},
-            {"seed_index", ik_candidate.seed_index},
-            {"h", ik_candidate.h},
-            {"ik_score", ik_candidate.score},
-            {"ik_solve_ms", ik_candidate.solve_ms},
-            {"step", step},
-            {"accepted", false},
-            {"left_candidate_count", left_candidates.size()},
-            {"right_candidate_count", right_candidates.size()},
-            {"failure_reason", timing.failure_reason}
-          };
-          record_step(step, current_state, extra);
-        }
-        if (extract_fail_fast_) break;
-        continue;
-      }
-
-      current_state = *best.state;
-      left_min_tip_z = std::max(left_min_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
-      right_min_tip_z = std::max(right_min_tip_z, current_state.getGlobalLinkTransform(right_tip_).translation().z());
-      left_last_retreat_x = best.left.retreat_x;
-      right_last_retreat_x = best.right.retreat_x;
-      left_lift_z = best.left.lift_z;
-      right_lift_z = best.right.lift_z;
-      timing.final_retreat_x = best.left.retreat_x;
-      timing.final_lift_z = best.left.lift_z;
-      timing.final_pitch_deg = best.left.pitch_up_rad * 180.0 / M_PI;
-      timing.right_final_retreat_x = best.right.retreat_x;
-      timing.right_final_lift_z = best.right.lift_z;
-      timing.right_final_pitch_deg = best.right.pitch_up_rad * 180.0 / M_PI;
-      ++timing.accepted_steps;
-
-      if (record_step) {
-        nlohmann::json extra = {
-          {"stage_kind", "dual_extract_all_legal_ik_step"},
-          {"candidate_order", candidate_order},
-          {"h_index", ik_candidate.h_index},
-          {"seed_index", ik_candidate.seed_index},
-          {"h", ik_candidate.h},
-          {"ik_score", ik_candidate.score},
-          {"ik_solve_ms", ik_candidate.solve_ms},
-          {"step", step},
-          {"left_candidate_index", best.left.candidate_index},
-          {"right_candidate_index", best.right.candidate_index},
-          {"left_retreat_x", best.left.retreat_x},
-          {"right_retreat_x", best.right.retreat_x},
-          {"left_retreat_delta_x", best.left.retreat_delta_x},
-          {"right_retreat_delta_x", best.right.retreat_delta_x},
-          {"left_lift_z", best.left.lift_z},
-          {"right_lift_z", best.right.lift_z},
-          {"left_pitch_up_deg", best.left.pitch_up_rad * 180.0 / M_PI},
-          {"right_pitch_up_deg", best.right.pitch_up_rad * 180.0 / M_PI},
-          {"left_detached_from_neighbors", best.left_detached},
-          {"right_detached_from_neighbors", best.right_detached},
-          {"left_candidate_count", left_candidates.size()},
-          {"right_candidate_count", right_candidates.size()},
-          {"score", best.score},
-          {"accepted", true}
-        };
-        record_step(step, current_state, extra);
-      }
-
-      if (best.left_detached && best.right_detached) {
-        timing.success = true;
-        timing.failure_reason.clear();
-        timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
-        break;
-      }
-    }
-
-    if (!timing.success && timing.failure_reason.empty()) {
-      timing.failure_reason = "reached_max_retreat_without_dual_neighbor_detachment";
-    }
-    const auto t1 = std::chrono::steady_clock::now();
-    timing.rollout_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    return timing;
-  }
-
-  bool write_extract_benchmark_csv(const std::vector<ExtractRolloutTiming>& timings) const
-  {
-    if (extract_benchmark_csv_path_.empty()) return true;
-    const std::filesystem::path path(extract_benchmark_csv_path_);
-    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
-    std::ofstream out(path, std::ios::out | std::ios::trunc);
-    if (!out) {
-      RCLCPP_WARN(get_logger(), "Failed to open extract benchmark CSV: %s", extract_benchmark_csv_path_.c_str());
-      return false;
-    }
-    out << "candidate_order,h_index,seed_index,h,ik_score,ik_solve_ms,rollout_ms,interval_ms,success,"
-           "loaded_plan_attempted,loaded_plan_success,loaded_plan_ms,loaded_plan_points,"
-           "loaded_plan_rank,loaded_pose_distance_sum,loaded_pose_distance_l2,loaded_pose_max_joint_delta,"
-           "selected_left_loaded_pose_index,selected_right_loaded_pose_index,"
-           "selected_left_loaded_pose_distance,selected_right_loaded_pose_distance,"
-           "accepted_steps,failed_steps,final_retreat_x,final_lift_z,final_pitch_deg,"
-           "right_final_retreat_x,right_final_lift_z,right_final_pitch_deg,"
-           "failure_reason,loaded_plan_failure_reason\n";
-    out << std::setprecision(12);
-    for (const auto& timing : timings) {
-      out << timing.candidate_order << ','
-          << timing.h_index << ','
-          << timing.seed_index << ','
-          << timing.h << ','
-          << timing.ik_score << ','
-          << timing.ik_solve_ms << ','
-          << timing.rollout_ms << ','
-          << timing.interval_ms << ','
-          << (timing.success ? 1 : 0) << ','
-          << (timing.loaded_plan_attempted ? 1 : 0) << ','
-          << (timing.loaded_plan_success ? 1 : 0) << ','
-          << timing.loaded_plan_ms << ','
-          << timing.loaded_plan_points << ','
-          << timing.loaded_plan_rank << ','
-          << timing.loaded_pose_distance_sum << ','
-          << timing.loaded_pose_distance_l2 << ','
-          << timing.loaded_pose_max_joint_delta << ','
-          << timing.selected_left_loaded_pose_index << ','
-          << timing.selected_right_loaded_pose_index << ','
-          << timing.selected_left_loaded_pose_distance << ','
-          << timing.selected_right_loaded_pose_distance << ','
-          << timing.accepted_steps << ','
-          << timing.failed_steps << ','
-          << timing.final_retreat_x << ','
-          << timing.final_lift_z << ','
-          << timing.final_pitch_deg << ','
-          << timing.right_final_retreat_x << ','
-          << timing.right_final_lift_z << ','
-          << timing.right_final_pitch_deg << ','
-          << '"' << timing.failure_reason << '"' << ','
-          << '"' << timing.loaded_plan_failure_reason << '"' << '\n';
-    }
-    RCLCPP_INFO(get_logger(), "Wrote extract all-legal-IK timing CSV: %s rows=%zu",
-                extract_benchmark_csv_path_.c_str(), timings.size());
-    return true;
-  }
-
-  ExtractRolloutTiming run_dual_extract_candidate(
-    const std::string& prefix,
-    const moveit::core::RobotState& seed_state,
-    const std::vector<ik_benchmark::UpdownAwareIkCandidate>& legal_candidates,
-    const AttachedBoxSpec& left_box,
-    int left_box_id,
-    const AttachedBoxSpec& right_box,
-    int right_box_id,
-    size_t index,
-    bool record_rollout)
-  {
-    auto state = state_from_ik_candidate(seed_state, legal_candidates[index]);
-    std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)> record_step;
-    if (record_rollout) {
-      const std::vector<AttachedBoxSpec> boxes{left_box, right_box};
-      record_step = [&, boxes, index](size_t step_index, const moveit::core::RobotState& rollout_state, const nlohmann::json& extra) {
-        record_extract_keyframe(
-          prefix + "/candidate_" + std::to_string(index) + "/step_" + std::to_string(step_index),
-          rollout_state,
-          boxes,
-          extra);
-      };
-    }
-    auto timing = rollout_dual_extract_from_state(
-      state, left_box, left_box_id, right_box, right_box_id, index, legal_candidates[index], record_step);
-    if (timing.success && timing.final_state) {
-      fill_loaded_pose_distance_metrics(timing);
-    }
-    return timing;
+    return extract_rollout_planner_->rolloutDual(
+      start_state,
+      left_it->second,
+      left_box,
+      left_box_id,
+      right_it->second,
+      right_box,
+      right_box_id,
+      candidate_order,
+      ik_candidate.h_index,
+      ik_candidate.seed_index,
+      ik_candidate.h,
+      ik_candidate.score,
+      ik_candidate.solve_ms,
+      record_step);
   }
 
   bool benchmark_all_legal_ik_extract(
@@ -3586,171 +1521,8 @@ private:
     const AttachedBoxSpec& left_box,
     int left_box_id)
   {
-    std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
-    for (const auto& candidate : ik_result.candidates) {
-      if (candidate.legal) {
-        legal_candidates.push_back(candidate);
-      }
-    }
-    std::sort(legal_candidates.begin(), legal_candidates.end(),
-              [](const auto& a, const auto& b) { return a.score < b.score; });
-    if (legal_candidates.empty()) {
-      return fail(prefix + "/extract_benchmark: no legal IK candidates");
-    }
-    const size_t original_legal_count = legal_candidates.size();
-    IkDedupStats dedup_stats;
-    legal_candidates = select_benchmark_ik_candidates(legal_candidates, &dedup_stats);
-
-    if (record_tip_error_ik_candidates_) {
-      record_tip_error_ik_candidates(prefix, seed_state, ik_result, left_box);
-    }
-
-    std::vector<ExtractRolloutTiming> timings;
-    timings.reserve(legal_candidates.size());
-    auto previous_start = std::chrono::steady_clock::now();
-    bool any_success = false;
-    for (size_t i = 0; i < legal_candidates.size(); ++i) {
-      const auto start = std::chrono::steady_clock::now();
-      auto state = state_from_ik_candidate(seed_state, legal_candidates[i]);
-      std::function<void(size_t, const moveit::core::RobotState&, const nlohmann::json&)> record_step;
-      if (extract_benchmark_record_rollouts_) {
-        record_step = [&](size_t step_index, const moveit::core::RobotState& rollout_state, const nlohmann::json& extra) {
-          record_extract_keyframe(
-            prefix + "/candidate_" + std::to_string(i) + "/step_" + std::to_string(step_index),
-            rollout_state,
-            left_box,
-            extra);
-        };
-      }
-      auto timing = rollout_left_extract_from_state(state, left_box, left_box_id, i, legal_candidates[i], record_step);
-      if (timing.success && timing.final_state) {
-        fill_loaded_pose_distance_metrics(timing);
-      }
-      timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
-      previous_start = start;
-      any_success = any_success || timing.success;
-      timings.push_back(std::move(timing));
-    }
-    if (!timings.empty()) {
-      timings.front().interval_ms = 0.0;
-    }
-
-    size_t loaded_plan_requests = 0;
-    std::vector<size_t> loaded_plan_indices;
-    if (extract_benchmark_plan_loaded_after_success_) {
-      for (size_t i = 0; i < timings.size(); ++i) {
-        if (timings[i].success && timings[i].final_state) {
-          loaded_plan_indices.push_back(i);
-        }
-      }
-      if (extract_loaded_sort_by_pose_distance_) {
-        std::sort(loaded_plan_indices.begin(), loaded_plan_indices.end(),
-                  [&](const size_t a, const size_t b) {
-                    const auto& lhs = timings[a];
-                    const auto& rhs = timings[b];
-                    if (lhs.loaded_pose_distance_sum != rhs.loaded_pose_distance_sum) {
-                      return lhs.loaded_pose_distance_sum < rhs.loaded_pose_distance_sum;
-                    }
-                    if (lhs.loaded_pose_distance_l2 != rhs.loaded_pose_distance_l2) {
-                      return lhs.loaded_pose_distance_l2 < rhs.loaded_pose_distance_l2;
-                    }
-                    if (lhs.loaded_pose_max_joint_delta != rhs.loaded_pose_max_joint_delta) {
-                      return lhs.loaded_pose_max_joint_delta < rhs.loaded_pose_max_joint_delta;
-                    }
-                    return lhs.ik_score < rhs.ik_score;
-                  });
-      }
-      const size_t loaded_limit = extract_loaded_candidate_limit_ > 0
-        ? std::min(extract_loaded_candidate_limit_, loaded_plan_indices.size())
-        : loaded_plan_indices.size();
-      for (size_t rank = 0; rank < loaded_plan_indices.size(); ++rank) {
-        auto& timing = timings[loaded_plan_indices[rank]];
-        timing.loaded_plan_rank = rank + 1;
-        if (rank < loaded_limit) {
-          ++loaded_plan_requests;
-          plan_loaded_from_extract_state(
-            prefix + "/candidate_" + std::to_string(timing.candidate_order) + "/post_extract_loaded",
-            *timing.final_state,
-            left_box,
-            &timing);
-          timing.loaded_plan_rank = rank + 1;
-        } else {
-          timing.loaded_plan_failure_reason = "loaded_plan_skipped_by_limit";
-        }
-      }
-    }
-
-    write_extract_benchmark_csv(timings);
-
-    double total_interval_ms = 0.0;
-    double total_rollout_ms = 0.0;
-    double total_loaded_plan_ms = 0.0;
-    size_t loaded_plan_attempted_count = 0;
-    size_t loaded_plan_success_count = 0;
-    size_t loaded_plan_first_success_rank = 0;
-    size_t loaded_plan_first_success_candidate_order = 0;
-    for (const auto& timing : timings) {
-      total_interval_ms += timing.interval_ms;
-      total_rollout_ms += timing.rollout_ms;
-      if (timing.loaded_plan_attempted) {
-        ++loaded_plan_attempted_count;
-        total_loaded_plan_ms += timing.loaded_plan_ms;
-      }
-      if (timing.loaded_plan_success) {
-        ++loaded_plan_success_count;
-        if (loaded_plan_first_success_rank == 0) {
-          loaded_plan_first_success_rank = timing.loaded_plan_rank;
-          loaded_plan_first_success_candidate_order = timing.candidate_order;
-        }
-      }
-    }
-    const double mean_interval_ms = timings.size() > 1
-      ? total_interval_ms / static_cast<double>(timings.size() - 1)
-      : 0.0;
-    const double mean_rollout_ms = total_rollout_ms / static_cast<double>(timings.size());
-    const double mean_loaded_plan_ms = loaded_plan_attempted_count > 0
-      ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
-      : 0.0;
-    RCLCPP_INFO(get_logger(),
-                "[%s/extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f success_any=%s loaded_plan=%zu/%zu mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
-                prefix.c_str(), original_legal_count, timings.size(),
-                dedup_stats.enabled ? "true" : "false", dedup_stats.unique_count,
-                dedup_stats.removed_count, dedup_stats.elapsed_ms,
-                any_success ? "true" : "false",
-                loaded_plan_success_count, loaded_plan_attempted_count,
-                mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
-
-    if (record_stream_) {
-      record_stream_ << nlohmann::json({
-        {"type", "extract_benchmark_summary"},
-        {"legal_ik_count", original_legal_count},
-        {"tested_ik_count", legal_candidates.size()},
-        {"candidate_limit", extract_benchmark_candidate_limit_},
-        {"ik_dedup_enabled", dedup_stats.enabled},
-        {"ik_dedup_joint_threshold_deg", extract_ik_dedup_joint_threshold_ * 180.0 / M_PI},
-        {"ik_dedup_h_threshold", extract_ik_dedup_h_threshold_},
-        {"ik_dedup_input_count", dedup_stats.input_count},
-        {"ik_dedup_unique_count", dedup_stats.unique_count},
-        {"ik_dedup_removed_count", dedup_stats.removed_count},
-        {"ik_dedup_selected_count", dedup_stats.selected_count},
-        {"ik_dedup_ms", dedup_stats.elapsed_ms},
-        {"success_any", any_success},
-        {"mean_interval_ms", mean_interval_ms},
-        {"mean_rollout_ms", mean_rollout_ms},
-        {"loaded_plan_after_success", extract_benchmark_plan_loaded_after_success_},
-        {"loaded_plan_candidate_limit", extract_loaded_candidate_limit_},
-        {"loaded_plan_sort_by_pose_distance", extract_loaded_sort_by_pose_distance_},
-        {"loaded_plan_sorted_success_candidate_count", loaded_plan_indices.size()},
-        {"loaded_plan_attempted_count", loaded_plan_attempted_count},
-        {"loaded_plan_success_count", loaded_plan_success_count},
-        {"mean_loaded_plan_ms", mean_loaded_plan_ms},
-        {"csv_path", extract_benchmark_csv_path_},
-        {"rollouts_recorded", extract_benchmark_record_rollouts_},
-        {"ik_candidate_rejection_counts", ik_candidate_rejection_counts_json(ik_result)}
-      }).dump() << '\n';
-      record_stream_.flush();
-    }
-    return any_success;
+    ExtractBenchmarkRunner runner(extract_benchmark_runner_config(), extract_benchmark_runner_callbacks());
+    return runner.runLeft(prefix, seed_state, ik_result, left_box, left_box_id);
   }
 
   bool benchmark_all_legal_ik_dual_extract(
@@ -3762,232 +1534,8 @@ private:
     const AttachedBoxSpec& right_box,
     int right_box_id)
   {
-    std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
-    for (const auto& candidate : ik_result.candidates) {
-      if (candidate.legal) {
-        legal_candidates.push_back(candidate);
-      }
-    }
-    std::sort(legal_candidates.begin(), legal_candidates.end(),
-              [](const auto& a, const auto& b) { return a.score < b.score; });
-    if (legal_candidates.empty()) {
-      return fail(prefix + "/dual_extract_benchmark: no legal IK candidates");
-    }
-    const size_t original_legal_count = legal_candidates.size();
-    IkDedupStats dedup_stats;
-    legal_candidates = select_benchmark_ik_candidates(legal_candidates, &dedup_stats);
-
-    std::vector<ExtractRolloutTiming> timings(legal_candidates.size());
-    bool any_success = false;
-    const size_t requested_extract_workers = std::max<size_t>(1, extract_benchmark_extract_workers_);
-    const size_t used_extract_workers = extract_benchmark_record_rollouts_
-      ? 1
-      : std::max<size_t>(1, std::min(requested_extract_workers, legal_candidates.size()));
-    const auto extract_wall_start = std::chrono::steady_clock::now();
-    if (used_extract_workers <= 1) {
-      auto previous_start = extract_wall_start;
-      for (size_t i = 0; i < legal_candidates.size(); ++i) {
-        const auto start = std::chrono::steady_clock::now();
-        auto timing = run_dual_extract_candidate(
-          prefix, seed_state, legal_candidates, left_box, left_box_id, right_box, right_box_id,
-          i, extract_benchmark_record_rollouts_);
-        timing.interval_ms = std::chrono::duration<double, std::milli>(start - previous_start).count();
-        previous_start = start;
-        timings[i] = std::move(timing);
-      }
-      if (!timings.empty()) {
-        timings.front().interval_ms = 0.0;
-      }
-    } else {
-      std::atomic<size_t> next_index{0};
-      std::vector<std::thread> workers;
-      workers.reserve(used_extract_workers);
-      for (size_t worker_index = 0; worker_index < used_extract_workers; ++worker_index) {
-        workers.emplace_back([&, worker_index]() {
-          (void)worker_index;
-          while (true) {
-            const size_t i = next_index.fetch_add(1);
-            if (i >= legal_candidates.size()) {
-              break;
-            }
-            timings[i] = run_dual_extract_candidate(
-              prefix, seed_state, legal_candidates, left_box, left_box_id, right_box, right_box_id,
-              i, false);
-          }
-        });
-      }
-      for (auto& worker : workers) {
-        if (worker.joinable()) {
-          worker.join();
-        }
-      }
-      for (auto& timing : timings) {
-        timing.interval_ms = 0.0;
-      }
-    }
-    const auto extract_wall_end = std::chrono::steady_clock::now();
-    const double extract_wall_ms =
-      std::chrono::duration<double, std::milli>(extract_wall_end - extract_wall_start).count();
-    for (const auto& timing : timings) {
-      any_success = any_success || timing.success;
-    }
-
-    size_t loaded_plan_requests = 0;
-    double loaded_plan_wall_ms = 0.0;
-    std::vector<size_t> loaded_plan_indices;
-    if (extract_benchmark_plan_loaded_after_success_) {
-      for (size_t i = 0; i < timings.size(); ++i) {
-        if (timings[i].success && timings[i].final_state) {
-          loaded_plan_indices.push_back(i);
-        }
-      }
-      if (extract_loaded_sort_by_pose_distance_) {
-        std::sort(loaded_plan_indices.begin(), loaded_plan_indices.end(),
-                  [&](const size_t a, const size_t b) {
-                    const auto& lhs = timings[a];
-                    const auto& rhs = timings[b];
-                    if (lhs.loaded_pose_distance_sum != rhs.loaded_pose_distance_sum) {
-                      return lhs.loaded_pose_distance_sum < rhs.loaded_pose_distance_sum;
-                    }
-                    if (lhs.loaded_pose_distance_l2 != rhs.loaded_pose_distance_l2) {
-                      return lhs.loaded_pose_distance_l2 < rhs.loaded_pose_distance_l2;
-                    }
-                    if (lhs.loaded_pose_max_joint_delta != rhs.loaded_pose_max_joint_delta) {
-                      return lhs.loaded_pose_max_joint_delta < rhs.loaded_pose_max_joint_delta;
-                    }
-                    return lhs.ik_score < rhs.ik_score;
-                  });
-      }
-      const size_t loaded_limit = extract_loaded_candidate_limit_ > 0
-        ? std::min(extract_loaded_candidate_limit_, loaded_plan_indices.size())
-        : loaded_plan_indices.size();
-      const auto loaded_plan_wall_start = std::chrono::steady_clock::now();
-      for (size_t rank = 0; rank < loaded_plan_indices.size(); ++rank) {
-        auto& timing = timings[loaded_plan_indices[rank]];
-        timing.loaded_plan_rank = rank + 1;
-        if (rank < loaded_limit) {
-          ++loaded_plan_requests;
-          plan_loaded_from_extract_state(
-            prefix + "/candidate_" + std::to_string(timing.candidate_order) + "/post_extract_loaded",
-            *timing.final_state,
-            std::vector<AttachedBoxSpec>{left_box, right_box},
-            &timing);
-          timing.loaded_plan_rank = rank + 1;
-          if (extract_loaded_stop_on_first_success_ && timing.loaded_plan_success) {
-            for (size_t rest_rank = rank + 1; rest_rank < loaded_plan_indices.size(); ++rest_rank) {
-              auto& skipped = timings[loaded_plan_indices[rest_rank]];
-              skipped.loaded_plan_rank = rest_rank + 1;
-              skipped.loaded_plan_failure_reason = "loaded_plan_skipped_after_first_success";
-            }
-            break;
-          }
-        } else {
-          timing.loaded_plan_failure_reason = "loaded_plan_skipped_by_limit";
-        }
-      }
-      const auto loaded_plan_wall_end = std::chrono::steady_clock::now();
-      loaded_plan_wall_ms =
-        std::chrono::duration<double, std::milli>(loaded_plan_wall_end - loaded_plan_wall_start).count();
-    }
-
-    write_extract_benchmark_csv(timings);
-
-    double total_interval_ms = 0.0;
-    double total_rollout_ms = 0.0;
-    double total_loaded_plan_ms = 0.0;
-    size_t loaded_plan_attempted_count = 0;
-    size_t loaded_plan_success_count = 0;
-    size_t loaded_plan_first_success_rank = 0;
-    size_t loaded_plan_first_success_candidate_order = 0;
-    for (const auto& timing : timings) {
-      total_interval_ms += timing.interval_ms;
-      total_rollout_ms += timing.rollout_ms;
-      if (timing.loaded_plan_attempted) {
-        ++loaded_plan_attempted_count;
-        total_loaded_plan_ms += timing.loaded_plan_ms;
-      }
-      if (timing.loaded_plan_success) {
-        ++loaded_plan_success_count;
-        if (loaded_plan_first_success_rank == 0) {
-          loaded_plan_first_success_rank = timing.loaded_plan_rank;
-          loaded_plan_first_success_candidate_order = timing.candidate_order;
-        }
-      }
-    }
-    const double mean_interval_ms = timings.size() > 1
-      ? total_interval_ms / static_cast<double>(timings.size() - 1)
-      : 0.0;
-    const double mean_rollout_ms = total_rollout_ms / static_cast<double>(timings.size());
-    const double mean_loaded_plan_ms = loaded_plan_attempted_count > 0
-      ? total_loaded_plan_ms / static_cast<double>(loaded_plan_attempted_count)
-      : 0.0;
-    const double task_wall_ms =
-      ik_result.wall_ms + dedup_stats.elapsed_ms + extract_wall_ms + loaded_plan_wall_ms;
-    const bool benchmark_success = extract_benchmark_plan_loaded_after_success_
-      ? loaded_plan_success_count > 0
-      : any_success;
-    if (!benchmark_success) {
-      last_error_ = prefix + "/dual_extract_benchmark: " +
-        std::string(any_success ? "loaded_plan_failed" : "extract_failed");
-    }
-
-    RCLCPP_INFO(get_logger(),
-                "[%s/dual_extract_benchmark] legal_ik=%zu selected=%zu dedup=%s unique=%zu removed=%zu dedup_ms=%.3f extract=%zu workers wall=%.3fms success_any=%s loaded_plan=%zu/%zu wall=%.3fms task_wall=%.3fms mean_interval=%.3fms mean_rollout=%.3fms mean_loaded_plan=%.3fms",
-                prefix.c_str(), original_legal_count, timings.size(),
-                dedup_stats.enabled ? "true" : "false", dedup_stats.unique_count,
-                dedup_stats.removed_count, dedup_stats.elapsed_ms,
-                used_extract_workers, extract_wall_ms,
-                any_success ? "true" : "false",
-                loaded_plan_success_count, loaded_plan_attempted_count, loaded_plan_wall_ms, task_wall_ms,
-                mean_interval_ms, mean_rollout_ms, mean_loaded_plan_ms);
-
-    if (record_stream_) {
-      record_stream_ << nlohmann::json({
-        {"type", "extract_benchmark_summary"},
-        {"stage", prefix},
-        {"mode", "dual_extract"},
-        {"dual_async", extract_benchmark_dual_async_},
-        {"legal_ik_count", original_legal_count},
-        {"tested_ik_count", legal_candidates.size()},
-        {"candidate_limit", extract_benchmark_candidate_limit_},
-        {"ik_dedup_enabled", dedup_stats.enabled},
-        {"ik_dedup_joint_threshold_deg", extract_ik_dedup_joint_threshold_ * 180.0 / M_PI},
-        {"ik_dedup_h_threshold", extract_ik_dedup_h_threshold_},
-        {"ik_dedup_input_count", dedup_stats.input_count},
-        {"ik_dedup_unique_count", dedup_stats.unique_count},
-        {"ik_dedup_removed_count", dedup_stats.removed_count},
-        {"ik_dedup_selected_count", dedup_stats.selected_count},
-        {"ik_dedup_ms", dedup_stats.elapsed_ms},
-        {"ik_wall_ms", ik_result.wall_ms},
-        {"extract_parallel_requested_workers", requested_extract_workers},
-        {"extract_parallel_used_workers", used_extract_workers},
-        {"extract_parallel_enabled", used_extract_workers > 1},
-        {"extract_wall_ms", extract_wall_ms},
-        {"extract_sum_rollout_ms", total_rollout_ms},
-        {"task_success", benchmark_success},
-        {"success_any", any_success},
-        {"mean_interval_ms", mean_interval_ms},
-        {"mean_rollout_ms", mean_rollout_ms},
-        {"loaded_plan_after_success", extract_benchmark_plan_loaded_after_success_},
-        {"loaded_plan_candidate_limit", extract_loaded_candidate_limit_},
-        {"loaded_plan_sort_by_pose_distance", extract_loaded_sort_by_pose_distance_},
-        {"loaded_plan_stop_on_first_success", extract_loaded_stop_on_first_success_},
-        {"loaded_plan_sorted_success_candidate_count", loaded_plan_indices.size()},
-        {"loaded_plan_attempted_count", loaded_plan_attempted_count},
-        {"loaded_plan_success_count", loaded_plan_success_count},
-        {"loaded_plan_first_success_rank", loaded_plan_first_success_rank},
-        {"loaded_plan_first_success_candidate_order", loaded_plan_first_success_candidate_order},
-        {"loaded_plan_wall_ms", loaded_plan_wall_ms},
-        {"loaded_plan_sum_ms", total_loaded_plan_ms},
-        {"mean_loaded_plan_ms", mean_loaded_plan_ms},
-        {"task_wall_ms", task_wall_ms},
-        {"csv_path", extract_benchmark_csv_path_},
-        {"rollouts_recorded", extract_benchmark_record_rollouts_},
-        {"ik_candidate_rejection_counts", ik_candidate_rejection_counts_json(ik_result)}
-      }).dump() << '\n';
-      record_stream_.flush();
-    }
-    return benchmark_success;
+    ExtractBenchmarkRunner runner(extract_benchmark_runner_config(), extract_benchmark_runner_callbacks());
+    return runner.runDual(prefix, seed_state, ik_result, left_box, left_box_id, right_box, right_box_id);
   }
 
   bool record_extract_keyframe(
@@ -3996,9 +1544,9 @@ private:
     const std::vector<AttachedBoxSpec>& boxes,
     const nlohmann::json& extra)
   {
-    if (!record_stream_) return true;
-    const auto saved_boxes = active_attached_boxes_;
-    active_attached_boxes_ = boxes;
+    if (!recording_enabled()) return true;
+    const auto saved_boxes = active_attached_boxes();
+    if (scene_adapter_) scene_adapter_->setActiveAttachedBoxesForRecordOnly(boxes);
 
     trajectory_msgs::msg::JointTrajectory traj;
     const auto names = optimized_ik_solver_ ? optimized_ik_solver_->freeVariableNames() : robot_model_->getVariableNames();
@@ -4015,7 +1563,7 @@ private:
     plan.trajectory_.joint_trajectory = traj;
     record_stage(stage_name, plan, state, state, names, extra);
 
-    active_attached_boxes_ = saved_boxes;
+    if (scene_adapter_) scene_adapter_->setActiveAttachedBoxesForRecordOnly(saved_boxes);
     return true;
   }
 
@@ -4034,7 +1582,7 @@ private:
     const ik_benchmark::UpdownAwareIkResult& ik_result,
     const AttachedBoxSpec& left_box)
   {
-    if (!record_stream_ || record_tip_error_ik_candidate_limit_ == 0) return;
+    if (!recording_enabled() || record_tip_error_ik_candidate_limit_ == 0) return;
     size_t recorded = 0;
     for (size_t i = 0; i < ik_result.candidates.size(); ++i) {
       const auto& candidate = ik_result.candidates[i];
@@ -4083,97 +1631,45 @@ private:
       : get_current_robot_state();
     if (!start_state) return fail(prefix + "/extract: cannot get start state");
 
-    const AttachedBoxSpec left_box = make_attached_box_spec("left", left_box_id, false);
+    const AttachedBoxSpec left_box = make_carried_box_spec("left", left_box_id, false);
     const auto boxes = make_boxes(box_front_x_);
     const auto left_it = boxes.find(left_box_id);
     if (left_it == boxes.end()) return fail(prefix + "/extract: unknown left box id");
 
-    const size_t max_steps = static_cast<size_t>(
-      std::ceil(std::max(0.0, extract_max_x_) / std::max(1e-6, 0.6 * extract_step_x_))) + 2;
-    std::vector<ExtractCandidate> accepted_path;
-    moveit::core::RobotState current_state(*start_state);
-    double last_retreat_x = 0.0;
-    double current_lift_z = 0.0;
-    double min_allowed_tip_z = current_state.getGlobalLinkTransform(left_tip_).translation().z();
+    auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
+      const bool accepted = extra.value("accepted", false);
+      const std::string stage = step == 0
+        ? prefix + "/extract_start"
+        : prefix + (accepted ? "/extract_step_" : "/extract_failed_step_") + std::to_string(step);
+      nlohmann::json enriched = extra;
+      enriched["stage_kind"] = accepted ? "left_extract_primitive" : "left_extract_primitive_candidates";
+      enriched["extract_ik"] = "left_v5_arm_kdl_fixed_updown";
+      enriched["left_box_id"] = left_box_id;
+      record_extract_keyframe(stage, state, left_box, enriched);
+    };
 
-    for (size_t step = 1; step <= max_steps; ++step) {
-      std::vector<ExtractCandidate> candidates =
-        make_left_extract_candidates(current_state, left_it->second, left_box, left_box_id,
-                                     step, last_retreat_x, current_lift_z, min_allowed_tip_z);
+    const ExtractRolloutTiming timing = extract_rollout_planner_->rolloutLeft(
+      *start_state,
+      left_it->second,
+      left_box,
+      left_box_id,
+      0,
+      0,
+      0,
+      current_updown(*start_state),
+      0.0,
+      0.0,
+      record_step);
 
-      auto best_it = std::min_element(candidates.begin(), candidates.end(), [&](const ExtractCandidate& a, const ExtractCandidate& b) {
-        return extract_candidate_score(a, current_state, last_retreat_x) <
-               extract_candidate_score(b, current_state, last_retreat_x);
-      });
-
-      if (best_it == candidates.end() || !best_it->state_valid) {
-        std::map<std::string, size_t> rejection_counts;
-        for (const auto& candidate : candidates) {
-          const std::string key = candidate.rejection_reason.empty() ? "unknown" : candidate.rejection_reason;
-          rejection_counts[key]++;
-        }
-        nlohmann::json rejection_json = nlohmann::json::object();
-        for (const auto& [reason, count] : rejection_counts) {
-          rejection_json[reason] = count;
-        }
-        nlohmann::json extra = {
-          {"stage_kind", "left_extract_primitive_candidates"},
-          {"step", step},
-          {"retreat_x", last_retreat_x},
-          {"accepted", false},
-          {"candidate_count", candidates.size()},
-          {"rejection_counts", rejection_json},
-        };
-        record_extract_keyframe(prefix + "/extract_failed_step_" + std::to_string(step), current_state, left_box, extra);
-        if (extract_fail_fast_) return fail(prefix + "/extract: no valid candidate at step " + std::to_string(step));
-        continue;
-      }
-
-      const double selected_score = extract_candidate_score(*best_it, current_state, last_retreat_x);
-      const double selected_joint_delta = extract_left_arm_joint_delta(current_state, *best_it->state);
-      const double selected_tip_position_delta = extract_tip_position_delta(current_state, *best_it->state);
-      const double selected_tip_orientation_delta = extract_tip_orientation_delta(current_state, *best_it->state);
-
-      current_state = *best_it->state;
-      min_allowed_tip_z = std::max(min_allowed_tip_z, current_state.getGlobalLinkTransform(left_tip_).translation().z());
-      last_retreat_x = best_it->retreat_x;
-      current_lift_z = best_it->lift_z;
-      accepted_path.push_back(*best_it);
-      nlohmann::json extra = {
-        {"stage_kind", "left_extract_primitive"},
-        {"extract_ik", "left_v5_arm_kdl_fixed_updown"},
-        {"left_box_id", left_box_id},
-        {"step", step},
-        {"candidate_index", best_it->candidate_index},
-        {"retreat_x", best_it->retreat_x},
-        {"retreat_delta_x", best_it->retreat_delta_x},
-        {"lift_z", best_it->lift_z},
-        {"lift_delta_z", best_it->lift_delta_z},
-        {"pitch_up_deg", best_it->pitch_up_rad * 180.0 / M_PI},
-        {"pitch_delta_deg", best_it->pitch_delta_rad * 180.0 / M_PI},
-        {"left_tip_z", current_state.getGlobalLinkTransform(left_tip_).translation().z()},
-        {"tool_normal_z", (current_state.getGlobalLinkTransform(left_tip_).linear() * Eigen::Vector3d::UnitZ()).z()},
-        {"detached_from_neighbors", best_it->detached_from_neighbors},
-        {"candidate_count", candidates.size()},
-        {"score", selected_score},
-        {"joint_delta", selected_joint_delta},
-        {"tip_position_delta", selected_tip_position_delta},
-        {"tip_orientation_delta", selected_tip_orientation_delta},
-      };
-      record_extract_keyframe(prefix + "/extract_step_" + std::to_string(step), current_state, left_box, extra);
-
-      if (best_it->detached_from_neighbors) {
-        last_commanded_state_ = std::make_shared<moveit::core::RobotState>(current_state);
-        RCLCPP_INFO(get_logger(), "[%s/extract] detached at step=%zu retreat=%.3f lift=%.3f pitch=%.1fdeg",
-                    prefix.c_str(), step, best_it->retreat_x, best_it->lift_z, best_it->pitch_up_rad * 180.0 / M_PI);
-        return true;
-      }
+    if (timing.success && timing.final_state) {
+      last_commanded_state_ = timing.final_state;
+      RCLCPP_INFO(get_logger(), "[%s/extract] detached retreat=%.3f lift=%.3f pitch=%.1fdeg",
+                  prefix.c_str(), timing.final_retreat_x, timing.final_lift_z, timing.final_pitch_deg);
+      return true;
     }
-
-    if (!accepted_path.empty()) {
-      last_commanded_state_ = std::make_shared<moveit::core::RobotState>(current_state);
-    }
-    return fail(prefix + "/extract: reached max retreat without neighbor detachment");
+    return fail(prefix + "/extract: " + (timing.failure_reason.empty()
+      ? std::string("reached max retreat without neighbor detachment")
+      : timing.failure_reason));
   }
 
   bool plan_to_goal_state(
@@ -4291,6 +1787,9 @@ private:
   std::vector<double> state_values(
     const moveit::core::RobotState& state, const std::vector<std::string>& names) const
   {
+    if (optimized_dual_ik_solver_) {
+      return optimized_dual_ik_solver_->stateValues(state, names);
+    }
     std::vector<double> values;
     values.reserve(names.size());
     for (const auto& name : names) {
@@ -4301,20 +1800,25 @@ private:
 
   double current_updown(const moveit::core::RobotState& state) const
   {
+    if (optimized_dual_ik_solver_) {
+      return optimized_dual_ik_solver_->currentUpdown(state);
+    }
     return is_robot_variable("updown") ? state.getVariablePosition("updown") : fixed_updown_;
+  }
+
+  bool recording_enabled() const
+  {
+    return recorder_ && recorder_->enabled();
+  }
+
+  size_t recorded_stage_count() const
+  {
+    return recorder_ ? recorder_->stageCount() : 0;
   }
 
   void open_record_file()
   {
     if (!record_trajectories_ || record_jsonl_path_.empty()) return;
-    const std::filesystem::path path(record_jsonl_path_);
-    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
-    record_stream_.open(path, std::ios::out | std::ios::trunc);
-    if (!record_stream_) {
-      RCLCPP_WARN(get_logger(), "Failed to open trajectory record JSONL: %s", record_jsonl_path_.c_str());
-      return;
-    }
-
     nlohmann::json header = {
       {"type", "header"},
       {"schema", "moveit_box_stack_flow_v1"},
@@ -4356,7 +1860,13 @@ private:
         {"cost_loaded_preferred_distance", ik_config_.cost_loaded_preferred_distance}
       }}
     };
-    record_stream_ << header.dump() << '\n';
+    recorder_ = std::make_unique<MotionFlowRecorder>();
+    std::string error;
+    if (!recorder_->open(record_jsonl_path_, header, &error)) {
+      RCLCPP_WARN(get_logger(), "Failed to open trajectory record JSONL: %s", record_jsonl_path_.c_str());
+      recorder_.reset();
+      return;
+    }
     RCLCPP_INFO(get_logger(), "Recording MoveIt flow JSONL: %s", record_jsonl_path_.c_str());
   }
 
@@ -4407,8 +1917,8 @@ private:
     return {
       {"enabled", enable_static_box_obstacles_},
       {"mode", "dynamic_box_wall_with_pair_opening"},
-      {"opening_left_box_id", active_static_left_box_id_},
-      {"opening_right_box_id", active_static_right_box_id_},
+      {"opening_left_box_id", scene_adapter_ ? scene_adapter_->activeStaticLeftBoxId() : 0},
+      {"opening_right_box_id", scene_adapter_ ? scene_adapter_->activeStaticRightBoxId() : 0},
       {"inset", static_box_obstacle_inset_},
       {"boxes", boxes},
     };
@@ -4417,7 +1927,7 @@ private:
   nlohmann::json active_attached_boxes_json() const
   {
     nlohmann::json boxes = nlohmann::json::array();
-    for (const auto& box : active_attached_boxes_) {
+    for (const auto& box : active_attached_boxes()) {
       boxes.push_back({
         {"id", box.id},
         {"link_name", box.link_name},
@@ -4445,35 +1955,16 @@ private:
     const std::vector<std::string>& target_names,
     const nlohmann::json& extra)
   {
-    if (!record_stream_) return;
-    const auto& traj = plan.trajectory_.joint_trajectory;
-    nlohmann::json points = nlohmann::json::array();
-    for (const auto& point : traj.points) {
-      points.push_back({
-        {"time_from_start_sec", rclcpp::Duration(point.time_from_start).seconds()},
-        {"positions", point.positions},
-        {"velocities", point.velocities}
-      });
-    }
-
-    nlohmann::json record = {
-      {"type", "stage"},
-      {"stage", stage_name},
-      {"stage_index", record_stage_index_++},
-      {"trajectory", {
-        {"joint_names", traj.joint_names},
-        {"point_count", traj.points.size()},
-        {"points", points}
-      }},
-      {"target_names", target_names},
-      {"start_state", robot_state_json(start_state)},
-      {"goal_state", robot_state_json(goal_state)},
-      {"attached_boxes", active_attached_boxes_json()},
-      {"static_box_obstacles", static_box_obstacles_json()},
-      {"extra", extra}
-    };
-    record_stream_ << record.dump() << '\n';
-    record_stream_.flush();
+    if (!recording_enabled()) return;
+    recorder_->recordStage(
+      stage_name,
+      plan,
+      robot_state_json(start_state),
+      robot_state_json(goal_state),
+      target_names,
+      active_attached_boxes_json(),
+      static_box_obstacles_json(),
+      extra);
   }
 
   geometry_msgs::msg::Pose front_grasp_pose(const BoxSpec& box) const
@@ -4489,43 +1980,8 @@ private:
 
   bool run_left_extract_demo()
   {
-    clear_carried_boxes_from_scene();
-    last_error_.clear();
-    last_commanded_state_.reset();
-
-    if (extract_demo_all_rows_) {
-      bool all_ok = true;
-      std::string first_error;
-      for (const auto& [left_box_id, right_box_id] : extract_demo_pair_sequence_) {
-        const bool ok = run_left_extract_pair(left_box_id, right_box_id);
-        all_ok = all_ok && ok;
-        if (!ok && first_error.empty()) {
-          first_error = last_error_;
-        }
-        clear_carried_boxes_from_scene();
-        last_commanded_state_.reset();
-      }
-      if (record_stream_) {
-        nlohmann::json pair_json = nlohmann::json::array();
-        for (const auto& [left_box_id, right_box_id] : extract_demo_pair_sequence_) {
-          pair_json.push_back({left_box_id, right_box_id});
-        }
-        record_stream_ << nlohmann::json({
-          {"type", "summary"},
-          {"success", all_ok},
-          {"error", all_ok ? "" : first_error},
-          {"stages", record_stage_index_},
-          {"pairs", pair_json}
-        }).dump() << '\n';
-        record_stream_.flush();
-      }
-      if (!all_ok && !first_error.empty()) {
-        last_error_ = first_error;
-      }
-      return all_ok;
-    }
-
-    return run_left_extract_pair(extract_demo_left_box_id_, extract_demo_right_box_id_);
+    ExtractDemoOrchestrator orchestrator(extract_demo_config(), extract_demo_callbacks());
+    return orchestrator.run();
   }
 
   bool run_left_extract_pair(int left_box_id, int right_box_id)
@@ -4569,8 +2025,8 @@ private:
         return false;
       }
       if (extract_benchmark_all_legal_ik_) {
-        const AttachedBoxSpec left_box = make_attached_box_spec("left", left_box_id, false);
-        const AttachedBoxSpec right_box = make_attached_box_spec("right", right_box_id, false);
+        const AttachedBoxSpec left_box = make_carried_box_spec("left", left_box_id, false);
+        const AttachedBoxSpec right_box = make_carried_box_spec("right", right_box_id, false);
         const std::string original_csv_path = extract_benchmark_csv_path_;
         if (extract_demo_all_rows_ && !original_csv_path.empty()) {
           const std::filesystem::path csv_path(original_csv_path);
@@ -4584,20 +2040,19 @@ private:
           : benchmark_all_legal_ik_extract(prefix, *seed_state, direct_ik_result,
                                            left_box, left_box_id);
         extract_benchmark_csv_path_ = original_csv_path;
-        if (record_stream_ && !extract_demo_all_rows_) {
-          record_stream_ << nlohmann::json({
+        if (recording_enabled() && !extract_demo_all_rows_) {
+          recorder_->write(nlohmann::json({
             {"type", "summary"},
             {"success", ok},
             {"error", ok ? "" : last_error_},
-            {"stages", record_stage_index_}
-          }).dump() << '\n';
-          record_stream_.flush();
+            {"stages", recorded_stage_count()}
+          }));
         }
         return ok;
       }
       last_commanded_state_ = std::make_shared<moveit::core::RobotState>(grasp_state);
       record_extract_keyframe(prefix + "/grasp_ik_direct_start", grasp_state,
-                              make_attached_box_spec("left", left_box_id, false), grasp_extra);
+                              make_carried_box_spec("left", left_box_id, false), grasp_extra);
     } else {
       if (!plan_to_joint_target(prefix + "/pregrasp",
                                 make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
@@ -4609,10 +2064,12 @@ private:
       }
     }
 
-    active_attached_boxes_ = {make_attached_box_spec("left", left_box_id, false)};
-    if (!apply_attached_box_state(active_attached_boxes_, moveit_msgs::msg::CollisionObject::ADD,
+    if (scene_adapter_) {
+      scene_adapter_->setActiveAttachedBoxesForRecordOnly({make_carried_box_spec("left", left_box_id, false)});
+    }
+    if (!apply_attached_box_state(active_attached_boxes(), moveit_msgs::msg::CollisionObject::ADD,
                                   prefix + "/attach_left_carried_box")) {
-      active_attached_boxes_.clear();
+      if (scene_adapter_) scene_adapter_->clearActiveAttachedBoxesForRecordOnly();
       return false;
     }
 
@@ -4620,7 +2077,7 @@ private:
       record_extract_keyframe(
         prefix + "/attach_hold",
         *last_commanded_state_,
-        active_attached_boxes_.front(),
+        active_attached_boxes().front(),
         {
           {"stage_kind", "attach_hold"},
           {"left_box_id", left_box_id},
@@ -4630,89 +2087,39 @@ private:
 
     const bool ok = plan_left_extract_primitive(left_box_id, prefix);
     detach_carried_boxes();
-    if (record_stream_ && !extract_demo_all_rows_) {
-      record_stream_ << nlohmann::json({{"type", "summary"}, {"success", ok}, {"error", ok ? "" : last_error_}, {"stages", record_stage_index_}}).dump() << '\n';
-      record_stream_.flush();
+    if (recording_enabled() && !extract_demo_all_rows_) {
+      recorder_->write(nlohmann::json({
+        {"type", "summary"},
+        {"success", ok},
+        {"error", ok ? "" : last_error_},
+        {"stages", recorded_stage_count()}
+      }));
     }
     return ok;
   }
 
   bool run_one_pair_flow(int left_box_id, int right_box_id, bool top_suction, int round)
   {
-    clear_carried_boxes_from_scene();
-    const auto boxes = make_boxes(box_front_x_);
-    const auto left_it = boxes.find(left_box_id);
-    const auto right_it = boxes.find(right_box_id);
-    if (left_it == boxes.end() || right_it == boxes.end()) {
-      return fail("unknown box id in one-pair flow");
-    }
-    set_static_box_wall_opening(left_box_id, right_box_id, "one_pair_flow");
-
-    const std::string prefix = "round_" + std::to_string(round) + "_L" + std::to_string(left_box_id) +
-                               "_R" + std::to_string(right_box_id);
-    if (!plan_to_joint_target(prefix + "/pregrasp",
-                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
-      return false;
-    }
-
-    const auto left_pose = top_suction ? top_suction_pose(left_it->second) : front_grasp_pose(left_it->second);
-    const auto right_pose = top_suction ? top_suction_pose(right_it->second) : front_grasp_pose(right_it->second);
-    if (!plan_dual_tip_ik(prefix + "/grasp_ik", left_pose, right_pose, top_suction)) {
-      return false;
-    }
-    if (!attach_carried_boxes(left_box_id, right_box_id, top_suction)) {
-      return false;
-    }
-
-    if (auto attached_state = get_current_robot_state()) {
-      std::string carried_collision_reason;
-      if (!carried_boxes_clear_static_obstacles(*attached_state, &carried_collision_reason)) {
-        detach_carried_boxes();
-        return fail(prefix + "/attach: carried box collides with static box obstacle (" +
-                    carried_collision_reason + ")");
-      }
-    }
-
-    if (!plan_to_joint_target(prefix + "/loaded",
-                              make_dual_arm_joint_target(fixed_updown_, left_loaded_arm_, right_loaded_arm_))) {
-      detach_carried_boxes();
-      return false;
-    }
-
-    if (!detach_carried_boxes()) {
-      return false;
-    }
-
-    if (!plan_to_joint_target(prefix + "/return_pregrasp",
-                              make_dual_arm_joint_target(fixed_updown_, left_pregrasp_arm_, right_pregrasp_arm_))) {
-      return false;
-    }
-    return true;
+    BoxStackFlowOrchestrator orchestrator(box_stack_flow_config(), box_stack_flow_callbacks());
+    return orchestrator.runOnePair(left_box_id, right_box_id, top_suction, round);
   }
 
   bool run_box_stack_flow()
   {
-    clear_carried_boxes_from_scene();
     last_error_.clear();
     last_commanded_state_.reset();
 
-    const auto pairs = make_pick_pairs(include_top_suction_, extract_demo_pair_sequence_);
-    const int rounds_to_run = std::min<int>(std::max(1, max_rounds_), static_cast<int>(pairs.size()));
-    RCLCPP_INFO(get_logger(), "Starting box-stack flow: rounds=%d/%zu execute=%s", rounds_to_run, pairs.size(),
-                execute_ ? "true" : "false");
-
-    for (int i = 0; i < rounds_to_run; ++i) {
-      const auto& pair = pairs[static_cast<size_t>(i)];
-      RCLCPP_INFO(get_logger(), "=== round %d: left box %d, right box %d, mode=%s ===",
-                  pair.round, pair.left_box, pair.right_box, pair.top_suction ? "top_suction" : "front");
-      if (!run_one_pair_flow(pair.left_box, pair.right_box, pair.top_suction, pair.round)) {
-        return false;
-      }
+    BoxStackFlowOrchestrator orchestrator(box_stack_flow_config(), box_stack_flow_callbacks());
+    const bool ok = orchestrator.run();
+    if (!ok) {
+      return false;
     }
-    RCLCPP_INFO(get_logger(), "Box-stack flow finished");
-    if (record_stream_) {
-      record_stream_ << nlohmann::json({{"type", "summary"}, {"success", true}, {"stages", record_stage_index_}}).dump() << '\n';
-      record_stream_.flush();
+    if (recording_enabled()) {
+      recorder_->write(nlohmann::json({
+        {"type", "summary"},
+        {"success", true},
+        {"stages", recorded_stage_count()}
+      }));
     }
     return true;
   }
@@ -4721,9 +2128,13 @@ private:
   {
     last_error_ = message;
     RCLCPP_ERROR(get_logger(), "%s", message.c_str());
-    if (record_stream_) {
-      record_stream_ << nlohmann::json({{"type", "summary"}, {"success", false}, {"error", message}, {"stages", record_stage_index_}}).dump() << '\n';
-      record_stream_.flush();
+    if (recording_enabled()) {
+      recorder_->write(nlohmann::json({
+        {"type", "summary"},
+        {"success", false},
+        {"error", message},
+        {"stages", recorded_stage_count()}
+      }));
     }
     return false;
   }
@@ -4816,7 +2227,6 @@ private:
   bool record_trajectories_ = true;
   int max_rounds_ = 10;
   int planning_attempts_ = 20;
-  size_t record_stage_index_ = 0;
   std::vector<double> left_pregrasp_arm_;
   std::vector<double> right_pregrasp_arm_;
   std::vector<double> left_loaded_arm_;
@@ -4825,17 +2235,20 @@ private:
   std::vector<std::vector<double>> right_loaded_pose_family_;
   size_t left_preferred_loaded_pose_index_ = 0;
   size_t right_preferred_loaded_pose_index_ = 0;
-  std::vector<AttachedBoxSpec> active_attached_boxes_;
-  std::vector<StaticBoxObstacle> current_static_box_obstacles_;
-  std::vector<std::string> applied_static_box_obstacle_ids_;
-  int active_static_left_box_id_ = 0;
-  int active_static_right_box_id_ = 0;
   std::string last_error_;
   ik_benchmark::UpdownAwareIkConfig ik_config_;
+  LoadedPoseSelectorConfig loaded_pose_selector_config_;
 
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_;
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> loaded_move_group_;
-  std::unique_ptr<moveit::planning_interface::PlanningSceneInterface> planning_scene_interface_;
+  std::unique_ptr<LoadedPoseSelector> loaded_pose_selector_;
+  std::unique_ptr<LoadedPosePlanner> loaded_pose_planner_;
+  std::unique_ptr<ExtractMotionPlanner> extract_motion_planner_;
+  std::unique_ptr<ExtractCandidateScorer> extract_candidate_scorer_;
+  std::unique_ptr<ExtractCandidateSolver> extract_candidate_solver_;
+  std::unique_ptr<ExtractRolloutPlanner> extract_rollout_planner_;
+  std::unique_ptr<IkCandidateSelector> ik_candidate_selector_;
+  std::unique_ptr<MotionSceneAdapter> scene_adapter_;
   planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
   moveit::core::RobotModelConstPtr robot_model_;
   const moveit::core::JointModelGroup* joint_group_ = nullptr;
@@ -4843,9 +2256,8 @@ private:
   const moveit::core::JointModelGroup* right_arm_group_ = nullptr;
   moveit::core::RobotStatePtr last_commanded_state_;
   std::unique_ptr<ik_benchmark::ParallelUpdownAwareIkSolver> optimized_ik_solver_;
-  std::ofstream record_stream_;
-  ArmKdlChain left_kdl_chain_;
-  ArmKdlChain right_kdl_chain_;
+  std::unique_ptr<OptimizedDualIkSolver> optimized_dual_ik_solver_;
+  std::unique_ptr<MotionFlowRecorder> recorder_;
 
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr demo_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr box_stack_srv_;
@@ -4854,7 +2266,6 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
   sensor_msgs::msg::JointState::SharedPtr latest_joint_state_;
   std::mutex joint_state_mutex_;
-  mutable std::mutex extract_kdl_mutex_;
 };
 
 int main(int argc, char** argv)

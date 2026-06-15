@@ -1,6 +1,7 @@
 from moveit_configs_utils import MoveItConfigsBuilder
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from moveit_configs_utils.launches import generate_move_group_launch
@@ -254,6 +255,9 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(str(launch_dir / "spawn_controllers.launch.py"))),
     ]
-    move_group_launch.entities.extend(support_nodes + [dual_arm_planner])
+    move_group_stack = GroupAction(
+        actions=move_group_launch.entities + support_nodes,
+        condition=IfCondition(LaunchConfiguration("start_move_group")),
+    )
 
-    return LaunchDescription(declared_arguments + move_group_launch.entities)
+    return LaunchDescription(declared_arguments + [move_group_stack, dual_arm_planner])

@@ -655,3 +655,9 @@
 - 改了哪里：新增 `scripts/plc_trajectory_queue_test/plc_queue_client.py` 和 `scripts/plc_trajectory_queue_test/README.md`；协议常量使用 `Unit ID=1`、状态区 `100`、包头区 `200`、点数据区 `240~359`，`packetCrc32=0`。
 - 验证结果：`python3 -m py_compile scripts/plc_trajectory_queue_test/plc_queue_client.py` 通过；本地生成 `mixed-delta` 20 点 CSV 成功，未连接/写入 PLC。
 - 留给下个 AI：正式接桥层前先用该脚本在实机上按 README 顺序测试：只读状态、5 点保持 commit-only、5 点保持 start、20 点单轴小幅、40 点 `sync-wave`、40/240 点 `mixed-delta`；测试时必须传入真实 12 轴当前角度作为 `--base`，未运动轴不能填 0。
+
+## 2026-06-25 运控 / Codex / PLC 执行链路退场与 EtherCAT 主栈切换
+- 做了什么：Linear 已取消 PLC/Modbus 主线 `MOTION-27`、PLC 轨迹队列协作 `SEV-7`、PLC 插值测试 `MOTION-54`，新建 `MOTION-55` 作为 EtherCAT 主栈封装主线；本地清理旧 PLC bridge 与 PLC 队列测试工具。
+- 改了哪里：删除 `ros2_ws/src/alfa_robot_plc_bridge/`、`scripts/plc_trajectory_queue_test/`；新增方向标定文档 `docs/ethercat/joint_direction_calibration.md`。
+- 验证结果：源码层全局搜索旧 `alfa_robot_plc_bridge` / `plc_joint_trajectory` / PLC service / PLC 队列测试工具引用无残留；`colcon list` 不再发现 `alfa_robot_plc_bridge`；`source ros2_ws/install/setup.bash` 通过。
+- 留给下个 AI：后续执行层优先围绕 `MOTION-55` 封装电控侧 EtherCAT 主栈 / ros2_control；常态开发应支持无电机 mock/仿真与实机主栈简单切换，不要恢复 PLC bridge 主线。

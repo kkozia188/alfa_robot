@@ -661,3 +661,9 @@
 - 改了哪里：删除 `ros2_ws/src/alfa_robot_plc_bridge/`、`scripts/plc_trajectory_queue_test/`；新增方向标定文档 `docs/ethercat/joint_direction_calibration.md`。
 - 验证结果：源码层全局搜索旧 `alfa_robot_plc_bridge` / `plc_joint_trajectory` / PLC service / PLC 队列测试工具引用无残留；`colcon list` 不再发现 `alfa_robot_plc_bridge`；`source ros2_ws/install/setup.bash` 通过。
 - 留给下个 AI：后续执行层优先围绕 `MOTION-55` 封装电控侧 EtherCAT 主栈 / ros2_control；常态开发应支持无电机 mock/仿真与实机主栈简单切换，不要恢复 PLC bridge 主线。
+
+## 2026-06-26 运控 / Codex / 统一执行接口 mock 包
+- 做了什么：新增 `alfa_robot_execution_bridge` ROS2 包，先提供统一 `FollowJointTrajectory` action 接口和 mock 后端；用于无电机/无 EtherCAT 主栈时打通上层任务编排、MoveIt 与执行层。
+- 改了哪里：新增 `ros2_ws/src/alfa_robot_execution_bridge/`；默认 action 为 `/alfa_execution/execute_joint_trajectory`，mock 发布完整 13 轴 `/joint_states`。
+- 验证结果：`python3 -m py_compile` 通过；`colcon build --packages-select alfa_robot_execution_bridge --symlink-install` 通过；本地启动 mock 节点并用测试客户端发送 13 轴轨迹成功返回。
+- 留给下个 AI：真实 EtherCAT 后端应复用同一个 action 和 joint state 语义，只替换执行后端；mock 后端不使用 `direction_signs`，实机后端需要参考 `docs/ethercat/joint_direction_calibration.md` 做 ROS 方向到电机方向转换。

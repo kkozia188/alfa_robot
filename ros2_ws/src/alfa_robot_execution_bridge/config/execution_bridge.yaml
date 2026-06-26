@@ -1,0 +1,49 @@
+mock_execution_node:
+  ros__parameters:
+    mode: mock
+    action_name: /alfa_execution/execute_joint_trajectory
+    joint_state_topic: /joint_states
+    publish_joint_states: true
+    update_hz: 50.0
+    joint_names:
+      - right_joint1
+      - right_joint2
+      - right_joint3
+      - right_joint4
+      - right_joint5
+      - right_joint6
+      - left_joint1
+      - left_joint2
+      - left_joint3
+      - left_joint4
+      - left_joint5
+      - left_joint6
+      - turn
+    direction_signs:
+      - 1.0
+      - -1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - -1.0
+      - 1.0
+      - -1.0
+      - 1.0
+      - 1.0
+    initial_positions:
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0

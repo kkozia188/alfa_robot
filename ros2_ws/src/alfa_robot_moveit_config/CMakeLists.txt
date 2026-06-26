@@ -210,6 +210,7 @@ install(PROGRAMS
   scripts/extract_sequence_rerun.py
   scripts/extract_failed_attempts_rerun.py
   scripts/execute_l6_r8_mock_live.py
+  scripts/execute_l6_r8_real_live.py
   scripts/run_extract_live_benchmark.py
   scripts/visualize_moveit_box_stack_flow.py
   DESTINATION lib/${PROJECT_NAME}

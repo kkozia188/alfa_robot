@@ -685,3 +685,10 @@
 - 改了哪里：`ros2_ws/src/alfa_robot_moveit_config/scripts/execute_l6_r8_mock_live.py`；安装入口 `ros2_ws/src/alfa_robot_moveit_config/CMakeLists.txt`；执行桥配置 `ros2_ws/src/alfa_robot_execution_bridge/config/execution_bridge.yaml`；执行桥优雅退出 `ros2_ws/src/alfa_robot_execution_bridge/alfa_robot_execution_bridge/execution_bridge_node.py`；`.gitignore` 放行新脚本。
 - 验证结果：`colcon build --packages-select alfa_robot_execution_bridge alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；smoke 生成 `/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/live_mock_execution/L6_R8_mock_live_smoke.rrd`，计算成功，mock 执行全 0→负重 3.022s，L6/R8 任务轨迹 113 点、10Hz、执行 11.279s。
 - 留给下个 AI：当前执行桥接口是 13 轴 `left_joint*`/`right_joint*`/`turn`，不含 `updown`；脚本按 `fixed_updown=0.3` 进行 Rerun 显示与执行语义，若后续实机需要升降轴运动，必须扩展执行接口或锁死 IK 的 h。
+
+## 2026-06-26 运控 / Codex / L6-R8 实机流程迁移到工控机 lhy_dev
+- 做了什么：将 L6/R8 全流程测试从 mock 版本扩展为实机直连版本，并把最小运行集同步到工控机 `~/lhy_dev`，不依赖旧运行目录。
+- 改了哪里：`execute_l6_r8_mock_live.py` 支持 `executor-mode=mock|real`、自动探测仓库根目录、实机直连默认发 `/dual_arm_trajectory_controller/follow_joint_trajectory`；新增入口 `execute_l6_r8_real_live.py`；`extract_stage_monitor_console.py` 去除本机硬编码路径。
+- 工控机内容：同步 `alfa_robot_description`、`alfa_robot_moveit_config`、`alfa_robot_execution_bridge`、`bio_ik`、`scripts/ik_benchmark` 到 `~/lhy_dev`；`pick_ik` 暂留但加 `COLCON_IGNORE`，当前流程只用 `bio_ik`。
+- 验证结果：工控机 `~/lhy_dev/ros2_ws` 中 `alfa_robot_description/bio_ik/alfa_robot_execution_bridge/alfa_robot_moveit_config` 编译通过；`ros2 run alfa_robot_moveit_config execute_l6_r8_real_live.py --help` 可用；运行脚本中无 `/mnt/mydisk/ALFA/alfa_robot` 硬编码残留。
+- 留给下个 AI：工控机真实控制器当前 joint order 是 `right_joint1..6,left_joint1..6,turn`，实机脚本默认按该顺序发送；内部/Rerun 仍按左臂优先整理。脚本只发送 12 个手臂轴 + `turn=0`，不发送 `updown`。Rerun 已安装到用户环境，`numpy` 保持 ROS 兼容的 `1.24.2`。

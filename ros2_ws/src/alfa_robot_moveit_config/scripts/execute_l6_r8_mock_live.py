@@ -23,10 +23,25 @@ from rclpy.node import Node
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
 
-REPO_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot")
-ROS_WS = REPO_ROOT / "ros2_ws"
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data/ik_benchmark/live_mock_execution"
+
+
+def find_repo_root() -> Path:
+    env_root = os.environ.get("ALFA_ROBOT_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    for candidate in [SCRIPT_DIR, *SCRIPT_DIR.parents]:
+        if (candidate / "ros2_ws").is_dir() and (candidate / "scripts/ik_benchmark").is_dir():
+            return candidate
+        if candidate.name == "ros2_ws":
+            return candidate.parent
+    return Path.cwd().resolve()
+
+
+REPO_ROOT = find_repo_root()
+ROS_WS = REPO_ROOT / "ros2_ws"
+DEFAULT_MOCK_OUTPUT_ROOT = REPO_ROOT / "data/ik_benchmark/live_mock_execution"
+DEFAULT_REAL_OUTPUT_ROOT = REPO_ROOT / "data/ik_benchmark/live_real_execution"
 EXECUTION_JOINT_NAMES = [
     "left_joint1",
     "left_joint2",
@@ -40,6 +55,21 @@ EXECUTION_JOINT_NAMES = [
     "right_joint4",
     "right_joint5",
     "right_joint6",
+    "turn",
+]
+REAL_CONTROLLER_JOINT_NAMES = [
+    "right_joint1",
+    "right_joint2",
+    "right_joint3",
+    "right_joint4",
+    "right_joint5",
+    "right_joint6",
+    "left_joint1",
+    "left_joint2",
+    "left_joint3",
+    "left_joint4",
+    "left_joint5",
+    "left_joint6",
     "turn",
 ]
 
@@ -133,6 +163,7 @@ def extract_position_from_stage_point(stage: dict[str, Any], point: dict[str, An
         target = moveit_to_execution_name(name)
         if target is not None:
             joints[target] = float(value)
+    joints["turn"] = 0.0
     return joints
 
 
@@ -165,14 +196,15 @@ def make_point(time_s: float, positions: list[float]) -> JointTrajectoryPoint:
     return point
 
 
-def make_trajectory(samples: list[tuple[float, dict[str, float]]]) -> JointTrajectory:
+def make_trajectory(samples: list[tuple[float, dict[str, float]]], joint_names: list[str] | None = None) -> JointTrajectory:
+    joint_names = joint_names or EXECUTION_JOINT_NAMES
     trajectory = JointTrajectory()
-    trajectory.joint_names = list(EXECUTION_JOINT_NAMES)
+    trajectory.joint_names = list(joint_names)
     if not samples:
         return trajectory
     start_time = samples[0][0]
     for time_s, joint_map in samples:
-        positions = [joint_map[name] for name in EXECUTION_JOINT_NAMES]
+        positions = [joint_map[name] for name in joint_names]
         trajectory.points.append(make_point(time_s - start_time, positions))
     return trajectory
 
@@ -247,7 +279,7 @@ class LiveExecutionClient(Node):
         scene_y_shift: float,
         hz: float,
     ) -> None:
-        super().__init__("alfa_l6_r8_mock_live_executor")
+        super().__init__("alfa_l6_r8_live_executor")
         self.client = ActionClient(self, FollowJointTrajectory, action_name)
         self.helpers = helpers
         self.robot = robot
@@ -260,6 +292,16 @@ class LiveExecutionClient(Node):
         self.last_context: dict[str, Any] = {}
         self.feedback_count = 0
         self._lock = threading.Lock()
+
+    def actual_positions_to_execution_order(self, feedback) -> list[float]:
+        joint_names = list(getattr(feedback, "joint_names", []))
+        positions = list(feedback.actual.positions)
+        if joint_names and len(joint_names) == len(positions):
+            name_to_position = dict(zip(joint_names, positions))
+            return [float(name_to_position.get(name, 0.0)) for name in EXECUTION_JOINT_NAMES]
+        if len(positions) == len(EXECUTION_JOINT_NAMES):
+            return [float(value) for value in positions]
+        return [0.0] * len(EXECUTION_JOINT_NAMES)
 
     def log_static_scene(self) -> None:
         monitor.rr.log("monitor", monitor.rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
@@ -322,7 +364,7 @@ class LiveExecutionClient(Node):
             context = dict(context)
             context["label"] = label
             self.feedback_count += 1
-            self.log_positions(list(feedback.actual.positions), context)
+            self.log_positions(self.actual_positions_to_execution_order(feedback), context)
 
         goal = FollowJointTrajectory.Goal()
         goal.trajectory = trajectory
@@ -407,12 +449,12 @@ def compute_snapshot(args: argparse.Namespace, run_dir: Path) -> Path:
         time.sleep(1.0)
 
 
-def start_execution_bridge(run_dir: Path, hz: float) -> subprocess.Popen[str]:
+def start_execution_bridge(run_dir: Path, hz: float, config_name: str) -> subprocess.Popen[str]:
     log_path = run_dir / "execution_bridge.log"
     command = (
         "ros2 run alfa_robot_execution_bridge execution_bridge_node "
         "--ros-args "
-        f"--params-file {ROS_WS}/install/alfa_robot_execution_bridge/share/alfa_robot_execution_bridge/config/execution_bridge.yaml "
+        f"--params-file {ROS_WS}/install/alfa_robot_execution_bridge/share/alfa_robot_execution_bridge/config/{config_name} "
         f"-p update_hz:={hz}"
     )
     with log_path.open("w") as log_file:
@@ -441,9 +483,15 @@ def wait_for_action_server(action_name: str, timeout_s: float) -> None:
     raise TimeoutError(f"action {action_name} not available")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Compute L6/R8 then execute it through mock executor with live Rerun.")
-    parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
+def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Compute L6/R8 then execute it with live Rerun feedback.")
+    parser.add_argument("--executor-mode", choices=["mock", "real"], default=default_executor_mode)
+    parser.add_argument(
+        "--start-execution-bridge",
+        action="store_true",
+        help="real 模式下也启动 alfa_robot_execution_bridge 并发 /alfa_execution；默认直接发真实控制器 action",
+    )
+    parser.add_argument("--output-root", type=Path, default=None)
     parser.add_argument("--left-box-id", type=int, default=6)
     parser.add_argument("--right-box-id", type=int, default=8)
     parser.add_argument("--box-front-x", type=float, default=0.925)
@@ -469,14 +517,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--service-timeout", type=float, default=120.0)
     parser.add_argument("--hz", type=float, default=10.0)
     parser.add_argument("--max-joint-speed-deg-s", type=float, default=45.0)
-    parser.add_argument("--action-name", default="/alfa_execution/execute_joint_trajectory")
+    parser.add_argument(
+        "--action-name",
+        default=None,
+        help="不设置时：mock 用 /alfa_execution/execute_joint_trajectory；real 默认用 /dual_arm_trajectory_controller/follow_joint_trajectory",
+    )
+    parser.add_argument(
+        "--real-controller-order",
+        choices=["right_first", "left_first"],
+        default="right_first",
+        help="real 直连控制器 joint_names 顺序；工控机当前 dual_arm_trajectory_controller 为 right_first",
+    )
     parser.add_argument("--save", type=Path, default=None, help="保存为 .rrd；不设置时默认打开实时 Rerun viewer")
     parser.add_argument("--connect", action="store_true", help="连接已有 Rerun viewer，而不是新开 viewer")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.output_root is None:
+        args.output_root = DEFAULT_REAL_OUTPUT_ROOT if args.executor_mode == "real" else DEFAULT_MOCK_OUTPUT_ROOT
+    if args.action_name is None:
+        if args.executor_mode == "real" and not args.start_execution_bridge:
+            args.action_name = "/dual_arm_trajectory_controller/follow_joint_trajectory"
+        else:
+            args.action_name = "/alfa_execution/execute_joint_trajectory"
+    return args
 
 
-def main() -> int:
-    args = parse_args()
+def main(default_executor_mode: str = "mock") -> int:
+    args = parse_args(default_executor_mode)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = args.output_root / f"L{args.left_box_id}_R{args.right_box_id}_{stamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -491,9 +557,16 @@ def main() -> int:
 
     bridge = None
     try:
-        bridge = start_execution_bridge(run_dir, args.hz)
+        if args.executor_mode == "mock":
+            bridge = start_execution_bridge(run_dir, args.hz, "execution_bridge.yaml")
+            print("mock执行桥启动中。", flush=True)
+        elif args.start_execution_bridge:
+            bridge = start_execution_bridge(run_dir, args.hz, "ros2_control_bridge.yaml")
+            print("实机转发桥启动中：/alfa_execution -> /dual_arm_trajectory_controller/follow_joint_trajectory", flush=True)
+        else:
+            print(f"实机直连模式：等待真实控制器 action {args.action_name}", flush=True)
         wait_for_action_server(args.action_name, 15.0)
-        print("mock执行器已启动。", flush=True)
+        print(f"执行接口已就绪：mode={args.executor_mode}, action={args.action_name}", flush=True)
 
         snapshot_path = compute_snapshot(args, run_dir)
         snapshot = monitor.read_snapshot(snapshot_path)
@@ -503,7 +576,7 @@ def main() -> int:
 
         monitor.rr = rr
         helpers = load_rerun_helpers()
-        rr.init("l6_r8_mock_live_execution")
+        rr.init(f"l6_r8_{args.executor_mode}_live_execution")
         if save_path is not None:
             rr.save(str(save_path))
             print(f"Rerun 保存模式：{save_path}", flush=True)
@@ -530,6 +603,13 @@ def main() -> int:
             client.log_static_scene()
             zero = {name: 0.0 for name in EXECUTION_JOINT_NAMES}
             loaded = loaded_joint_map()
+            command_joint_names = (
+                REAL_CONTROLLER_JOINT_NAMES
+                if args.executor_mode == "real"
+                and not args.start_execution_bridge
+                and args.real_controller_order == "right_first"
+                else EXECUTION_JOINT_NAMES
+            )
             home_samples = [
                 (0.0, zero),
                 *resample_segment(
@@ -544,9 +624,13 @@ def main() -> int:
                 {"label": "home_to_loaded", "stage": "zero_to_loaded", "attached_boxes": [], "static_box_obstacles": []}
                 for _ in home_samples
             ]
+            if args.executor_mode == "real":
+                print("实机将发送 12 个手臂关节 + turn=0；不发送 updown。", flush=True)
+                print("实机 joint_names 顺序：" + ", ".join(command_joint_names), flush=True)
+                input("确认真实机器人当前接近全0起点、人员远离、可运动后按回车开始 全0→负重姿态；Ctrl+C 取消...")
             print("开始执行：全0 → 负重姿态", flush=True)
             home_start = time.monotonic()
-            if not client.send_and_wait(make_trajectory(home_samples), home_contexts, "home_to_loaded"):
+            if not client.send_and_wait(make_trajectory(home_samples, command_joint_names), home_contexts, "home_to_loaded"):
                 return 1
             print(f"完成执行：全0 → 负重姿态，用时 {(time.monotonic() - home_start):.3f}s", flush=True)
 
@@ -564,7 +648,7 @@ def main() -> int:
                 raise RuntimeError("snapshot produced empty execution trajectory")
             print(f"开始执行：L6/R8 任务轨迹，轨迹点 {len(task_samples)}，频率 {args.hz:.1f}Hz", flush=True)
             task_start = time.monotonic()
-            if not client.send_and_wait(make_trajectory(task_samples), task_contexts, "L6_R8_task"):
+            if not client.send_and_wait(make_trajectory(task_samples, command_joint_names), task_contexts, "L6_R8_task"):
                 return 1
             print(f"完成执行：L6/R8 任务轨迹，用时 {(time.monotonic() - task_start):.3f}s", flush=True)
             if save_path is not None:

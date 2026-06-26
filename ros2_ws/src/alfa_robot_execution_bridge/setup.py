@@ -25,6 +25,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'execution_bridge_node = alfa_robot_execution_bridge.execution_bridge_node:main',
             'mock_execution_node = alfa_robot_execution_bridge.mock_execution_node:main',
             'send_mock_trajectory = alfa_robot_execution_bridge.send_mock_trajectory:main',
         ],

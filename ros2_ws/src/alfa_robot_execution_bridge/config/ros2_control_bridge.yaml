@@ -1,9 +1,10 @@
 alfa_execution_bridge:
   ros__parameters:
-    mode: mock
+    mode: ros2_control
     action_name: /alfa_execution/execute_joint_trajectory
-    joint_state_topic: /joint_states
-    publish_joint_states: true
+    downstream_action_name: /dual_arm_trajectory_controller/follow_joint_trajectory
+    downstream_wait_timeout_s: 5.0
+    publish_joint_states: false
     update_hz: 50.0
     joint_names:
       - left_joint1
@@ -28,6 +29,7 @@ alfa_execution_bridge:
       - 1.0
       - 1.0
       - -1.0
+      - 1.0
       - 1.0
       - 1.0
       - 1.0

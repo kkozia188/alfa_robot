@@ -20,8 +20,8 @@ def generate_launch_description():
         ),
         Node(
             package='alfa_robot_execution_bridge',
-            executable='mock_execution_node',
-            name='mock_execution_node',
+            executable='execution_bridge_node',
+            name='alfa_execution_bridge',
             output='screen',
             parameters=[config_file],
         ),

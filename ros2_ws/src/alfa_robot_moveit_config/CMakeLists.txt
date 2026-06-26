@@ -5,6 +5,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(control_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_ros_planning REQUIRED)
 find_package(moveit_core REQUIRED)
@@ -98,6 +99,7 @@ ament_target_dependencies(alfa_robot_motion_scene_adapter
   pluginlib
   random_numbers
   rclcpp
+  control_msgs
   shape_msgs
   srdfdom
   urdf
@@ -122,6 +124,7 @@ target_link_libraries(dual_arm_planner_node
 ament_target_dependencies(dual_arm_planner_node
   rclcpp
   rclcpp_action
+  control_msgs
   moveit_core
   moveit_ros_planning_interface
   moveit_ros_planning
@@ -173,6 +176,7 @@ ament_export_dependencies(
   pluginlib
   random_numbers
   rclcpp
+  control_msgs
   shape_msgs
   srdfdom
   urdf

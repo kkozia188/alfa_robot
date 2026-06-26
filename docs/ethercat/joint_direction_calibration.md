@@ -6,6 +6,8 @@
 
 当前实机测试确认：为了让机器人实际姿态与 Rerun/上位机目标姿态一致，控制器发送到 EtherCAT 侧的目标角度需要按下表做符号映射。
 
+当前上层统一接口关节顺序为：前 6 个左臂、后 6 个右臂，最后 `turn`。
+
 | 上位机 / Rerun 关节 | 发送到 EtherCAT 控制器的角度 | 方向关系 |
 | --- | --- | --- |
 | `right_joint1` | `+right_joint1` | 同向 |
@@ -22,19 +24,19 @@
 | `left_joint6` | `+left_joint6` | 同向 |
 | `turn` | `+turn` | 同向 |
 
-换成符号数组，按当前控制器关节顺序：
+换成符号数组，按当前统一执行接口关节顺序：
 
 ```text
-right_joint1, right_joint2, right_joint3, right_joint4, right_joint5, right_joint6,
 left_joint1,  left_joint2,  left_joint3,  left_joint4,  left_joint5,  left_joint6,
+right_joint1, right_joint2, right_joint3, right_joint4, right_joint5, right_joint6,
 turn
 ```
 
 对应：
 
 ```text
-+1, -1, +1, +1, +1, +1,
 +1, +1, -1, +1, -1, +1,
++1, -1, +1, +1, +1, +1,
 +1
 ```
 

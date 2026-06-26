@@ -32,6 +32,7 @@ alfa_execution_bridge:
       - 1.0
       - 1.0
       - 1.0
+      - 1.0
     apply_direction_signs: false
     initial_positions:
       - 0.0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import copy
 import math
 import threading
@@ -411,7 +412,10 @@ def main(args: list[str] | None = None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
+    except KeyboardInterrupt:
+        pass
     finally:
         executor.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        with contextlib.suppress(Exception):
+            rclpy.shutdown()

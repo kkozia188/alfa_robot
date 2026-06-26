@@ -1672,9 +1672,6 @@ private:
     const std::vector<AttachedBoxSpec>& attached_boxes,
     std::string* reason) const
   {
-    if (!enable_attached_box_collision_) return true;
-    const bool has_boxes = !attached_boxes.empty() || robot_state_has_attached_body(start_state);
-    if (!has_boxes) return true;
     auto scene_snapshot = make_full_scene_snapshot(start_state, attached_boxes);
     if (!scene_snapshot) return true;
 
@@ -1697,6 +1694,234 @@ private:
         }
         return false;
       }
+    }
+    return true;
+  }
+
+  moveit::planning_interface::MoveGroupInterface::Plan make_interpolated_joint_plan(
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    double duration_s) const
+  {
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    auto& trajectory = plan.trajectory_.joint_trajectory;
+    trajectory.joint_names = arm_joint_target_names();
+
+    double max_delta = 0.0;
+    for (const auto& name : trajectory.joint_names) {
+      const double delta = std::abs(joint_variable_delta(name, start_state, goal_state));
+      max_delta = std::max(max_delta, delta);
+    }
+    const size_t steps = std::max<size_t>(2, static_cast<size_t>(std::ceil(max_delta / (5.0 * M_PI / 180.0))) + 1);
+    trajectory.points.reserve(steps);
+    for (size_t step = 0; step < steps; ++step) {
+      const double ratio = steps <= 1 ? 1.0 : static_cast<double>(step) / static_cast<double>(steps - 1);
+      trajectory_msgs::msg::JointTrajectoryPoint point;
+      point.time_from_start = rclcpp::Duration::from_seconds(duration_s * ratio);
+      point.positions.reserve(trajectory.joint_names.size());
+      for (const auto& name : trajectory.joint_names) {
+        const double start = start_state.getVariablePosition(name);
+        point.positions.push_back(start + joint_variable_delta(name, start_state, goal_state) * ratio);
+      }
+      trajectory.points.push_back(std::move(point));
+    }
+    moveit::core::robotStateToRobotStateMsg(start_state, plan.start_state_, true);
+    plan.planning_time_ = 0.0;
+    return plan;
+  }
+
+  double joint_variable_delta(
+    const std::string& name,
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state) const
+  {
+    const double start = start_state.getVariablePosition(name);
+    const double goal = goal_state.getVariablePosition(name);
+    const auto* variable_joint = robot_model_ ? robot_model_->getJointOfVariable(name) : nullptr;
+    const bool angular_variable =
+      variable_joint && variable_joint->getType() != moveit::core::JointModel::PRISMATIC;
+    return angular_variable ? shortest_angular_distance(start, goal) : (goal - start);
+  }
+
+  moveit::planning_interface::MoveGroupInterface::Plan shortcut_joint_plan(
+    const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+    const moveit::core::RobotState& start_state,
+    const std::vector<AttachedBoxSpec>& attached_boxes,
+    std::string* reason) const
+  {
+    const auto& trajectory = plan.trajectory_.joint_trajectory;
+    if (trajectory.points.size() <= 2) {
+      return plan;
+    }
+
+    std::vector<moveit::core::RobotState> states;
+    states.reserve(trajectory.points.size());
+    for (const auto& point : trajectory.points) {
+      moveit::core::RobotState state(start_state);
+      for (size_t i = 0; i < trajectory.joint_names.size() && i < point.positions.size(); ++i) {
+        if (is_robot_variable(trajectory.joint_names[i])) {
+          state.setVariablePosition(trajectory.joint_names[i], point.positions[i]);
+        }
+      }
+      state.update(true);
+      states.push_back(std::move(state));
+    }
+
+    std::vector<size_t> kept;
+    kept.push_back(0);
+    size_t from = 0;
+    while (from + 1 < states.size()) {
+      size_t best = from + 1;
+      for (size_t to = states.size() - 1; to > from + 1; --to) {
+        auto candidate = make_interpolated_joint_plan(states[from], states[to], 0.1);
+        std::string segment_reason;
+        if (planned_trajectory_clear_in_full_scene(candidate, states[from], attached_boxes, &segment_reason)) {
+          best = to;
+          break;
+        }
+      }
+      kept.push_back(best);
+      from = best;
+    }
+
+    if (kept.size() >= states.size()) {
+      return plan;
+    }
+
+    moveit::planning_interface::MoveGroupInterface::Plan out;
+    out.start_state_ = plan.start_state_;
+    out.planning_time_ = plan.planning_time_;
+    auto& out_traj = out.trajectory_.joint_trajectory;
+    out_traj.joint_names = trajectory.joint_names;
+    const double duration = trajectory.points.empty()
+      ? 1.0
+      : rclcpp::Duration(trajectory.points.back().time_from_start).seconds();
+    for (size_t i = 0; i < kept.size(); ++i) {
+      const auto& state = states[kept[i]];
+      trajectory_msgs::msg::JointTrajectoryPoint point;
+      const double ratio = kept.size() <= 1 ? 1.0 : static_cast<double>(i) / static_cast<double>(kept.size() - 1);
+      point.time_from_start = rclcpp::Duration::from_seconds(duration * ratio);
+      point.positions.reserve(out_traj.joint_names.size());
+      for (const auto& name : out_traj.joint_names) {
+        point.positions.push_back(state.getVariablePosition(name));
+      }
+      out_traj.points.push_back(std::move(point));
+    }
+
+    if (reason) {
+      *reason = "shortcut " + std::to_string(trajectory.points.size()) + " -> " +
+                std::to_string(out_traj.points.size()) + " points";
+    }
+    return out;
+  }
+
+  moveit::planning_interface::MoveGroupInterface::Plan densify_joint_plan(
+    const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+    double max_joint_step_rad,
+    double max_updown_step_m) const
+  {
+    const auto& trajectory = plan.trajectory_.joint_trajectory;
+    if (trajectory.points.size() < 2 || trajectory.joint_names.empty()) {
+      return plan;
+    }
+
+    moveit::planning_interface::MoveGroupInterface::Plan out;
+    out.start_state_ = plan.start_state_;
+    out.planning_time_ = plan.planning_time_;
+    auto& out_traj = out.trajectory_.joint_trajectory;
+    out_traj.joint_names = trajectory.joint_names;
+
+    auto point_time = [](const trajectory_msgs::msg::JointTrajectoryPoint& point) {
+      return rclcpp::Duration(point.time_from_start).seconds();
+    };
+    out_traj.points.push_back(trajectory.points.front());
+    for (size_t point_index = 1; point_index < trajectory.points.size(); ++point_index) {
+      const auto& previous = trajectory.points[point_index - 1];
+      const auto& current = trajectory.points[point_index];
+      if (previous.positions.size() != trajectory.joint_names.size() ||
+          current.positions.size() != trajectory.joint_names.size()) {
+        out_traj.points.push_back(current);
+        continue;
+      }
+
+      double max_ratio = 0.0;
+      for (size_t i = 0; i < trajectory.joint_names.size(); ++i) {
+        const double delta = std::abs(current.positions[i] - previous.positions[i]);
+        const double limit = trajectory.joint_names[i] == "updown"
+          ? std::max(1e-4, max_updown_step_m)
+          : std::max(1e-4, max_joint_step_rad);
+        max_ratio = std::max(max_ratio, delta / limit);
+      }
+      const size_t steps = std::max<size_t>(1, static_cast<size_t>(std::ceil(max_ratio)));
+      const double start_time = point_time(previous);
+      const double end_time = point_time(current);
+      for (size_t step = 1; step <= steps; ++step) {
+        const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.time_from_start = rclcpp::Duration::from_seconds(start_time + (end_time - start_time) * ratio);
+        point.positions.reserve(trajectory.joint_names.size());
+        for (size_t i = 0; i < trajectory.joint_names.size(); ++i) {
+          point.positions.push_back(previous.positions[i] + (current.positions[i] - previous.positions[i]) * ratio);
+        }
+        out_traj.points.push_back(std::move(point));
+      }
+    }
+    return out;
+  }
+
+  bool plan_joint_space_with_direct_pipeline(
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    moveit::planning_interface::MoveGroupInterface::Plan* plan,
+    std::string* reason) const
+  {
+    if (!plan) {
+      if (reason) *reason = "direct_joint_plan_output_null";
+      return false;
+    }
+    if (!loaded_planning_pipeline_) {
+      if (reason) *reason = "direct_pipeline_not_initialized";
+      return false;
+    }
+    const auto* loaded_group = robot_model_->getJointModelGroup(extract_loaded_planning_group_);
+    if (!loaded_group) {
+      if (reason) *reason = "direct_pipeline_missing_group_" + extract_loaded_planning_group_;
+      return false;
+    }
+    auto scene_snapshot = make_full_scene_snapshot(start_state, {});
+    if (!scene_snapshot) {
+      if (reason) *reason = "direct_pipeline_planning_scene_not_initialized";
+      return false;
+    }
+
+    planning_interface::MotionPlanRequest request;
+    request.group_name = extract_loaded_planning_group_;
+    request.allowed_planning_time = extract_loaded_planning_time_;
+    request.num_planning_attempts = extract_loaded_planning_attempts_;
+    request.max_velocity_scaling_factor = velocity_scale_;
+    request.max_acceleration_scaling_factor = acceleration_scale_;
+    moveit::core::robotStateToRobotStateMsg(start_state, request.start_state, true);
+    request.goal_constraints.push_back(
+      kinematic_constraints::constructGoalConstraints(goal_state, loaded_group, joint_goal_tolerance_rad_));
+
+    planning_interface::MotionPlanResponse response;
+    const bool generated = loaded_planning_pipeline_->generatePlan(scene_snapshot, request, response);
+    if (!generated || response.error_code_.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS ||
+        !response.trajectory_) {
+      if (reason) {
+        *reason = "direct_pipeline_planning_failed_code_" +
+          std::to_string(response.error_code_.val) + " " +
+          direct_pipeline_failure_diagnostic(scene_snapshot, start_state, goal_state, loaded_group);
+      }
+      return false;
+    }
+
+    moveit::core::robotStateToRobotStateMsg(start_state, plan->start_state_, true);
+    response.trajectory_->getRobotTrajectoryMsg(plan->trajectory_);
+    plan->planning_time_ = response.planning_time_;
+    if (plan->trajectory_.joint_trajectory.points.empty()) {
+      if (reason) *reason = "direct_pipeline_empty_trajectory";
+      return false;
     }
     return true;
   }
@@ -3032,6 +3257,22 @@ private:
     return seed_state;
   }
 
+  moveit::core::RobotState make_extract_monitor_loaded_start_state() const
+  {
+    moveit::core::RobotState state(robot_model_);
+    state.setToDefaultValues();
+    for (size_t i = 0; i < left_loaded_arm_.size(); ++i) {
+      state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_loaded_arm_[i]);
+    }
+    for (size_t i = 0; i < right_loaded_arm_.size(); ++i) {
+      state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_loaded_arm_[i]);
+    }
+    state.setVariablePosition("updown", extract_grasp_ik_home_updown_);
+    state.enforceBounds(joint_group_);
+    state.update();
+    return state;
+  }
+
   void record_stage(
     const std::string& stage_name,
     const moveit::planning_interface::MoveGroupInterface::Plan& plan,
@@ -3184,6 +3425,8 @@ private:
                                     "_R" + std::to_string(right_box_id);
     extract_monitor_state_.seed_state =
       std::make_shared<moveit::core::RobotState>(make_extract_monitor_seed_state());
+    extract_monitor_state_.loaded_start_state =
+      std::make_shared<moveit::core::RobotState>(make_extract_monitor_loaded_start_state());
 
     moveit::core::RobotState selected_state(*extract_monitor_state_.seed_state);
     nlohmann::json ik_extra;
@@ -3470,8 +3713,22 @@ private:
   {
     const auto stage_start = std::chrono::steady_clock::now();
     ExtractRolloutTiming* selected = nullptr;
+    auto pre_attach_is_smooth = [&](const ExtractRolloutTiming& timing) {
+      if (!extract_monitor_state_.loaded_start_state ||
+          timing.candidate_order >= extract_monitor_state_.legal_candidates.size() ||
+          !extract_monitor_state_.seed_state) {
+        return false;
+      }
+      const auto ik_state = state_from_ik_candidate(
+        *extract_monitor_state_.seed_state,
+        extract_monitor_state_.legal_candidates[timing.candidate_order]);
+      auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_state, 1.0);
+      std::string reason;
+      return planned_trajectory_clear_in_full_scene(plan, *extract_monitor_state_.loaded_start_state, {}, &reason);
+    };
+
     for (auto& timing : extract_monitor_state_.timings) {
-      if (timing.loaded_plan_selected && timing.loaded_plan_success) {
+      if (timing.loaded_plan_success && pre_attach_is_smooth(timing)) {
         selected = &timing;
         break;
       }
@@ -3491,6 +3748,12 @@ private:
     moveit::core::RobotState goal_state = selected->loaded_goal_state
       ? *selected->loaded_goal_state
       : loaded_pose_selector_->makeGoalState(*selected->final_state);
+    moveit::core::RobotState ik_goal_state = selected->candidate_order < extract_monitor_state_.legal_candidates.size() &&
+        extract_monitor_state_.seed_state
+      ? state_from_ik_candidate(
+          *extract_monitor_state_.seed_state,
+          extract_monitor_state_.legal_candidates[selected->candidate_order])
+      : *selected->final_state;
 
     if (selected->rollout_records.empty() &&
         selected->candidate_order < extract_monitor_state_.legal_candidates.size() &&
@@ -3541,6 +3804,55 @@ private:
     }
 
     nlohmann::json replay_stages = nlohmann::json::array();
+    if (extract_monitor_state_.loaded_start_state) {
+      const auto transition_t0 = std::chrono::steady_clock::now();
+      moveit::planning_interface::MoveGroupInterface::Plan transition_plan =
+        make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_goal_state, 1.0);
+      transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
+      std::string transition_reason;
+      bool transition_ok =
+        planned_trajectory_clear_in_full_scene(
+          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
+      std::string transition_method = "joint_interpolation";
+      if (!transition_ok) {
+        transition_method = "rrt";
+        transition_reason.clear();
+        transition_ok = plan_joint_space_with_direct_pipeline(
+          *extract_monitor_state_.loaded_start_state, ik_goal_state, &transition_plan, &transition_reason);
+        if (transition_ok) {
+          std::string shortcut_reason;
+          transition_plan = shortcut_joint_plan(
+            transition_plan, *extract_monitor_state_.loaded_start_state, {}, &shortcut_reason);
+          transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
+          transition_ok = planned_trajectory_clear_in_full_scene(
+            transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
+          if (!shortcut_reason.empty()) {
+            transition_reason = shortcut_reason + (transition_reason.empty() ? "" : "; " + transition_reason);
+          }
+        }
+      }
+      const double transition_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - transition_t0).count();
+      nlohmann::json extra = {
+        {"stage_kind", "monitor_selected_pre_attach_loaded_to_ik_replay"},
+        {"valid", transition_ok},
+        {"method", transition_method},
+        {"transition_ms", transition_ms},
+        {"failure_reason", transition_ok ? "" : transition_reason},
+        {"candidate_order", selected->candidate_order},
+        {"loaded_plan_rank", selected->loaded_plan_rank},
+        {"left_box_id", extract_monitor_state_.left_box_id},
+        {"right_box_id", extract_monitor_state_.right_box_id}
+      };
+      replay_stages.push_back(monitor_stage_json(
+        extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
+        transition_plan,
+        *extract_monitor_state_.loaded_start_state,
+        ik_goal_state,
+        arm_joint_target_names(),
+        {},
+        extra));
+    }
     for (const auto& stage : selected->rollout_records) {
       replay_stages.push_back(stage);
     }
@@ -3934,6 +4246,7 @@ private:
     AttachedBoxSpec left_box;
     AttachedBoxSpec right_box;
     moveit::core::RobotStatePtr seed_state;
+    moveit::core::RobotStatePtr loaded_start_state;
     ik_benchmark::UpdownAwareIkResult ik_result;
     std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
     std::vector<moveit::core::RobotStatePtr> candidate_states;

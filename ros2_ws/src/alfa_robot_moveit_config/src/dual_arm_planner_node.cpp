@@ -3313,38 +3313,40 @@ private:
     return true;
   }
 
+  bool extract_monitor_pre_attach_transition_is_smooth(const ExtractRolloutTiming& timing)
+  {
+    if (!extract_monitor_state_.loaded_start_state ||
+        timing.candidate_order >= extract_monitor_state_.legal_candidates.size() ||
+        !extract_monitor_state_.seed_state) {
+      return false;
+    }
+    const auto ik_state = state_from_ik_candidate(
+      *extract_monitor_state_.seed_state,
+      extract_monitor_state_.legal_candidates[timing.candidate_order]);
+    auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_state, 1.0);
+    std::string reason;
+    return planned_trajectory_clear_in_full_scene(plan, *extract_monitor_state_.loaded_start_state, {}, &reason);
+  }
+
+  ExtractRolloutTiming* select_extract_monitor_final_timing()
+  {
+    for (auto& timing : extract_monitor_state_.timings) {
+      if (timing.loaded_plan_success && extract_monitor_pre_attach_transition_is_smooth(timing)) {
+        return &timing;
+      }
+    }
+    for (auto& timing : extract_monitor_state_.timings) {
+      if (timing.loaded_plan_success) {
+        return &timing;
+      }
+    }
+    return nullptr;
+  }
+
   bool run_extract_monitor_final_stage(std::string* message)
   {
     const auto stage_start = std::chrono::steady_clock::now();
-    ExtractRolloutTiming* selected = nullptr;
-    auto pre_attach_is_smooth = [&](const ExtractRolloutTiming& timing) {
-      if (!extract_monitor_state_.loaded_start_state ||
-          timing.candidate_order >= extract_monitor_state_.legal_candidates.size() ||
-          !extract_monitor_state_.seed_state) {
-        return false;
-      }
-      const auto ik_state = state_from_ik_candidate(
-        *extract_monitor_state_.seed_state,
-        extract_monitor_state_.legal_candidates[timing.candidate_order]);
-      auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_state, 1.0);
-      std::string reason;
-      return planned_trajectory_clear_in_full_scene(plan, *extract_monitor_state_.loaded_start_state, {}, &reason);
-    };
-
-    for (auto& timing : extract_monitor_state_.timings) {
-      if (timing.loaded_plan_success && pre_attach_is_smooth(timing)) {
-        selected = &timing;
-        break;
-      }
-    }
-    if (!selected) {
-      for (auto& timing : extract_monitor_state_.timings) {
-        if (timing.loaded_plan_success) {
-          selected = &timing;
-          break;
-        }
-      }
-    }
+    ExtractRolloutTiming* selected = select_extract_monitor_final_timing();
     if (!selected || !selected->final_state || !loaded_pose_selector_) {
       return fail("extract monitor final: no loaded-plan success to select");
     }

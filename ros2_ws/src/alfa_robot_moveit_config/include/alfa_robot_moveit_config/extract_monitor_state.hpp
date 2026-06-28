@@ -65,6 +65,10 @@ void populate_extract_monitor_candidate_states(
   ExtractMonitorState& state,
   const ExtractMonitorCandidateStateBuilder& state_builder);
 
+const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing(
+  const ExtractMonitorState& state,
+  const ExtractRolloutTiming& timing);
+
 struct ExtractMonitorTimingSummary
 {
   size_t success_count = 0;

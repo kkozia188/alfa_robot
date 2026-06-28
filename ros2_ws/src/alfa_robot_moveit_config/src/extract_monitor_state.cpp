@@ -88,6 +88,16 @@ void populate_extract_monitor_candidate_states(
   }
 }
 
+const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing(
+  const ExtractMonitorState& state,
+  const ExtractRolloutTiming& timing)
+{
+  if (timing.candidate_order >= state.legal_candidates.size()) {
+    return nullptr;
+  }
+  return &state.legal_candidates[timing.candidate_order];
+}
+
 ExtractMonitorTimingSummary summarize_extract_monitor_timings(
   const std::vector<ExtractRolloutTiming>& timings)
 {

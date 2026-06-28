@@ -12,6 +12,7 @@ int main()
   using alfa_robot::motion::ExtractMonitorStage;
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
   using alfa_robot::motion::AttachedBoxSpec;
+  using alfa_robot::motion::extract_monitor_candidate_for_timing;
   using alfa_robot::motion::extract_monitor_prefix;
   using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::populate_extract_monitor_candidate_states;
@@ -156,6 +157,12 @@ int main()
   assert(state.candidate_states.size() == 3);
   populate_extract_monitor_candidate_states(state, {});
   assert(state.candidate_states.empty());
+
+  alfa_robot::motion::ExtractRolloutTiming candidate_timing;
+  candidate_timing.candidate_order = 1;
+  assert(extract_monitor_candidate_for_timing(state, candidate_timing) == &state.legal_candidates[1]);
+  candidate_timing.candidate_order = 99;
+  assert(extract_monitor_candidate_for_timing(state, candidate_timing) == nullptr);
 
   std::vector<alfa_robot::motion::ExtractRolloutTiming> timings(4);
   moveit::core::RobotStatePtr fake_final_state(

@@ -106,6 +106,26 @@ nlohmann::json extract_monitor_replay_context_json(
   };
 }
 
+nlohmann::json extract_monitor_pre_attach_replay_extra(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  bool valid,
+  const std::string& method,
+  double transition_ms,
+  const std::string& failure_reason)
+{
+  nlohmann::json extra = extract_monitor_replay_context_json(timing, left_box_id, right_box_id);
+  extra.update({
+    {"stage_kind", "monitor_selected_pre_attach_loaded_to_ik_replay"},
+    {"valid", valid},
+    {"method", method},
+    {"transition_ms", transition_ms},
+    {"failure_reason", valid ? "" : failure_reason}
+  });
+  return extra;
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,

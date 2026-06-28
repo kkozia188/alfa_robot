@@ -85,6 +85,7 @@ using alfa_robot::motion::extract_monitor_full_selected_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
+using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
 using alfa_robot::motion::extract_monitor_replay_context_json;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
@@ -3340,15 +3341,14 @@ private:
     }
     const double transition_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - transition_t0).count();
-    nlohmann::json extra = extract_monitor_replay_context_json(
-      selected, extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id);
-    extra.update({
-      {"stage_kind", "monitor_selected_pre_attach_loaded_to_ik_replay"},
-      {"valid", transition_ok},
-      {"method", transition_method},
-      {"transition_ms", transition_ms},
-      {"failure_reason", transition_ok ? "" : transition_reason}
-    });
+    const nlohmann::json extra = extract_monitor_pre_attach_replay_extra(
+      selected,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      transition_ok,
+      transition_method,
+      transition_ms,
+      transition_reason);
     replay_stages->push_back(monitor_stage_json(
       extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
       transition_plan,

@@ -11,6 +11,7 @@ int main()
   using alfa_robot::motion::extract_monitor_final_snapshot;
   using alfa_robot::motion::extract_monitor_full_selected_snapshot;
   using alfa_robot::motion::extract_monitor_loaded_snapshot;
+  using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
   using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::failure_counts_json;
@@ -66,6 +67,22 @@ int main()
   assert(replay_context.at("loaded_plan_rank") == 3);
   assert(replay_context.at("left_box_id") == 6);
   assert(replay_context.at("right_box_id") == 8);
+
+  const auto pre_attach_ok = extract_monitor_pre_attach_replay_extra(
+    timing, 6, 8, true, "joint_interpolation", 5.0, "ignored_failure");
+  assert(pre_attach_ok.at("stage_kind") == "monitor_selected_pre_attach_loaded_to_ik_replay");
+  assert(pre_attach_ok.at("candidate_order") == 12);
+  assert(pre_attach_ok.at("loaded_plan_rank") == 3);
+  assert(pre_attach_ok.at("valid") == true);
+  assert(pre_attach_ok.at("method") == "joint_interpolation");
+  assert(pre_attach_ok.at("transition_ms") == 5.0);
+  assert(pre_attach_ok.at("failure_reason") == "");
+
+  const auto pre_attach_failed = extract_monitor_pre_attach_replay_extra(
+    timing, 6, 8, false, "rrt", 7.5, "collision");
+  assert(pre_attach_failed.at("valid") == false);
+  assert(pre_attach_failed.at("method") == "rrt");
+  assert(pre_attach_failed.at("failure_reason") == "collision");
 
   const auto final_snapshot = extract_monitor_final_snapshot(
     45.0,

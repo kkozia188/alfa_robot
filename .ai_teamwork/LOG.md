@@ -872,3 +872,9 @@
 - 改了哪里：`dual_arm_planner_node.cpp` 新增 `record_monitor_extract_replay_step()`；抽离阶段实时记录和最终阶段缺失 replay 补录都改为复用该 helper。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2853.29ms，snapshot phase=`full_selected`，replay_stages=18。
 - 留给下个 AI：这步是局部 Locality 改善；更大的下一步仍是把 pre-attach replay 规划和最终 replay 组装整体移出主节点。
+
+## 2026-06-29 运控 / Codex / monitor pre-attach 回放字段收口
+- 做了什么：把最终回放里 pre-attach 过渡段的 `stage_kind/valid/method/transition_ms/failure_reason` 字段 schema 收口到 `extract_monitor_json` Module。
+- 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_pre_attach_replay_extra()`；`dual_arm_planner_node.cpp` 改为只传过渡结果；`test_extract_monitor_json.cpp` 覆盖成功和失败两类字段语义。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2809.06ms，pre_attach extra 中 method=`rrt`、valid=true。
+- 留给下个 AI：pre-attach replay 的字段 Interface 已集中；下一步可把“插值失败再 RRT，再 shortcut/densify/验碰”的规划 Implementation 抽成更深 Module。

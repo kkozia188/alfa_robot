@@ -1,6 +1,7 @@
 #pragma once
 
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_state.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_transition_planning.hpp"
 
 #include <moveit/robot_state/robot_state.h>
@@ -25,6 +26,12 @@ struct ExtractMonitorReplayBuildRequest
   moveit::core::RobotStatePtr loaded_start_state;
   moveit::core::RobotStatePtr ik_goal_state;
 };
+
+ExtractMonitorReplayBuildRequest make_extract_monitor_replay_request(
+  const ExtractMonitorState& state,
+  const std::vector<std::string>& target_names,
+  const nlohmann::json& static_box_obstacles,
+  moveit::core::RobotStatePtr ik_goal_state);
 
 using ExtractMonitorEnsureExtractReplay =
   std::function<void(ExtractRolloutTiming& selected)>;

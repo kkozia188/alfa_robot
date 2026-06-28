@@ -998,3 +998,9 @@
 - 改了哪里：`ExtractMonitorSnapshotWriter` 新增 `writeError()`；node 的 `write_extract_monitor_snapshot()` 改为调用 writer 格式化错误；测试补充路径和错误内容断言。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过。
 - 留给下个 AI：后续更大的收益点仍是把 `build_final_replay_stages()` 和 `extract_monitor_transition_planner()` 的装配职责继续下沉。
+
+## 2026-06-29 运控 / Codex / final replay request 构造收口
+- 做了什么：把 monitor final replay 的 `ExtractMonitorReplayBuildRequest` 字段拼装从 `dual_arm_planner_node.cpp` 收口到 `ExtractMonitorReplayBuilder` 模块。
+- 改了哪里：新增 `make_extract_monitor_replay_request()`，由 `ExtractMonitorState`、目标关节名、静态障碍 JSON 和 IK 目标状态生成 replay request；node 不再逐字段拼 request；`test_extract_monitor_replay_builder` 增加 factory 断言。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过；L6/R8 冒烟成功，内部耗时约 2813ms。
+- 留给下个 AI：下一步可继续收口 `extract_monitor_transition_planner()` 的 adapter 构造，或把 final stage 的 snapshot/record 组合再下沉一点。

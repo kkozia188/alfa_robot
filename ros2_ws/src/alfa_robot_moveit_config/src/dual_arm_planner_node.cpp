@@ -85,7 +85,6 @@ using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::ExtractMonitorReplayBuilder;
-using alfa_robot::motion::ExtractMonitorReplayBuildRequest;
 using alfa_robot::motion::ExtractMonitorTransitionPlanner;
 using alfa_robot::motion::extract_monitor_candidate_records_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
@@ -167,6 +166,7 @@ using alfa_robot::motion::make_box_wall_obstacles_for_opening;
 using alfa_robot::motion::make_container_panels;
 using alfa_robot::motion::make_extract_monitor_joint_state;
 using alfa_robot::motion::make_extract_monitor_initial_state;
+using alfa_robot::motion::make_extract_monitor_replay_request;
 using alfa_robot::motion::make_identity_pose;
 using alfa_robot::motion::make_pick_pairs;
 using alfa_robot::motion::make_pose;
@@ -3180,16 +3180,11 @@ private:
       ensure_selected_extract_replay_records(timing);
     };
 
-    ExtractMonitorReplayBuildRequest request;
-    request.prefix = extract_monitor_state_.prefix;
-    request.left_box_id = extract_monitor_state_.left_box_id;
-    request.right_box_id = extract_monitor_state_.right_box_id;
-    request.target_names = dual_arm_with_updown_joint_names();
-    request.carried_boxes = {extract_monitor_state_.left_box, extract_monitor_state_.right_box};
-    request.static_box_obstacles = static_box_obstacles_json();
-    request.loaded_start_state = extract_monitor_state_.loaded_start_state;
-    request.ik_goal_state = std::make_shared<moveit::core::RobotState>(ik_goal_state);
-    return builder.build(selected, request);
+    return builder.build(selected, make_extract_monitor_replay_request(
+      extract_monitor_state_,
+      dual_arm_with_updown_joint_names(),
+      static_box_obstacles_json(),
+      std::make_shared<moveit::core::RobotState>(ik_goal_state)));
   }
 
   bool run_extract_monitor_final_stage(std::string* message)

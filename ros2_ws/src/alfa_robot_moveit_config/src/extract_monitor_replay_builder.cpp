@@ -1,7 +1,27 @@
 #include "alfa_robot_moveit_config/extract_monitor_replay_builder.hpp"
 
+#include <utility>
+
 namespace alfa_robot::motion
 {
+
+ExtractMonitorReplayBuildRequest make_extract_monitor_replay_request(
+  const ExtractMonitorState& state,
+  const std::vector<std::string>& target_names,
+  const nlohmann::json& static_box_obstacles,
+  moveit::core::RobotStatePtr ik_goal_state)
+{
+  ExtractMonitorReplayBuildRequest request;
+  request.prefix = state.prefix;
+  request.left_box_id = state.left_box_id;
+  request.right_box_id = state.right_box_id;
+  request.target_names = target_names;
+  request.carried_boxes = {state.left_box, state.right_box};
+  request.static_box_obstacles = static_box_obstacles;
+  request.loaded_start_state = state.loaded_start_state;
+  request.ik_goal_state = std::move(ik_goal_state);
+  return request;
+}
 
 nlohmann::json ExtractMonitorReplayBuilder::build(
   ExtractRolloutTiming& selected,

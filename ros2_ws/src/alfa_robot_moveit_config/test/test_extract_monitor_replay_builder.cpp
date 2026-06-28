@@ -38,7 +38,9 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::ExtractMonitorReplayBuildRequest;
   using alfa_robot::motion::ExtractMonitorReplayBuilder;
+  using alfa_robot::motion::ExtractMonitorState;
   using alfa_robot::motion::LoadedPoseReplayStage;
+  using alfa_robot::motion::make_extract_monitor_replay_request;
 
   const auto model = empty_model();
   auto start_state = std::make_shared<moveit::core::RobotState>(model);
@@ -132,6 +134,27 @@ int main()
   const auto no_pre_attach_stages = builder.build(no_pre_attach_timing, request);
   assert(no_pre_attach_stages.size() == 4);
   assert(no_pre_attach_stages[0].at("stage") == "extract_step");
+
+  ExtractMonitorState monitor_state;
+  monitor_state.prefix = "extract_monitor_L1_R2";
+  monitor_state.left_box_id = 1;
+  monitor_state.right_box_id = 2;
+  monitor_state.left_box = left_box;
+  monitor_state.right_box = right_box;
+  monitor_state.loaded_start_state = start_state;
+  const auto factory_request = make_extract_monitor_replay_request(
+    monitor_state,
+    {"updown", "left_v5_joint1"},
+    nlohmann::json{{"boxes", nlohmann::json::array()}},
+    ik_state);
+  assert(factory_request.prefix == "extract_monitor_L1_R2");
+  assert(factory_request.left_box_id == 1);
+  assert(factory_request.right_box_id == 2);
+  assert(factory_request.target_names.size() == 2);
+  assert(factory_request.carried_boxes.size() == 2);
+  assert(factory_request.loaded_start_state == start_state);
+  assert(factory_request.ik_goal_state == ik_state);
+  assert(factory_request.static_box_obstacles.at("boxes").is_array());
 
   return 0;
 }

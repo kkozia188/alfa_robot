@@ -23,6 +23,88 @@ nlohmann::json attached_boxes_json(const std::vector<AttachedBoxSpec>& specs)
   return boxes;
 }
 
+nlohmann::json container_panels_json(const std::vector<ContainerPanel>& panels)
+{
+  nlohmann::json out = nlohmann::json::array();
+  for (const auto& panel : panels) {
+    out.push_back({
+      {"id", panel.id},
+      {"center", {panel.center[0], panel.center[1], panel.center[2]}},
+      {"size", {panel.size[0], panel.size[1], panel.size[2]}},
+    });
+  }
+  return out;
+}
+
+nlohmann::json static_box_obstacles_json(
+  bool enabled,
+  int opening_left_box_id,
+  int opening_right_box_id,
+  double inset,
+  const std::vector<StaticBoxObstacle>& boxes)
+{
+  nlohmann::json box_json = nlohmann::json::array();
+  for (const auto& box : boxes) {
+    box_json.push_back({
+      {"id", box.id},
+      {"center", {box.center[0], box.center[1], box.center[2]}},
+      {"size", {box.size[0], box.size[1], box.size[2]}},
+    });
+  }
+  return {
+    {"enabled", enabled},
+    {"mode", "dynamic_box_wall_with_pair_opening"},
+    {"opening_left_box_id", opening_left_box_id},
+    {"opening_right_box_id", opening_right_box_id},
+    {"inset", inset},
+    {"boxes", box_json},
+  };
+}
+
+nlohmann::json container_obstacle_json(
+  bool enabled,
+  const std::string& frame,
+  double length,
+  double width,
+  double height,
+  double center_x,
+  double center_y,
+  double nominal_center_y,
+  double scene_y_shift,
+  double floor_z,
+  double wall_thickness,
+  const std::vector<ContainerPanel>& panels)
+{
+  return {
+    {"enabled", enabled},
+    {"frame", frame},
+    {"length", length},
+    {"width", width},
+    {"height", height},
+    {"center_x", center_x},
+    {"center_y", center_y},
+    {"nominal_center_y", nominal_center_y},
+    {"scene_y_shift", scene_y_shift},
+    {"floor_z", floor_z},
+    {"wall_thickness", wall_thickness},
+    {"panels", container_panels_json(panels)},
+  };
+}
+
+nlohmann::json attached_box_config_json(
+  bool enabled,
+  double depth,
+  double width,
+  double height)
+{
+  return {
+    {"enabled", enabled},
+    {"depth", depth},
+    {"width", width},
+    {"height", height},
+  };
+}
+
 nlohmann::json robot_state_json(const moveit::core::RobotState& state)
 {
   const auto& names = state.getRobotModel()->getVariableNames();

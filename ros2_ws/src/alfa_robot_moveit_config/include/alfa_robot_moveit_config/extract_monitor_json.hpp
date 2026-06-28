@@ -20,6 +20,35 @@ namespace alfa_robot::motion
 
 nlohmann::json attached_boxes_json(const std::vector<AttachedBoxSpec>& specs);
 
+nlohmann::json container_panels_json(const std::vector<ContainerPanel>& panels);
+
+nlohmann::json static_box_obstacles_json(
+  bool enabled,
+  int opening_left_box_id,
+  int opening_right_box_id,
+  double inset,
+  const std::vector<StaticBoxObstacle>& boxes);
+
+nlohmann::json container_obstacle_json(
+  bool enabled,
+  const std::string& frame,
+  double length,
+  double width,
+  double height,
+  double center_x,
+  double center_y,
+  double nominal_center_y,
+  double scene_y_shift,
+  double floor_z,
+  double wall_thickness,
+  const std::vector<ContainerPanel>& panels);
+
+nlohmann::json attached_box_config_json(
+  bool enabled,
+  double depth,
+  double width,
+  double height);
+
 nlohmann::json robot_state_json(const moveit::core::RobotState& state);
 
 nlohmann::json trajectory_json(const moveit::planning_interface::MoveGroupInterface::Plan& plan);

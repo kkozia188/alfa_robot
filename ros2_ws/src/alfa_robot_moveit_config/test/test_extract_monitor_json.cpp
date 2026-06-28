@@ -36,8 +36,13 @@ moveit::planning_interface::MoveGroupInterface::Plan one_point_plan()
 int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
+  using alfa_robot::motion::ContainerPanel;
   using alfa_robot::motion::LoadedPoseReplayStage;
+  using alfa_robot::motion::StaticBoxObstacle;
   using alfa_robot::motion::attached_boxes_json;
+  using alfa_robot::motion::attached_box_config_json;
+  using alfa_robot::motion::container_obstacle_json;
+  using alfa_robot::motion::container_panels_json;
   using alfa_robot::motion::extract_monitor_candidate_records_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
   using alfa_robot::motion::extract_monitor_final_snapshot;
@@ -53,6 +58,7 @@ int main()
   using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::extract_monitor_timing_records_json;
   using alfa_robot::motion::failure_counts_json;
+  using alfa_robot::motion::static_box_obstacles_json;
 
   AttachedBoxSpec box;
   box.id = "carried_left_box_6";
@@ -67,6 +73,42 @@ int main()
   assert(boxes[0].at("link_name") == "left_v5_tool0");
   assert(boxes[0].at("center_in_link").size() == 3);
   assert(boxes[0].at("size").size() == 3);
+
+  ContainerPanel panel;
+  panel.id = "container_ceiling";
+  panel.center = {1.0, 2.0, 3.0};
+  panel.size = {4.0, 5.0, 6.0};
+  const auto panels = container_panels_json({panel});
+  assert(panels.size() == 1);
+  assert(panels[0].at("id") == "container_ceiling");
+  assert(panels[0].at("center")[2] == 3.0);
+  assert(panels[0].at("size")[0] == 4.0);
+
+  const auto container = container_obstacle_json(
+    true, "world", 8.0, 2.2, 2.4, 0.9, -0.4, 0.0, -0.4, 0.0, 0.03, {panel});
+  assert(container.at("enabled") == true);
+  assert(container.at("frame") == "world");
+  assert(container.at("center_y") == -0.4);
+  assert(container.at("nominal_center_y") == 0.0);
+  assert(container.at("panels").size() == 1);
+
+  StaticBoxObstacle obstacle;
+  obstacle.id = "box_wall_left";
+  obstacle.center = {0.9, 0.4, 0.6};
+  obstacle.size = {0.3, 0.4, 0.8};
+  const auto static_boxes = static_box_obstacles_json(true, 6, 8, 0.002, {obstacle});
+  assert(static_boxes.at("enabled") == true);
+  assert(static_boxes.at("mode") == "dynamic_box_wall_with_pair_opening");
+  assert(static_boxes.at("opening_left_box_id") == 6);
+  assert(static_boxes.at("opening_right_box_id") == 8);
+  assert(static_boxes.at("inset") == 0.002);
+  assert(static_boxes.at("boxes").size() == 1);
+
+  const auto attached_config = attached_box_config_json(true, 0.3, 0.4, 0.5);
+  assert(attached_config.at("enabled") == true);
+  assert(attached_config.at("depth") == 0.3);
+  assert(attached_config.at("width") == 0.4);
+  assert(attached_config.at("height") == 0.5);
 
   const auto failures = failure_counts_json({{"left_kdl_no_solution", 2}, {"unknown", 1}});
   assert(failures.is_object());

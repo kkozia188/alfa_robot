@@ -2688,72 +2688,43 @@ private:
 
   nlohmann::json container_obstacle_json() const
   {
-    nlohmann::json panels = nlohmann::json::array();
-    for (const auto& panel : container_panels()) {
-      panels.push_back({
-        {"id", panel.id},
-        {"center", {panel.center[0], panel.center[1], panel.center[2]}},
-        {"size", {panel.size[0], panel.size[1], panel.size[2]}},
-      });
-    }
-    return {
-      {"enabled", enable_container_obstacle_},
-      {"frame", container_frame_},
-      {"length", container_length_},
-      {"width", container_width_},
-      {"height", container_height_},
-      {"center_x", container_center_x_},
-      {"center_y", container_center_y_ + scene_y_shift_},
-      {"nominal_center_y", container_center_y_},
-      {"scene_y_shift", scene_y_shift_},
-      {"floor_z", container_floor_z_},
-      {"wall_thickness", container_wall_thickness_},
-      {"panels", panels},
-    };
+    return alfa_robot::motion::container_obstacle_json(
+      enable_container_obstacle_,
+      container_frame_,
+      container_length_,
+      container_width_,
+      container_height_,
+      container_center_x_,
+      container_center_y_ + scene_y_shift_,
+      container_center_y_,
+      scene_y_shift_,
+      container_floor_z_,
+      container_wall_thickness_,
+      container_panels());
   }
 
   nlohmann::json attached_box_config_json() const
   {
-    return {
-      {"enabled", enable_attached_box_collision_},
-      {"depth", carried_box_depth_},
-      {"width", carried_box_width_},
-      {"height", carried_box_height_},
-    };
+    return alfa_robot::motion::attached_box_config_json(
+      enable_attached_box_collision_,
+      carried_box_depth_,
+      carried_box_width_,
+      carried_box_height_);
   }
 
   nlohmann::json static_box_obstacles_json() const
   {
-    nlohmann::json boxes = nlohmann::json::array();
-    for (const auto& box : static_box_obstacles()) {
-      boxes.push_back({
-        {"id", box.id},
-        {"center", {box.center[0], box.center[1], box.center[2]}},
-        {"size", {box.size[0], box.size[1], box.size[2]}},
-      });
-    }
-    return {
-      {"enabled", enable_static_box_obstacles_},
-      {"mode", "dynamic_box_wall_with_pair_opening"},
-      {"opening_left_box_id", scene_adapter_ ? scene_adapter_->activeStaticLeftBoxId() : 0},
-      {"opening_right_box_id", scene_adapter_ ? scene_adapter_->activeStaticRightBoxId() : 0},
-      {"inset", static_box_obstacle_inset_},
-      {"boxes", boxes},
-    };
+    return alfa_robot::motion::static_box_obstacles_json(
+      enable_static_box_obstacles_,
+      scene_adapter_ ? scene_adapter_->activeStaticLeftBoxId() : 0,
+      scene_adapter_ ? scene_adapter_->activeStaticRightBoxId() : 0,
+      static_box_obstacle_inset_,
+      static_box_obstacles());
   }
 
   nlohmann::json active_attached_boxes_json() const
   {
-    nlohmann::json boxes = nlohmann::json::array();
-    for (const auto& box : active_attached_boxes()) {
-      boxes.push_back({
-        {"id", box.id},
-        {"link_name", box.link_name},
-        {"center_in_link", {box.center_in_link[0], box.center_in_link[1], box.center_in_link[2]}},
-        {"size", {box.size[0], box.size[1], box.size[2]}},
-      });
-    }
-    return boxes;
+    return attached_boxes_json(active_attached_boxes());
   }
 
   void record_monitor_extract_replay_step(

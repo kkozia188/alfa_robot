@@ -2828,6 +2828,34 @@ private:
       extra);
   }
 
+  void record_monitor_extract_replay_step(
+    size_t step,
+    size_t candidate_order,
+    const moveit::core::RobotState& state,
+    const nlohmann::json& extra,
+    std::vector<nlohmann::json>* rollout_records) const
+  {
+    if (!rollout_records) {
+      return;
+    }
+    const auto names = arm_joint_target_names();
+    const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
+
+    nlohmann::json enriched = extra;
+    enriched["stage_kind"] = "monitor_selected_extract_replay";
+    enriched["candidate_order"] = candidate_order;
+    enriched["left_box_id"] = extract_monitor_state_.left_box_id;
+    enriched["right_box_id"] = extract_monitor_state_.right_box_id;
+    rollout_records->push_back(monitor_stage_json(
+      extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
+      plan,
+      state,
+      state,
+      names,
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      enriched));
+  }
+
   nlohmann::json monitor_candidate_json(
     const ik_benchmark::UpdownAwareIkCandidate& candidate,
     size_t display_index,
@@ -3105,22 +3133,7 @@ private:
         const auto state = state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate);
         std::vector<nlohmann::json> rollout_records;
         auto record_step = [&](size_t step, const moveit::core::RobotState& step_state, const nlohmann::json& extra) {
-          const auto names = arm_joint_target_names();
-          const auto plan = single_state_plan(step_state, names, 0.1 * static_cast<double>(step));
-
-          nlohmann::json enriched = extra;
-          enriched["stage_kind"] = "monitor_selected_extract_replay";
-          enriched["candidate_order"] = index;
-          enriched["left_box_id"] = extract_monitor_state_.left_box_id;
-          enriched["right_box_id"] = extract_monitor_state_.right_box_id;
-          rollout_records.push_back(monitor_stage_json(
-            extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
-            plan,
-            step_state,
-            step_state,
-            names,
-            {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-            enriched));
+          record_monitor_extract_replay_step(step, index, step_state, extra, &rollout_records);
         };
         auto timing = rollout_dual_extract_from_state(
           state,
@@ -3274,22 +3287,7 @@ private:
 
     std::vector<nlohmann::json> rollout_records;
     auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
-      const auto names = arm_joint_target_names();
-      const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
-
-      nlohmann::json enriched = extra;
-      enriched["stage_kind"] = "monitor_selected_extract_replay";
-      enriched["candidate_order"] = selected.candidate_order;
-      enriched["left_box_id"] = extract_monitor_state_.left_box_id;
-      enriched["right_box_id"] = extract_monitor_state_.right_box_id;
-      rollout_records.push_back(monitor_stage_json(
-        extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
-        plan,
-        state,
-        state,
-        names,
-        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-        enriched));
+      record_monitor_extract_replay_step(step, selected.candidate_order, state, extra, &rollout_records);
     };
     auto replay_timing = rollout_dual_extract_from_state(
       state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate),

@@ -67,6 +67,7 @@ target_link_libraries(alfa_robot_motion_core
 add_library(alfa_robot_motion_scene_adapter
   src/box_stack_flow_orchestrator.cpp
   src/execution_trajectory_adapter.cpp
+  src/extract_monitor_snapshot_writer.cpp
   src/extract_demo_orchestrator.cpp
   src/extract_planning_pipeline.cpp
   src/loaded_pose_planning.cpp
@@ -200,6 +201,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_execution_trajectory_adapter alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_execution_trajectory_adapter control_msgs trajectory_msgs)
   add_test(NAME test_execution_trajectory_adapter COMMAND test_execution_trajectory_adapter)
+
+  add_executable(test_extract_monitor_snapshot_writer test/test_extract_monitor_snapshot_writer.cpp)
+  target_link_libraries(test_extract_monitor_snapshot_writer alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_extract_monitor_snapshot_writer nlohmann_json)
+  add_test(NAME test_extract_monitor_snapshot_writer COMMAND test_extract_monitor_snapshot_writer)
 endif()
 
 ament_package()

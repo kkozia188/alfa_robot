@@ -716,3 +716,9 @@
 - 改了哪里：分支关系调整；当前 feature 包含 `robot_motion_scene_service` 场景包独立、`ExecutionTrajectoryAdapter` 执行轨迹适配层、`planning_diagnostics` 规划失败诊断模块三次重构提交。
 - 验证结果：`v5_dev` 指向 `9c1e72d`，与 `origin/v5_dev` 一致；当前工作分支为 `feature/motion-flow-readability-refactor-20260628`，工作树干净后追加本日志。
 - 留给下个 AI：后续所有“流程可读性/模块化”工作必须继续在该 feature 分支上小步提交，不要直接提交到 `v5_dev`。
+
+## 2026-06-28 运控 / Codex / extract monitor 快照写入拆分
+- 做了什么：从 `DualArmPlannerNode` 中拆出 `ExtractMonitorSnapshotWriter`，集中管理 extract monitor 阶段快照 JSON 的目录创建、写入和读取。
+- 改了哪里：新增 `extract_monitor_snapshot_writer.*` 和单元测试；主节点只保留 `write_extract_monitor_snapshot()` 这一层日志包装，不再直接操作文件系统。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，现有 2 个测试均通过。
+- 留给下个 AI：下一步若继续拆 extract monitor，优先抽出 snapshot JSON 构造/阶段状态机；文件写入已集中，不要再在节点里新增直接 `ofstream` 写快照。

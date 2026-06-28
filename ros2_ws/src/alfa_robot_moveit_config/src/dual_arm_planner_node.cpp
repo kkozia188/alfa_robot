@@ -12,6 +12,7 @@
 #include "alfa_robot_moveit_config/box_stack_flow_orchestrator.hpp"
 #include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
 #include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
 #include "alfa_robot_moveit_config/execution_trajectory_adapter.hpp"
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
@@ -71,6 +72,7 @@ using alfa_robot::motion::ExtractBenchmarkRunnerCallbacks;
 using alfa_robot::motion::ExecutionTrajectoryAdapter;
 using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
+using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -240,6 +242,7 @@ public:
     extract_monitor_snapshot_path_ = get_or_declare_parameter<std::string>(
       "extract_monitor_snapshot_path",
       "/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_stage_monitor/latest_snapshot.json");
+    extract_monitor_snapshot_writer_.setPath(extract_monitor_snapshot_path_);
 
     ik_config_.fixed_group = get_or_declare_parameter<std::string>("ik_fixed_group", "dual_v5_arm");
     ik_config_.free_group = get_or_declare_parameter<std::string>("ik_free_group", "dual_v5_arm_with_base");
@@ -2957,24 +2960,13 @@ private:
 
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const
   {
-    try {
-      const std::filesystem::path path(extract_monitor_snapshot_path_);
-      if (path.has_parent_path()) {
-        std::filesystem::create_directories(path.parent_path());
-      }
-      std::ofstream out(path);
-      if (!out) {
-        RCLCPP_ERROR(get_logger(), "Failed to open extract monitor snapshot: %s",
-                     extract_monitor_snapshot_path_.c_str());
-        return false;
-      }
-      out << snapshot.dump(2) << '\n';
+    std::string error;
+    if (extract_monitor_snapshot_writer_.write(snapshot, &error)) {
       return true;
-    } catch (const std::exception& e) {
-      RCLCPP_ERROR(get_logger(), "Failed to write extract monitor snapshot %s: %s",
-                   extract_monitor_snapshot_path_.c_str(), e.what());
-      return false;
     }
+    RCLCPP_ERROR(get_logger(), "Failed to write extract monitor snapshot %s: %s",
+                 extract_monitor_snapshot_path_.c_str(), error.c_str());
+    return false;
   }
 
   std::vector<ik_benchmark::UpdownAwareIkCandidate> selected_monitor_ik_candidates(
@@ -3134,7 +3126,7 @@ private:
 
     nlohmann::json snapshot;
     try {
-      snapshot = nlohmann::json::parse(std::ifstream(extract_monitor_snapshot_path_));
+      snapshot = extract_monitor_snapshot_writer_.readOrEmpty();
     } catch (const std::exception&) {
       snapshot = nlohmann::json::object();
     }
@@ -3958,6 +3950,7 @@ private:
   std::string record_jsonl_path_;
   bool record_trajectories_ = true;
   std::string extract_monitor_snapshot_path_;
+  ExtractMonitorSnapshotWriter extract_monitor_snapshot_writer_;
   int max_rounds_ = 10;
   int planning_attempts_ = 8;
   std::vector<double> left_pregrasp_arm_;

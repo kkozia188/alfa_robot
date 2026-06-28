@@ -788,3 +788,9 @@
 - 改了哪里：新增 `include/alfa_robot_moveit_config/extract_monitor_state.hpp`；`dual_arm_planner_node.cpp` 改为 include 并使用该类型，删除节点底部内嵌 enum/struct。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过；L6/R8 `--once --no-rerun` 重跑成功，内部耗时 2999.16ms，快照 `replay_stages=19`。首次回归为 4306.51ms，重跑回到约 3s，判断为 IK/RRT 随机波动而非本次类型搬迁导致。
 - 留给下个 AI：下一步可以把 `run_extract_monitor_next/full/ik/extract/loaded/final` 周围的状态机接口抽成独立 Module；当前已先把状态数据类型放到可引用的 seam。
+
+## 2026-06-28 运控 / Codex / monitor 阶段调度 seam 拆分
+- 做了什么：把 extract monitor 的 phase→stage 映射、next/full 调度顺序、阶段失败中文标签、full 阶段耗时汇总抽到 `extract_monitor_state` 模块中；节点只提供 IK/抽离/负重/最终四个阶段 callback。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 增加 `ExtractMonitorStage`、`ExtractMonitorStageCallbacks`、`run_extract_monitor_stage()`、`run_extract_monitor_full_sequence()` 等；`dual_arm_planner_node.cpp` 的 `run_extract_monitor_next/full_selected` 改为调用调度 seam；新增 `test_extract_monitor_state.cpp` 覆盖 phase 映射、Done 重跑语义、full 顺序和失败消息。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，4 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 3075.67ms，快照 phase=`full_selected`，records=1，replay_stages=17。
+- 留给下个 AI：monitor 阶段调度已经有独立 seam；下一步可把阶段实现本身逐个移入一个 `ExtractMonitorRunner` 类，节点保留 ROS service 与依赖装配。

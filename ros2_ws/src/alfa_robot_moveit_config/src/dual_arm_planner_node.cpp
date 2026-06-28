@@ -78,6 +78,7 @@ using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorPhase;
 using alfa_robot::motion::ExtractMonitorState;
+using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
@@ -85,6 +86,11 @@ using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
+using alfa_robot::motion::extract_monitor_next_phase_after;
+using alfa_robot::motion::extract_monitor_phase_before_running;
+using alfa_robot::motion::extract_monitor_stage_for_phase;
+using alfa_robot::motion::run_extract_monitor_full_sequence;
+using alfa_robot::motion::run_extract_monitor_stage;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -2949,6 +2955,16 @@ private:
       box.x + top_suction_x_offset_, box.y, box.z + top_suction_z_offset_ - world_to_base_z_, top_suction_orientation());
   }
 
+  ExtractMonitorStageCallbacks extract_monitor_stage_callbacks()
+  {
+    ExtractMonitorStageCallbacks callbacks;
+    callbacks.ik = [this](std::string* message) { return run_extract_monitor_ik_stage(message); };
+    callbacks.extract = [this](std::string* message) { return run_extract_monitor_extract_stage(message); };
+    callbacks.loaded = [this](std::string* message) { return run_extract_monitor_loaded_stage(message); };
+    callbacks.final = [this](std::string* message) { return run_extract_monitor_final_stage(message); };
+    return callbacks;
+  }
+
   bool run_extract_monitor_next(std::string* message)
   {
     std::lock_guard<std::mutex> lock(extract_monitor_mutex_);
@@ -2956,20 +2972,19 @@ private:
       return fail("extract monitor: output message is null");
     }
 
-    switch (extract_monitor_phase_) {
-      case ExtractMonitorPhase::ReadyForIk:
-        return run_extract_monitor_ik_stage(message);
-      case ExtractMonitorPhase::ReadyForExtract:
-        return run_extract_monitor_extract_stage(message);
-      case ExtractMonitorPhase::ReadyForLoaded:
-        return run_extract_monitor_loaded_stage(message);
-      case ExtractMonitorPhase::ReadyForFinal:
-        return run_extract_monitor_final_stage(message);
-      case ExtractMonitorPhase::Done:
-        extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
-        return run_extract_monitor_ik_stage(message);
+    const auto stage = extract_monitor_stage_for_phase(extract_monitor_phase_);
+    extract_monitor_phase_ = extract_monitor_phase_before_running(extract_monitor_phase_);
+    double elapsed_ms = 0.0;
+    const bool ok = run_extract_monitor_stage(
+      stage,
+      extract_monitor_stage_callbacks(),
+      [this] { return extract_monitor_last_stage_ms_; },
+      &elapsed_ms,
+      message);
+    if (ok) {
+      extract_monitor_phase_ = extract_monitor_next_phase_after(stage);
     }
-    return fail("extract monitor: unknown phase");
+    return ok;
   }
 
   bool run_extract_monitor_full_selected(std::string* message)
@@ -2979,39 +2994,14 @@ private:
       return fail("extract monitor full: output message is null");
     }
 
-    const auto total_start = std::chrono::steady_clock::now();
     extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
-
-    std::string ik_message;
-    if (!run_extract_monitor_ik_stage(&ik_message)) {
-      *message = "完整流程失败在IK阶段: " + ik_message;
+    const auto result = run_extract_monitor_full_sequence(
+      extract_monitor_stage_callbacks(),
+      [this] { return extract_monitor_last_stage_ms_; });
+    if (!result.success) {
+      *message = result.message;
       return false;
     }
-    const double ik_elapsed_ms = extract_monitor_last_stage_ms_;
-
-    std::string extract_message;
-    if (!run_extract_monitor_extract_stage(&extract_message)) {
-      *message = "完整流程失败在抽离阶段: " + extract_message;
-      return false;
-    }
-    const double extract_elapsed_ms = extract_monitor_last_stage_ms_;
-
-    std::string loaded_message;
-    if (!run_extract_monitor_loaded_stage(&loaded_message)) {
-      *message = "完整流程失败在负重规划阶段: " + loaded_message;
-      return false;
-    }
-    const double loaded_elapsed_ms = extract_monitor_last_stage_ms_;
-
-    std::string final_message;
-    if (!run_extract_monitor_final_stage(&final_message)) {
-      *message = "完整流程失败在最终选择阶段: " + final_message;
-      return false;
-    }
-    const double final_elapsed_ms = extract_monitor_last_stage_ms_;
-
-    const double total_elapsed_ms = std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - total_start).count();
 
     nlohmann::json snapshot;
     try {
@@ -3024,21 +3014,17 @@ private:
       snapshot["phase_label"] = "完整流程最终采用方案";
       snapshot["box_front_x"] = box_front_x_;
       snapshot["scene_y_shift"] = scene_y_shift_;
-      snapshot["elapsed_ms"] = total_elapsed_ms;
-      snapshot["ik_elapsed_ms"] = ik_elapsed_ms;
-      snapshot["extract_elapsed_ms"] = extract_elapsed_ms;
-      snapshot["loaded_elapsed_ms"] = loaded_elapsed_ms;
-      snapshot["final_elapsed_ms"] = final_elapsed_ms;
+      snapshot["elapsed_ms"] = result.total_elapsed_ms;
+      snapshot["ik_elapsed_ms"] = result.stage_elapsed_ms[0];
+      snapshot["extract_elapsed_ms"] = result.stage_elapsed_ms[1];
+      snapshot["loaded_elapsed_ms"] = result.stage_elapsed_ms[2];
+      snapshot["final_elapsed_ms"] = result.stage_elapsed_ms[3];
       write_extract_monitor_snapshot(snapshot);
     }
 
     extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
     std::ostringstream out;
-    out << "完整流程完成: total=" << total_elapsed_ms << "ms"
-        << " ik=" << ik_elapsed_ms << "ms"
-        << " extract=" << extract_elapsed_ms << "ms"
-        << " loaded=" << loaded_elapsed_ms << "ms"
-        << " final=" << final_elapsed_ms << "ms"
+    out << result.message
         << " snapshot=" << extract_monitor_snapshot_path_;
     *message = out.str();
     return true;

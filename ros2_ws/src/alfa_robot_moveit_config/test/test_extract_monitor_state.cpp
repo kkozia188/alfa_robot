@@ -15,6 +15,7 @@ int main()
   using alfa_robot::motion::extract_monitor_prefix;
   using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::populate_extract_monitor_candidate_states;
+  using alfa_robot::motion::select_extract_monitor_final_timing;
   using alfa_robot::motion::summarize_extract_monitor_timings;
   using alfa_robot::motion::summarize_loaded_plan_timings;
   using alfa_robot::motion::extract_monitor_next_phase_after;
@@ -186,6 +187,35 @@ int main()
   assert(loaded_summary.success_indices[0] == 0);
   assert(loaded_summary.failure_counts.at("rrt_failed") == 1);
   assert(loaded_summary.failure_counts.at("unknown") == 1);
+
+  std::vector<alfa_robot::motion::ExtractRolloutTiming> final_timings(4);
+  final_timings[0].loaded_plan_success = true;
+  final_timings[0].final_state = fake_final_state;
+  final_timings[0].candidate_order = 0;
+  final_timings[1].loaded_plan_success = true;
+  final_timings[1].final_state = fake_final_state;
+  final_timings[1].candidate_order = 1;
+  final_timings[2].loaded_plan_success = false;
+  final_timings[2].candidate_order = 2;
+
+  auto* preferred = select_extract_monitor_final_timing(
+    final_timings,
+    [](const alfa_robot::motion::ExtractRolloutTiming& timing) {
+      return timing.candidate_order == 1;
+    });
+  assert(preferred == &final_timings[1]);
+
+  auto* fallback = select_extract_monitor_final_timing(
+    final_timings,
+    [](const alfa_robot::motion::ExtractRolloutTiming&) {
+      return false;
+    });
+  assert(fallback == &final_timings[0]);
+
+  final_timings[0].final_state.reset();
+  final_timings[1].final_state.reset();
+  auto* missing_ready_state = select_extract_monitor_final_timing(final_timings, {});
+  assert(missing_ready_state == nullptr);
 
   return 0;
 }

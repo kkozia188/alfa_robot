@@ -42,6 +42,11 @@ size_t stage_index(ExtractMonitorStage stage)
   return 0;
 }
 
+bool timing_has_loaded_plan(const ExtractRolloutTiming& timing)
+{
+  return timing.loaded_plan_success && timing.final_state;
+}
+
 }  // namespace
 
 std::string extract_monitor_prefix(int left_box_id, int right_box_id)
@@ -122,6 +127,25 @@ ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
     }
   }
   return summary;
+}
+
+ExtractRolloutTiming* select_extract_monitor_final_timing(
+  std::vector<ExtractRolloutTiming>& timings,
+  const ExtractMonitorTimingPredicate& preferred_predicate)
+{
+  if (preferred_predicate) {
+    for (auto& timing : timings) {
+      if (timing_has_loaded_plan(timing) && preferred_predicate(timing)) {
+        return &timing;
+      }
+    }
+  }
+  for (auto& timing : timings) {
+    if (timing_has_loaded_plan(timing)) {
+      return &timing;
+    }
+  }
+  return nullptr;
 }
 
 const char* extract_monitor_stage_failure_label(ExtractMonitorStage stage)

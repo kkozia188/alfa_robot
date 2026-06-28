@@ -88,6 +88,12 @@ ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
   const std::vector<ExtractRolloutTiming>& timings,
   const std::vector<size_t>& plan_indices);
 
+using ExtractMonitorTimingPredicate = std::function<bool(const ExtractRolloutTiming&)>;
+
+ExtractRolloutTiming* select_extract_monitor_final_timing(
+  std::vector<ExtractRolloutTiming>& timings,
+  const ExtractMonitorTimingPredicate& preferred_predicate);
+
 using ExtractMonitorStageRunner = std::function<bool(std::string*)>;
 
 struct ExtractMonitorStageCallbacks

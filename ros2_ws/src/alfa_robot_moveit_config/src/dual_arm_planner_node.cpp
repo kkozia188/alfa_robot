@@ -87,6 +87,7 @@ using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
+using alfa_robot::motion::select_extract_monitor_final_timing;
 using alfa_robot::motion::summarize_extract_monitor_timings;
 using alfa_robot::motion::summarize_loaded_plan_timings;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
@@ -3269,17 +3270,11 @@ private:
 
   ExtractRolloutTiming* select_extract_monitor_final_timing()
   {
-    for (auto& timing : extract_monitor_state_.timings) {
-      if (timing.loaded_plan_success && extract_monitor_pre_attach_transition_is_smooth(timing)) {
-        return &timing;
-      }
-    }
-    for (auto& timing : extract_monitor_state_.timings) {
-      if (timing.loaded_plan_success) {
-        return &timing;
-      }
-    }
-    return nullptr;
+    return alfa_robot::motion::select_extract_monitor_final_timing(
+      extract_monitor_state_.timings,
+      [this](const ExtractRolloutTiming& timing) {
+        return extract_monitor_pre_attach_transition_is_smooth(timing);
+      });
   }
 
   void ensure_selected_extract_replay_records(ExtractRolloutTiming& selected)

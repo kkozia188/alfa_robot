@@ -63,4 +63,6 @@ std::vector<PickPair> make_pick_pairs(
   bool include_top_suction,
   const std::vector<std::pair<int, int>>& front_pairs);
 
+std::vector<std::string> dual_arm_with_updown_joint_names();
+
 }  // namespace alfa_robot::motion

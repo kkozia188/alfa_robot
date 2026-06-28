@@ -956,3 +956,9 @@
 - 改了哪里：`optimized_ik_pipeline.hpp/.cpp` 新增 `ik_candidate_rejection_counts_json()` 并由 `resultJson()` 复用；`dual_arm_planner_node.cpp` 删除本地 fallback 统计函数；`test_ik_candidate_selector.cpp` 增加 legal、指定失败原因和 unknown 统计覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，8 个测试全绿。本轮为 schema/可读性收口，不改变 IK/抽离/负重算法路径。
 - 留给下个 AI：候选 rejection 统计已归 IK pipeline；monitor 和 recorder 若需要该字段，应继续调用 `ik_candidate_rejection_counts_json()`，不要在节点或 JSON 层重复实现统计。
+
+## 2026-06-29 运控 / Codex / 目标关节顺序收口
+- 做了什么：把 `updown + 双臂 12 轴` 的标准目标关节顺序从 `DualArmPlannerNode` 收口到 motion core，避免节点、monitor、recorder 各自持有关节顺序知识。
+- 改了哪里：`robot_motion_scene_service/motion_core/task_geometry` 新增 `dual_arm_with_updown_joint_names()`；`dual_arm_planner_node.cpp` 删除本地 `arm_joint_target_names()` 并统一调用 motion core；`test_scene_geometry.cpp` 增加顺序断言；`MOTION_PIPELINE_REFACTOR.md` 更新模块职责。
+- 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config` 通过，1+8 个测试全绿。本轮只迁移常量规则，不改变运行路径或耗时。
+- 留给下个 AI：关节目标顺序已归 motion core；后续新增执行器、回放、CSV 或 planner Adapter 时复用 `dual_arm_with_updown_joint_names()`，不要在节点里再手写 13 个名字。

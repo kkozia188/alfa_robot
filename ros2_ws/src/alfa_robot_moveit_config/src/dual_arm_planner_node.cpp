@@ -99,6 +99,7 @@ using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
 using alfa_robot::motion::extract_monitor_timing_records_json;
 using alfa_robot::motion::ik_candidate_rejection_counts_json;
+using alfa_robot::motion::dual_arm_with_updown_joint_names;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
 using alfa_robot::motion::robot_state_from_ik_candidate;
@@ -945,7 +946,7 @@ private:
     config.move_group = loaded_move_group_.get();
     config.selector = loaded_pose_selector_.get();
     config.scene_adapter = scene_adapter_.get();
-    config.target_joint_names = arm_joint_target_names();
+    config.target_joint_names = dual_arm_with_updown_joint_names();
     config.attached_box_collision_padding = attached_box_collision_padding_;
     config.lateral_shift_enabled = extract_loaded_lateral_shift_enabled_;
     config.lateral_shift_distance = extract_loaded_lateral_shift_distance_;
@@ -1629,7 +1630,7 @@ private:
   {
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto& trajectory = plan.trajectory_.joint_trajectory;
-    trajectory.joint_names = arm_joint_target_names();
+    trajectory.joint_names = dual_arm_with_updown_joint_names();
 
     double max_delta = 0.0;
     for (const auto& name : trajectory.joint_names) {
@@ -2121,17 +2122,6 @@ private:
     Eigen::Quaterniond q(tf.linear());
     q.normalize();
     return make_pose(tf.translation().x(), tf.translation().y(), tf.translation().z(), q);
-  }
-
-  std::vector<std::string> arm_joint_target_names() const
-  {
-    return {
-      "updown",
-      "left_v5_joint1", "left_v5_joint2", "left_v5_joint3",
-      "left_v5_joint4", "left_v5_joint5", "left_v5_joint6",
-      "right_v5_joint1", "right_v5_joint2", "right_v5_joint3",
-      "right_v5_joint4", "right_v5_joint5", "right_v5_joint6",
-    };
   }
 
   ExtractRolloutTiming rollout_left_extract_from_state(
@@ -2776,7 +2766,7 @@ private:
     if (!rollout_records) {
       return;
     }
-    const auto names = arm_joint_target_names();
+    const auto names = dual_arm_with_updown_joint_names();
     const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
     rollout_records->push_back(extract_monitor_selected_extract_replay_stage(
       extract_monitor_state_.prefix,
@@ -3047,7 +3037,7 @@ private:
       extract_monitor_state_.prefix,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
+      dual_arm_with_updown_joint_names(),
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
       static_box_obstacles_json(),
       [](const ExtractRolloutTiming& timing) { return timing.final_state; });
@@ -3107,7 +3097,7 @@ private:
       extract_monitor_state_.prefix,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
+      dual_arm_with_updown_joint_names(),
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
       static_box_obstacles_json(),
       [this](const ExtractRolloutTiming& timing) -> moveit::core::RobotStatePtr {
@@ -3244,7 +3234,7 @@ private:
     request.prefix = extract_monitor_state_.prefix;
     request.left_box_id = extract_monitor_state_.left_box_id;
     request.right_box_id = extract_monitor_state_.right_box_id;
-    request.target_names = arm_joint_target_names();
+    request.target_names = dual_arm_with_updown_joint_names();
     request.carried_boxes = {extract_monitor_state_.left_box, extract_monitor_state_.right_box};
     request.static_box_obstacles = static_box_obstacles_json();
     request.loaded_start_state = extract_monitor_state_.loaded_start_state;
@@ -3282,7 +3272,7 @@ private:
       extract_monitor_state_.prefix,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
+      dual_arm_with_updown_joint_names(),
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
       static_box_obstacles_json(),
       [&goal_state](const ExtractRolloutTiming&) {

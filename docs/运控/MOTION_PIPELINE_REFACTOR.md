@@ -23,7 +23,7 @@
 
 | 模块 | 责任 | 当前文件 |
 | --- | --- | --- |
-| `motion_core/task_geometry` | 箱子编号、箱垛坐标、抓取 pair、基础碰撞几何数据结构 | `include/alfa_robot_moveit_config/motion_core/task_geometry.hpp` / `src/motion_core/task_geometry.cpp` |
+| `motion_core/task_geometry` | 箱子编号、箱垛坐标、抓取 pair、基础碰撞几何数据结构，以及 `updown + 双臂 12 轴` 的标准目标关节顺序 | `include/alfa_robot_moveit_config/motion_core/task_geometry.hpp` / `src/motion_core/task_geometry.cpp` |
 | `motion_core/pose_math` | 角度解析、抓取姿态、Pose/Eigen 转换、误差计算、JSON 辅助 | `include/alfa_robot_moveit_config/motion_core/pose_math.hpp` / `src/motion_core/pose_math.cpp` |
 | `motion_core/scene_geometry` | 集装箱板、动态箱墙、末端附着箱、AABB 与邻箱脱离判断 | `include/alfa_robot_moveit_config/motion_core/scene_geometry.hpp` / `src/motion_core/scene_geometry.cpp` |
 | `MotionSceneAdapter` | 将场景几何转换为 MoveIt collision/attached objects，并管理 ADD/REMOVE 与当前场景状态 | `include/alfa_robot_moveit_config/motion_scene_adapter.hpp` / `src/motion_scene_adapter.cpp` |

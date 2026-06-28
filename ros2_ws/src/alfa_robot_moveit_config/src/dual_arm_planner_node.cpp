@@ -12,6 +12,7 @@
 #include "alfa_robot_moveit_config/box_stack_flow_orchestrator.hpp"
 #include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
 #include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
+#include "alfa_robot_moveit_config/execution_trajectory_adapter.hpp"
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
 #include "alfa_robot_moveit_config/motion_flow_recorder.hpp"
@@ -66,6 +67,9 @@ using alfa_robot::motion::AttachedBoxSpec;
 using alfa_robot::motion::ArmExtractPath;
 using alfa_robot::motion::ExtractBenchmarkRunner;
 using alfa_robot::motion::ExtractBenchmarkRunnerCallbacks;
+using alfa_robot::motion::ExecutionTrajectoryAdapter;
+using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
+using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -2655,157 +2659,37 @@ private:
     return false;
   }
 
+  ExecutionTrajectoryAdapterConfig execution_trajectory_adapter_config() const
+  {
+    ExecutionTrajectoryAdapterConfig config;
+    config.include_turn = execution_include_turn_;
+    config.allow_hold_missing_target_joints = execution_allow_hold_missing_target_joints_;
+    config.reject_unmapped_planned_joints = execution_reject_unmapped_planned_joints_;
+    return config;
+  }
+
   bool build_alfa_execution_goal(
     const trajectory_msgs::msg::JointTrajectory& source,
     const moveit::core::RobotState& planning_start_state,
     FollowJointTrajectory::Goal* goal,
     std::string* reason) const
   {
-    if (!goal) return false;
-    if (source.points.empty()) {
-      if (reason) *reason = "source trajectory is empty";
-      return false;
-    }
-
-    const auto target_names = alfa_execution_joint_names();
-    std::vector<int> source_indices;
-    source_indices.reserve(target_names.size());
-    for (const auto& target_name : target_names) {
-      const auto moveit_name = alfa_to_moveit_joint_name(target_name);
-      const auto it = std::find(source.joint_names.begin(), source.joint_names.end(), moveit_name);
-      if (it == source.joint_names.end()) {
-        if (!execution_allow_hold_missing_target_joints_) {
-          if (reason) *reason = "missing planned joint " + moveit_name + " for target " + target_name;
-          return false;
-        }
-        source_indices.push_back(-1);
-      } else {
-        source_indices.push_back(static_cast<int>(std::distance(source.joint_names.begin(), it)));
-      }
-    }
-
-    if (execution_reject_unmapped_planned_joints_) {
-      const auto mapped_target_names = alfa_execution_joint_names();
-      for (const auto& planned_name : source.joint_names) {
-        if (std::find(mapped_target_names.begin(), mapped_target_names.end(),
-                      moveit_to_alfa_joint_name(planned_name)) != mapped_target_names.end()) {
-          continue;
-        }
-        if (planned_joint_changes(source, planned_name)) {
-          if (reason) {
-            *reason = "planned joint " + planned_name +
-              " changes but is not mapped to alfa execution target joints";
-          }
-          return false;
-        }
-      }
-    }
-
-    goal->trajectory = trajectory_msgs::msg::JointTrajectory();
-    goal->trajectory.header = source.header;
-    goal->trajectory.joint_names = target_names;
-    goal->trajectory.points.reserve(source.points.size());
-
-    for (const auto& source_point : source.points) {
-      trajectory_msgs::msg::JointTrajectoryPoint point;
-      point.time_from_start = source_point.time_from_start;
-      point.positions.reserve(target_names.size());
-      if (!source_point.velocities.empty()) point.velocities.reserve(target_names.size());
-      if (!source_point.accelerations.empty()) point.accelerations.reserve(target_names.size());
-      if (!source_point.effort.empty()) point.effort.reserve(target_names.size());
-
-      for (size_t i = 0; i < target_names.size(); ++i) {
-        const int source_index = source_indices[i];
-        if (source_index >= 0) {
-          const auto index = static_cast<size_t>(source_index);
-          point.positions.push_back(index < source_point.positions.size() ? source_point.positions[index] : 0.0);
-          if (!source_point.velocities.empty()) {
-            point.velocities.push_back(index < source_point.velocities.size() ? source_point.velocities[index] : 0.0);
-          }
-          if (!source_point.accelerations.empty()) {
-            point.accelerations.push_back(index < source_point.accelerations.size() ? source_point.accelerations[index] : 0.0);
-          }
-          if (!source_point.effort.empty()) {
-            point.effort.push_back(index < source_point.effort.size() ? source_point.effort[index] : 0.0);
-          }
-        } else {
-          const auto moveit_name = alfa_to_moveit_joint_name(target_names[i]);
-          const double hold_position =
-            is_robot_variable(moveit_name) ? planning_start_state.getVariablePosition(moveit_name) : 0.0;
-          point.positions.push_back(hold_position);
-          if (!source_point.velocities.empty()) point.velocities.push_back(0.0);
-          if (!source_point.accelerations.empty()) point.accelerations.push_back(0.0);
-          if (!source_point.effort.empty()) point.effort.push_back(0.0);
-        }
-      }
-      goal->trajectory.points.push_back(std::move(point));
-    }
-    return true;
-  }
-
-  bool planned_joint_changes(
-    const trajectory_msgs::msg::JointTrajectory& source,
-    const std::string& joint_name) const
-  {
-    const auto it = std::find(source.joint_names.begin(), source.joint_names.end(), joint_name);
-    if (it == source.joint_names.end()) return false;
-    const auto index = static_cast<size_t>(std::distance(source.joint_names.begin(), it));
-    std::optional<double> first_value;
-    for (const auto& point : source.points) {
-      if (index >= point.positions.size()) continue;
-      if (!first_value) {
-        first_value = point.positions[index];
-        continue;
-      }
-      if (std::abs(point.positions[index] - *first_value) > 1e-6) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  std::vector<std::string> alfa_execution_joint_names() const
-  {
-    std::vector<std::string> names = {
-      "left_joint1",
-      "left_joint2",
-      "left_joint3",
-      "left_joint4",
-      "left_joint5",
-      "left_joint6",
-      "right_joint1",
-      "right_joint2",
-      "right_joint3",
-      "right_joint4",
-      "right_joint5",
-      "right_joint6",
+    const ExecutionTrajectoryAdapter adapter(execution_trajectory_adapter_config());
+    ExecutionTrajectoryBuildRequest request;
+    request.source = &source;
+    request.is_robot_variable = [this](const std::string& name) { return is_robot_variable(name); };
+    request.hold_position = [&planning_start_state](const std::string& name) {
+      return planning_start_state.getVariablePosition(name);
     };
-    if (execution_include_turn_) {
-      names.push_back("turn");
-    }
-    return names;
-  }
-
-  std::string alfa_to_moveit_joint_name(const std::string& name) const
-  {
-    if (name.rfind("left_joint", 0) == 0) {
-      return "left_v5_joint" + name.substr(std::string("left_joint").size());
-    }
-    if (name.rfind("right_joint", 0) == 0) {
-      return "right_v5_joint" + name.substr(std::string("right_joint").size());
-    }
-    return name;
+    return adapter.buildGoal(
+      request,
+      goal,
+      reason);
   }
 
   std::string moveit_to_alfa_joint_name(const std::string& name) const
   {
-    if (name.rfind("left_v5_joint", 0) == 0) {
-      return "left_joint" + name.substr(std::string("left_v5_joint").size());
-    }
-    if (name.rfind("right_v5_joint", 0) == 0) {
-      return "right_joint" + name.substr(std::string("right_v5_joint").size());
-    }
-    return name;
+    return ExecutionTrajectoryAdapter(execution_trajectory_adapter_config()).moveItToAlfaJointName(name);
   }
 
   bool robot_state_matches(

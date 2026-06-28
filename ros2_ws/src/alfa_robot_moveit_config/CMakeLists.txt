@@ -6,6 +6,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(control_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_ros_planning REQUIRED)
 find_package(moveit_core REQUIRED)
@@ -65,6 +66,7 @@ target_link_libraries(alfa_robot_motion_core
 
 add_library(alfa_robot_motion_scene_adapter
   src/box_stack_flow_orchestrator.cpp
+  src/execution_trajectory_adapter.cpp
   src/extract_demo_orchestrator.cpp
   src/extract_planning_pipeline.cpp
   src/loaded_pose_planning.cpp
@@ -102,6 +104,7 @@ ament_target_dependencies(alfa_robot_motion_scene_adapter
   random_numbers
   rclcpp
   control_msgs
+  trajectory_msgs
   shape_msgs
   robot_motion_scene_service
   srdfdom
@@ -130,6 +133,7 @@ ament_target_dependencies(dual_arm_planner_node
   rclcpp
   rclcpp_action
   control_msgs
+  trajectory_msgs
   moveit_core
   moveit_ros_planning_interface
   moveit_ros_planning
@@ -182,11 +186,20 @@ ament_export_dependencies(
   random_numbers
   rclcpp
   control_msgs
+  trajectory_msgs
   shape_msgs
   robot_motion_scene_service
   srdfdom
   urdf
 )
+
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(test_execution_trajectory_adapter test/test_execution_trajectory_adapter.cpp)
+  target_link_libraries(test_execution_trajectory_adapter alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_execution_trajectory_adapter control_msgs trajectory_msgs)
+  add_test(NAME test_execution_trajectory_adapter COMMAND test_execution_trajectory_adapter)
+endif()
 
 ament_package()
 

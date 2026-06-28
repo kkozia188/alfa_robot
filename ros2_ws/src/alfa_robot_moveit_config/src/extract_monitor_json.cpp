@@ -205,4 +205,25 @@ nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_
   return failure_json;
 }
 
+nlohmann::json extract_monitor_snapshot_base(
+  const std::string& phase,
+  const std::string& phase_label,
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift)
+{
+  return {
+    {"type", "extract_monitor_snapshot"},
+    {"phase", phase},
+    {"phase_label", phase_label},
+    {"elapsed_ms", elapsed_ms},
+    {"left_box_id", left_box_id},
+    {"right_box_id", right_box_id},
+    {"box_front_x", box_front_x},
+    {"scene_y_shift", scene_y_shift}
+  };
+}
+
 }  // namespace alfa_robot::motion

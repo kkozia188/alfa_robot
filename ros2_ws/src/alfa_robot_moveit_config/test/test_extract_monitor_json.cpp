@@ -6,6 +6,7 @@ int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::attached_boxes_json;
+  using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::failure_counts_json;
 
   AttachedBoxSpec box;
@@ -26,6 +27,14 @@ int main()
   assert(failures.is_object());
   assert(failures.at("left_kdl_no_solution") == 2);
   assert(failures.at("unknown") == 1);
+
+  const auto snapshot = extract_monitor_snapshot_base(
+    "extract_successes", "抽离成功候选", 12.5, 6, 8, 0.925, -0.4);
+  assert(snapshot.at("type") == "extract_monitor_snapshot");
+  assert(snapshot.at("phase") == "extract_successes");
+  assert(snapshot.at("left_box_id") == 6);
+  assert(snapshot.at("right_box_id") == 8);
+  assert(snapshot.at("box_front_x") == 0.925);
 
   return 0;
 }

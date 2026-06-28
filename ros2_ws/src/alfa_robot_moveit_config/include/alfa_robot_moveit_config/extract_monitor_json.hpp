@@ -49,4 +49,13 @@ nlohmann::json extract_monitor_timing_json(
 
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
+nlohmann::json extract_monitor_snapshot_base(
+  const std::string& phase,
+  const std::string& phase_label,
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift);
+
 }  // namespace alfa_robot::motion

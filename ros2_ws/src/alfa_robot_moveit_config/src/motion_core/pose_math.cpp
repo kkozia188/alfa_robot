@@ -137,6 +137,26 @@ geometry_msgs::msg::Pose make_identity_pose(double x, double y, double z)
   return pose;
 }
 
+geometry_msgs::msg::Pose make_front_grasp_pose(
+  const BoxSpec& box,
+  double world_to_base_z)
+{
+  return make_pose(box.x, box.y, box.z - world_to_base_z, forward_x_orientation());
+}
+
+geometry_msgs::msg::Pose make_top_suction_pose(
+  const BoxSpec& box,
+  double world_to_base_z,
+  double x_offset,
+  double z_offset)
+{
+  return make_pose(
+    box.x + x_offset,
+    box.y,
+    box.z + z_offset - world_to_base_z,
+    top_suction_orientation());
+}
+
 Eigen::Isometry3d pose_to_eigen(const geometry_msgs::msg::Pose& pose)
 {
   Eigen::Quaterniond q(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);

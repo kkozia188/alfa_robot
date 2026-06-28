@@ -1115,8 +1115,18 @@ private:
       const BoxSpec& left_box,
       const BoxSpec& right_box,
       bool top_suction) {
-      const auto left_pose = top_suction ? top_suction_pose(left_box) : front_grasp_pose(left_box);
-      const auto right_pose = top_suction ? top_suction_pose(right_box) : front_grasp_pose(right_box);
+      const auto left_pose = top_suction ? make_top_suction_pose(
+                                             left_box,
+                                             world_to_base_z_,
+                                             top_suction_x_offset_,
+                                             top_suction_z_offset_)
+                                         : make_front_grasp_pose(left_box, world_to_base_z_);
+      const auto right_pose = top_suction ? make_top_suction_pose(
+                                              right_box,
+                                              world_to_base_z_,
+                                              top_suction_x_offset_,
+                                              top_suction_z_offset_)
+                                          : make_front_grasp_pose(right_box, world_to_base_z_);
       return plan_dual_tip_ik(stage_name, left_pose, right_pose, top_suction);
     };
     callbacks.attach_boxes = [this](int left_box_id, int right_box_id, bool top_suction) {
@@ -2813,17 +2823,6 @@ private:
       extra);
   }
 
-  geometry_msgs::msg::Pose front_grasp_pose(const BoxSpec& box) const
-  {
-    return make_pose(box.x, box.y, box.z - world_to_base_z_, forward_x_orientation());
-  }
-
-  geometry_msgs::msg::Pose top_suction_pose(const BoxSpec& box) const
-  {
-    return make_pose(
-      box.x + top_suction_x_offset_, box.y, box.z + top_suction_z_offset_ - world_to_base_z_, top_suction_orientation());
-  }
-
   ExtractMonitorStageCallbacks extract_monitor_stage_callbacks()
   {
     ExtractMonitorStageCallbacks callbacks;
@@ -2914,8 +2913,8 @@ private:
     ik_benchmark::UpdownAwareIkResult ik_result;
     if (!solve_dual_tip_ik_state(
           extract_monitor_state_.prefix + "/monitor_ik",
-          front_grasp_pose(left_it->second),
-          front_grasp_pose(right_it->second),
+          make_front_grasp_pose(left_it->second, world_to_base_z_),
+          make_front_grasp_pose(right_it->second, world_to_base_z_),
           false,
           *extract_monitor_state_.seed_state,
           &selected_state,
@@ -3288,8 +3287,8 @@ private:
     const std::string prefix = "left_extract_demo_L" + std::to_string(left_box_id) +
                                "_R" + std::to_string(right_box_id);
 
-    const auto left_pose = front_grasp_pose(left_it->second);
-    const auto right_pose = front_grasp_pose(right_it->second);
+    const auto left_pose = make_front_grasp_pose(left_it->second, world_to_base_z_);
+    const auto right_pose = make_front_grasp_pose(right_it->second, world_to_base_z_);
 
     if (extract_demo_direct_grasp_start_) {
       auto seed_state = std::make_shared<moveit::core::RobotState>(robot_model_);

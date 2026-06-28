@@ -206,6 +206,10 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_execution_trajectory_adapter control_msgs trajectory_msgs)
   add_test(NAME test_execution_trajectory_adapter COMMAND test_execution_trajectory_adapter)
 
+  add_executable(test_pose_math test/test_pose_math.cpp)
+  target_link_libraries(test_pose_math alfa_robot_motion_scene_adapter)
+  add_test(NAME test_pose_math COMMAND test_pose_math)
+
   add_executable(test_extract_monitor_snapshot_writer test/test_extract_monitor_snapshot_writer.cpp)
   target_link_libraries(test_extract_monitor_snapshot_writer alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_extract_monitor_snapshot_writer nlohmann_json)

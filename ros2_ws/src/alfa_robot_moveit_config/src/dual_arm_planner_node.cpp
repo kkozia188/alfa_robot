@@ -3503,6 +3503,22 @@ private:
     return true;
   }
 
+  nlohmann::json build_final_replay_stages(
+    ExtractRolloutTiming& selected,
+    const moveit::core::RobotState& ik_goal_state)
+  {
+    ensure_selected_extract_replay_records(selected);
+
+    nlohmann::json replay_stages = nlohmann::json::array();
+    append_pre_attach_replay_stage(selected, ik_goal_state, &replay_stages);
+    for (const auto& stage : selected.rollout_records) {
+      replay_stages.push_back(stage);
+    }
+    append_lateral_shift_replay_stages(selected, &replay_stages);
+    append_loaded_plan_replay_stage(selected, &replay_stages);
+    return replay_stages;
+  }
+
   bool run_extract_monitor_final_stage(std::string* message)
   {
     const auto stage_start = std::chrono::steady_clock::now();
@@ -3521,15 +3537,7 @@ private:
           extract_monitor_state_.legal_candidates[selected->candidate_order])
       : *selected->final_state;
 
-    ensure_selected_extract_replay_records(*selected);
-
-    nlohmann::json replay_stages = nlohmann::json::array();
-    append_pre_attach_replay_stage(*selected, ik_goal_state, &replay_stages);
-    for (const auto& stage : selected->rollout_records) {
-      replay_stages.push_back(stage);
-    }
-    append_lateral_shift_replay_stages(*selected, &replay_stages);
-    append_loaded_plan_replay_stage(*selected, &replay_stages);
+    const nlohmann::json replay_stages = build_final_replay_stages(*selected, ik_goal_state);
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();

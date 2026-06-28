@@ -914,3 +914,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_*_stage_message()` 四个 helper；`dual_arm_planner_node.cpp` 改为直接调用；`test_extract_monitor_state.cpp` 增加消息格式断言。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2773.82ms，服务返回仍包含 `完整流程完成:`。
 - 留给下个 AI：monitor 阶段输出文本已有集中 seam；后续如调整控制台/服务返回文案，优先改 `extract_monitor_state`，不要在主节点里散写。
+
+## 2026-06-29 运控 / Codex / monitor 阶段 records 生成收口与耗时复核
+- 做了什么：把 monitor IK 候选 records、抽离成功 records、负重尝试 records 的列表生成规则从 `dual_arm_planner_node.cpp` 收口到 `extract_monitor_json` Module，主节点不再手写 records 循环。
+- 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_candidate_records_json()` 与 `extract_monitor_timing_records_json()`；`dual_arm_planner_node.cpp` 改为调用 records helper；`test_extract_monitor_json.cpp` 增加候选/时序 records 覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2775.53ms，仍在重构前约 2.7–3.0s 区间。
+- 留给下个 AI：这次只移动 JSON records 组装 Implementation，不改变 IK/抽离/负重规划算法；后续如果继续拆 `dual_arm_planner_node.cpp`，优先拆 ROS/MoveIt Adapter 或 monitor 阶段编排，不要再抽浅 pass-through helper。

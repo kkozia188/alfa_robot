@@ -38,6 +38,7 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::attached_boxes_json;
+  using alfa_robot::motion::extract_monitor_candidate_records_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
   using alfa_robot::motion::extract_monitor_final_snapshot;
   using alfa_robot::motion::extract_monitor_full_selected_snapshot;
@@ -49,6 +50,7 @@ int main()
   using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
   using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
   using alfa_robot::motion::extract_monitor_snapshot_base;
+  using alfa_robot::motion::extract_monitor_timing_records_json;
   using alfa_robot::motion::failure_counts_json;
 
   AttachedBoxSpec box;
@@ -150,6 +152,26 @@ int main()
   start_state->setToDefaultValues();
   goal_state->setToDefaultValues();
 
+  ik_benchmark::UpdownAwareIkCandidate candidate;
+  candidate.h = 0.3;
+  candidate.h_index = 2;
+  candidate.seed_index = 5;
+  candidate.score = 1.25;
+  candidate.solver_path = "fixed_h_candidates";
+  candidate.target_order = "normal";
+  const auto candidate_records = extract_monitor_candidate_records_json({candidate}, {start_state, nullptr});
+  assert(candidate_records.is_array());
+  assert(candidate_records.size() == 1);
+  assert(candidate_records[0].at("display_index") == 0);
+  assert(candidate_records[0].at("h") == 0.3);
+  assert(candidate_records[0].at("h_index") == 2);
+  assert(candidate_records[0].at("seed_index") == 5);
+  assert(candidate_records[0].at("solver_path") == "fixed_h_candidates");
+  assert(candidate_records[0].at("state").at("joint_names").size() == 0);
+
+  const auto empty_candidate_records = extract_monitor_candidate_records_json({candidate}, {nullptr});
+  assert(empty_candidate_records.empty());
+
   LoadedPoseReplayStage shift_stage;
   shift_stage.stage_name = "shift_stage";
   shift_stage.plan = one_point_plan();
@@ -167,6 +189,42 @@ int main()
   timing.loaded_start_state = start_state;
   timing.loaded_goal_state = goal_state;
   timing.loaded_plan = one_point_plan();
+  std::vector<alfa_robot::motion::ExtractRolloutTiming> timing_list(2);
+  timing_list[1] = timing;
+  const auto timing_records = extract_monitor_timing_records_json(
+    timing_list,
+    {1, 99},
+    "extract_monitor_L6_R8",
+    6,
+    8,
+    {},
+    {box},
+    nlohmann::json::object(),
+    [start_state](const alfa_robot::motion::ExtractRolloutTiming&) {
+      return start_state;
+    });
+  assert(timing_records.is_array());
+  assert(timing_records.size() == 1);
+  assert(timing_records[0].at("display_index") == 0);
+  assert(timing_records[0].at("candidate_order") == 12);
+  assert(timing_records[0].at("loaded_plan_rank") == 3);
+  assert(timing_records[0].at("replay_stage_count") == 2);
+  assert(timing_records[0].at("replay_stages")[0].at("attached_boxes").size() == 1);
+
+  const auto empty_timing_records = extract_monitor_timing_records_json(
+    timing_list,
+    {1},
+    "extract_monitor_L6_R8",
+    6,
+    8,
+    {},
+    {box},
+    nlohmann::json::object(),
+    [](const alfa_robot::motion::ExtractRolloutTiming&) {
+      return moveit::core::RobotStatePtr{};
+    });
+  assert(empty_timing_records.empty());
+
   const auto loaded_stage = extract_monitor_selected_loaded_plan_replay_stage(
     "extract_monitor_L6_R8", timing, 6, 8, {}, {box}, nlohmann::json::object());
   assert(loaded_stage.is_object());

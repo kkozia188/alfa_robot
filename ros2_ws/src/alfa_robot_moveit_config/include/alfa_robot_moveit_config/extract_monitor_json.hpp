@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -38,6 +39,10 @@ nlohmann::json extract_monitor_candidate_json(
   size_t display_index,
   const moveit::core::RobotState& state);
 
+nlohmann::json extract_monitor_candidate_records_json(
+  const std::vector<ik_benchmark::UpdownAwareIkCandidate>& candidates,
+  const std::vector<moveit::core::RobotStatePtr>& candidate_states);
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,
@@ -48,6 +53,20 @@ nlohmann::json extract_monitor_timing_json(
   const std::vector<std::string>& target_names,
   const std::vector<AttachedBoxSpec>& carried_boxes,
   const nlohmann::json& static_box_obstacles);
+
+using ExtractMonitorTimingRecordState =
+  std::function<moveit::core::RobotStatePtr(const ExtractRolloutTiming& timing)>;
+
+nlohmann::json extract_monitor_timing_records_json(
+  const std::vector<ExtractRolloutTiming>& timings,
+  const std::vector<size_t>& indices,
+  const std::string& prefix,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles,
+  const ExtractMonitorTimingRecordState& record_state);
 
 nlohmann::json extract_monitor_replay_context_json(
   const ExtractRolloutTiming& timing,

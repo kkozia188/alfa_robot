@@ -4,6 +4,8 @@
 
 #include <rclcpp/duration.hpp>
 
+#include <algorithm>
+
 namespace alfa_robot::motion
 {
 
@@ -91,6 +93,21 @@ nlohmann::json extract_monitor_candidate_json(
     {"joint_delta", candidate.joint_delta},
     {"state", robot_state_json(state)}
   };
+}
+
+nlohmann::json extract_monitor_candidate_records_json(
+  const std::vector<ik_benchmark::UpdownAwareIkCandidate>& candidates,
+  const std::vector<moveit::core::RobotStatePtr>& candidate_states)
+{
+  nlohmann::json records = nlohmann::json::array();
+  const size_t count = std::min(candidates.size(), candidate_states.size());
+  for (size_t i = 0; i < count; ++i) {
+    if (!candidate_states[i]) {
+      continue;
+    }
+    records.push_back(extract_monitor_candidate_json(candidates[i], records.size(), *candidate_states[i]));
+  }
+  return records;
 }
 
 nlohmann::json extract_monitor_replay_context_json(
@@ -304,6 +321,43 @@ nlohmann::json extract_monitor_timing_json(
     {"replay_stage_count", replay_stages.size()},
     {"replay_stages", replay_stages}
   };
+}
+
+nlohmann::json extract_monitor_timing_records_json(
+  const std::vector<ExtractRolloutTiming>& timings,
+  const std::vector<size_t>& indices,
+  const std::string& prefix,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles,
+  const ExtractMonitorTimingRecordState& record_state)
+{
+  nlohmann::json records = nlohmann::json::array();
+  if (!record_state) {
+    return records;
+  }
+  for (const auto index : indices) {
+    if (index >= timings.size()) {
+      continue;
+    }
+    const auto state = record_state(timings[index]);
+    if (!state) {
+      continue;
+    }
+    records.push_back(extract_monitor_timing_json(
+      timings[index],
+      records.size(),
+      *state,
+      prefix,
+      left_box_id,
+      right_box_id,
+      target_names,
+      carried_boxes,
+      static_box_obstacles));
+  }
+  return records;
 }
 
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts)

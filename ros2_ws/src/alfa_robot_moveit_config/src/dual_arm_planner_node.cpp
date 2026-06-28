@@ -81,7 +81,7 @@ using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::ExtractMonitorTransitionPlanner;
-using alfa_robot::motion::extract_monitor_candidate_json;
+using alfa_robot::motion::extract_monitor_candidate_records_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_final_snapshot;
 using alfa_robot::motion::extract_monitor_final_stage_message;
@@ -97,7 +97,7 @@ using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
 using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
-using alfa_robot::motion::extract_monitor_timing_json;
+using alfa_robot::motion::extract_monitor_timing_records_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
 using alfa_robot::motion::select_extract_monitor_final_timing;
@@ -2866,35 +2866,6 @@ private:
       enriched));
   }
 
-  nlohmann::json monitor_candidate_json(
-    const ik_benchmark::UpdownAwareIkCandidate& candidate,
-    size_t display_index,
-    const moveit::core::RobotState& state) const
-  {
-    return extract_monitor_candidate_json(candidate, display_index, state);
-  }
-
-  nlohmann::json monitor_timing_json(
-    const ExtractRolloutTiming& timing,
-    size_t display_index,
-    const moveit::core::RobotState& state) const
-  {
-    const std::vector<AttachedBoxSpec> carried_boxes{
-      extract_monitor_state_.left_box,
-      extract_monitor_state_.right_box,
-    };
-    return extract_monitor_timing_json(
-      timing,
-      display_index,
-      state,
-      extract_monitor_state_.prefix,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
-      carried_boxes,
-      static_box_obstacles_json());
-  }
-
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const
   {
     std::string error;
@@ -3077,13 +3048,9 @@ private:
           state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate));
       });
 
-    nlohmann::json records = nlohmann::json::array();
-    for (size_t i = 0; i < extract_monitor_state_.legal_candidates.size(); ++i) {
-      records.push_back(monitor_candidate_json(
-        extract_monitor_state_.legal_candidates[i],
-        i,
-        *extract_monitor_state_.candidate_states[i]));
-    }
+    const nlohmann::json records = extract_monitor_candidate_records_json(
+      extract_monitor_state_.legal_candidates,
+      extract_monitor_state_.candidate_states);
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
@@ -3145,12 +3112,17 @@ private:
         return timing;
       });
 
-    nlohmann::json records = nlohmann::json::array();
     const auto summary = summarize_extract_monitor_timings(extract_monitor_state_.timings);
-    for (const auto index : summary.success_indices) {
-      const auto& timing = extract_monitor_state_.timings[index];
-      records.push_back(monitor_timing_json(timing, records.size(), *timing.final_state));
-    }
+    const nlohmann::json records = extract_monitor_timing_records_json(
+      extract_monitor_state_.timings,
+      summary.success_indices,
+      extract_monitor_state_.prefix,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      arm_joint_target_names(),
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      static_box_obstacles_json(),
+      [](const ExtractRolloutTiming& timing) { return timing.final_state; });
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
@@ -3200,17 +3172,26 @@ private:
           options)
       : LoadedPoseBatchPlanResult{};
 
-    nlohmann::json records = nlohmann::json::array();
     const auto summary = summarize_loaded_plan_timings(extract_monitor_state_.timings, batch.plan_indices);
-    for (const auto index : summary.attempted_indices) {
-      const auto& timing = extract_monitor_state_.timings[index];
-      if (timing.loaded_plan_attempted && timing.final_state && loaded_pose_selector_) {
-        moveit::core::RobotState record_state = timing.loaded_goal_state
-          ? *timing.loaded_goal_state
-          : loaded_pose_selector_->makeGoalState(*timing.final_state);
-        records.push_back(monitor_timing_json(timing, records.size(), record_state));
-      }
-    }
+    const nlohmann::json records = extract_monitor_timing_records_json(
+      extract_monitor_state_.timings,
+      summary.attempted_indices,
+      extract_monitor_state_.prefix,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      arm_joint_target_names(),
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      static_box_obstacles_json(),
+      [this](const ExtractRolloutTiming& timing) -> moveit::core::RobotStatePtr {
+        if (!timing.loaded_plan_attempted || !timing.final_state || !loaded_pose_selector_) {
+          return {};
+        }
+        if (timing.loaded_goal_state) {
+          return std::make_shared<moveit::core::RobotState>(*timing.loaded_goal_state);
+        }
+        return std::make_shared<moveit::core::RobotState>(
+          loaded_pose_selector_->makeGoalState(*timing.final_state));
+      });
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
@@ -3428,13 +3409,25 @@ private:
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
+    const nlohmann::json final_records = extract_monitor_timing_records_json(
+      {*selected},
+      {0},
+      extract_monitor_state_.prefix,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      arm_joint_target_names(),
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      static_box_obstacles_json(),
+      [&goal_state](const ExtractRolloutTiming&) {
+        return std::make_shared<moveit::core::RobotState>(goal_state);
+      });
     const nlohmann::json snapshot = extract_monitor_final_snapshot(
       elapsed_ms,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
       box_front_x_,
       scene_y_shift_,
-      monitor_timing_json(*selected, 0, goal_state),
+      final_records.empty() ? nlohmann::json::object() : final_records[0],
       replay_stages);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor final: failed to write snapshot");

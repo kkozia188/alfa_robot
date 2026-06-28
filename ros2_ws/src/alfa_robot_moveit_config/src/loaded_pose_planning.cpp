@@ -159,7 +159,7 @@ moveit::core::RobotState LoadedPoseSelector::makeGoalState(
 
 }  // namespace alfa_robot::motion
 
-#include "alfa_robot_moveit_config/motion_scene_adapter.hpp"
+#include "robot_motion_scene_service/motion_scene_adapter.hpp"
 
 #include <geometric_shapes/shapes.h>
 #include <moveit_msgs/msg/collision_object.hpp>

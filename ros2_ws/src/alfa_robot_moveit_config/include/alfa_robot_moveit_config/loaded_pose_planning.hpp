@@ -1,6 +1,6 @@
 #pragma once
 
-#include "alfa_robot_moveit_config/motion_core/scene_geometry.hpp"
+#include "robot_motion_scene_service/motion_core/scene_geometry.hpp"
 
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit/robot_model/robot_model.h>

@@ -25,6 +25,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(robot_motion_scene_service REQUIRED)
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl_vendor REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -42,8 +43,6 @@ set(IK_BENCHMARK_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../../../scripts/ik_benchmark)
 
 add_library(alfa_robot_motion_core
   src/motion_core/pose_math.cpp
-  src/motion_core/scene_geometry.cpp
-  src/motion_core/task_geometry.cpp
 )
 
 target_compile_features(alfa_robot_motion_core PUBLIC cxx_std_17)
@@ -56,10 +55,12 @@ target_include_directories(alfa_robot_motion_core PUBLIC
 ament_target_dependencies(alfa_robot_motion_core
   geometry_msgs
   nlohmann_json
+  robot_motion_scene_service
 )
 
 target_link_libraries(alfa_robot_motion_core
   Eigen3::Eigen
+  robot_motion_scene_service::robot_motion_scene_core
 )
 
 add_library(alfa_robot_motion_scene_adapter
@@ -68,7 +69,6 @@ add_library(alfa_robot_motion_scene_adapter
   src/extract_planning_pipeline.cpp
   src/loaded_pose_planning.cpp
   src/motion_flow_recorder.cpp
-  src/motion_scene_adapter.cpp
   src/optimized_ik_pipeline.cpp
   ${IK_BENCHMARK_ROOT}/src/ik_solver.cpp
   ${IK_BENCHMARK_ROOT}/src/parallel_updown_aware_ik_solver.cpp
@@ -84,6 +84,8 @@ target_include_directories(alfa_robot_motion_scene_adapter PUBLIC
 
 target_link_libraries(alfa_robot_motion_scene_adapter
   alfa_robot_motion_core
+  robot_motion_scene_service::robot_motion_scene_core
+  robot_motion_scene_service::robot_motion_scene_adapter
 )
 
 ament_target_dependencies(alfa_robot_motion_scene_adapter
@@ -101,6 +103,7 @@ ament_target_dependencies(alfa_robot_motion_scene_adapter
   rclcpp
   control_msgs
   shape_msgs
+  robot_motion_scene_service
   srdfdom
   urdf
 )
@@ -119,6 +122,8 @@ target_include_directories(dual_arm_planner_node PRIVATE
 target_link_libraries(dual_arm_planner_node
   alfa_robot_motion_core
   alfa_robot_motion_scene_adapter
+  robot_motion_scene_service::robot_motion_scene_core
+  robot_motion_scene_service::robot_motion_scene_adapter
 )
 
 ament_target_dependencies(dual_arm_planner_node
@@ -178,6 +183,7 @@ ament_export_dependencies(
   rclcpp
   control_msgs
   shape_msgs
+  robot_motion_scene_service
   srdfdom
   urdf
 )

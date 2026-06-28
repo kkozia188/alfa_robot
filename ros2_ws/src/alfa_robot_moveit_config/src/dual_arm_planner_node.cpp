@@ -15,10 +15,10 @@
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
 #include "alfa_robot_moveit_config/motion_flow_recorder.hpp"
-#include "alfa_robot_moveit_config/motion_scene_adapter.hpp"
+#include "robot_motion_scene_service/motion_scene_adapter.hpp"
 #include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
-#include "alfa_robot_moveit_config/motion_core/scene_geometry.hpp"
-#include "alfa_robot_moveit_config/motion_core/task_geometry.hpp"
+#include "robot_motion_scene_service/motion_core/scene_geometry.hpp"
+#include "robot_motion_scene_service/motion_core/task_geometry.hpp"
 
 #include <control_msgs/action/follow_joint_trajectory.hpp>
 #include <rclcpp/rclcpp.hpp>

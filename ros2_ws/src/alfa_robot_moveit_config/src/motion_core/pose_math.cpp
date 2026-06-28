@@ -1,6 +1,6 @@
 #include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
 
-#include "alfa_robot_moveit_config/motion_core/task_geometry.hpp"
+#include "robot_motion_scene_service/motion_core/task_geometry.hpp"
 
 #include <algorithm>
 #include <cmath>

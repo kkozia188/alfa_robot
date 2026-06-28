@@ -692,3 +692,9 @@
 - 工控机内容：同步 `alfa_robot_description`、`alfa_robot_moveit_config`、`alfa_robot_execution_bridge`、`bio_ik`、`scripts/ik_benchmark` 到 `~/lhy_dev`；`pick_ik` 暂留但加 `COLCON_IGNORE`，当前流程只用 `bio_ik`。
 - 验证结果：工控机 `~/lhy_dev/ros2_ws` 中 `alfa_robot_description/bio_ik/alfa_robot_execution_bridge/alfa_robot_moveit_config` 编译通过；`ros2 run alfa_robot_moveit_config execute_l6_r8_real_live.py --help` 可用；运行脚本中无 `/mnt/mydisk/ALFA/alfa_robot` 硬编码残留。
 - 留给下个 AI：工控机真实控制器当前 joint order 是 `right_joint1..6,left_joint1..6,turn`，实机脚本默认按该顺序发送；内部/Rerun 仍按左臂优先整理。脚本只发送 12 个手臂轴 + `turn=0`，不发送 `updown`。Rerun 已安装到用户环境，`numpy` 保持 ROS 兼容的 `1.24.2`。
+
+## 2026-06-28 运控 / Codex / robot_motion_scene_service 场景包独立化原型
+- 做了什么：在 `v5_dev` 上新增 `robot_motion_scene_service` ROS2 包，把 `dual_arm_planner` 原本直接拥有的动态场景几何与 MoveIt PlanningScene 适配逻辑独立成包。
+- 改了哪里：新增 `ros2_ws/src/robot_motion_scene_service/`，包含 `motion_core/task_geometry`、`motion_core/scene_geometry`、`motion_scene_adapter`；`alfa_robot_moveit_config` 改为依赖该包，旧同名头文件保留为兼容转发壳。
+- 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；`robot_motion_scene_service` 自带 `test_scene_geometry` 通过。
+- 留给下个 AI：当前命名空间仍保持 `alfa_robot::motion` 以降低旧 planner 拆分风险；迁移到 `robot_motion_control` 时可再统一命名。该包只负责动态世界/场景适配，不负责 IK、抽离策略、RRT 或任务状态机。

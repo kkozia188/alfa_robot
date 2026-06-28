@@ -47,6 +47,7 @@ int main()
   using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_extra;
   using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
+  using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
   using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
   using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
   using alfa_robot::motion::extract_monitor_snapshot_base;
@@ -185,6 +186,27 @@ int main()
   assert(shift_stages[0].at("stage") == "shift_stage");
   assert(shift_stages[0].at("extra").at("candidate_order") == 12);
   assert(shift_stages[0].at("attached_boxes").size() == 1);
+
+  const auto extract_replay_stage = extract_monitor_selected_extract_replay_stage(
+    "extract_monitor_L6_R8",
+    5,
+    12,
+    one_point_plan(),
+    *start_state,
+    6,
+    8,
+    {},
+    {box},
+    nlohmann::json{{"boxes", nlohmann::json::array()}},
+    nlohmann::json{{"valid", true}});
+  assert(extract_replay_stage.at("stage") == "extract_monitor_L6_R8/selected_extract_step_5");
+  assert(extract_replay_stage.at("extra").at("stage_kind") == "monitor_selected_extract_replay");
+  assert(extract_replay_stage.at("extra").at("candidate_order") == 12);
+  assert(extract_replay_stage.at("extra").at("left_box_id") == 6);
+  assert(extract_replay_stage.at("extra").at("right_box_id") == 8);
+  assert(extract_replay_stage.at("extra").at("valid") == true);
+  assert(extract_replay_stage.at("attached_boxes").size() == 1);
+  assert(extract_replay_stage.at("static_box_obstacles").at("boxes").is_array());
 
   timing.loaded_start_state = start_state;
   timing.loaded_goal_state = goal_state;

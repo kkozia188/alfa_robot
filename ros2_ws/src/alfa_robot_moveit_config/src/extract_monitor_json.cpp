@@ -226,6 +226,35 @@ nlohmann::json extract_monitor_selected_loaded_plan_replay_stage(
     extract_monitor_selected_loaded_plan_replay_extra(timing, left_box_id, right_box_id));
 }
 
+nlohmann::json extract_monitor_selected_extract_replay_stage(
+  const std::string& prefix,
+  size_t step,
+  size_t candidate_order,
+  const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+  const moveit::core::RobotState& state,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles,
+  const nlohmann::json& extra)
+{
+  nlohmann::json enriched = extra;
+  enriched["stage_kind"] = "monitor_selected_extract_replay";
+  enriched["candidate_order"] = candidate_order;
+  enriched["left_box_id"] = left_box_id;
+  enriched["right_box_id"] = right_box_id;
+  return extract_monitor_stage_json(
+    prefix + "/selected_extract_step_" + std::to_string(step),
+    plan,
+    state,
+    state,
+    target_names,
+    carried_boxes,
+    static_box_obstacles,
+    enriched);
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,

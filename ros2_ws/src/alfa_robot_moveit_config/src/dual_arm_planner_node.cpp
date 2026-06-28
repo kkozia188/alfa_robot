@@ -96,7 +96,7 @@ using alfa_robot::motion::extract_monitor_loaded_stage_message;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_extract_stage_message;
 using alfa_robot::motion::extract_monitor_snapshot_base;
-using alfa_robot::motion::extract_monitor_stage_json;
+using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
 using alfa_robot::motion::extract_monitor_timing_records_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
@@ -2818,26 +2818,6 @@ private:
     return boxes;
   }
 
-  nlohmann::json monitor_stage_json(
-    const std::string& stage_name,
-    const moveit::planning_interface::MoveGroupInterface::Plan& plan,
-    const moveit::core::RobotState& start_state,
-    const moveit::core::RobotState& goal_state,
-    const std::vector<std::string>& target_names,
-    const std::vector<AttachedBoxSpec>& attached_boxes,
-    const nlohmann::json& extra) const
-  {
-    return extract_monitor_stage_json(
-      stage_name,
-      plan,
-      start_state,
-      goal_state,
-      target_names,
-      attached_boxes,
-      static_box_obstacles_json(),
-      extra);
-  }
-
   void record_monitor_extract_replay_step(
     size_t step,
     size_t candidate_order,
@@ -2850,20 +2830,18 @@ private:
     }
     const auto names = arm_joint_target_names();
     const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
-
-    nlohmann::json enriched = extra;
-    enriched["stage_kind"] = "monitor_selected_extract_replay";
-    enriched["candidate_order"] = candidate_order;
-    enriched["left_box_id"] = extract_monitor_state_.left_box_id;
-    enriched["right_box_id"] = extract_monitor_state_.right_box_id;
-    rollout_records->push_back(monitor_stage_json(
-      extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
+    rollout_records->push_back(extract_monitor_selected_extract_replay_stage(
+      extract_monitor_state_.prefix,
+      step,
+      candidate_order,
       plan,
       state,
-      state,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
       names,
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-      enriched));
+      static_box_obstacles_json(),
+      extra));
   }
 
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const

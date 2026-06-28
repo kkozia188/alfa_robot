@@ -110,6 +110,19 @@ nlohmann::json extract_monitor_selected_loaded_plan_replay_stage(
   const std::vector<AttachedBoxSpec>& carried_boxes,
   const nlohmann::json& static_box_obstacles);
 
+nlohmann::json extract_monitor_selected_extract_replay_stage(
+  const std::string& prefix,
+  size_t step,
+  size_t candidate_order,
+  const moveit::planning_interface::MoveGroupInterface::Plan& plan,
+  const moveit::core::RobotState& state,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles,
+  const nlohmann::json& extra);
+
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
 nlohmann::json extract_monitor_snapshot_base(

@@ -920,3 +920,9 @@
 - 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_candidate_records_json()` 与 `extract_monitor_timing_records_json()`；`dual_arm_planner_node.cpp` 改为调用 records helper；`test_extract_monitor_json.cpp` 增加候选/时序 records 覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2775.53ms，仍在重构前约 2.7–3.0s 区间。
 - 留给下个 AI：这次只移动 JSON records 组装 Implementation，不改变 IK/抽离/负重规划算法；后续如果继续拆 `dual_arm_planner_node.cpp`，优先拆 ROS/MoveIt Adapter 或 monitor 阶段编排，不要再抽浅 pass-through helper。
+
+## 2026-06-29 运控 / Codex / monitor 最终回放组装收口
+- 做了什么：把 monitor 最终采用方案的 replay stages 组装顺序从 `dual_arm_planner_node.cpp` 收口到 `ExtractMonitorReplayBuilder` Module，主节点只保留 MoveIt/碰撞/补录抽离记录 Adapter。
+- 改了哪里：新增 `extract_monitor_replay_builder.hpp/.cpp` 与 `test_extract_monitor_replay_builder.cpp`；`dual_arm_planner_node.cpp` 删除 pre-attach、横向让位、负重 replay append 样板函数；`MOTION_PIPELINE_REFACTOR.md` 补充模块地图。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，7 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2762.63ms，最终 replay_stages=18，首段为 selected_pre_attach，末段为 selected_loaded_plan。
+- 留给下个 AI：最终回放阶段顺序已有独立 Interface；如果继续瘦身主节点，下一步可考虑把 `ensure_selected_extract_replay_records()` 的抽离补录 Adapter 继续下沉，或把 monitor IK 阶段的 solver 装配从节点迁出。

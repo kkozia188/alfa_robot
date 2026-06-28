@@ -37,6 +37,7 @@
 | `extract_monitor_json` | monitor 的候选、阶段、快照、replay extra 字段 schema | `include/alfa_robot_moveit_config/extract_monitor_json.hpp` / `src/extract_monitor_json.cpp` |
 | `ExtractMonitorSnapshotWriter` | monitor 快照文件读写，保证目录创建和 JSON 落盘错误集中处理 | `include/alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp` / `src/extract_monitor_snapshot_writer.cpp` |
 | `ExtractMonitorTransitionPlanner` | monitor 最终回放中“负重位 → IK 吸附位”的过渡规划策略：插值、densify、碰撞验证、失败后 RRT、shortcut、再次验证 | `include/alfa_robot_moveit_config/extract_monitor_transition_planning.hpp` / `src/extract_monitor_transition_planning.cpp` |
+| `ExtractMonitorReplayBuilder` | monitor 最终采用方案的 Rerun/JSON 回放阶段组装：预吸附过渡、抽离记录、横向让位、负重规划按固定顺序合并 | `include/alfa_robot_moveit_config/extract_monitor_replay_builder.hpp` / `src/extract_monitor_replay_builder.cpp` |
 | `DualArmPlannerNode` | ROS 参数、MoveIt 后端、场景碰撞判定、service callback 装配 | `src/dual_arm_planner_node.cpp` |
 | 启动配置 | 暴露算法超参数和实验参数 | `launch/dual_arm_planner.launch.py` |
 | 回放工具 | 将 JSONL 转为 Rerun 场景 | `scripts/visualize_moveit_box_stack_flow.py` |
@@ -104,12 +105,13 @@
 2. IK 阶段调用 `OptimizedDualIkSolver` 后，由 `IkCandidateSelector` 排序/去重，再由 `populate_extract_monitor_candidate_states()` 建候选状态缓存。
 3. 抽离阶段通过 `run_extract_monitor_candidate_tasks()` 统一调度候选任务，节点只描述“单个候选如何 rollout”。
 4. 负重阶段调用 `LoadedPosePlanner::planBatch()` 后，由 `summarize_loaded_plan_timings()` 汇总 attempted/success/failure。
-5. 最终阶段通过 `select_extract_monitor_final_timing()` 选择候选；`ExtractMonitorTransitionPlanner` 负责预吸附过渡规划；`extract_monitor_json` 负责所有 replay extra 字段。
+5. 最终阶段通过 `select_extract_monitor_final_timing()` 选择候选；`ExtractMonitorReplayBuilder` 负责把预吸附过渡、抽离记录、横向让位和负重规划合并成最终回放；其中预吸附过渡由 `ExtractMonitorTransitionPlanner` 执行，字段 schema 仍由 `extract_monitor_json` 提供。
 
 当前 monitor 相关测试：
 
 - `test_extract_monitor_state`：阶段状态机、候选缓存、调度、统计和最终选择规则。
 - `test_extract_monitor_json`：快照和 replay 字段 schema。
+- `test_extract_monitor_replay_builder`：最终采用方案 replay 阶段顺序、预吸附过渡 fallback 和缺失起点处理。
 - `test_extract_monitor_snapshot_writer`：快照写入错误处理。
 - `test_extract_monitor_transition_planning`：预吸附过渡规划的插值成功、RRT fallback 和失败传播。
 

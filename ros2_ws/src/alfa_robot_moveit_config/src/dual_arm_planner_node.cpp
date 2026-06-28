@@ -13,6 +13,7 @@
 #include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
 #include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_replay_builder.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_state.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_transition_planning.hpp"
@@ -80,6 +81,8 @@ using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
+using alfa_robot::motion::ExtractMonitorReplayBuilder;
+using alfa_robot::motion::ExtractMonitorReplayBuildRequest;
 using alfa_robot::motion::ExtractMonitorTransitionPlanner;
 using alfa_robot::motion::extract_monitor_candidate_records_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
@@ -92,9 +95,6 @@ using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_stage_message;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_extract_stage_message;
-using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
-using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
-using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_records_json;
@@ -3279,16 +3279,8 @@ private:
     }
   }
 
-  bool append_pre_attach_replay_stage(
-    const ExtractRolloutTiming& selected,
-    const moveit::core::RobotState& ik_goal_state,
-    nlohmann::json* replay_stages)
+  ExtractMonitorTransitionPlanner extract_monitor_transition_planner()
   {
-    if (!replay_stages || !extract_monitor_state_.loaded_start_state) {
-      return false;
-    }
-
-    const auto transition_t0 = std::chrono::steady_clock::now();
     ExtractMonitorTransitionPlanner transition_planner;
     transition_planner.make_interpolated_plan =
       [this](const auto& start, const auto& goal, double duration_s) {
@@ -3306,84 +3298,29 @@ private:
     transition_planner.shortcut_plan = [this](const auto& plan, const auto& start, std::string* reason) {
       return shortcut_joint_plan(plan, start, {}, reason);
     };
-    const auto transition = transition_planner.plan(*extract_monitor_state_.loaded_start_state, ik_goal_state);
-    const double transition_ms = std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - transition_t0).count();
-    const nlohmann::json extra = extract_monitor_pre_attach_replay_extra(
-      selected,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      transition.valid,
-      transition.method,
-      transition_ms,
-      transition.failure_reason);
-    replay_stages->push_back(monitor_stage_json(
-      extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
-      transition.plan,
-      *extract_monitor_state_.loaded_start_state,
-      ik_goal_state,
-      arm_joint_target_names(),
-      {},
-      extra));
-    return true;
-  }
-
-  void append_lateral_shift_replay_stages(
-    const ExtractRolloutTiming& selected,
-    nlohmann::json* replay_stages)
-  {
-    if (!replay_stages) {
-      return;
-    }
-    const auto shift_replay_stages = extract_monitor_selected_lateral_shift_replay_stages(
-      selected,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
-      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-      static_box_obstacles_json());
-    for (const auto& stage : shift_replay_stages) {
-      replay_stages->push_back(stage);
-    }
-  }
-
-  bool append_loaded_plan_replay_stage(
-    const ExtractRolloutTiming& selected,
-    nlohmann::json* replay_stages)
-  {
-    if (!replay_stages) {
-      return false;
-    }
-
-    const auto stage = extract_monitor_selected_loaded_plan_replay_stage(
-      extract_monitor_state_.prefix,
-      selected,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      arm_joint_target_names(),
-      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-      static_box_obstacles_json());
-    if (stage.is_null()) {
-      return false;
-    }
-    replay_stages->push_back(stage);
-    return true;
+    return transition_planner;
   }
 
   nlohmann::json build_final_replay_stages(
     ExtractRolloutTiming& selected,
     const moveit::core::RobotState& ik_goal_state)
   {
-    ensure_selected_extract_replay_records(selected);
+    ExtractMonitorReplayBuilder builder;
+    builder.transition_planner = extract_monitor_transition_planner();
+    builder.ensure_extract_replay = [this](ExtractRolloutTiming& timing) {
+      ensure_selected_extract_replay_records(timing);
+    };
 
-    nlohmann::json replay_stages = nlohmann::json::array();
-    append_pre_attach_replay_stage(selected, ik_goal_state, &replay_stages);
-    for (const auto& stage : selected.rollout_records) {
-      replay_stages.push_back(stage);
-    }
-    append_lateral_shift_replay_stages(selected, &replay_stages);
-    append_loaded_plan_replay_stage(selected, &replay_stages);
-    return replay_stages;
+    ExtractMonitorReplayBuildRequest request;
+    request.prefix = extract_monitor_state_.prefix;
+    request.left_box_id = extract_monitor_state_.left_box_id;
+    request.right_box_id = extract_monitor_state_.right_box_id;
+    request.target_names = arm_joint_target_names();
+    request.carried_boxes = {extract_monitor_state_.left_box, extract_monitor_state_.right_box};
+    request.static_box_obstacles = static_box_obstacles_json();
+    request.loaded_start_state = extract_monitor_state_.loaded_start_state;
+    request.ik_goal_state = std::make_shared<moveit::core::RobotState>(ik_goal_state);
+    return builder.build(selected, request);
   }
 
   bool run_extract_monitor_final_stage(std::string* message)

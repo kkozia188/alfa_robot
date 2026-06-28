@@ -9,6 +9,19 @@
 
 namespace alfa_robot::motion
 {
+namespace
+{
+
+bool robot_state_has_variable(
+  const moveit::core::RobotState& state,
+  const std::string& name)
+{
+  const auto& variable_names = state.getRobotModel()->getVariableNames();
+  return std::find(variable_names.begin(), variable_names.end(), name) != variable_names.end();
+}
+
+}  // namespace
+
 
 OptimizedDualIkSolver::OptimizedDualIkSolver(OptimizedDualIkSolverConfig config)
 : config_(std::move(config))
@@ -174,6 +187,28 @@ bool OptimizedDualIkSolver::isRobotVariable(const std::string& name) const
 
 namespace alfa_robot::motion
 {
+
+moveit::core::RobotState robot_state_from_ik_candidate(
+  const moveit::core::RobotState& seed_state,
+  const ik_benchmark::UpdownAwareIkCandidate& candidate,
+  const moveit::core::JointModelGroup* enforce_bounds_group)
+{
+  moveit::core::RobotState state(seed_state);
+  for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
+    const auto& name = candidate.full_joint_names[i];
+    if (robot_state_has_variable(state, name)) {
+      state.setVariablePosition(name, candidate.full_joint_values[i]);
+    }
+  }
+  if (enforce_bounds_group) {
+    state.enforceBounds(enforce_bounds_group);
+  } else {
+    state.enforceBounds();
+  }
+  state.update();
+  return state;
+}
+
 namespace
 {
 

@@ -100,6 +100,7 @@ using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
 using alfa_robot::motion::extract_monitor_timing_records_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
+using alfa_robot::motion::robot_state_from_ik_candidate;
 using alfa_robot::motion::select_extract_monitor_final_timing;
 using alfa_robot::motion::summarize_extract_monitor_timings;
 using alfa_robot::motion::summarize_loaded_plan_timings;
@@ -1221,7 +1222,7 @@ private:
     callbacks.state_from_candidate = [this](
       const moveit::core::RobotState& seed_state,
       const ik_benchmark::UpdownAwareIkCandidate& candidate) {
-      return state_from_ik_candidate(seed_state, candidate);
+      return robot_state_from_ik_candidate(seed_state, candidate, joint_group_);
     };
     callbacks.rollout_left = [this](
       const moveit::core::RobotState& start_state,
@@ -2143,22 +2144,6 @@ private:
     return out;
   }
 
-  moveit::core::RobotState state_from_ik_candidate(
-    const moveit::core::RobotState& seed_state,
-    const ik_benchmark::UpdownAwareIkCandidate& candidate) const
-  {
-    moveit::core::RobotState state(seed_state);
-    for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
-      const auto& name = candidate.full_joint_names[i];
-      if (is_robot_variable(name)) {
-        state.setVariablePosition(name, candidate.full_joint_values[i]);
-      }
-    }
-    state.enforceBounds(joint_group_);
-    state.update();
-    return state;
-  }
-
   std::vector<std::string> arm_joint_target_names() const
   {
     return {
@@ -3007,7 +2992,7 @@ private:
       extract_monitor_state_,
       [this](const ik_benchmark::UpdownAwareIkCandidate& candidate) {
         return std::make_shared<moveit::core::RobotState>(
-          state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate));
+          robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate, joint_group_));
       });
 
     const nlohmann::json records = extract_monitor_candidate_records_json(
@@ -3053,7 +3038,7 @@ private:
       extract_monitor_state_,
       extract_benchmark_extract_workers_,
       [&](size_t index, const ik_benchmark::UpdownAwareIkCandidate& candidate) {
-        const auto state = state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate);
+        const auto state = robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate, joint_group_);
         std::vector<nlohmann::json> rollout_records;
         auto record_step = [&](size_t step, const moveit::core::RobotState& step_state, const nlohmann::json& extra) {
           record_monitor_extract_replay_step(step, index, step_state, extra, &rollout_records);
@@ -3197,9 +3182,10 @@ private:
     if (!candidate) {
       return false;
     }
-    const auto ik_state = state_from_ik_candidate(
+    const auto ik_state = robot_state_from_ik_candidate(
       *extract_monitor_state_.seed_state,
-      *candidate);
+      *candidate,
+      joint_group_);
     auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_state, 1.0);
     std::string reason;
     return planned_trajectory_clear_in_full_scene(plan, *extract_monitor_state_.loaded_start_state, {}, &reason);
@@ -3230,7 +3216,7 @@ private:
       record_monitor_extract_replay_step(step, selected.candidate_order, state, extra, &rollout_records);
     };
     auto replay_timing = rollout_dual_extract_from_state(
-      state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate),
+      robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate, joint_group_),
       extract_monitor_state_.left_box,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box,
@@ -3300,9 +3286,10 @@ private:
       : loaded_pose_selector_->makeGoalState(*selected->final_state);
     const auto* selected_candidate = extract_monitor_candidate_for_timing(extract_monitor_state_, *selected);
     moveit::core::RobotState ik_goal_state = selected_candidate && extract_monitor_state_.seed_state
-      ? state_from_ik_candidate(
+      ? robot_state_from_ik_candidate(
           *extract_monitor_state_.seed_state,
-          *selected_candidate)
+          *selected_candidate,
+          joint_group_)
       : *selected->final_state;
 
     const nlohmann::json replay_stages = build_final_replay_stages(*selected, ik_goal_state);

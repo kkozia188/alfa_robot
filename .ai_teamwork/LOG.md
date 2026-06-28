@@ -944,3 +944,9 @@
 - 改了哪里：`dual_arm_planner_node.cpp` 的 front 侧吸高度窗兜底默认值对齐为 `0.45~1.25`；`docs/运控/MOTION_PIPELINE_REFACTOR.md` 同步参数表。
 - 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config` 通过，1+8 个测试全绿；L6/R8 `--once --no-rerun` 三次内部耗时为 2852.87ms、2809.78ms、2766.23ms，均值 2809.63ms，修正后复跑 2777.04ms，未见相对原 2.7~3.0s 基线的性能回退。
 - 留给下个 AI：当前重构后的模块划分基本稳定；若继续瘦身，应优先迁出 `dual_arm_planner_node.cpp` 中剩余 ROS/MoveIt Adapter，而不是再抽浅 helper。
+
+## 2026-06-29 运控 / Codex / IK 候选状态还原收口
+- 做了什么：把“IK 候选 full_joint_names/full_joint_values 如何还原为 MoveIt RobotState”的规则从 `DualArmPlannerNode` 收口到 `optimized_ik_pipeline`，让节点不再掌握候选解写关节值的细节。
+- 改了哪里：`optimized_ik_pipeline.hpp/.cpp` 新增 `robot_state_from_ik_candidate()`；`dual_arm_planner_node.cpp` 删除本地 `state_from_ik_candidate()` 并统一调用 IK 模块 helper；`test_ik_candidate_selector.cpp` 增加 RobotState 还原、未知变量忽略和 seed 保留覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，8 个测试全绿；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2845.96ms，仍在近期 2.7~3.0s 基线内。
+- 留给下个 AI：IK candidate -> RobotState 的解释权已归入 IK pipeline；后续不要在 ROS 节点里重新散写 full_joint_names/full_joint_values 写回逻辑。

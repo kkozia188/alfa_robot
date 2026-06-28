@@ -92,6 +92,11 @@ struct IkCandidateSelectionStats
   double elapsed_ms = 0.0;
 };
 
+moveit::core::RobotState robot_state_from_ik_candidate(
+  const moveit::core::RobotState& seed_state,
+  const ik_benchmark::UpdownAwareIkCandidate& candidate,
+  const moveit::core::JointModelGroup* enforce_bounds_group = nullptr);
+
 class IkCandidateSelector
 {
 public:

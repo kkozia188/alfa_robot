@@ -3,8 +3,13 @@
 #include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cmath>
 #include <map>
+#include <optional>
 #include <sstream>
+#include <string>
 #include <utility>
 
 namespace alfa_robot::motion
@@ -20,8 +25,28 @@ bool robot_state_has_variable(
   return std::find(variable_names.begin(), variable_names.end(), name) != variable_names.end();
 }
 
-}  // namespace
+double wrapped_angle_delta(double lhs, double rhs)
+{
+  double delta = std::fmod(lhs - rhs + M_PI, 2.0 * M_PI);
+  if (delta < 0.0) {
+    delta += 2.0 * M_PI;
+  }
+  return std::abs(delta - M_PI);
+}
 
+std::optional<double> candidate_joint_value(
+  const ik_benchmark::UpdownAwareIkCandidate& candidate,
+  const std::string& joint_name)
+{
+  for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
+    if (candidate.full_joint_names[i] == joint_name) {
+      return candidate.full_joint_values[i];
+    }
+  }
+  return std::nullopt;
+}
+
+}  // namespace
 
 OptimizedDualIkSolver::OptimizedDualIkSolver(OptimizedDualIkSolverConfig config)
 : config_(std::move(config))
@@ -111,8 +136,8 @@ double OptimizedDualIkSolver::currentUpdown(const moveit::core::RobotState& stat
   return isRobotVariable("updown") ? state.getVariablePosition("updown") : config_.fallback_updown;
 }
 
-nlohmann::json OptimizedDualIkSolver::candidateRejectionCountsJson(
-  const ik_benchmark::UpdownAwareIkResult& result) const
+nlohmann::json ik_candidate_rejection_counts_json(
+  const ik_benchmark::UpdownAwareIkResult& result)
 {
   std::map<std::string, size_t> counts;
   for (const auto& candidate : result.candidates) {
@@ -147,7 +172,7 @@ nlohmann::json OptimizedDualIkSolver::resultJson(
     {"sum_solve_ms", result.sum_solve_ms},
     {"h_interval", {{"lower", result.h_interval_lower}, {"upper", result.h_interval_upper}, {"center", result.h_center}}},
     {"h_candidates", vector_json(result.h_candidates)},
-    {"candidate_rejection_counts", candidateRejectionCountsJson(result)},
+    {"candidate_rejection_counts", ik_candidate_rejection_counts_json(result)},
     {"selected", {
       {"h", result.selected.h},
       {"h_index", result.selected.h_index},
@@ -176,18 +201,6 @@ bool OptimizedDualIkSolver::isRobotVariable(const std::string& name) const
   return std::find(variable_names.begin(), variable_names.end(), name) != variable_names.end();
 }
 
-}  // namespace alfa_robot::motion
-
-#include <algorithm>
-#include <array>
-#include <chrono>
-#include <cmath>
-#include <optional>
-#include <string>
-
-namespace alfa_robot::motion
-{
-
 moveit::core::RobotState robot_state_from_ik_candidate(
   const moveit::core::RobotState& seed_state,
   const ik_benchmark::UpdownAwareIkCandidate& candidate,
@@ -208,32 +221,6 @@ moveit::core::RobotState robot_state_from_ik_candidate(
   state.update();
   return state;
 }
-
-namespace
-{
-
-double wrapped_angle_delta(double lhs, double rhs)
-{
-  double delta = std::fmod(lhs - rhs + M_PI, 2.0 * M_PI);
-  if (delta < 0.0) {
-    delta += 2.0 * M_PI;
-  }
-  return std::abs(delta - M_PI);
-}
-
-std::optional<double> candidate_joint_value(
-  const ik_benchmark::UpdownAwareIkCandidate& candidate,
-  const std::string& joint_name)
-{
-  for (size_t i = 0; i < candidate.full_joint_names.size() && i < candidate.full_joint_values.size(); ++i) {
-    if (candidate.full_joint_names[i] == joint_name) {
-      return candidate.full_joint_values[i];
-    }
-  }
-  return std::nullopt;
-}
-
-}  // namespace
 
 IkCandidateSelector::IkCandidateSelector(IkCandidateSelectorConfig config)
 : config_(std::move(config))

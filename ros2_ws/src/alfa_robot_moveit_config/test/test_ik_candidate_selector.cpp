@@ -86,14 +86,22 @@ int main()
   using alfa_robot::motion::IkCandidateSelectionStats;
   using alfa_robot::motion::IkCandidateSelector;
   using alfa_robot::motion::IkCandidateSelectorConfig;
+  using alfa_robot::motion::ik_candidate_rejection_counts_json;
   using alfa_robot::motion::robot_state_from_ik_candidate;
 
   ik_benchmark::UpdownAwareIkResult result;
   result.candidates.push_back(make_candidate(true, 3.0, 0, 2, 0.3, 0.20));
   result.candidates.push_back(make_candidate(false, 0.1, 0, 0, 0.3, 0.00));
+  result.candidates.back().rejection_reason = "tip_error_too_large";
   result.candidates.push_back(make_candidate(true, 1.0, 2, 4, 0.3, 0.00));
   result.candidates.push_back(make_candidate(true, 1.0, 1, 3, 0.3, 0.00));
   result.candidates.push_back(make_candidate(true, 2.0, 0, 5, 0.3, 0.004));
+  result.candidates.push_back(make_candidate(false, 4.0, 0, 6, 0.3, 0.30));
+
+  const auto rejection_counts = ik_candidate_rejection_counts_json(result);
+  assert(rejection_counts.at("legal") == 4);
+  assert(rejection_counts.at("tip_error_too_large") == 1);
+  assert(rejection_counts.at("unknown") == 1);
 
   IkCandidateSelectorConfig config;
   config.dedup_enabled = true;

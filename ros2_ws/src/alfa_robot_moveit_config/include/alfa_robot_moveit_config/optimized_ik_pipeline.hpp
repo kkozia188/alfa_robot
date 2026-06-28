@@ -42,6 +42,9 @@ struct OptimizedDualIkSolverConfig
   double fallback_updown = 0.0;
 };
 
+nlohmann::json ik_candidate_rejection_counts_json(
+  const ik_benchmark::UpdownAwareIkResult& result);
+
 class OptimizedDualIkSolver
 {
 public:
@@ -60,9 +63,6 @@ public:
     const std::vector<std::string>& names) const;
 
   double currentUpdown(const moveit::core::RobotState& state) const;
-
-  nlohmann::json candidateRejectionCountsJson(
-    const ik_benchmark::UpdownAwareIkResult& result) const;
 
   nlohmann::json resultJson(
     const ik_benchmark::UpdownAwareIkResult& result,

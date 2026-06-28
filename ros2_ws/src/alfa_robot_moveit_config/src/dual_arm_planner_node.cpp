@@ -98,6 +98,7 @@ using alfa_robot::motion::extract_monitor_extract_stage_message;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
 using alfa_robot::motion::extract_monitor_timing_records_json;
+using alfa_robot::motion::ik_candidate_rejection_counts_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
 using alfa_robot::motion::robot_state_from_ik_candidate;
@@ -2120,28 +2121,6 @@ private:
     Eigen::Quaterniond q(tf.linear());
     q.normalize();
     return make_pose(tf.translation().x(), tf.translation().y(), tf.translation().z(), q);
-  }
-
-  nlohmann::json ik_candidate_rejection_counts_json(const ik_benchmark::UpdownAwareIkResult& result) const
-  {
-    if (optimized_dual_ik_solver_) {
-      return optimized_dual_ik_solver_->candidateRejectionCountsJson(result);
-    }
-    std::map<std::string, size_t> counts;
-    for (const auto& candidate : result.candidates) {
-      if (candidate.legal) {
-        counts["legal"]++;
-      } else if (!candidate.rejection_reason.empty()) {
-        counts[candidate.rejection_reason]++;
-      } else {
-        counts["unknown"]++;
-      }
-    }
-    nlohmann::json out = nlohmann::json::object();
-    for (const auto& [reason, count] : counts) {
-      out[reason] = count;
-    }
-    return out;
   }
 
   std::vector<std::string> arm_joint_target_names() const

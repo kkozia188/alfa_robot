@@ -3118,12 +3118,12 @@ private:
 
   void ensure_selected_extract_replay_records(ExtractRolloutTiming& selected)
   {
-    if (!selected.rollout_records.empty() ||
-        !extract_monitor_state_.seed_state) {
+    if (!selected.rollout_records.empty()) {
       return;
     }
     const auto* candidate = extract_monitor_candidate_for_timing(extract_monitor_state_, selected);
-    if (!candidate) {
+    auto start_state = extract_monitor_candidate_state_for_timing(extract_monitor_state_, selected);
+    if (!candidate || !start_state) {
       return;
     }
 
@@ -3131,12 +3131,6 @@ private:
     auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
       record_monitor_extract_replay_step(step, selected.candidate_order, state, extra, &rollout_records);
     };
-    auto start_state = extract_monitor_candidate_state_for_timing(extract_monitor_state_, selected);
-    if (!start_state) {
-      start_state = std::make_shared<moveit::core::RobotState>(
-        robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate, joint_group_));
-    }
-
     auto replay_timing = rollout_dual_extract_from_state(
       *start_state,
       extract_monitor_state_.left_box,

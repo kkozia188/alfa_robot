@@ -1016,3 +1016,9 @@
 - 改了哪里：`extract_monitor_state.hpp/cpp` 新增候选状态查询接口；`dual_arm_planner_node.cpp` 的最终选择平滑检查、抽离回放补录、最终 replay 起点改用该接口；`test_extract_monitor_state` 增加映射断言。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过；L6/R8 smoke 成功，内部耗时约 2876ms。
 - 留给下个 AI：下一步可继续检查 `DualArmPlannerNode` 中纯 MoveIt 后端函数是否还能聚合为更明确的 planning/collision Adapter，但不要把 callback seam 拆成过浅文件。
+
+## 2026-06-29 运控 / Codex / 去除monitor回放状态重建fallback
+- 做了什么：继续收口 monitor 候选状态语义，删除 `ensure_selected_extract_replay_records()` 中从 IK candidate 现场重建 RobotState 的 fallback；回放补录统一使用 `ExtractMonitorState::candidate_states`，避免节点再次知道 candidate state 的构造细节。
+- 改了哪里：`dual_arm_planner_node.cpp` 的 selected extract replay 补录逻辑。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过；L6/R8 smoke 成功，内部耗时约 2897ms。
+- 留给下个 AI：`robot_state_from_ik_candidate()` 在节点内仍用于 IK stage 建候选缓存和 benchmark callback，这是当前合理 Adapter seam；不要为了删 using 而把清晰职责重新打散。

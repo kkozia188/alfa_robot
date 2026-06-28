@@ -14,6 +14,7 @@
 #include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_state.hpp"
 #include "alfa_robot_moveit_config/execution_trajectory_adapter.hpp"
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
@@ -75,6 +76,8 @@ using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
 using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
+using alfa_robot::motion::ExtractMonitorPhase;
+using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
@@ -3863,30 +3866,6 @@ private:
   std::unique_ptr<ik_benchmark::ParallelUpdownAwareIkSolver> optimized_ik_solver_;
   std::unique_ptr<OptimizedDualIkSolver> optimized_dual_ik_solver_;
   std::unique_ptr<MotionFlowRecorder> recorder_;
-
-  enum class ExtractMonitorPhase
-  {
-    ReadyForIk,
-    ReadyForExtract,
-    ReadyForLoaded,
-    ReadyForFinal,
-    Done,
-  };
-
-  struct ExtractMonitorState
-  {
-    int left_box_id = 0;
-    int right_box_id = 0;
-    std::string prefix;
-    AttachedBoxSpec left_box;
-    AttachedBoxSpec right_box;
-    moveit::core::RobotStatePtr seed_state;
-    moveit::core::RobotStatePtr loaded_start_state;
-    ik_benchmark::UpdownAwareIkResult ik_result;
-    std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
-    std::vector<moveit::core::RobotStatePtr> candidate_states;
-    std::vector<ExtractRolloutTiming> timings;
-  };
 
   ExtractMonitorPhase extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
   ExtractMonitorState extract_monitor_state_;

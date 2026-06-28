@@ -234,6 +234,11 @@ if(BUILD_TESTING)
   add_executable(test_ik_candidate_selector test/test_ik_candidate_selector.cpp)
   target_link_libraries(test_ik_candidate_selector alfa_robot_motion_scene_adapter)
   add_test(NAME test_ik_candidate_selector COMMAND test_ik_candidate_selector)
+
+  add_executable(test_loaded_pose_selector test/test_loaded_pose_selector.cpp)
+  target_link_libraries(test_loaded_pose_selector alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_loaded_pose_selector srdfdom urdf)
+  add_test(NAME test_loaded_pose_selector COMMAND test_loaded_pose_selector)
 endif()
 
 ament_package()

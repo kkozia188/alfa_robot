@@ -88,6 +88,7 @@
 ### 3.5 抽离后负重规划
 
 - `LoadedPoseSelector` 根据抽离末态，从左右各 3 个负重姿态族中选择最近目标。
+- `LoadedPoseSelector` 同时负责把最近负重姿态距离、L2 距离和最大关节差写回 `ExtractRolloutTiming`，供候选排序、CSV 和 monitor 快照复用。
 - `LoadedPosePlanner` 在保留末端附着箱的情况下调用 MoveIt 规划到负重姿态。
 - `ExtractBenchmarkRunner` 可对抽离成功候选按负重姿态距离排序，按 `extract_loaded_candidate_limit` 截断，并可 `extract_loaded_stop_on_first_success` 首成功即停。
 
@@ -114,6 +115,7 @@
 - `test_extract_monitor_replay_builder`：最终采用方案 replay 阶段顺序、预吸附过渡 fallback 和缺失起点处理。
 - `test_extract_monitor_snapshot_writer`：快照写入错误处理。
 - `test_extract_monitor_transition_planning`：预吸附过渡规划的插值成功、RRT fallback 和失败传播。
+- `test_loaded_pose_selector`：最近负重姿态选择、timing 距离指标写回和目标姿态生成。
 
 这部分的迁移建议：不要复制 `run_extract_monitor_*` 的线性实现；应优先迁移上述四个 monitor 模块，再在新仓库里重新写 ROS service Adapter。
 

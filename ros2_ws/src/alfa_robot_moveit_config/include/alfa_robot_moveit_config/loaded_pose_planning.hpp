@@ -80,6 +80,8 @@ public:
     const moveit::core::RobotState& start_state,
     LoadedPoseSelection* selection = nullptr) const;
 
+  void fillTimingDistanceMetrics(ExtractRolloutTiming& timing) const;
+
 private:
   bool hasVariable(const moveit::core::RobotState& state, const std::string& name) const;
   static std::string jointName(const std::string& side, size_t index);

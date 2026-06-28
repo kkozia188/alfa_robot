@@ -1246,7 +1246,9 @@ private:
         candidate_order, ik_candidate, record_step);
     };
     callbacks.fill_loaded_metrics = [this](ExtractRolloutTiming& timing) {
-      fill_loaded_pose_distance_metrics(timing);
+      if (loaded_pose_selector_) {
+        loaded_pose_selector_->fillTimingDistanceMetrics(timing);
+      }
     };
     callbacks.record_keyframe = [this](
       const std::string& stage_name,
@@ -2168,24 +2170,6 @@ private:
     };
   }
 
-  void fill_loaded_pose_distance_metrics(ExtractRolloutTiming& timing) const
-  {
-    if (!timing.final_state) {
-      return;
-    }
-    if (!loaded_pose_selector_) {
-      return;
-    }
-    const auto selection = loaded_pose_selector_->select(*timing.final_state);
-    timing.selected_left_loaded_pose_index = selection.left_index;
-    timing.selected_right_loaded_pose_index = selection.right_index;
-    timing.selected_left_loaded_pose_distance = selection.left_distance;
-    timing.selected_right_loaded_pose_distance = selection.right_distance;
-    timing.loaded_pose_distance_sum = selection.distance_sum;
-    timing.loaded_pose_distance_l2 = selection.distance_l2;
-    timing.loaded_pose_max_joint_delta = selection.max_joint_delta;
-  }
-
   ExtractRolloutTiming rollout_left_extract_from_state(
     const moveit::core::RobotState& start_state,
     const AttachedBoxSpec& left_box,
@@ -3086,7 +3070,9 @@ private:
         if (timing.success) {
           timing.rollout_records = std::move(rollout_records);
         }
-        fill_loaded_pose_distance_metrics(timing);
+        if (loaded_pose_selector_) {
+          loaded_pose_selector_->fillTimingDistanceMetrics(timing);
+        }
         return timing;
       });
 

@@ -9,6 +9,7 @@
 #include <moveit/robot_state/robot_state.h>
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <map>
 #include <string>
 #include <vector>
@@ -111,5 +112,12 @@ nlohmann::json extract_monitor_final_snapshot(
   double scene_y_shift,
   const nlohmann::json& record,
   const nlohmann::json& replay_stages);
+
+nlohmann::json extract_monitor_full_selected_snapshot(
+  nlohmann::json snapshot,
+  double box_front_x,
+  double scene_y_shift,
+  double total_elapsed_ms,
+  const std::array<double, 4>& stage_elapsed_ms);
 
 }  // namespace alfa_robot::motion

@@ -328,4 +328,26 @@ nlohmann::json extract_monitor_final_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_full_selected_snapshot(
+  nlohmann::json snapshot,
+  double box_front_x,
+  double scene_y_shift,
+  double total_elapsed_ms,
+  const std::array<double, 4>& stage_elapsed_ms)
+{
+  if (!snapshot.is_object()) {
+    snapshot = nlohmann::json::object();
+  }
+  snapshot["phase"] = "full_selected";
+  snapshot["phase_label"] = "完整流程最终采用方案";
+  snapshot["box_front_x"] = box_front_x;
+  snapshot["scene_y_shift"] = scene_y_shift;
+  snapshot["elapsed_ms"] = total_elapsed_ms;
+  snapshot["ik_elapsed_ms"] = stage_elapsed_ms[0];
+  snapshot["extract_elapsed_ms"] = stage_elapsed_ms[1];
+  snapshot["loaded_elapsed_ms"] = stage_elapsed_ms[2];
+  snapshot["final_elapsed_ms"] = stage_elapsed_ms[3];
+  return snapshot;
+}
+
 }  // namespace alfa_robot::motion

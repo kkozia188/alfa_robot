@@ -1,5 +1,6 @@
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 
+#include <array>
 #include <cassert>
 
 int main()
@@ -8,6 +9,7 @@ int main()
   using alfa_robot::motion::attached_boxes_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
   using alfa_robot::motion::extract_monitor_final_snapshot;
+  using alfa_robot::motion::extract_monitor_full_selected_snapshot;
   using alfa_robot::motion::extract_monitor_loaded_snapshot;
   using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_snapshot_base;
@@ -79,6 +81,19 @@ int main()
   assert(final_snapshot.at("records")[0].at("candidate_order") == 12);
   assert(final_snapshot.at("replay_stages").size() == 1);
   assert(final_snapshot.at("replay_stages")[0].at("stage") == "selected_loaded_plan");
+
+  const auto full_snapshot = extract_monitor_full_selected_snapshot(
+    final_snapshot, 0.925, -0.4, 123.0, std::array<double, 4>{1.0, 2.0, 3.0, 4.0});
+  assert(full_snapshot.at("phase") == "full_selected");
+  assert(full_snapshot.at("phase_label") == "完整流程最终采用方案");
+  assert(full_snapshot.at("box_front_x") == 0.925);
+  assert(full_snapshot.at("scene_y_shift") == -0.4);
+  assert(full_snapshot.at("elapsed_ms") == 123.0);
+  assert(full_snapshot.at("ik_elapsed_ms") == 1.0);
+  assert(full_snapshot.at("extract_elapsed_ms") == 2.0);
+  assert(full_snapshot.at("loaded_elapsed_ms") == 3.0);
+  assert(full_snapshot.at("final_elapsed_ms") == 4.0);
+  assert(full_snapshot.at("records").size() == 1);
 
   return 0;
 }

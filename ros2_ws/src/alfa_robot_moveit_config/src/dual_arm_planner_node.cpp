@@ -82,6 +82,7 @@ using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_final_snapshot;
+using alfa_robot::motion::extract_monitor_full_selected_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
@@ -2987,18 +2988,13 @@ private:
     } catch (const std::exception&) {
       snapshot = nlohmann::json::object();
     }
-    if (snapshot.is_object()) {
-      snapshot["phase"] = "full_selected";
-      snapshot["phase_label"] = "完整流程最终采用方案";
-      snapshot["box_front_x"] = box_front_x_;
-      snapshot["scene_y_shift"] = scene_y_shift_;
-      snapshot["elapsed_ms"] = result.total_elapsed_ms;
-      snapshot["ik_elapsed_ms"] = result.stage_elapsed_ms[0];
-      snapshot["extract_elapsed_ms"] = result.stage_elapsed_ms[1];
-      snapshot["loaded_elapsed_ms"] = result.stage_elapsed_ms[2];
-      snapshot["final_elapsed_ms"] = result.stage_elapsed_ms[3];
-      write_extract_monitor_snapshot(snapshot);
-    }
+    const nlohmann::json full_snapshot = extract_monitor_full_selected_snapshot(
+      snapshot,
+      box_front_x_,
+      scene_y_shift_,
+      result.total_elapsed_ms,
+      result.stage_elapsed_ms);
+    write_extract_monitor_snapshot(full_snapshot);
 
     std::ostringstream out;
     out << result.message

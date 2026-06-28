@@ -770,3 +770,9 @@
 - 改了哪里：`dual_arm_planner_node.cpp` 新增 `single_state_plan()` 与 `ensure_selected_extract_replay_records()`；extract 阶段和 final 阶段复用同一个单点状态 Plan 构造函数。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2901.97ms，快照 `replay_stages=21`，首段为 pre_attach，末段为 selected_loaded_plan。
 - 留给下个 AI：最终阶段剩余可拆点是 pre_attach transition replay 构造、lateral shift replay 构造、loaded plan replay 构造；建议继续按“一个语义块一刀”的节奏，不要一次性搬大段。
+
+## 2026-06-28 运控 / Codex / monitor 最终 replay 拼装分段命名化
+- 做了什么：把 `run_extract_monitor_final_stage()` 中剩余的最终 replay 拼装按语义拆成 pre-attach 过渡、横向让位 replay、负重规划 replay 三个命名函数，主流程变成按阶段 append。
+- 改了哪里：`dual_arm_planner_node.cpp` 新增 `append_pre_attach_replay_stage()`、`append_lateral_shift_replay_stages()`、`append_loaded_plan_replay_stage()`；最终阶段只保留选择候选、计算 goal、确保抽离 replay、组合四段 replay 和写 snapshot。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2798.15ms，快照 `replay_stages=17`，首段为 pre_attach，末段为 selected_loaded_plan。
+- 留给下个 AI：final stage 的 replay 拼装已经具备清晰 seam；后续更大的收益来自把 monitor 状态机整体抽成类，或把 `ExtractMonitorState`/阶段函数从节点里移出。

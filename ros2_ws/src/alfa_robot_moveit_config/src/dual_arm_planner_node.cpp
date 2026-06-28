@@ -3383,6 +3383,126 @@ private:
     }
   }
 
+  bool append_pre_attach_replay_stage(
+    const ExtractRolloutTiming& selected,
+    const moveit::core::RobotState& ik_goal_state,
+    nlohmann::json* replay_stages)
+  {
+    if (!replay_stages || !extract_monitor_state_.loaded_start_state) {
+      return false;
+    }
+
+    const auto transition_t0 = std::chrono::steady_clock::now();
+    moveit::planning_interface::MoveGroupInterface::Plan transition_plan =
+      make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_goal_state, 1.0);
+    transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
+    std::string transition_reason;
+    bool transition_ok =
+      planned_trajectory_clear_in_full_scene(
+        transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
+    std::string transition_method = "joint_interpolation";
+    if (!transition_ok) {
+      transition_method = "rrt";
+      transition_reason.clear();
+      transition_ok = plan_joint_space_with_direct_pipeline(
+        *extract_monitor_state_.loaded_start_state, ik_goal_state, &transition_plan, &transition_reason);
+      if (transition_ok) {
+        std::string shortcut_reason;
+        transition_plan = shortcut_joint_plan(
+          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &shortcut_reason);
+        transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
+        transition_ok = planned_trajectory_clear_in_full_scene(
+          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
+        if (!shortcut_reason.empty()) {
+          transition_reason = shortcut_reason + (transition_reason.empty() ? "" : "; " + transition_reason);
+        }
+      }
+    }
+    const double transition_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - transition_t0).count();
+    nlohmann::json extra = {
+      {"stage_kind", "monitor_selected_pre_attach_loaded_to_ik_replay"},
+      {"valid", transition_ok},
+      {"method", transition_method},
+      {"transition_ms", transition_ms},
+      {"failure_reason", transition_ok ? "" : transition_reason},
+      {"candidate_order", selected.candidate_order},
+      {"loaded_plan_rank", selected.loaded_plan_rank},
+      {"left_box_id", extract_monitor_state_.left_box_id},
+      {"right_box_id", extract_monitor_state_.right_box_id}
+    };
+    replay_stages->push_back(monitor_stage_json(
+      extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
+      transition_plan,
+      *extract_monitor_state_.loaded_start_state,
+      ik_goal_state,
+      arm_joint_target_names(),
+      {},
+      extra));
+    return true;
+  }
+
+  void append_lateral_shift_replay_stages(
+    const ExtractRolloutTiming& selected,
+    nlohmann::json* replay_stages)
+  {
+    if (!replay_stages) {
+      return;
+    }
+    for (const auto& shift_stage : selected.lateral_shift_replay_stages) {
+      if (!shift_stage.start_state || !shift_stage.goal_state) {
+        continue;
+      }
+      nlohmann::json extra = shift_stage.extra;
+      extra["candidate_order"] = selected.candidate_order;
+      extra["loaded_plan_rank"] = selected.loaded_plan_rank;
+      extra["left_box_id"] = extract_monitor_state_.left_box_id;
+      extra["right_box_id"] = extract_monitor_state_.right_box_id;
+      replay_stages->push_back(monitor_stage_json(
+        shift_stage.stage_name,
+        shift_stage.plan,
+        *shift_stage.start_state,
+        *shift_stage.goal_state,
+        arm_joint_target_names(),
+        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+        extra));
+    }
+  }
+
+  bool append_loaded_plan_replay_stage(
+    const ExtractRolloutTiming& selected,
+    nlohmann::json* replay_stages)
+  {
+    if (!replay_stages ||
+        !selected.loaded_start_state ||
+        !selected.loaded_goal_state ||
+        selected.loaded_plan.trajectory_.joint_trajectory.points.empty()) {
+      return false;
+    }
+
+    nlohmann::json extra = {
+      {"stage_kind", "monitor_selected_loaded_plan_replay"},
+      {"valid", true},
+      {"candidate_order", selected.candidate_order},
+      {"loaded_plan_rank", selected.loaded_plan_rank},
+      {"loaded_plan_ms", selected.loaded_plan_ms},
+      {"loaded_plan_points", selected.loaded_plan_points},
+      {"loaded_plan_trajectory_distance", selected.loaded_plan_trajectory_distance},
+      {"moveit_attached_box_count", 2},
+      {"left_box_id", extract_monitor_state_.left_box_id},
+      {"right_box_id", extract_monitor_state_.right_box_id}
+    };
+    replay_stages->push_back(monitor_stage_json(
+      extract_monitor_state_.prefix + "/selected_loaded_plan",
+      selected.loaded_plan,
+      *selected.loaded_start_state,
+      *selected.loaded_goal_state,
+      arm_joint_target_names(),
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      extra));
+    return true;
+  }
+
   bool run_extract_monitor_final_stage(std::string* message)
   {
     const auto stage_start = std::chrono::steady_clock::now();
@@ -3404,99 +3524,12 @@ private:
     ensure_selected_extract_replay_records(*selected);
 
     nlohmann::json replay_stages = nlohmann::json::array();
-    if (extract_monitor_state_.loaded_start_state) {
-      const auto transition_t0 = std::chrono::steady_clock::now();
-      moveit::planning_interface::MoveGroupInterface::Plan transition_plan =
-        make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_goal_state, 1.0);
-      transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
-      std::string transition_reason;
-      bool transition_ok =
-        planned_trajectory_clear_in_full_scene(
-          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
-      std::string transition_method = "joint_interpolation";
-      if (!transition_ok) {
-        transition_method = "rrt";
-        transition_reason.clear();
-        transition_ok = plan_joint_space_with_direct_pipeline(
-          *extract_monitor_state_.loaded_start_state, ik_goal_state, &transition_plan, &transition_reason);
-        if (transition_ok) {
-          std::string shortcut_reason;
-          transition_plan = shortcut_joint_plan(
-            transition_plan, *extract_monitor_state_.loaded_start_state, {}, &shortcut_reason);
-          transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
-          transition_ok = planned_trajectory_clear_in_full_scene(
-            transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
-          if (!shortcut_reason.empty()) {
-            transition_reason = shortcut_reason + (transition_reason.empty() ? "" : "; " + transition_reason);
-          }
-        }
-      }
-      const double transition_ms = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - transition_t0).count();
-      nlohmann::json extra = {
-        {"stage_kind", "monitor_selected_pre_attach_loaded_to_ik_replay"},
-        {"valid", transition_ok},
-        {"method", transition_method},
-        {"transition_ms", transition_ms},
-        {"failure_reason", transition_ok ? "" : transition_reason},
-        {"candidate_order", selected->candidate_order},
-        {"loaded_plan_rank", selected->loaded_plan_rank},
-        {"left_box_id", extract_monitor_state_.left_box_id},
-        {"right_box_id", extract_monitor_state_.right_box_id}
-      };
-      replay_stages.push_back(monitor_stage_json(
-        extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
-        transition_plan,
-        *extract_monitor_state_.loaded_start_state,
-        ik_goal_state,
-        arm_joint_target_names(),
-        {},
-        extra));
-    }
+    append_pre_attach_replay_stage(*selected, ik_goal_state, &replay_stages);
     for (const auto& stage : selected->rollout_records) {
       replay_stages.push_back(stage);
     }
-    for (const auto& shift_stage : selected->lateral_shift_replay_stages) {
-      if (!shift_stage.start_state || !shift_stage.goal_state) {
-        continue;
-      }
-      nlohmann::json extra = shift_stage.extra;
-      extra["candidate_order"] = selected->candidate_order;
-      extra["loaded_plan_rank"] = selected->loaded_plan_rank;
-      extra["left_box_id"] = extract_monitor_state_.left_box_id;
-      extra["right_box_id"] = extract_monitor_state_.right_box_id;
-      replay_stages.push_back(monitor_stage_json(
-        shift_stage.stage_name,
-        shift_stage.plan,
-        *shift_stage.start_state,
-        *shift_stage.goal_state,
-        arm_joint_target_names(),
-        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-        extra));
-    }
-    if (selected->loaded_start_state && selected->loaded_goal_state &&
-        !selected->loaded_plan.trajectory_.joint_trajectory.points.empty()) {
-      nlohmann::json extra = {
-        {"stage_kind", "monitor_selected_loaded_plan_replay"},
-        {"valid", true},
-        {"candidate_order", selected->candidate_order},
-        {"loaded_plan_rank", selected->loaded_plan_rank},
-        {"loaded_plan_ms", selected->loaded_plan_ms},
-        {"loaded_plan_points", selected->loaded_plan_points},
-        {"loaded_plan_trajectory_distance", selected->loaded_plan_trajectory_distance},
-        {"moveit_attached_box_count", 2},
-        {"left_box_id", extract_monitor_state_.left_box_id},
-        {"right_box_id", extract_monitor_state_.right_box_id}
-      };
-      replay_stages.push_back(monitor_stage_json(
-        extract_monitor_state_.prefix + "/selected_loaded_plan",
-        selected->loaded_plan,
-        *selected->loaded_start_state,
-        *selected->loaded_goal_state,
-        arm_joint_target_names(),
-        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-        extra));
-    }
+    append_lateral_shift_replay_stages(*selected, &replay_stages);
+    append_loaded_plan_replay_stage(*selected, &replay_stages);
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();

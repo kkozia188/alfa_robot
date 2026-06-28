@@ -11,6 +11,9 @@ int main()
   using alfa_robot::motion::ExtractMonitorPhase;
   using alfa_robot::motion::ExtractMonitorStage;
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
+  using alfa_robot::motion::AttachedBoxSpec;
+  using alfa_robot::motion::extract_monitor_prefix;
+  using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::extract_monitor_next_phase_after;
   using alfa_robot::motion::extract_monitor_phase_before_running;
   using alfa_robot::motion::extract_monitor_stage_for_phase;
@@ -116,6 +119,26 @@ int main()
   const auto full_from_controller = controller.runFull(callbacks, [&] { return last_elapsed; });
   assert(full_from_controller.success);
   assert(controller.phase() == ExtractMonitorPhase::ReadyForIk);
+
+  AttachedBoxSpec left_box;
+  left_box.id = "left_box";
+  AttachedBoxSpec right_box;
+  right_box.id = "right_box";
+  auto state = make_extract_monitor_initial_state(
+    6,
+    8,
+    left_box,
+    right_box,
+    {},
+    {});
+  assert(extract_monitor_prefix(6, 8) == "extract_monitor_L6_R8");
+  assert(state.left_box_id == 6);
+  assert(state.right_box_id == 8);
+  assert(state.prefix == "extract_monitor_L6_R8");
+  assert(state.left_box.id == "left_box");
+  assert(state.right_box.id == "right_box");
+  assert(!state.seed_state);
+  assert(!state.loaded_start_state);
 
   return 0;
 }

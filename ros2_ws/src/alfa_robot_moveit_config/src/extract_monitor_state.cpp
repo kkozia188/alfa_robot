@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <sstream>
+#include <utility>
 
 namespace alfa_robot::motion
 {
@@ -42,6 +43,31 @@ size_t stage_index(ExtractMonitorStage stage)
 }
 
 }  // namespace
+
+std::string extract_monitor_prefix(int left_box_id, int right_box_id)
+{
+  return "extract_monitor_L" + std::to_string(left_box_id) +
+         "_R" + std::to_string(right_box_id);
+}
+
+ExtractMonitorState make_extract_monitor_initial_state(
+  int left_box_id,
+  int right_box_id,
+  AttachedBoxSpec left_box,
+  AttachedBoxSpec right_box,
+  moveit::core::RobotStatePtr seed_state,
+  moveit::core::RobotStatePtr loaded_start_state)
+{
+  ExtractMonitorState state;
+  state.left_box_id = left_box_id;
+  state.right_box_id = right_box_id;
+  state.left_box = std::move(left_box);
+  state.right_box = std::move(right_box);
+  state.prefix = extract_monitor_prefix(left_box_id, right_box_id);
+  state.seed_state = std::move(seed_state);
+  state.loaded_start_state = std::move(loaded_start_state);
+  return state;
+}
 
 const char* extract_monitor_stage_failure_label(ExtractMonitorStage stage)
 {

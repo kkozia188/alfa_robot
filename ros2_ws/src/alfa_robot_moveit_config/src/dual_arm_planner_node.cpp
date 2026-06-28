@@ -141,6 +141,7 @@ using alfa_robot::motion::make_attached_box_spec;
 using alfa_robot::motion::make_boxes;
 using alfa_robot::motion::make_box_wall_obstacles_for_opening;
 using alfa_robot::motion::make_container_panels;
+using alfa_robot::motion::make_extract_monitor_initial_state;
 using alfa_robot::motion::make_identity_pose;
 using alfa_robot::motion::make_pick_pairs;
 using alfa_robot::motion::make_pose;
@@ -3017,16 +3018,13 @@ private:
     }
     set_static_box_wall_opening(left_box_id, right_box_id, "extract_monitor");
 
-    extract_monitor_state_.left_box_id = left_box_id;
-    extract_monitor_state_.right_box_id = right_box_id;
-    extract_monitor_state_.left_box = make_carried_box_spec("left", left_box_id, false);
-    extract_monitor_state_.right_box = make_carried_box_spec("right", right_box_id, false);
-    extract_monitor_state_.prefix = "extract_monitor_L" + std::to_string(left_box_id) +
-                                    "_R" + std::to_string(right_box_id);
-    extract_monitor_state_.seed_state =
-      std::make_shared<moveit::core::RobotState>(make_extract_monitor_seed_state());
-    extract_monitor_state_.loaded_start_state =
-      std::make_shared<moveit::core::RobotState>(make_extract_monitor_loaded_start_state());
+    extract_monitor_state_ = make_extract_monitor_initial_state(
+      left_box_id,
+      right_box_id,
+      make_carried_box_spec("left", left_box_id, false),
+      make_carried_box_spec("right", right_box_id, false),
+      std::make_shared<moveit::core::RobotState>(make_extract_monitor_seed_state()),
+      std::make_shared<moveit::core::RobotState>(make_extract_monitor_loaded_start_state()));
 
     moveit::core::RobotState selected_state(*extract_monitor_state_.seed_state);
     nlohmann::json ik_extra;

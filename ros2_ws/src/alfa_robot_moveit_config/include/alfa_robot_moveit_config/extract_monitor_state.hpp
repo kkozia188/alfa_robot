@@ -47,6 +47,16 @@ struct ExtractMonitorState
   std::vector<ExtractRolloutTiming> timings;
 };
 
+std::string extract_monitor_prefix(int left_box_id, int right_box_id);
+
+ExtractMonitorState make_extract_monitor_initial_state(
+  int left_box_id,
+  int right_box_id,
+  AttachedBoxSpec left_box,
+  AttachedBoxSpec right_box,
+  moveit::core::RobotStatePtr seed_state,
+  moveit::core::RobotStatePtr loaded_start_state);
+
 using ExtractMonitorStageRunner = std::function<bool(std::string*)>;
 
 struct ExtractMonitorStageCallbacks

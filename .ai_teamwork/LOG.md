@@ -806,3 +806,9 @@
 - 改了哪里：`optimized_ik_pipeline.hpp/.cpp` 新增 `selectLegalFromResult()`；`dual_arm_planner_node.cpp` 的 monitor IK 阶段改为调用该深接口；新增 `test_ik_candidate_selector.cpp` 覆盖合法过滤、排序、去重和统计。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2728.45ms。
 - 留给下个 AI：IK 候选去重/排序已经和 BioIK 优选模块放在一起；后续不要在 `dual_arm_planner_node.cpp` 里再写候选排序逻辑，应该继续扩展 `IkCandidateSelector` 或 IK pipeline。
+
+## 2026-06-28 运控 / Codex / monitor 初始状态装配收口
+- 做了什么：把 extract monitor 的初始状态装配规则收进 `extract_monitor_state` 模块，集中生成 prefix、箱号、左右携带箱 spec、seed state 和 loaded start state。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_prefix()` 与 `make_extract_monitor_initial_state()`；`dual_arm_planner_node.cpp` 的 IK 阶段不再逐字段拼装 `ExtractMonitorState`；`test_extract_monitor_state.cpp` 增加初始状态字段覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2768.85ms。
+- 留给下个 AI：monitor 状态生命周期已经更集中；后续如果继续拆阶段实现，优先让阶段函数读写 `ExtractMonitorState` 的位置更少、更集中。

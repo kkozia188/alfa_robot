@@ -6,6 +6,7 @@ int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::attached_boxes_json;
+  using alfa_robot::motion::failure_counts_json;
 
   AttachedBoxSpec box;
   box.id = "carried_left_box_6";
@@ -20,6 +21,11 @@ int main()
   assert(boxes[0].at("link_name") == "left_v5_tool0");
   assert(boxes[0].at("center_in_link").size() == 3);
   assert(boxes[0].at("size").size() == 3);
+
+  const auto failures = failure_counts_json({{"left_kdl_no_solution", 2}, {"unknown", 1}});
+  assert(failures.is_object());
+  assert(failures.at("left_kdl_no_solution") == 2);
+  assert(failures.at("unknown") == 1);
 
   return 0;
 }

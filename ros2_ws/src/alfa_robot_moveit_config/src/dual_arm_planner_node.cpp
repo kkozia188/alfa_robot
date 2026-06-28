@@ -78,6 +78,7 @@ using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
+using alfa_robot::motion::failure_counts_json;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -3216,11 +3217,6 @@ private:
       }
     }
 
-    nlohmann::json failure_json = nlohmann::json::object();
-    for (const auto& [reason, count_value] : failure_counts) {
-      failure_json[reason] = count_value;
-    }
-
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
@@ -3236,7 +3232,7 @@ private:
       {"input_candidate_count", count},
       {"success_count", success_count},
       {"worker_count", worker_count},
-      {"failure_counts", failure_json},
+      {"failure_counts", failure_counts_json(failure_counts)},
       {"records", records}
     };
     if (!write_extract_monitor_snapshot(snapshot)) {
@@ -3298,11 +3294,6 @@ private:
       }
     }
 
-    nlohmann::json failure_json = nlohmann::json::object();
-    for (const auto& [reason, count_value] : failure_counts) {
-      failure_json[reason] = count_value;
-    }
-
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
@@ -3321,7 +3312,7 @@ private:
       {"loaded_plan_batch_wall_ms", batch.wall_ms},
       {"loaded_parallel_workers", options.parallel_workers},
       {"loaded_candidate_limit", options.candidate_limit},
-      {"failure_counts", failure_json},
+      {"failure_counts", failure_counts_json(failure_counts)},
       {"records", records}
     };
     if (!write_extract_monitor_snapshot(snapshot)) {

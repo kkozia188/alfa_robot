@@ -196,4 +196,13 @@ nlohmann::json extract_monitor_timing_json(
   };
 }
 
+nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts)
+{
+  nlohmann::json failure_json = nlohmann::json::object();
+  for (const auto& [reason, count_value] : failure_counts) {
+    failure_json[reason] = count_value;
+  }
+  return failure_json;
+}
+
 }  // namespace alfa_robot::motion

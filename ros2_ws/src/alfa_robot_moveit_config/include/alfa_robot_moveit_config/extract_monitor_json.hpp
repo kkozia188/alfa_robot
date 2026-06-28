@@ -8,6 +8,7 @@
 #include <moveit/robot_state/robot_state.h>
 #include <nlohmann/json.hpp>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -45,5 +46,7 @@ nlohmann::json extract_monitor_timing_json(
   const std::vector<std::string>& target_names,
   const std::vector<AttachedBoxSpec>& carried_boxes,
   const nlohmann::json& static_box_obstacles);
+
+nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
 }  // namespace alfa_robot::motion

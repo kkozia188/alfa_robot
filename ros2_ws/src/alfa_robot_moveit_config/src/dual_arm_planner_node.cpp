@@ -88,9 +88,10 @@ using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
-using alfa_robot::motion::extract_monitor_replay_context_json;
 using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_extra;
+using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
 using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
+using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
@@ -3364,23 +3365,15 @@ private:
     if (!replay_stages) {
       return;
     }
-    for (const auto& shift_stage : selected.lateral_shift_replay_stages) {
-      if (!shift_stage.start_state || !shift_stage.goal_state) {
-        continue;
-      }
-      const nlohmann::json extra = extract_monitor_selected_lateral_shift_replay_extra(
-        selected,
-        extract_monitor_state_.left_box_id,
-        extract_monitor_state_.right_box_id,
-        shift_stage.extra);
-      replay_stages->push_back(monitor_stage_json(
-        shift_stage.stage_name,
-        shift_stage.plan,
-        *shift_stage.start_state,
-        *shift_stage.goal_state,
-        arm_joint_target_names(),
-        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-        extra));
+    const auto shift_replay_stages = extract_monitor_selected_lateral_shift_replay_stages(
+      selected,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      arm_joint_target_names(),
+      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+      static_box_obstacles_json());
+    for (const auto& stage : shift_replay_stages) {
+      replay_stages->push_back(stage);
     }
   }
 
@@ -3388,25 +3381,22 @@ private:
     const ExtractRolloutTiming& selected,
     nlohmann::json* replay_stages)
   {
-    if (!replay_stages ||
-        !selected.loaded_start_state ||
-        !selected.loaded_goal_state ||
-        selected.loaded_plan.trajectory_.joint_trajectory.points.empty()) {
+    if (!replay_stages) {
       return false;
     }
 
-    const nlohmann::json extra = extract_monitor_selected_loaded_plan_replay_extra(
+    const auto stage = extract_monitor_selected_loaded_plan_replay_stage(
+      extract_monitor_state_.prefix,
       selected,
       extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id);
-    replay_stages->push_back(monitor_stage_json(
-      extract_monitor_state_.prefix + "/selected_loaded_plan",
-      selected.loaded_plan,
-      *selected.loaded_start_state,
-      *selected.loaded_goal_state,
+      extract_monitor_state_.right_box_id,
       arm_joint_target_names(),
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-      extra));
+      static_box_obstacles_json());
+    if (stage.is_null()) {
+      return false;
+    }
+    replay_stages->push_back(stage);
     return true;
   }
 

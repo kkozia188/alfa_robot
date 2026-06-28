@@ -212,7 +212,7 @@ if(BUILD_TESTING)
 
   add_executable(test_extract_monitor_json test/test_extract_monitor_json.cpp)
   target_link_libraries(test_extract_monitor_json alfa_robot_motion_scene_adapter)
-  ament_target_dependencies(test_extract_monitor_json nlohmann_json)
+  ament_target_dependencies(test_extract_monitor_json nlohmann_json srdfdom urdf)
   add_test(NAME test_extract_monitor_json COMMAND test_extract_monitor_json)
 
   add_executable(test_extract_monitor_state test/test_extract_monitor_state.cpp)

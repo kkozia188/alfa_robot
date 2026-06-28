@@ -156,6 +156,59 @@ nlohmann::json extract_monitor_selected_loaded_plan_replay_extra(
   return extra;
 }
 
+nlohmann::json extract_monitor_selected_lateral_shift_replay_stages(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles)
+{
+  nlohmann::json replay_stages = nlohmann::json::array();
+  for (const auto& shift_stage : timing.lateral_shift_replay_stages) {
+    if (!shift_stage.start_state || !shift_stage.goal_state) {
+      continue;
+    }
+    replay_stages.push_back(extract_monitor_stage_json(
+      shift_stage.stage_name,
+      shift_stage.plan,
+      *shift_stage.start_state,
+      *shift_stage.goal_state,
+      target_names,
+      carried_boxes,
+      static_box_obstacles,
+      extract_monitor_selected_lateral_shift_replay_extra(
+        timing, left_box_id, right_box_id, shift_stage.extra)));
+  }
+  return replay_stages;
+}
+
+nlohmann::json extract_monitor_selected_loaded_plan_replay_stage(
+  const std::string& prefix,
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles)
+{
+  if (!timing.loaded_start_state ||
+      !timing.loaded_goal_state ||
+      timing.loaded_plan.trajectory_.joint_trajectory.points.empty()) {
+    return nlohmann::json();
+  }
+
+  return extract_monitor_stage_json(
+    prefix + "/selected_loaded_plan",
+    timing.loaded_plan,
+    *timing.loaded_start_state,
+    *timing.loaded_goal_state,
+    target_names,
+    carried_boxes,
+    static_box_obstacles,
+    extract_monitor_selected_loaded_plan_replay_extra(timing, left_box_id, right_box_id));
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,

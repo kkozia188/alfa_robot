@@ -74,6 +74,23 @@ nlohmann::json extract_monitor_selected_loaded_plan_replay_extra(
   int left_box_id,
   int right_box_id);
 
+nlohmann::json extract_monitor_selected_lateral_shift_replay_stages(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles);
+
+nlohmann::json extract_monitor_selected_loaded_plan_replay_stage(
+  const std::string& prefix,
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles);
+
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
 nlohmann::json extract_monitor_snapshot_base(

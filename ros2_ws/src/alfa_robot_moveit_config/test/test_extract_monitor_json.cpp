@@ -1,11 +1,42 @@
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 
+#include <moveit/robot_model/robot_model.h>
+#include <moveit/robot_state/robot_state.h>
+#include <srdfdom/model.h>
+#include <urdf/model.h>
+
 #include <array>
 #include <cassert>
+#include <memory>
+
+namespace
+{
+
+moveit::core::RobotModelPtr empty_model()
+{
+  const std::string urdf_xml =
+    R"(<robot name="empty_robot"><link name="world"/></robot>)";
+  auto urdf_model = std::make_shared<urdf::Model>();
+  assert(urdf_model->initString(urdf_xml));
+  auto srdf_model = std::make_shared<srdf::Model>();
+  assert(srdf_model->initString(*urdf_model, R"(<robot name="empty_robot"/>)"));
+  return std::make_shared<moveit::core::RobotModel>(urdf_model, srdf_model);
+}
+
+moveit::planning_interface::MoveGroupInterface::Plan one_point_plan()
+{
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  trajectory_msgs::msg::JointTrajectoryPoint point;
+  plan.trajectory_.joint_trajectory.points.push_back(point);
+  return plan;
+}
+
+}  // namespace
 
 int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
+  using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::attached_boxes_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
   using alfa_robot::motion::extract_monitor_final_snapshot;
@@ -14,7 +45,9 @@ int main()
   using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
   using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_extra;
+  using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
   using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
+  using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
   using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::failure_counts_json;
 
@@ -110,6 +143,37 @@ int main()
   assert(selected_loaded_extra.at("loaded_plan_points") == 42);
   assert(selected_loaded_extra.at("loaded_plan_trajectory_distance") == 2.25);
   assert(selected_loaded_extra.at("moveit_attached_box_count") == 2);
+
+  const auto model = empty_model();
+  auto start_state = std::make_shared<moveit::core::RobotState>(model);
+  auto goal_state = std::make_shared<moveit::core::RobotState>(model);
+  start_state->setToDefaultValues();
+  goal_state->setToDefaultValues();
+
+  LoadedPoseReplayStage shift_stage;
+  shift_stage.stage_name = "shift_stage";
+  shift_stage.plan = one_point_plan();
+  shift_stage.start_state = start_state;
+  shift_stage.goal_state = goal_state;
+  shift_stage.extra = nlohmann::json{{"stage_kind", "shift"}, {"valid", true}};
+  timing.lateral_shift_replay_stages = {shift_stage};
+  const auto shift_stages = extract_monitor_selected_lateral_shift_replay_stages(
+    timing, 6, 8, {}, {box}, nlohmann::json::object());
+  assert(shift_stages.size() == 1);
+  assert(shift_stages[0].at("stage") == "shift_stage");
+  assert(shift_stages[0].at("extra").at("candidate_order") == 12);
+  assert(shift_stages[0].at("attached_boxes").size() == 1);
+
+  timing.loaded_start_state = start_state;
+  timing.loaded_goal_state = goal_state;
+  timing.loaded_plan = one_point_plan();
+  const auto loaded_stage = extract_monitor_selected_loaded_plan_replay_stage(
+    "extract_monitor_L6_R8", timing, 6, 8, {}, {box}, nlohmann::json::object());
+  assert(loaded_stage.is_object());
+  assert(loaded_stage.at("stage") == "extract_monitor_L6_R8/selected_loaded_plan");
+  assert(loaded_stage.at("extra").at("stage_kind") == "monitor_selected_loaded_plan_replay");
+  assert(loaded_stage.at("extra").at("candidate_order") == 12);
+  assert(loaded_stage.at("attached_boxes").size() == 1);
 
   const auto final_snapshot = extract_monitor_final_snapshot(
     45.0,

@@ -69,6 +69,20 @@ ExtractMonitorState make_extract_monitor_initial_state(
   return state;
 }
 
+void populate_extract_monitor_candidate_states(
+  ExtractMonitorState& state,
+  const ExtractMonitorCandidateStateBuilder& state_builder)
+{
+  state.candidate_states.clear();
+  state.candidate_states.reserve(state.legal_candidates.size());
+  if (!state_builder) {
+    return;
+  }
+  for (const auto& candidate : state.legal_candidates) {
+    state.candidate_states.push_back(state_builder(candidate));
+  }
+}
+
 const char* extract_monitor_stage_failure_label(ExtractMonitorStage stage)
 {
   switch (stage) {

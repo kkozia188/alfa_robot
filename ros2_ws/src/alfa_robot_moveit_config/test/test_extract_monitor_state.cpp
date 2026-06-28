@@ -14,6 +14,7 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::extract_monitor_prefix;
   using alfa_robot::motion::make_extract_monitor_initial_state;
+  using alfa_robot::motion::populate_extract_monitor_candidate_states;
   using alfa_robot::motion::extract_monitor_next_phase_after;
   using alfa_robot::motion::extract_monitor_phase_before_running;
   using alfa_robot::motion::extract_monitor_stage_for_phase;
@@ -139,6 +140,19 @@ int main()
   assert(state.right_box.id == "right_box");
   assert(!state.seed_state);
   assert(!state.loaded_start_state);
+
+  state.legal_candidates.resize(3);
+  size_t built_count = 0;
+  populate_extract_monitor_candidate_states(
+    state,
+    [&](const ik_benchmark::UpdownAwareIkCandidate&) {
+      ++built_count;
+      return moveit::core::RobotStatePtr{};
+    });
+  assert(built_count == 3);
+  assert(state.candidate_states.size() == 3);
+  populate_extract_monitor_candidate_states(state, {});
+  assert(state.candidate_states.empty());
 
   return 0;
 }

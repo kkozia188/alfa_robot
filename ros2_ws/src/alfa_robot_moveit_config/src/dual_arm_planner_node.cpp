@@ -86,6 +86,7 @@ using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
+using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -3045,15 +3046,19 @@ private:
     IkCandidateSelectionStats dedup_stats;
     extract_monitor_state_.ik_result = ik_result;
     extract_monitor_state_.legal_candidates = selected_monitor_ik_candidates(ik_result, &dedup_stats);
-    extract_monitor_state_.candidate_states.clear();
-    extract_monitor_state_.candidate_states.reserve(extract_monitor_state_.legal_candidates.size());
+    populate_extract_monitor_candidate_states(
+      extract_monitor_state_,
+      [this](const ik_benchmark::UpdownAwareIkCandidate& candidate) {
+        return std::make_shared<moveit::core::RobotState>(
+          state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate));
+      });
 
     nlohmann::json records = nlohmann::json::array();
     for (size_t i = 0; i < extract_monitor_state_.legal_candidates.size(); ++i) {
-      auto state = std::make_shared<moveit::core::RobotState>(
-        state_from_ik_candidate(*extract_monitor_state_.seed_state, extract_monitor_state_.legal_candidates[i]));
-      extract_monitor_state_.candidate_states.push_back(state);
-      records.push_back(monitor_candidate_json(extract_monitor_state_.legal_candidates[i], i, *state));
+      records.push_back(monitor_candidate_json(
+        extract_monitor_state_.legal_candidates[i],
+        i,
+        *extract_monitor_state_.candidate_states[i]));
     }
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(

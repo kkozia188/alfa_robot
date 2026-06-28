@@ -812,3 +812,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_prefix()` 与 `make_extract_monitor_initial_state()`；`dual_arm_planner_node.cpp` 的 IK 阶段不再逐字段拼装 `ExtractMonitorState`；`test_extract_monitor_state.cpp` 增加初始状态字段覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2768.85ms。
 - 留给下个 AI：monitor 状态生命周期已经更集中；后续如果继续拆阶段实现，优先让阶段函数读写 `ExtractMonitorState` 的位置更少、更集中。
+
+## 2026-06-28 运控 / Codex / monitor 候选状态填充收口
+- 做了什么：把 extract monitor 中“根据已选 IK 候选批量生成 RobotState 缓存”的容器操作收进 `extract_monitor_state` 模块，减少主节点里手写 candidate state 清空/预留/填充循环。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `populate_extract_monitor_candidate_states()`；`dual_arm_planner_node.cpp` 的 IK 阶段改为用该函数生成 candidate states；`test_extract_monitor_state.cpp` 增加填充调用计数和空 builder 覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2816.53ms。
+- 留给下个 AI：monitor IK 阶段现在剩余主要是业务动作顺序；候选状态缓存已经有独立 seam，后续不要在节点里重复维护 `candidate_states` 容器规则。

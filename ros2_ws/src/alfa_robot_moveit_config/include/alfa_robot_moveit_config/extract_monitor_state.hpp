@@ -57,6 +57,13 @@ ExtractMonitorState make_extract_monitor_initial_state(
   moveit::core::RobotStatePtr seed_state,
   moveit::core::RobotStatePtr loaded_start_state);
 
+using ExtractMonitorCandidateStateBuilder =
+  std::function<moveit::core::RobotStatePtr(const ik_benchmark::UpdownAwareIkCandidate&)>;
+
+void populate_extract_monitor_candidate_states(
+  ExtractMonitorState& state,
+  const ExtractMonitorCandidateStateBuilder& state_builder);
+
 using ExtractMonitorStageRunner = std::function<bool(std::string*)>;
 
 struct ExtractMonitorStageCallbacks

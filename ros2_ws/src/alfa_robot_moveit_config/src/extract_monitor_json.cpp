@@ -93,6 +93,19 @@ nlohmann::json extract_monitor_candidate_json(
   };
 }
 
+nlohmann::json extract_monitor_replay_context_json(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id)
+{
+  return {
+    {"candidate_order", timing.candidate_order},
+    {"loaded_plan_rank", timing.loaded_plan_rank},
+    {"left_box_id", left_box_id},
+    {"right_box_id", right_box_id}
+  };
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,
@@ -113,12 +126,9 @@ nlohmann::json extract_monitor_timing_json(
       continue;
     }
     nlohmann::json extra = shift_stage.extra;
-    extra["candidate_order"] = timing.candidate_order;
-    extra["loaded_plan_rank"] = timing.loaded_plan_rank;
+    extra.update(extract_monitor_replay_context_json(timing, left_box_id, right_box_id));
     extra["loaded_plan_success"] = timing.loaded_plan_success;
     extra["loaded_plan_failure_reason"] = timing.loaded_plan_failure_reason;
-    extra["left_box_id"] = left_box_id;
-    extra["right_box_id"] = right_box_id;
     replay_stages.push_back(extract_monitor_stage_json(
       shift_stage.stage_name,
       shift_stage.plan,
@@ -131,19 +141,16 @@ nlohmann::json extract_monitor_timing_json(
   }
   if (timing.loaded_start_state && timing.loaded_goal_state &&
       !timing.loaded_plan.trajectory_.joint_trajectory.points.empty()) {
-    nlohmann::json extra = {
+    nlohmann::json extra = extract_monitor_replay_context_json(timing, left_box_id, right_box_id);
+    extra.update({
       {"stage_kind", "monitor_loaded_plan_attempt_replay"},
       {"valid", timing.loaded_plan_success},
-      {"candidate_order", timing.candidate_order},
-      {"loaded_plan_rank", timing.loaded_plan_rank},
       {"loaded_plan_success", timing.loaded_plan_success},
       {"loaded_plan_failure_reason", timing.loaded_plan_failure_reason},
       {"loaded_plan_ms", timing.loaded_plan_ms},
       {"loaded_plan_points", timing.loaded_plan_points},
-      {"loaded_plan_trajectory_distance", timing.loaded_plan_trajectory_distance},
-      {"left_box_id", left_box_id},
-      {"right_box_id", right_box_id}
-    };
+      {"loaded_plan_trajectory_distance", timing.loaded_plan_trajectory_distance}
+    });
     replay_stages.push_back(extract_monitor_stage_json(
       prefix + "/candidate_" + std::to_string(timing.candidate_order) + "/loaded_plan_attempt",
       timing.loaded_plan,

@@ -836,3 +836,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `select_extract_monitor_final_timing()`；`dual_arm_planner_node.cpp` 只保留平滑性 predicate；`test_extract_monitor_state.cpp` 补充优先选择、回退选择、无可用状态三类覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2800.52ms。
 - 留给下个 AI：最终选择规则已有独立 seam；后续继续降低 `dual_arm_planner_node.cpp` 复杂度时，可优先把 pre-attach 过渡 plan 构造、最终 replay 构造进一步迁到更深 Module。
+
+## 2026-06-29 运控 / Codex / monitor replay 公共上下文收口
+- 做了什么：把 extract monitor replay 阶段里反复手写的 `candidate_order/loaded_plan_rank/left_box_id/right_box_id` 公共上下文字段收口到 `extract_monitor_json` Module。
+- 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_replay_context_json()`；`dual_arm_planner_node.cpp` 的 pre-attach、横向让位、负重 replay 统一复用该 helper；`test_extract_monitor_json.cpp` 增加字段覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2824.84ms，最终 replay 首尾阶段均保留 candidate/rank/box id。
+- 留给下个 AI：replay JSON 公共字段已有单一 seam；后续改 replay 审计字段优先改 `extract_monitor_json`，不要在主节点里继续散写重复字段。

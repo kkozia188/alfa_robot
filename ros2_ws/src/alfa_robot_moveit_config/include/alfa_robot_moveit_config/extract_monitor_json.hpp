@@ -48,6 +48,11 @@ nlohmann::json extract_monitor_timing_json(
   const std::vector<AttachedBoxSpec>& carried_boxes,
   const nlohmann::json& static_box_obstacles);
 
+nlohmann::json extract_monitor_replay_context_json(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id);
+
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
 nlohmann::json extract_monitor_snapshot_base(

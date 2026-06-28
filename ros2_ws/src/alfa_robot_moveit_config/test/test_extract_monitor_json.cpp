@@ -8,6 +8,7 @@ int main()
   using alfa_robot::motion::attached_boxes_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
   using alfa_robot::motion::extract_monitor_loaded_snapshot;
+  using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::failure_counts_json;
 
@@ -53,6 +54,15 @@ int main()
   assert(loaded_snapshot.at("attempted_count") == 4);
   assert(loaded_snapshot.at("success_count") == 1);
   assert(loaded_snapshot.at("loaded_parallel_workers") == 8);
+
+  alfa_robot::motion::ExtractRolloutTiming timing;
+  timing.candidate_order = 12;
+  timing.loaded_plan_rank = 3;
+  const auto replay_context = extract_monitor_replay_context_json(timing, 6, 8);
+  assert(replay_context.at("candidate_order") == 12);
+  assert(replay_context.at("loaded_plan_rank") == 3);
+  assert(replay_context.at("left_box_id") == 6);
+  assert(replay_context.at("right_box_id") == 8);
 
   return 0;
 }

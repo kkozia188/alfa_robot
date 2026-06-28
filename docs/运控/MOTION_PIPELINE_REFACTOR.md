@@ -48,7 +48,7 @@
 
 - `make_boxes(box_front_x)` 生成 5×5 箱垛坐标。
 - `parse_box_pair_list()` / `make_pick_pairs()` 生成抓取 pair。
-- `makeFrontGraspPose()` / `makeTopGraspPose()` 在 `DualArmPlannerNode` 内结合抓取模式生成左右末端 Pose。
+- `make_front_grasp_pose()` / `make_top_suction_pose()` 在 `motion_core/pose_math` 内结合抓取模式生成左右末端 Pose。
 - 集装箱和箱墙几何来自 `motion_core/scene_geometry`，再由 `MotionSceneAdapter` 注入 MoveIt。
 
 ### 3.2 抓取 IK
@@ -260,7 +260,7 @@ ros2 service call /dual_arm_planner/run_left_extract_demo std_srvs/srv/Trigger {
 
 ## 8. 当前仍需注意
 
-- `DualArmPlannerNode` 仍有约 2300 行，主要剩 ROS 参数、MoveIt 后端、碰撞判定和 callback 装配；后续迁移时不要继续在该节点里堆新算法。
+- `DualArmPlannerNode` 仍有约 3600 行，主要剩 ROS 参数、MoveIt 后端、碰撞判定和 callback 装配；后续迁移时不要继续在该节点里堆新算法。
 - `ExtractRolloutPlanner` 通过 callback 复用节点内碰撞判定，这是刻意保留的 seam，避免重构时改变 PlanningScene 语义。
 - 负重规划依赖 MoveIt；如果 `start_move_group=false`，必须外部已有可用 move_group、robot state publisher 和 controller/joint state 相关支持节点，否则 `DualArmPlannerNode` 可能在 MoveGroupInterface 初始化阶段等待。
 - 当前 `alfa_robot_motion_scene_adapter` 名字偏窄，实际已经包含 IK、抽离和负重规划模块；后续迁移到新包时可以重命名为更准确的 motion pipeline/runtime 库。

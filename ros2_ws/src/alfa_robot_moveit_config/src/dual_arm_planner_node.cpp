@@ -2750,8 +2750,7 @@ private:
     if (extract_monitor_snapshot_writer_.write(snapshot, &error)) {
       return true;
     }
-    RCLCPP_ERROR(get_logger(), "Failed to write extract monitor snapshot %s: %s",
-                 extract_monitor_snapshot_path_.c_str(), error.c_str());
+    RCLCPP_ERROR(get_logger(), "%s", extract_monitor_snapshot_writer_.writeError(error).c_str());
     return false;
   }
 

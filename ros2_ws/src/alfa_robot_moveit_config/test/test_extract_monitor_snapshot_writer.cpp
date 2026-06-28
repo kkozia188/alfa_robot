@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <string>
 
 int main()
 {
@@ -10,6 +11,10 @@ int main()
   std::filesystem::remove_all(path.parent_path().parent_path());
 
   alfa_robot::motion::ExtractMonitorSnapshotWriter writer(path.string());
+  const std::string formatted_error = writer.writeError("disk full");
+  assert(formatted_error.find(path.string()) != std::string::npos);
+  assert(formatted_error.find("disk full") != std::string::npos);
+
   std::string error;
   const bool ok = writer.write({{"phase", "ik_candidates"}, {"count", 3}}, &error);
   assert(ok);

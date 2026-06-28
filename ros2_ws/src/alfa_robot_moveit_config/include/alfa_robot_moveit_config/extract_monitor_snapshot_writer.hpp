@@ -16,6 +16,7 @@ public:
   void setPath(std::string path);
 
   bool write(const nlohmann::json& snapshot, std::string* error = nullptr) const;
+  std::string writeError(const std::string& error) const;
   nlohmann::json readOrEmpty() const;
 
 private:

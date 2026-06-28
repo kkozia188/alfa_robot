@@ -36,6 +36,11 @@ bool ExtractMonitorSnapshotWriter::write(const nlohmann::json& snapshot, std::st
   }
 }
 
+std::string ExtractMonitorSnapshotWriter::writeError(const std::string& error) const
+{
+  return "Failed to write extract monitor snapshot " + path_ + ": " + error;
+}
+
 nlohmann::json ExtractMonitorSnapshotWriter::readOrEmpty() const
 {
   try {

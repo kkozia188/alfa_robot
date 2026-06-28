@@ -15,6 +15,7 @@ int main()
   using alfa_robot::motion::extract_monitor_prefix;
   using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::populate_extract_monitor_candidate_states;
+  using alfa_robot::motion::summarize_extract_monitor_timings;
   using alfa_robot::motion::extract_monitor_next_phase_after;
   using alfa_robot::motion::extract_monitor_phase_before_running;
   using alfa_robot::motion::extract_monitor_stage_for_phase;
@@ -153,6 +154,23 @@ int main()
   assert(state.candidate_states.size() == 3);
   populate_extract_monitor_candidate_states(state, {});
   assert(state.candidate_states.empty());
+
+  std::vector<alfa_robot::motion::ExtractRolloutTiming> timings(4);
+  moveit::core::RobotStatePtr fake_final_state(
+    reinterpret_cast<moveit::core::RobotState*>(0x1),
+    [](moveit::core::RobotState*) {});
+  timings[0].success = true;
+  timings[0].final_state = fake_final_state;
+  timings[1].success = true;
+  timings[1].failure_reason = "missing_final_state";
+  timings[2].failure_reason = "collision";
+  const auto timing_summary = summarize_extract_monitor_timings(timings);
+  assert(timing_summary.success_count == 1);
+  assert(timing_summary.success_indices.size() == 1);
+  assert(timing_summary.success_indices[0] == 0);
+  assert(timing_summary.failure_counts.at("missing_final_state") == 1);
+  assert(timing_summary.failure_counts.at("collision") == 1);
+  assert(timing_summary.failure_counts.at("unknown") == 1);
 
   return 0;
 }

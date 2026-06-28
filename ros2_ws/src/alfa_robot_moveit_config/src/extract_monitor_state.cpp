@@ -83,6 +83,22 @@ void populate_extract_monitor_candidate_states(
   }
 }
 
+ExtractMonitorTimingSummary summarize_extract_monitor_timings(
+  const std::vector<ExtractRolloutTiming>& timings)
+{
+  ExtractMonitorTimingSummary summary;
+  for (size_t i = 0; i < timings.size(); ++i) {
+    const auto& timing = timings[i];
+    if (timing.success && timing.final_state) {
+      ++summary.success_count;
+      summary.success_indices.push_back(i);
+    } else {
+      summary.failure_counts[timing.failure_reason.empty() ? "unknown" : timing.failure_reason]++;
+    }
+  }
+  return summary;
+}
+
 const char* extract_monitor_stage_failure_label(ExtractMonitorStage stage)
 {
   switch (stage) {

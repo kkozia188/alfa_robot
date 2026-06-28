@@ -8,6 +8,7 @@
 
 #include <array>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,6 +64,16 @@ using ExtractMonitorCandidateStateBuilder =
 void populate_extract_monitor_candidate_states(
   ExtractMonitorState& state,
   const ExtractMonitorCandidateStateBuilder& state_builder);
+
+struct ExtractMonitorTimingSummary
+{
+  size_t success_count = 0;
+  std::map<std::string, size_t> failure_counts;
+  std::vector<size_t> success_indices;
+};
+
+ExtractMonitorTimingSummary summarize_extract_monitor_timings(
+  const std::vector<ExtractRolloutTiming>& timings);
 
 using ExtractMonitorStageRunner = std::function<bool(std::string*)>;
 

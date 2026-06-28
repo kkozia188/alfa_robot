@@ -87,6 +87,7 @@ using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
+using alfa_robot::motion::summarize_extract_monitor_timings;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -3155,16 +3156,10 @@ private:
     }
 
     nlohmann::json records = nlohmann::json::array();
-    size_t success_count = 0;
-    std::map<std::string, size_t> failure_counts;
-    for (size_t i = 0; i < extract_monitor_state_.timings.size(); ++i) {
-      const auto& timing = extract_monitor_state_.timings[i];
-      if (timing.success && timing.final_state) {
-        records.push_back(monitor_timing_json(timing, success_count, *timing.final_state));
-        ++success_count;
-      } else {
-        failure_counts[timing.failure_reason.empty() ? "unknown" : timing.failure_reason]++;
-      }
+    const auto summary = summarize_extract_monitor_timings(extract_monitor_state_.timings);
+    for (const auto index : summary.success_indices) {
+      const auto& timing = extract_monitor_state_.timings[index];
+      records.push_back(monitor_timing_json(timing, records.size(), *timing.final_state));
     }
 
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
@@ -3177,16 +3172,16 @@ private:
       box_front_x_,
       scene_y_shift_,
       count,
-      success_count,
+      summary.success_count,
       worker_count,
-      failure_counts,
+      summary.failure_counts,
       records);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor extract: failed to write snapshot");
     }
 
     std::ostringstream out;
-    out << "抽离阶段完成: success=" << success_count << "/" << count
+    out << "抽离阶段完成: success=" << summary.success_count << "/" << count
         << " workers=" << worker_count
         << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
     *message = out.str();

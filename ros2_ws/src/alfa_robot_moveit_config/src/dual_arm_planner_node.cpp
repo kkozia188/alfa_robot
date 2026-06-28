@@ -15,6 +15,7 @@
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_state.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_transition_planning.hpp"
 #include "alfa_robot_moveit_config/execution_trajectory_adapter.hpp"
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
@@ -78,6 +79,7 @@ using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
+using alfa_robot::motion::ExtractMonitorTransitionPlanner;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_final_snapshot;
@@ -3314,44 +3316,37 @@ private:
     }
 
     const auto transition_t0 = std::chrono::steady_clock::now();
-    moveit::planning_interface::MoveGroupInterface::Plan transition_plan =
-      make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_goal_state, 1.0);
-    transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
-    std::string transition_reason;
-    bool transition_ok =
-      planned_trajectory_clear_in_full_scene(
-        transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
-    std::string transition_method = "joint_interpolation";
-    if (!transition_ok) {
-      transition_method = "rrt";
-      transition_reason.clear();
-      transition_ok = plan_joint_space_with_direct_pipeline(
-        *extract_monitor_state_.loaded_start_state, ik_goal_state, &transition_plan, &transition_reason);
-      if (transition_ok) {
-        std::string shortcut_reason;
-        transition_plan = shortcut_joint_plan(
-          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &shortcut_reason);
-        transition_plan = densify_joint_plan(transition_plan, 5.0 * M_PI / 180.0, 0.01);
-        transition_ok = planned_trajectory_clear_in_full_scene(
-          transition_plan, *extract_monitor_state_.loaded_start_state, {}, &transition_reason);
-        if (!shortcut_reason.empty()) {
-          transition_reason = shortcut_reason + (transition_reason.empty() ? "" : "; " + transition_reason);
-        }
-      }
-    }
+    ExtractMonitorTransitionPlanner transition_planner;
+    transition_planner.make_interpolated_plan =
+      [this](const auto& start, const auto& goal, double duration_s) {
+        return make_interpolated_joint_plan(start, goal, duration_s);
+      };
+    transition_planner.densify_plan = [this](const auto& plan) {
+      return densify_joint_plan(plan, 5.0 * M_PI / 180.0, 0.01);
+    };
+    transition_planner.validate_plan = [this](const auto& plan, const auto& start, std::string* reason) {
+      return planned_trajectory_clear_in_full_scene(plan, start, {}, reason);
+    };
+    transition_planner.direct_plan = [this](const auto& start, const auto& goal, auto* plan, std::string* reason) {
+      return plan_joint_space_with_direct_pipeline(start, goal, plan, reason);
+    };
+    transition_planner.shortcut_plan = [this](const auto& plan, const auto& start, std::string* reason) {
+      return shortcut_joint_plan(plan, start, {}, reason);
+    };
+    const auto transition = transition_planner.plan(*extract_monitor_state_.loaded_start_state, ik_goal_state);
     const double transition_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - transition_t0).count();
     const nlohmann::json extra = extract_monitor_pre_attach_replay_extra(
       selected,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
-      transition_ok,
-      transition_method,
+      transition.valid,
+      transition.method,
       transition_ms,
-      transition_reason);
+      transition.failure_reason);
     replay_stages->push_back(monitor_stage_json(
       extract_monitor_state_.prefix + "/selected_pre_attach_loaded_to_ik",
-      transition_plan,
+      transition.plan,
       *extract_monitor_state_.loaded_start_state,
       ik_goal_state,
       arm_joint_target_names(),

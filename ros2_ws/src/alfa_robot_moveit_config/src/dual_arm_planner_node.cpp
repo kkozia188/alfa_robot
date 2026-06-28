@@ -12,6 +12,7 @@
 #include "alfa_robot_moveit_config/box_stack_flow_orchestrator.hpp"
 #include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
 #include "alfa_robot_moveit_config/extract_demo_orchestrator.hpp"
+#include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 #include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
 #include "alfa_robot_moveit_config/execution_trajectory_adapter.hpp"
 #include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
@@ -71,8 +72,11 @@ using alfa_robot::motion::ExtractBenchmarkRunner;
 using alfa_robot::motion::ExtractBenchmarkRunnerCallbacks;
 using alfa_robot::motion::ExecutionTrajectoryAdapter;
 using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
+using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
+using alfa_robot::motion::extract_monitor_candidate_json;
+using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -141,6 +145,7 @@ using alfa_robot::motion::pose_json;
 using alfa_robot::motion::pose_orientation_error;
 using alfa_robot::motion::pose_position_error;
 using alfa_robot::motion::pose_to_eigen;
+using alfa_robot::motion::robot_state_json;
 using alfa_robot::motion::scene_collision_reason;
 using alfa_robot::motion::shortest_angular_distance;
 using alfa_robot::motion::top_suction_orientation;
@@ -2776,47 +2781,6 @@ private:
     return boxes;
   }
 
-  nlohmann::json attached_boxes_json(const std::vector<AttachedBoxSpec>& specs) const
-  {
-    nlohmann::json boxes = nlohmann::json::array();
-    for (const auto& box : specs) {
-      boxes.push_back({
-        {"id", box.id},
-        {"link_name", box.link_name},
-        {"center_in_link", {box.center_in_link[0], box.center_in_link[1], box.center_in_link[2]}},
-        {"size", {box.size[0], box.size[1], box.size[2]}},
-      });
-    }
-    return boxes;
-  }
-
-  nlohmann::json robot_state_json(const moveit::core::RobotState& state) const
-  {
-    const auto& names = robot_model_->getVariableNames();
-    std::vector<double> values;
-    values.reserve(names.size());
-    for (const auto& name : names) values.push_back(state.getVariablePosition(name));
-    return {{"joint_names", names}, {"joint_values", values}, {"joint_map", names_values_json(names, values)}};
-  }
-
-  nlohmann::json trajectory_json(const moveit::planning_interface::MoveGroupInterface::Plan& plan) const
-  {
-    const auto& traj = plan.trajectory_.joint_trajectory;
-    nlohmann::json points = nlohmann::json::array();
-    for (const auto& point : traj.points) {
-      points.push_back({
-        {"time_from_start_sec", rclcpp::Duration(point.time_from_start).seconds()},
-        {"positions", point.positions},
-        {"velocities", point.velocities}
-      });
-    }
-    return {
-      {"joint_names", traj.joint_names},
-      {"point_count", traj.points.size()},
-      {"points", points}
-    };
-  }
-
   nlohmann::json monitor_stage_json(
     const std::string& stage_name,
     const moveit::planning_interface::MoveGroupInterface::Plan& plan,
@@ -2826,17 +2790,15 @@ private:
     const std::vector<AttachedBoxSpec>& attached_boxes,
     const nlohmann::json& extra) const
   {
-    return {
-      {"type", "stage"},
-      {"stage", stage_name},
-      {"trajectory", trajectory_json(plan)},
-      {"target_names", target_names},
-      {"start_state", robot_state_json(start_state)},
-      {"goal_state", robot_state_json(goal_state)},
-      {"attached_boxes", attached_boxes_json(attached_boxes)},
-      {"static_box_obstacles", static_box_obstacles_json()},
-      {"extra", extra}
-    };
+    return extract_monitor_stage_json(
+      stage_name,
+      plan,
+      start_state,
+      goal_state,
+      target_names,
+      attached_boxes,
+      static_box_obstacles_json(),
+      extra);
   }
 
   nlohmann::json monitor_candidate_json(
@@ -2844,19 +2806,7 @@ private:
     size_t display_index,
     const moveit::core::RobotState& state) const
   {
-    return {
-      {"display_index", display_index},
-      {"h", candidate.h},
-      {"h_index", candidate.h_index},
-      {"seed_index", candidate.seed_index},
-      {"score", candidate.score},
-      {"solve_ms", candidate.solve_ms},
-      {"solver_path", candidate.solver_path},
-      {"target_order", candidate.target_order},
-      {"updown_delta", candidate.updown_delta},
-      {"joint_delta", candidate.joint_delta},
-      {"state", robot_state_json(state)}
-    };
+    return extract_monitor_candidate_json(candidate, display_index, state);
   }
 
   nlohmann::json monitor_timing_json(

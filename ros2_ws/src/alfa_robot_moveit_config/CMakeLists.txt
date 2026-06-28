@@ -67,6 +67,7 @@ target_link_libraries(alfa_robot_motion_core
 add_library(alfa_robot_motion_scene_adapter
   src/box_stack_flow_orchestrator.cpp
   src/execution_trajectory_adapter.cpp
+  src/extract_monitor_json.cpp
   src/extract_monitor_snapshot_writer.cpp
   src/extract_demo_orchestrator.cpp
   src/extract_planning_pipeline.cpp
@@ -206,6 +207,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_extract_monitor_snapshot_writer alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_extract_monitor_snapshot_writer nlohmann_json)
   add_test(NAME test_extract_monitor_snapshot_writer COMMAND test_extract_monitor_snapshot_writer)
+
+  add_executable(test_extract_monitor_json test/test_extract_monitor_json.cpp)
+  target_link_libraries(test_extract_monitor_json alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_extract_monitor_json nlohmann_json)
+  add_test(NAME test_extract_monitor_json COMMAND test_extract_monitor_json)
 endif()
 
 ament_package()

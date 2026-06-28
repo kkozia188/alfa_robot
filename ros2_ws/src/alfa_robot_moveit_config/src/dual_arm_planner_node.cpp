@@ -95,6 +95,7 @@ using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_ik_stage_message;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_stage_message;
+using alfa_robot::motion::extract_monitor_candidate_state_for_timing;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_extract_stage_message;
 using alfa_robot::motion::extract_monitor_snapshot_base;
@@ -3094,18 +3095,14 @@ private:
   bool extract_monitor_pre_attach_transition_is_smooth(const ExtractRolloutTiming& timing)
   {
     if (!extract_monitor_state_.loaded_start_state ||
-        !extract_monitor_state_.seed_state) {
+        extract_monitor_state_.candidate_states.empty()) {
       return false;
     }
-    const auto* candidate = extract_monitor_candidate_for_timing(extract_monitor_state_, timing);
-    if (!candidate) {
+    const auto ik_state = extract_monitor_candidate_state_for_timing(extract_monitor_state_, timing);
+    if (!ik_state) {
       return false;
     }
-    const auto ik_state = robot_state_from_ik_candidate(
-      *extract_monitor_state_.seed_state,
-      *candidate,
-      joint_group_);
-    auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, ik_state, 1.0);
+    auto plan = make_interpolated_joint_plan(*extract_monitor_state_.loaded_start_state, *ik_state, 1.0);
     std::string reason;
     return planned_trajectory_clear_in_full_scene(plan, *extract_monitor_state_.loaded_start_state, {}, &reason);
   }
@@ -3134,8 +3131,14 @@ private:
     auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
       record_monitor_extract_replay_step(step, selected.candidate_order, state, extra, &rollout_records);
     };
+    auto start_state = extract_monitor_candidate_state_for_timing(extract_monitor_state_, selected);
+    if (!start_state) {
+      start_state = std::make_shared<moveit::core::RobotState>(
+        robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate, joint_group_));
+    }
+
     auto replay_timing = rollout_dual_extract_from_state(
-      robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, *candidate, joint_group_),
+      *start_state,
       extract_monitor_state_.left_box,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box,
@@ -3198,13 +3201,8 @@ private:
     moveit::core::RobotState goal_state = selected->loaded_goal_state
       ? *selected->loaded_goal_state
       : loaded_pose_selector_->makeGoalState(*selected->final_state);
-    const auto* selected_candidate = extract_monitor_candidate_for_timing(extract_monitor_state_, *selected);
-    moveit::core::RobotState ik_goal_state = selected_candidate && extract_monitor_state_.seed_state
-      ? robot_state_from_ik_candidate(
-          *extract_monitor_state_.seed_state,
-          *selected_candidate,
-          joint_group_)
-      : *selected->final_state;
+    const auto ik_candidate_state = extract_monitor_candidate_state_for_timing(extract_monitor_state_, *selected);
+    moveit::core::RobotState ik_goal_state = ik_candidate_state ? *ik_candidate_state : *selected->final_state;
 
     const nlohmann::json replay_stages = build_final_replay_stages(*selected, ik_goal_state);
 

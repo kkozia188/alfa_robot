@@ -91,6 +91,10 @@ const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing
   const ExtractMonitorState& state,
   const ExtractRolloutTiming& timing);
 
+moveit::core::RobotStatePtr extract_monitor_candidate_state_for_timing(
+  const ExtractMonitorState& state,
+  const ExtractRolloutTiming& timing);
+
 struct ExtractMonitorTimingSummary
 {
   size_t success_count = 0;

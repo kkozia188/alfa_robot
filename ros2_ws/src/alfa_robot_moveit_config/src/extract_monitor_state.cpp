@@ -165,6 +165,16 @@ const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing
   return &state.legal_candidates[timing.candidate_order];
 }
 
+moveit::core::RobotStatePtr extract_monitor_candidate_state_for_timing(
+  const ExtractMonitorState& state,
+  const ExtractRolloutTiming& timing)
+{
+  if (timing.candidate_order >= state.candidate_states.size()) {
+    return nullptr;
+  }
+  return state.candidate_states[timing.candidate_order];
+}
+
 ExtractMonitorTimingSummary summarize_extract_monitor_timings(
   const std::vector<ExtractRolloutTiming>& timings)
 {

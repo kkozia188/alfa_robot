@@ -63,6 +63,7 @@ int main()
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::extract_monitor_candidate_for_timing;
+  using alfa_robot::motion::extract_monitor_candidate_state_for_timing;
   using alfa_robot::motion::extract_monitor_extract_stage_message;
   using alfa_robot::motion::extract_monitor_final_stage_message;
   using alfa_robot::motion::extract_monitor_ik_stage_message;
@@ -251,8 +252,13 @@ int main()
   alfa_robot::motion::ExtractRolloutTiming candidate_timing;
   candidate_timing.candidate_order = 1;
   assert(extract_monitor_candidate_for_timing(state, candidate_timing) == &state.legal_candidates[1]);
+  assert(extract_monitor_candidate_state_for_timing(state, candidate_timing) == nullptr);
+  state.candidate_states.resize(3);
+  state.candidate_states[1] = std::make_shared<moveit::core::RobotState>(seed_state);
+  assert(extract_monitor_candidate_state_for_timing(state, candidate_timing) == state.candidate_states[1]);
   candidate_timing.candidate_order = 99;
   assert(extract_monitor_candidate_for_timing(state, candidate_timing) == nullptr);
+  assert(extract_monitor_candidate_state_for_timing(state, candidate_timing) == nullptr);
 
   std::vector<alfa_robot::motion::ExtractRolloutTiming> timings(4);
   moveit::core::RobotStatePtr fake_final_state(

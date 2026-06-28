@@ -884,3 +884,9 @@
 - 改了哪里：新增 `extract_monitor_transition_planning.hpp/.cpp` 与 `test_extract_monitor_transition_planning.cpp`；`dual_arm_planner_node.cpp` 改为用 Adapter callback 装配具体 MoveIt/碰撞/shortcut 实现；`CMakeLists.txt` 增加源文件和单测。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 三次内部耗时为 2828.94ms、2754.66ms、2772.92ms，平均约 2785.51ms，仍在重构前约 2.7–3.0s 区间。
 - 留给下个 AI：pre-attach 过渡规划已有独立 Interface；后续若继续降低 `dual_arm_planner_node.cpp` 复杂度，可把 final replay 构造整体移到更深 Module，或把 `make_interpolated_joint_plan/densify/shortcut` 沉入通用轨迹 Module。
+
+## 2026-06-29 运控 / Codex / monitor 最终回放 extra 字段收口
+- 做了什么：继续把最终回放阶段的 JSON schema 从 `dual_arm_planner_node.cpp` 收口到 `extract_monitor_json` Module，主节点不再手写横向让位和负重规划回放的 extra 字段。
+- 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_selected_lateral_shift_replay_extra()` 与 `extract_monitor_selected_loaded_plan_replay_extra()`；`dual_arm_planner_node.cpp` 改为调用这两个 helper；`test_extract_monitor_json.cpp` 增加字段语义覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2761.31ms，pre_attach 和 selected_loaded_plan 回放字段保留 candidate/rank/valid。
+- 留给下个 AI：monitor replay 的字段 schema 更集中；后续若继续重构，优先把 `build_final_replay_stages()` 的阶段组合 Interface 从主节点移出，而不是继续在主节点散写 JSON 字段。

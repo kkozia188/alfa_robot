@@ -89,6 +89,8 @@ using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
 using alfa_robot::motion::extract_monitor_replay_context_json;
+using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_extra;
+using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
@@ -3366,9 +3368,11 @@ private:
       if (!shift_stage.start_state || !shift_stage.goal_state) {
         continue;
       }
-      nlohmann::json extra = shift_stage.extra;
-      extra.update(extract_monitor_replay_context_json(
-        selected, extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id));
+      const nlohmann::json extra = extract_monitor_selected_lateral_shift_replay_extra(
+        selected,
+        extract_monitor_state_.left_box_id,
+        extract_monitor_state_.right_box_id,
+        shift_stage.extra);
       replay_stages->push_back(monitor_stage_json(
         shift_stage.stage_name,
         shift_stage.plan,
@@ -3391,16 +3395,10 @@ private:
       return false;
     }
 
-    nlohmann::json extra = extract_monitor_replay_context_json(
-      selected, extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id);
-    extra.update({
-      {"stage_kind", "monitor_selected_loaded_plan_replay"},
-      {"valid", true},
-      {"loaded_plan_ms", selected.loaded_plan_ms},
-      {"loaded_plan_points", selected.loaded_plan_points},
-      {"loaded_plan_trajectory_distance", selected.loaded_plan_trajectory_distance},
-      {"moveit_attached_box_count", 2}
-    });
+    const nlohmann::json extra = extract_monitor_selected_loaded_plan_replay_extra(
+      selected,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id);
     replay_stages->push_back(monitor_stage_json(
       extract_monitor_state_.prefix + "/selected_loaded_plan",
       selected.loaded_plan,

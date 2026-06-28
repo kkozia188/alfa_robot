@@ -13,6 +13,8 @@ int main()
   using alfa_robot::motion::extract_monitor_loaded_snapshot;
   using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
   using alfa_robot::motion::extract_monitor_replay_context_json;
+  using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_extra;
+  using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_extra;
   using alfa_robot::motion::extract_monitor_snapshot_base;
   using alfa_robot::motion::failure_counts_json;
 
@@ -83,6 +85,31 @@ int main()
   assert(pre_attach_failed.at("valid") == false);
   assert(pre_attach_failed.at("method") == "rrt");
   assert(pre_attach_failed.at("failure_reason") == "collision");
+
+  timing.loaded_plan_success = true;
+  timing.loaded_plan_failure_reason = "";
+  const auto lateral_extra = extract_monitor_selected_lateral_shift_replay_extra(
+    timing, 6, 8, nlohmann::json{{"stage_kind", "left_lateral_shift"}, {"valid", true}});
+  assert(lateral_extra.at("stage_kind") == "left_lateral_shift");
+  assert(lateral_extra.at("valid") == true);
+  assert(lateral_extra.at("candidate_order") == 12);
+  assert(lateral_extra.at("left_box_id") == 6);
+  assert(lateral_extra.at("right_box_id") == 8);
+  assert(lateral_extra.at("loaded_plan_success") == true);
+  assert(lateral_extra.at("loaded_plan_failure_reason") == "");
+
+  timing.loaded_plan_ms = 31.5;
+  timing.loaded_plan_points = 42;
+  timing.loaded_plan_trajectory_distance = 2.25;
+  const auto selected_loaded_extra = extract_monitor_selected_loaded_plan_replay_extra(timing, 6, 8);
+  assert(selected_loaded_extra.at("stage_kind") == "monitor_selected_loaded_plan_replay");
+  assert(selected_loaded_extra.at("valid") == true);
+  assert(selected_loaded_extra.at("candidate_order") == 12);
+  assert(selected_loaded_extra.at("loaded_plan_rank") == 3);
+  assert(selected_loaded_extra.at("loaded_plan_ms") == 31.5);
+  assert(selected_loaded_extra.at("loaded_plan_points") == 42);
+  assert(selected_loaded_extra.at("loaded_plan_trajectory_distance") == 2.25);
+  assert(selected_loaded_extra.at("moveit_attached_box_count") == 2);
 
   const auto final_snapshot = extract_monitor_final_snapshot(
     45.0,

@@ -63,6 +63,17 @@ nlohmann::json extract_monitor_pre_attach_replay_extra(
   double transition_ms,
   const std::string& failure_reason);
 
+nlohmann::json extract_monitor_selected_lateral_shift_replay_extra(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const nlohmann::json& shift_extra);
+
+nlohmann::json extract_monitor_selected_loaded_plan_replay_extra(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id);
+
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 
 nlohmann::json extract_monitor_snapshot_base(

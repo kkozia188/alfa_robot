@@ -126,6 +126,36 @@ nlohmann::json extract_monitor_pre_attach_replay_extra(
   return extra;
 }
 
+nlohmann::json extract_monitor_selected_lateral_shift_replay_extra(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id,
+  const nlohmann::json& shift_extra)
+{
+  nlohmann::json extra = shift_extra;
+  extra.update(extract_monitor_replay_context_json(timing, left_box_id, right_box_id));
+  extra["loaded_plan_success"] = timing.loaded_plan_success;
+  extra["loaded_plan_failure_reason"] = timing.loaded_plan_failure_reason;
+  return extra;
+}
+
+nlohmann::json extract_monitor_selected_loaded_plan_replay_extra(
+  const ExtractRolloutTiming& timing,
+  int left_box_id,
+  int right_box_id)
+{
+  nlohmann::json extra = extract_monitor_replay_context_json(timing, left_box_id, right_box_id);
+  extra.update({
+    {"stage_kind", "monitor_selected_loaded_plan_replay"},
+    {"valid", true},
+    {"loaded_plan_ms", timing.loaded_plan_ms},
+    {"loaded_plan_points", timing.loaded_plan_points},
+    {"loaded_plan_trajectory_distance", timing.loaded_plan_trajectory_distance},
+    {"moveit_attached_box_count", 2}
+  });
+  return extra;
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,

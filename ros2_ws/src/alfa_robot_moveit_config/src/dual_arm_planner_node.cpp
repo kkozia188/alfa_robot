@@ -75,8 +75,8 @@ using alfa_robot::motion::ExecutionTrajectoryAdapter;
 using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
 using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
+using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
-using alfa_robot::motion::ExtractMonitorPhase;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::extract_monitor_candidate_json;
@@ -86,11 +86,6 @@ using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
-using alfa_robot::motion::extract_monitor_next_phase_after;
-using alfa_robot::motion::extract_monitor_phase_before_running;
-using alfa_robot::motion::extract_monitor_stage_for_phase;
-using alfa_robot::motion::run_extract_monitor_full_sequence;
-using alfa_robot::motion::run_extract_monitor_stage;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -2972,19 +2967,10 @@ private:
       return fail("extract monitor: output message is null");
     }
 
-    const auto stage = extract_monitor_stage_for_phase(extract_monitor_phase_);
-    extract_monitor_phase_ = extract_monitor_phase_before_running(extract_monitor_phase_);
-    double elapsed_ms = 0.0;
-    const bool ok = run_extract_monitor_stage(
-      stage,
+    return extract_monitor_controller_.runNext(
       extract_monitor_stage_callbacks(),
       [this] { return extract_monitor_last_stage_ms_; },
-      &elapsed_ms,
       message);
-    if (ok) {
-      extract_monitor_phase_ = extract_monitor_next_phase_after(stage);
-    }
-    return ok;
   }
 
   bool run_extract_monitor_full_selected(std::string* message)
@@ -2994,8 +2980,7 @@ private:
       return fail("extract monitor full: output message is null");
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
-    const auto result = run_extract_monitor_full_sequence(
+    const auto result = extract_monitor_controller_.runFull(
       extract_monitor_stage_callbacks(),
       [this] { return extract_monitor_last_stage_ms_; });
     if (!result.success) {
@@ -3022,7 +3007,6 @@ private:
       write_extract_monitor_snapshot(snapshot);
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
     std::ostringstream out;
     out << result.message
         << " snapshot=" << extract_monitor_snapshot_path_;
@@ -3107,7 +3091,6 @@ private:
       return fail("extract monitor IK: failed to write snapshot");
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::ReadyForExtract;
     std::ostringstream out;
     out << "IK阶段完成: unique=" << extract_monitor_state_.legal_candidates.size()
         << " legal=" << ik_result.legal_count
@@ -3214,7 +3197,6 @@ private:
       return fail("extract monitor extract: failed to write snapshot");
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::ReadyForLoaded;
     std::ostringstream out;
     out << "抽离阶段完成: success=" << success_count << "/" << count
         << " workers=" << worker_count
@@ -3290,7 +3272,6 @@ private:
       return fail("extract monitor loaded: failed to write snapshot");
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::ReadyForFinal;
     std::ostringstream out;
     out << "负重规划阶段完成: success=" << success_count
         << " attempted=" << attempted_count
@@ -3540,7 +3521,6 @@ private:
       return fail("extract monitor final: failed to write snapshot");
     }
 
-    extract_monitor_phase_ = ExtractMonitorPhase::Done;
     std::ostringstream out;
     out << "最终方案已选择: candidate_order=" << selected->candidate_order
         << " loaded_rank=" << selected->loaded_plan_rank
@@ -3853,7 +3833,7 @@ private:
   std::unique_ptr<OptimizedDualIkSolver> optimized_dual_ik_solver_;
   std::unique_ptr<MotionFlowRecorder> recorder_;
 
-  ExtractMonitorPhase extract_monitor_phase_ = ExtractMonitorPhase::ReadyForIk;
+  ExtractMonitorController extract_monitor_controller_;
   ExtractMonitorState extract_monitor_state_;
   std::mutex extract_monitor_mutex_;
   double extract_monitor_last_stage_ms_ = 0.0;

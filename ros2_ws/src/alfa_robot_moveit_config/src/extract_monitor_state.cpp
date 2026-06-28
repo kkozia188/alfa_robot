@@ -158,4 +158,59 @@ ExtractMonitorFullRunResult run_extract_monitor_full_sequence(
   return result;
 }
 
+bool ExtractMonitorController::runNext(
+  const ExtractMonitorStageCallbacks& callbacks,
+  const std::function<double()>& last_stage_ms,
+  std::string* message)
+{
+  const auto stage = extract_monitor_stage_for_phase(phase_);
+  phase_ = extract_monitor_phase_before_running(phase_);
+  double elapsed_ms = 0.0;
+  const bool ok = run_extract_monitor_stage(stage, callbacks, last_stage_ms, &elapsed_ms, message);
+  if (ok) {
+    phase_ = extract_monitor_next_phase_after(stage);
+  }
+  return ok;
+}
+
+ExtractMonitorFullRunResult ExtractMonitorController::runFull(
+  const ExtractMonitorStageCallbacks& callbacks,
+  const std::function<double()>& last_stage_ms)
+{
+  reset();
+  ExtractMonitorFullRunResult result;
+  const auto total_start = std::chrono::steady_clock::now();
+  constexpr std::array<ExtractMonitorStage, 4> stages{
+    ExtractMonitorStage::Ik,
+    ExtractMonitorStage::Extract,
+    ExtractMonitorStage::Loaded,
+    ExtractMonitorStage::Final,
+  };
+
+  for (const auto stage : stages) {
+    std::string stage_message;
+    double elapsed_ms = 0.0;
+    if (!run_extract_monitor_stage(stage, callbacks, last_stage_ms, &elapsed_ms, &stage_message)) {
+      result.message = std::string("完整流程失败在") + extract_monitor_stage_failure_label(stage) + ": " + stage_message;
+      result.success = false;
+      return result;
+    }
+    result.stage_elapsed_ms[stage_index(stage)] = elapsed_ms;
+    phase_ = extract_monitor_next_phase_after(stage);
+  }
+
+  result.total_elapsed_ms = std::chrono::duration<double, std::milli>(
+    std::chrono::steady_clock::now() - total_start).count();
+  std::ostringstream out;
+  out << "完整流程完成: total=" << result.total_elapsed_ms << "ms"
+      << " ik=" << result.stage_elapsed_ms[0] << "ms"
+      << " extract=" << result.stage_elapsed_ms[1] << "ms"
+      << " loaded=" << result.stage_elapsed_ms[2] << "ms"
+      << " final=" << result.stage_elapsed_ms[3] << "ms";
+  result.message = out.str();
+  result.success = true;
+  reset();
+  return result;
+}
+
 }  // namespace alfa_robot::motion

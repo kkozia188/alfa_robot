@@ -794,3 +794,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 增加 `ExtractMonitorStage`、`ExtractMonitorStageCallbacks`、`run_extract_monitor_stage()`、`run_extract_monitor_full_sequence()` 等；`dual_arm_planner_node.cpp` 的 `run_extract_monitor_next/full_selected` 改为调用调度 seam；新增 `test_extract_monitor_state.cpp` 覆盖 phase 映射、Done 重跑语义、full 顺序和失败消息。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，4 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 3075.67ms，快照 phase=`full_selected`，records=1，replay_stages=17。
 - 留给下个 AI：monitor 阶段调度已经有独立 seam；下一步可把阶段实现本身逐个移入一个 `ExtractMonitorRunner` 类，节点保留 ROS service 与依赖装配。
+
+## 2026-06-28 运控 / Codex / monitor 控制器与场景重复 apply 修复
+- 做了什么：把 extract monitor 的 next/full phase 持有逻辑收口为 `ExtractMonitorController`，节点不再直接写 `extract_monitor_phase_`；同时发现并修复同一箱墙 opening 重复 apply 到 MoveIt PlanningScene 时偶发长时间阻塞的问题。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 增加 Controller；`dual_arm_planner_node.cpp` 改为通过 Controller 调度四阶段 callback；`robot_motion_scene_service/src/motion_scene_adapter.cpp` 对相同 left/right opening 增加幂等跳过。
+- 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config` 通过，共 5 个测试通过；L6/R8 `--once --no-rerun` 复跑 3 次内部耗时为 2764.48ms、2929.44ms、2778.21ms，平均 2824.04ms，回到重构前 2.7–3.0s 量级。
+- 留给下个 AI：这次异常慢的根因不是 Controller，而是旧的 MoveIt 场景重复 apply/同步偶发抖动；后续继续拆 `run_extract_monitor_*` 阶段实现时，注意不要新增无必要的 PlanningSceneInterface apply。

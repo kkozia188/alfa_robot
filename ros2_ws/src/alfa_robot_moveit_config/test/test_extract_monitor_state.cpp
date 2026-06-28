@@ -7,6 +7,7 @@
 int main()
 {
   using alfa_robot::motion::ExtractMonitorFullRunResult;
+  using alfa_robot::motion::ExtractMonitorController;
   using alfa_robot::motion::ExtractMonitorPhase;
   using alfa_robot::motion::ExtractMonitorStage;
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -90,6 +91,31 @@ int main()
   const auto failed = run_extract_monitor_full_sequence(callbacks, [&] { return last_elapsed; });
   assert(!failed.success);
   assert(failed.message.find("完整流程失败在抽离阶段") != std::string::npos);
+
+  ExtractMonitorController controller;
+  calls.clear();
+  callbacks.extract = [&](std::string* message) {
+    calls.push_back("extract");
+    last_elapsed = 2.0;
+    if (message) *message = "extract ok";
+    return true;
+  };
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForIk);
+  assert(controller.runNext(callbacks, [&] { return last_elapsed; }, &message));
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForExtract);
+  assert(controller.runNext(callbacks, [&] { return last_elapsed; }, &message));
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForLoaded);
+  assert(controller.runNext(callbacks, [&] { return last_elapsed; }, &message));
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForFinal);
+  assert(controller.runNext(callbacks, [&] { return last_elapsed; }, &message));
+  assert(controller.phase() == ExtractMonitorPhase::Done);
+  assert(controller.runNext(callbacks, [&] { return last_elapsed; }, &message));
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForExtract);
+
+  controller.reset();
+  const auto full_from_controller = controller.runFull(callbacks, [&] { return last_elapsed; });
+  assert(full_from_controller.success);
+  assert(controller.phase() == ExtractMonitorPhase::ReadyForIk);
 
   return 0;
 }

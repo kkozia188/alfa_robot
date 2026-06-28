@@ -84,4 +84,24 @@ ExtractMonitorFullRunResult run_extract_monitor_full_sequence(
   const ExtractMonitorStageCallbacks& callbacks,
   const std::function<double()>& last_stage_ms);
 
+class ExtractMonitorController
+{
+public:
+  ExtractMonitorPhase phase() const { return phase_; }
+
+  void reset() { phase_ = ExtractMonitorPhase::ReadyForIk; }
+
+  bool runNext(
+    const ExtractMonitorStageCallbacks& callbacks,
+    const std::function<double()>& last_stage_ms,
+    std::string* message);
+
+  ExtractMonitorFullRunResult runFull(
+    const ExtractMonitorStageCallbacks& callbacks,
+    const std::function<double()>& last_stage_ms);
+
+private:
+  ExtractMonitorPhase phase_ = ExtractMonitorPhase::ReadyForIk;
+};
+
 }  // namespace alfa_robot::motion

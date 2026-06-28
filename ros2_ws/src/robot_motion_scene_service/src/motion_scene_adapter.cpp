@@ -114,6 +114,13 @@ bool MotionSceneAdapter::setStaticBoxWallOpening(int left_box_id, int right_box_
     return applyStaticBoxObstacles();
   }
 
+  if (active_static_left_box_id_ == left_box_id &&
+      active_static_right_box_id_ == right_box_id &&
+      !current_static_box_obstacles_.empty() &&
+      !applied_static_box_obstacle_ids_.empty()) {
+    return true;
+  }
+
   active_static_left_box_id_ = left_box_id;
   active_static_right_box_id_ = right_box_id;
   current_static_box_obstacles_ =

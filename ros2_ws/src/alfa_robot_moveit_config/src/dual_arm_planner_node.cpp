@@ -2263,6 +2263,26 @@ private:
     return runner.runDual(prefix, seed_state, ik_result, left_box, left_box_id, right_box, right_box_id);
   }
 
+  moveit::planning_interface::MoveGroupInterface::Plan single_state_plan(
+    const moveit::core::RobotState& state,
+    const std::vector<std::string>& names,
+    double time_from_start_sec) const
+  {
+    trajectory_msgs::msg::JointTrajectory traj;
+    traj.joint_names = names;
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    point.time_from_start = rclcpp::Duration::from_seconds(time_from_start_sec);
+    point.positions.reserve(names.size());
+    for (const auto& name : names) {
+      point.positions.push_back(is_robot_variable(name) ? state.getVariablePosition(name) : 0.0);
+    }
+    traj.points.push_back(point);
+
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    plan.trajectory_.joint_trajectory = traj;
+    return plan;
+  }
+
   bool record_extract_keyframe(
     const std::string& stage_name,
     const moveit::core::RobotState& state,
@@ -2273,19 +2293,8 @@ private:
     const auto saved_boxes = active_attached_boxes();
     if (scene_adapter_) scene_adapter_->setActiveAttachedBoxesForRecordOnly(boxes);
 
-    trajectory_msgs::msg::JointTrajectory traj;
     const auto names = optimized_ik_solver_ ? optimized_ik_solver_->freeVariableNames() : robot_model_->getVariableNames();
-    traj.joint_names = names;
-    trajectory_msgs::msg::JointTrajectoryPoint point;
-    point.time_from_start = rclcpp::Duration::from_seconds(0.0);
-    point.positions.reserve(names.size());
-    for (const auto& name : names) {
-      point.positions.push_back(is_robot_variable(name) ? state.getVariablePosition(name) : 0.0);
-    }
-    traj.points.push_back(point);
-
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    plan.trajectory_.joint_trajectory = traj;
+    const auto plan = single_state_plan(state, names, 0.0);
     record_stage(stage_name, plan, state, state, names, extra);
 
     if (scene_adapter_) scene_adapter_->setActiveAttachedBoxesForRecordOnly(saved_boxes);
@@ -3147,19 +3156,8 @@ private:
             extract_monitor_state_.legal_candidates[index]);
           std::vector<nlohmann::json> rollout_records;
           auto record_step = [&](size_t step, const moveit::core::RobotState& step_state, const nlohmann::json& extra) {
-            trajectory_msgs::msg::JointTrajectory traj;
             const auto names = arm_joint_target_names();
-            traj.joint_names = names;
-            trajectory_msgs::msg::JointTrajectoryPoint point;
-            point.time_from_start = rclcpp::Duration::from_seconds(0.1 * static_cast<double>(step));
-            point.positions.reserve(names.size());
-            for (const auto& name : names) {
-              point.positions.push_back(step_state.getVariablePosition(name));
-            }
-            traj.points.push_back(point);
-
-            moveit::planning_interface::MoveGroupInterface::Plan plan;
-            plan.trajectory_.joint_trajectory = traj;
+            const auto plan = single_state_plan(step_state, names, 0.1 * static_cast<double>(step));
 
             nlohmann::json enriched = extra;
             enriched["stage_kind"] = "monitor_selected_extract_replay";
@@ -3343,6 +3341,48 @@ private:
     return nullptr;
   }
 
+  void ensure_selected_extract_replay_records(ExtractRolloutTiming& selected)
+  {
+    if (!selected.rollout_records.empty() ||
+        selected.candidate_order >= extract_monitor_state_.legal_candidates.size() ||
+        !extract_monitor_state_.seed_state) {
+      return;
+    }
+
+    std::vector<nlohmann::json> rollout_records;
+    auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
+      const auto names = arm_joint_target_names();
+      const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
+
+      nlohmann::json enriched = extra;
+      enriched["stage_kind"] = "monitor_selected_extract_replay";
+      enriched["candidate_order"] = selected.candidate_order;
+      enriched["left_box_id"] = extract_monitor_state_.left_box_id;
+      enriched["right_box_id"] = extract_monitor_state_.right_box_id;
+      rollout_records.push_back(monitor_stage_json(
+        extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
+        plan,
+        state,
+        state,
+        names,
+        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+        enriched));
+    };
+    const auto& candidate = extract_monitor_state_.legal_candidates[selected.candidate_order];
+    auto replay_timing = rollout_dual_extract_from_state(
+      state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate),
+      extract_monitor_state_.left_box,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box,
+      extract_monitor_state_.right_box_id,
+      selected.candidate_order,
+      candidate,
+      record_step);
+    if (replay_timing.success) {
+      selected.rollout_records = std::move(rollout_records);
+    }
+  }
+
   bool run_extract_monitor_final_stage(std::string* message)
   {
     const auto stage_start = std::chrono::steady_clock::now();
@@ -3361,53 +3401,7 @@ private:
           extract_monitor_state_.legal_candidates[selected->candidate_order])
       : *selected->final_state;
 
-    if (selected->rollout_records.empty() &&
-        selected->candidate_order < extract_monitor_state_.legal_candidates.size() &&
-        extract_monitor_state_.seed_state) {
-      std::vector<nlohmann::json> rollout_records;
-      auto record_step = [&](size_t step, const moveit::core::RobotState& state, const nlohmann::json& extra) {
-        trajectory_msgs::msg::JointTrajectory traj;
-        const auto names = arm_joint_target_names();
-        traj.joint_names = names;
-        trajectory_msgs::msg::JointTrajectoryPoint point;
-        point.time_from_start = rclcpp::Duration::from_seconds(0.1 * static_cast<double>(step));
-        point.positions.reserve(names.size());
-        for (const auto& name : names) {
-          point.positions.push_back(state.getVariablePosition(name));
-        }
-        traj.points.push_back(point);
-
-        moveit::planning_interface::MoveGroupInterface::Plan plan;
-        plan.trajectory_.joint_trajectory = traj;
-
-        nlohmann::json enriched = extra;
-        enriched["stage_kind"] = "monitor_selected_extract_replay";
-        enriched["candidate_order"] = selected->candidate_order;
-        enriched["left_box_id"] = extract_monitor_state_.left_box_id;
-        enriched["right_box_id"] = extract_monitor_state_.right_box_id;
-        rollout_records.push_back(monitor_stage_json(
-          extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
-          plan,
-          state,
-          state,
-          names,
-          {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-          enriched));
-      };
-      const auto& candidate = extract_monitor_state_.legal_candidates[selected->candidate_order];
-      auto replay_timing = rollout_dual_extract_from_state(
-        state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate),
-        extract_monitor_state_.left_box,
-        extract_monitor_state_.left_box_id,
-        extract_monitor_state_.right_box,
-        extract_monitor_state_.right_box_id,
-        selected->candidate_order,
-        candidate,
-        record_step);
-      if (replay_timing.success) {
-        selected->rollout_records = std::move(rollout_records);
-      }
-    }
+    ensure_selected_extract_replay_records(*selected);
 
     nlohmann::json replay_stages = nlohmann::json::array();
     if (extract_monitor_state_.loaded_start_state) {

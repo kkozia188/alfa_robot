@@ -752,3 +752,9 @@
 - 改了哪里：本轮只追加协作日志，无代码修改；重点复核 `robot_motion_scene_service`、`execution_trajectory_adapter`、`planning_diagnostics`、`extract_monitor_json`、`extract_monitor_snapshot_writer`。
 - 验证结果：`robot_motion_scene_service` 与 `alfa_robot_moveit_config` 构建通过；4 个单测全部通过；L6/R8 代表性全流程 3 次内部耗时分别为 2779.43ms、2740.87ms、2698.89ms，平均 2739.73ms，和重构前约 2.7–2.8s 基准一致，未见明显耗时回退。
 - 留给下个 AI：当前主节点仍有约 3889 行，剩余可读性优化应继续在该 feature 分支小步提交；优先拆 `run_extract_monitor_*` 阶段状态机和最终 replay 组装，避免再直接提交到 `v5_dev`。
+
+## 2026-06-28 运控 / Codex / monitor 阶段快照构造收敛
+- 做了什么：继续降低 `dual_arm_planner_node.cpp` 线性噪音，把 extract monitor 的 IK/抽离/负重阶段 snapshot JSON 构造收敛到 `extract_monitor_json`。
+- 改了哪里：`extract_monitor_json.*` 新增 `extract_monitor_ik_snapshot()`、`extract_monitor_extract_snapshot()`、`extract_monitor_loaded_snapshot()`；主节点阶段函数只保留阶段流程与数据传入；`test_extract_monitor_json` 增加快照字段覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2836.01ms，快照 phase 为 `full_selected`，records=1，replay_stages=18。
+- 留给下个 AI：主节点剩余最大线性块是 `run_extract_monitor_final_stage()` 的最终 replay 组装，可继续拆成“最终方案选择”和“replay 构造”两个更深的 Module。

@@ -226,4 +226,83 @@ nlohmann::json extract_monitor_snapshot_base(
   };
 }
 
+nlohmann::json extract_monitor_ik_snapshot(
+  const std::string& snapshot_path,
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  const ik_benchmark::UpdownAwareIkResult& ik_result,
+  const IkCandidateSelectionStats& dedup_stats,
+  const nlohmann::json& rejection_counts,
+  const nlohmann::json& records)
+{
+  auto snapshot = extract_monitor_snapshot_base(
+    "ik_candidates", "不重复 IK 候选", elapsed_ms, left_box_id, right_box_id, box_front_x, scene_y_shift);
+  snapshot["snapshot_path"] = snapshot_path;
+  snapshot["ik_trial_count"] = ik_result.trial_count;
+  snapshot["ik_legal_count"] = ik_result.legal_count;
+  snapshot["ik_wall_ms"] = ik_result.wall_ms;
+  snapshot["ik_dedup_enabled"] = dedup_stats.enabled;
+  snapshot["ik_dedup_input_count"] = dedup_stats.input_count;
+  snapshot["ik_dedup_unique_count"] = dedup_stats.unique_count;
+  snapshot["ik_dedup_removed_count"] = dedup_stats.removed_count;
+  snapshot["ik_dedup_selected_count"] = dedup_stats.selected_count;
+  snapshot["ik_dedup_ms"] = dedup_stats.elapsed_ms;
+  snapshot["rejection_counts"] = rejection_counts;
+  snapshot["records"] = records;
+  return snapshot;
+}
+
+nlohmann::json extract_monitor_extract_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  size_t input_candidate_count,
+  size_t success_count,
+  size_t worker_count,
+  const std::map<std::string, size_t>& failure_counts,
+  const nlohmann::json& records)
+{
+  auto snapshot = extract_monitor_snapshot_base(
+    "extract_successes", "抽离成功候选", elapsed_ms, left_box_id, right_box_id, box_front_x, scene_y_shift);
+  snapshot["input_candidate_count"] = input_candidate_count;
+  snapshot["success_count"] = success_count;
+  snapshot["worker_count"] = worker_count;
+  snapshot["failure_counts"] = failure_counts_json(failure_counts);
+  snapshot["records"] = records;
+  return snapshot;
+}
+
+nlohmann::json extract_monitor_loaded_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  size_t extract_success_count,
+  size_t attempted_count,
+  size_t success_count,
+  double loaded_plan_batch_wall_ms,
+  size_t loaded_parallel_workers,
+  size_t loaded_candidate_limit,
+  const std::map<std::string, size_t>& failure_counts,
+  const nlohmann::json& records)
+{
+  auto snapshot = extract_monitor_snapshot_base(
+    "loaded_plan_successes", "负重规划成功候选", elapsed_ms, left_box_id, right_box_id, box_front_x, scene_y_shift);
+  snapshot["extract_success_count"] = extract_success_count;
+  snapshot["attempted_count"] = attempted_count;
+  snapshot["success_count"] = success_count;
+  snapshot["loaded_plan_batch_wall_ms"] = loaded_plan_batch_wall_ms;
+  snapshot["loaded_parallel_workers"] = loaded_parallel_workers;
+  snapshot["loaded_candidate_limit"] = loaded_candidate_limit;
+  snapshot["failure_counts"] = failure_counts_json(failure_counts);
+  snapshot["records"] = records;
+  return snapshot;
+}
+
 }  // namespace alfa_robot::motion

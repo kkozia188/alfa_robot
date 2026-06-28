@@ -1,6 +1,7 @@
 #pragma once
 
 #include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
+#include "alfa_robot_moveit_config/optimized_ik_pipeline.hpp"
 #include "robot_motion_scene_service/motion_core/scene_geometry.hpp"
 #include "ik_benchmark/parallel_updown_aware_ik_solver.h"
 
@@ -57,5 +58,44 @@ nlohmann::json extract_monitor_snapshot_base(
   int right_box_id,
   double box_front_x,
   double scene_y_shift);
+
+nlohmann::json extract_monitor_ik_snapshot(
+  const std::string& snapshot_path,
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  const ik_benchmark::UpdownAwareIkResult& ik_result,
+  const IkCandidateSelectionStats& dedup_stats,
+  const nlohmann::json& rejection_counts,
+  const nlohmann::json& records);
+
+nlohmann::json extract_monitor_extract_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  size_t input_candidate_count,
+  size_t success_count,
+  size_t worker_count,
+  const std::map<std::string, size_t>& failure_counts,
+  const nlohmann::json& records);
+
+nlohmann::json extract_monitor_loaded_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  size_t extract_success_count,
+  size_t attempted_count,
+  size_t success_count,
+  double loaded_plan_batch_wall_ms,
+  size_t loaded_parallel_workers,
+  size_t loaded_candidate_limit,
+  const std::map<std::string, size_t>& failure_counts,
+  const nlohmann::json& records);
 
 }  // namespace alfa_robot::motion

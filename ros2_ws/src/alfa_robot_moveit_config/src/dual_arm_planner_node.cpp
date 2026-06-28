@@ -76,10 +76,12 @@ using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::extract_monitor_candidate_json;
+using alfa_robot::motion::extract_monitor_extract_snapshot;
+using alfa_robot::motion::extract_monitor_ik_snapshot;
+using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
-using alfa_robot::motion::failure_counts_json;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -3092,20 +3094,17 @@ private:
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
-    nlohmann::json snapshot = extract_monitor_snapshot_base(
-      "ik_candidates", "不重复 IK 候选", elapsed_ms, left_box_id, right_box_id, box_front_x_, scene_y_shift_);
-    snapshot["snapshot_path"] = extract_monitor_snapshot_path_;
-    snapshot["ik_trial_count"] = ik_result.trial_count;
-    snapshot["ik_legal_count"] = ik_result.legal_count;
-    snapshot["ik_wall_ms"] = ik_result.wall_ms;
-    snapshot["ik_dedup_enabled"] = dedup_stats.enabled;
-    snapshot["ik_dedup_input_count"] = dedup_stats.input_count;
-    snapshot["ik_dedup_unique_count"] = dedup_stats.unique_count;
-    snapshot["ik_dedup_removed_count"] = dedup_stats.removed_count;
-    snapshot["ik_dedup_selected_count"] = dedup_stats.selected_count;
-    snapshot["ik_dedup_ms"] = dedup_stats.elapsed_ms;
-    snapshot["rejection_counts"] = ik_candidate_rejection_counts_json(ik_result);
-    snapshot["records"] = records;
+    const nlohmann::json snapshot = extract_monitor_ik_snapshot(
+      extract_monitor_snapshot_path_,
+      elapsed_ms,
+      left_box_id,
+      right_box_id,
+      box_front_x_,
+      scene_y_shift_,
+      ik_result,
+      dedup_stats,
+      ik_candidate_rejection_counts_json(ik_result),
+      records);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor IK: failed to write snapshot");
     }
@@ -3213,14 +3212,17 @@ private:
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
-    nlohmann::json snapshot = extract_monitor_snapshot_base(
-      "extract_successes", "抽离成功候选", elapsed_ms,
-      extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id, box_front_x_, scene_y_shift_);
-    snapshot["input_candidate_count"] = count;
-    snapshot["success_count"] = success_count;
-    snapshot["worker_count"] = worker_count;
-    snapshot["failure_counts"] = failure_counts_json(failure_counts);
-    snapshot["records"] = records;
+    const nlohmann::json snapshot = extract_monitor_extract_snapshot(
+      elapsed_ms,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      box_front_x_,
+      scene_y_shift_,
+      count,
+      success_count,
+      worker_count,
+      failure_counts,
+      records);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor extract: failed to write snapshot");
     }
@@ -3283,17 +3285,20 @@ private:
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
-    nlohmann::json snapshot = extract_monitor_snapshot_base(
-      "loaded_plan_successes", "负重规划成功候选", elapsed_ms,
-      extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id, box_front_x_, scene_y_shift_);
-    snapshot["extract_success_count"] = batch.plan_indices.size();
-    snapshot["attempted_count"] = attempted_count;
-    snapshot["success_count"] = success_count;
-    snapshot["loaded_plan_batch_wall_ms"] = batch.wall_ms;
-    snapshot["loaded_parallel_workers"] = options.parallel_workers;
-    snapshot["loaded_candidate_limit"] = options.candidate_limit;
-    snapshot["failure_counts"] = failure_counts_json(failure_counts);
-    snapshot["records"] = records;
+    const nlohmann::json snapshot = extract_monitor_loaded_snapshot(
+      elapsed_ms,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      box_front_x_,
+      scene_y_shift_,
+      batch.plan_indices.size(),
+      attempted_count,
+      success_count,
+      batch.wall_ms,
+      options.parallel_workers,
+      options.candidate_limit,
+      failure_counts,
+      records);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor loaded: failed to write snapshot");
     }

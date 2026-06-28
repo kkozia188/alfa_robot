@@ -704,3 +704,9 @@
 - 改了哪里：新增 `execution_trajectory_adapter.*` 与 `test_execution_trajectory_adapter.cpp`；`dual_arm_planner_node.cpp` 只保留配置装配和 action 发送逻辑；`alfa_robot_moveit_config` 增加 `trajectory_msgs` 依赖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，`test_execution_trajectory_adapter` 通过。
 - 留给下个 AI：执行接口 seam 已集中，后续真实 EtherCAT/不同执行后端只应优先改 adapter 或 action client 装配，不要再把 joint name 映射规则散回 planner 节点。
+
+## 2026-06-28 运控 / Codex / MoveIt 规划失败诊断拆分
+- 做了什么：从 `DualArmPlannerNode` 中拆出 `planning_diagnostics`，集中管理场景碰撞原因、关节越界原因和 direct planning 失败诊断字符串。
+- 改了哪里：新增 `planning_diagnostics.*`；`dual_arm_planner_node.cpp` 不再内联 `scene_collision_reason`、`group_bounds_reason`、`direct_pipeline_failure_diagnostic`；CMake 将诊断模块编入 `alfa_robot_motion_scene_adapter`。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过。
+- 留给下个 AI：后续排查 `direct_pipeline_planning_failed_code_*`、起点/终点碰撞、插值中越界时，优先看 `planning_diagnostics`，不要把诊断字符串散落回主节点。

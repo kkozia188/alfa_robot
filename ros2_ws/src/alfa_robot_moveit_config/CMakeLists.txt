@@ -72,6 +72,7 @@ add_library(alfa_robot_motion_scene_adapter
   src/loaded_pose_planning.cpp
   src/motion_flow_recorder.cpp
   src/optimized_ik_pipeline.cpp
+  src/planning_diagnostics.cpp
   ${IK_BENCHMARK_ROOT}/src/ik_solver.cpp
   ${IK_BENCHMARK_ROOT}/src/parallel_updown_aware_ik_solver.cpp
 )

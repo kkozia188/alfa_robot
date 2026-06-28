@@ -1,5 +1,6 @@
 #pragma once
 
+#include "alfa_robot_moveit_config/extract_planning_pipeline.hpp"
 #include "robot_motion_scene_service/motion_core/scene_geometry.hpp"
 #include "ik_benchmark/parallel_updown_aware_ik_solver.h"
 
@@ -33,5 +34,16 @@ nlohmann::json extract_monitor_candidate_json(
   const ik_benchmark::UpdownAwareIkCandidate& candidate,
   size_t display_index,
   const moveit::core::RobotState& state);
+
+nlohmann::json extract_monitor_timing_json(
+  const ExtractRolloutTiming& timing,
+  size_t display_index,
+  const moveit::core::RobotState& state,
+  const std::string& prefix,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles);
 
 }  // namespace alfa_robot::motion

@@ -77,6 +77,7 @@ using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_stage_json;
+using alfa_robot::motion::extract_monitor_timing_json;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -2818,94 +2819,16 @@ private:
       extract_monitor_state_.left_box,
       extract_monitor_state_.right_box,
     };
-    nlohmann::json replay_stages = nlohmann::json::array();
-    for (const auto& stage : timing.rollout_records) {
-      replay_stages.push_back(stage);
-    }
-    for (const auto& shift_stage : timing.lateral_shift_replay_stages) {
-      if (!shift_stage.start_state || !shift_stage.goal_state) {
-        continue;
-      }
-      nlohmann::json extra = shift_stage.extra;
-      extra["candidate_order"] = timing.candidate_order;
-      extra["loaded_plan_rank"] = timing.loaded_plan_rank;
-      extra["loaded_plan_success"] = timing.loaded_plan_success;
-      extra["loaded_plan_failure_reason"] = timing.loaded_plan_failure_reason;
-      extra["left_box_id"] = extract_monitor_state_.left_box_id;
-      extra["right_box_id"] = extract_monitor_state_.right_box_id;
-      replay_stages.push_back(monitor_stage_json(
-        shift_stage.stage_name,
-        shift_stage.plan,
-        *shift_stage.start_state,
-        *shift_stage.goal_state,
-        arm_joint_target_names(),
-        carried_boxes,
-        extra));
-    }
-    if (timing.loaded_start_state && timing.loaded_goal_state &&
-        !timing.loaded_plan.trajectory_.joint_trajectory.points.empty()) {
-      nlohmann::json extra = {
-        {"stage_kind", "monitor_loaded_plan_attempt_replay"},
-        {"valid", timing.loaded_plan_success},
-        {"candidate_order", timing.candidate_order},
-        {"loaded_plan_rank", timing.loaded_plan_rank},
-        {"loaded_plan_success", timing.loaded_plan_success},
-        {"loaded_plan_failure_reason", timing.loaded_plan_failure_reason},
-        {"loaded_plan_ms", timing.loaded_plan_ms},
-        {"loaded_plan_points", timing.loaded_plan_points},
-        {"loaded_plan_trajectory_distance", timing.loaded_plan_trajectory_distance},
-        {"left_box_id", extract_monitor_state_.left_box_id},
-        {"right_box_id", extract_monitor_state_.right_box_id}
-      };
-      replay_stages.push_back(monitor_stage_json(
-        extract_monitor_state_.prefix + "/candidate_" + std::to_string(timing.candidate_order) + "/loaded_plan_attempt",
-        timing.loaded_plan,
-        *timing.loaded_start_state,
-        *timing.loaded_goal_state,
-        arm_joint_target_names(),
-        carried_boxes,
-        extra));
-    }
-    return {
-      {"display_index", display_index},
-      {"candidate_order", timing.candidate_order},
-      {"h", timing.h},
-      {"h_index", timing.h_index},
-      {"seed_index", timing.seed_index},
-      {"ik_score", timing.ik_score},
-      {"ik_solve_ms", timing.ik_solve_ms},
-      {"rollout_ms", timing.rollout_ms},
-      {"interval_ms", timing.interval_ms},
-      {"accepted_steps", timing.accepted_steps},
-      {"failed_steps", timing.failed_steps},
-      {"final_retreat_x", timing.final_retreat_x},
-      {"final_lift_z", timing.final_lift_z},
-      {"final_pitch_deg", timing.final_pitch_deg},
-      {"right_final_retreat_x", timing.right_final_retreat_x},
-      {"right_final_lift_z", timing.right_final_lift_z},
-      {"right_final_pitch_deg", timing.right_final_pitch_deg},
-      {"success", timing.success},
-      {"failure_reason", timing.failure_reason},
-      {"loaded_plan_attempted", timing.loaded_plan_attempted},
-      {"loaded_plan_success", timing.loaded_plan_success},
-      {"lateral_shift_attempted", timing.lateral_shift_attempted},
-      {"lateral_shift_success", timing.lateral_shift_success},
-      {"lateral_shift_ms", timing.lateral_shift_ms},
-      {"lateral_shift_reached_distance", timing.lateral_shift_reached_distance},
-      {"lateral_shift_points", timing.lateral_shift_points},
-      {"loaded_plan_rank", timing.loaded_plan_rank},
-      {"loaded_plan_ms", timing.loaded_plan_ms},
-      {"loaded_plan_points", timing.loaded_plan_points},
-      {"loaded_plan_trajectory_distance", timing.loaded_plan_trajectory_distance},
-      {"loaded_plan_failure_reason", timing.loaded_plan_failure_reason},
-      {"loaded_pose_distance_sum", timing.loaded_pose_distance_sum},
-      {"loaded_pose_distance_l2", timing.loaded_pose_distance_l2},
-      {"loaded_pose_max_joint_delta", timing.loaded_pose_max_joint_delta},
-      {"loaded_plan_selected", timing.loaded_plan_selected},
-      {"state", robot_state_json(state)},
-      {"replay_stage_count", replay_stages.size()},
-      {"replay_stages", replay_stages}
-    };
+    return extract_monitor_timing_json(
+      timing,
+      display_index,
+      state,
+      extract_monitor_state_.prefix,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      arm_joint_target_names(),
+      carried_boxes,
+      static_box_obstacles_json());
   }
 
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const

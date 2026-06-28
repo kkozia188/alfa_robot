@@ -728,3 +728,9 @@
 - 改了哪里：新增 `extract_monitor_json.*` 和 `test_extract_monitor_json.cpp`；主节点保留少量包装函数，只负责补充当前场景的静态障碍上下文。
 - 验证结果：在 `ros2_ws/` 下 `colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，现有 3 个测试均通过。
 - 留给下个 AI：后续 monitor snapshot 字段格式优先改 `extract_monitor_json`，不要继续把 JSON 拼装散在主节点里；更大的 `monitor_timing_json` 仍留在节点，之后可继续拆。
+
+## 2026-06-28 运控 / Codex / extract monitor timing JSON 拆分
+- 做了什么：继续收敛 extract monitor 审计格式，把 `monitor_timing_json` 的候选 rollout/侧移/负重尝试 JSON 打包逻辑移入 `extract_monitor_json`。
+- 改了哪里：`extract_monitor_json.*` 增加 `extract_monitor_timing_json()`；`dual_arm_planner_node.cpp` 只负责传入当前 pair、目标关节名、携带箱和静态障碍上下文。
+- 验证结果：在 `ros2_ws/` 下 `colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，3 个测试均通过。
+- 留给下个 AI：monitor 的 JSON 字段已经基本集中；剩余大块主要是 `run_extract_monitor_*` 阶段状态机和最终方案 replay 组装。

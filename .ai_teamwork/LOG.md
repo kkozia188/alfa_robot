@@ -986,3 +986,9 @@
 - 改了哪里：`extract_monitor_json.hpp/cpp` 新增 `extract_monitor_selected_extract_replay_state_stage()`；`dual_arm_planner_node.cpp` 的 `record_monitor_extract_replay_step()` 不再手工构造单点 plan；`test_extract_monitor_json` 增加单关节模型用例覆盖 state-stage 轨迹点生成。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 9/9 通过；L6/R8 冒烟成功，内部耗时约 2945ms。
 - 留给下个 AI：`single_state_plan()` 仍被普通 keyframe 记录使用，暂不删除；后续可继续收口 snapshot 写入和 replay builder 装配。
+
+## 2026-06-29 运控 / Codex / 单点轨迹构造工具收口
+- 做了什么：把 `RobotState -> 单点 MoveIt Plan` 的重复实现收口到 `trajectory_plan_utils`，避免 node 与 monitor JSON 各自维护一份轨迹构造逻辑。
+- 改了哪里：新增 `trajectory_plan_utils.hpp/cpp` 和 `test_trajectory_plan_utils`；`dual_arm_planner_node.cpp` 删除局部 `single_state_plan()`；`extract_monitor_json.cpp` 改为复用统一工具。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过；L6/R8 冒烟成功，内部耗时约 2897ms。
+- 留给下个 AI：后续可继续把 `write_extract_monitor_snapshot()` 和 `build_final_replay_stages()` 这类 node 内装配胶水下沉，但要保持 ROS/MoveIt adapter 语义不变。

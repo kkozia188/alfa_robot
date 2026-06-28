@@ -78,6 +78,7 @@ add_library(alfa_robot_motion_scene_adapter
   src/motion_flow_recorder.cpp
   src/optimized_ik_pipeline.cpp
   src/planning_diagnostics.cpp
+  src/trajectory_plan_utils.cpp
   ${IK_BENCHMARK_ROOT}/src/ik_solver.cpp
   ${IK_BENCHMARK_ROOT}/src/parallel_updown_aware_ik_solver.cpp
 )
@@ -209,6 +210,11 @@ if(BUILD_TESTING)
   add_executable(test_pose_math test/test_pose_math.cpp)
   target_link_libraries(test_pose_math alfa_robot_motion_scene_adapter)
   add_test(NAME test_pose_math COMMAND test_pose_math)
+
+  add_executable(test_trajectory_plan_utils test/test_trajectory_plan_utils.cpp)
+  target_link_libraries(test_trajectory_plan_utils alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_trajectory_plan_utils srdfdom urdf)
+  add_test(NAME test_trajectory_plan_utils COMMAND test_trajectory_plan_utils)
 
   add_executable(test_extract_monitor_snapshot_writer test/test_extract_monitor_snapshot_writer.cpp)
   target_link_libraries(test_extract_monitor_snapshot_writer alfa_robot_motion_scene_adapter)

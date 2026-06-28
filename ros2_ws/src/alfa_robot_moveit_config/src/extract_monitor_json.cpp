@@ -1,41 +1,12 @@
 #include "alfa_robot_moveit_config/extract_monitor_json.hpp"
 
 #include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
-
-#include <rclcpp/duration.hpp>
+#include "alfa_robot_moveit_config/trajectory_plan_utils.hpp"
 
 #include <algorithm>
-#include <unordered_set>
 
 namespace alfa_robot::motion
 {
-
-namespace
-{
-
-moveit::planning_interface::MoveGroupInterface::Plan single_state_replay_plan(
-  const moveit::core::RobotState& state,
-  const std::vector<std::string>& target_names,
-  double time_from_start_sec)
-{
-  trajectory_msgs::msg::JointTrajectory traj;
-  traj.joint_names = target_names;
-  trajectory_msgs::msg::JointTrajectoryPoint point;
-  point.time_from_start = rclcpp::Duration::from_seconds(time_from_start_sec);
-  point.positions.reserve(target_names.size());
-  const auto& model_names = state.getRobotModel()->getVariableNames();
-  const std::unordered_set<std::string> variable_names(model_names.begin(), model_names.end());
-  for (const auto& name : target_names) {
-    point.positions.push_back(variable_names.count(name) > 0 ? state.getVariablePosition(name) : 0.0);
-  }
-  traj.points.push_back(point);
-
-  moveit::planning_interface::MoveGroupInterface::Plan plan;
-  plan.trajectory_.joint_trajectory = traj;
-  return plan;
-}
-
-}  // namespace
 
 nlohmann::json attached_boxes_json(const std::vector<AttachedBoxSpec>& specs)
 {
@@ -382,7 +353,7 @@ nlohmann::json extract_monitor_selected_extract_replay_state_stage(
     prefix,
     step,
     candidate_order,
-    single_state_replay_plan(state, target_names, time_from_start_sec),
+    single_state_plan(state, target_names, time_from_start_sec),
     state,
     left_box_id,
     right_box_id,

@@ -22,6 +22,7 @@
 #include "alfa_robot_moveit_config/loaded_pose_planning.hpp"
 #include "alfa_robot_moveit_config/motion_flow_recorder.hpp"
 #include "alfa_robot_moveit_config/planning_diagnostics.hpp"
+#include "alfa_robot_moveit_config/trajectory_plan_utils.hpp"
 #include "robot_motion_scene_service/motion_scene_adapter.hpp"
 #include "alfa_robot_moveit_config/motion_core/pose_math.hpp"
 #include "robot_motion_scene_service/motion_core/scene_geometry.hpp"
@@ -106,6 +107,7 @@ using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::run_extract_monitor_candidate_tasks;
 using alfa_robot::motion::robot_state_from_ik_candidate;
 using alfa_robot::motion::select_extract_monitor_final_timing;
+using alfa_robot::motion::single_state_plan;
 using alfa_robot::motion::summarize_extract_monitor_timings;
 using alfa_robot::motion::summarize_loaded_plan_timings;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
@@ -2234,26 +2236,6 @@ private:
   {
     ExtractBenchmarkRunner runner(extract_benchmark_runner_config(), extract_benchmark_runner_callbacks());
     return runner.runDual(prefix, seed_state, ik_result, left_box, left_box_id, right_box, right_box_id);
-  }
-
-  moveit::planning_interface::MoveGroupInterface::Plan single_state_plan(
-    const moveit::core::RobotState& state,
-    const std::vector<std::string>& names,
-    double time_from_start_sec) const
-  {
-    trajectory_msgs::msg::JointTrajectory traj;
-    traj.joint_names = names;
-    trajectory_msgs::msg::JointTrajectoryPoint point;
-    point.time_from_start = rclcpp::Duration::from_seconds(time_from_start_sec);
-    point.positions.reserve(names.size());
-    for (const auto& name : names) {
-      point.positions.push_back(is_robot_variable(name) ? state.getVariablePosition(name) : 0.0);
-    }
-    traj.points.push_back(point);
-
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    plan.trajectory_.joint_trajectory = traj;
-    return plan;
   }
 
   bool record_extract_keyframe(

@@ -217,6 +217,10 @@ if(BUILD_TESTING)
   add_executable(test_extract_monitor_state test/test_extract_monitor_state.cpp)
   target_link_libraries(test_extract_monitor_state alfa_robot_motion_scene_adapter)
   add_test(NAME test_extract_monitor_state COMMAND test_extract_monitor_state)
+
+  add_executable(test_ik_candidate_selector test/test_ik_candidate_selector.cpp)
+  target_link_libraries(test_ik_candidate_selector alfa_robot_motion_scene_adapter)
+  add_test(NAME test_ik_candidate_selector COMMAND test_ik_candidate_selector)
 endif()
 
 ament_package()

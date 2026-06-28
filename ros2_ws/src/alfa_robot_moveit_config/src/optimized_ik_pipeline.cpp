@@ -282,4 +282,24 @@ std::vector<ik_benchmark::UpdownAwareIkCandidate> IkCandidateSelector::select(
   return selected;
 }
 
+std::vector<ik_benchmark::UpdownAwareIkCandidate> IkCandidateSelector::selectLegalFromResult(
+  const ik_benchmark::UpdownAwareIkResult& result,
+  IkCandidateSelectionStats* stats) const
+{
+  std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
+  legal_candidates.reserve(result.candidates.size());
+  for (const auto& candidate : result.candidates) {
+    if (candidate.legal) {
+      legal_candidates.push_back(candidate);
+    }
+  }
+  std::sort(legal_candidates.begin(), legal_candidates.end(),
+            [](const auto& lhs, const auto& rhs) {
+              if (lhs.score != rhs.score) return lhs.score < rhs.score;
+              if (lhs.h_index != rhs.h_index) return lhs.h_index < rhs.h_index;
+              return lhs.seed_index < rhs.seed_index;
+            });
+  return select(legal_candidates, stats);
+}
+
 }  // namespace alfa_robot::motion

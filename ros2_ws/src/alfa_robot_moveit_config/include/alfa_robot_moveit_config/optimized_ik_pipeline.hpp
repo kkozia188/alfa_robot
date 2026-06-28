@@ -103,6 +103,10 @@ public:
     const std::vector<ik_benchmark::UpdownAwareIkCandidate>& sorted_legal_candidates,
     IkCandidateSelectionStats* stats = nullptr) const;
 
+  std::vector<ik_benchmark::UpdownAwareIkCandidate> selectLegalFromResult(
+    const ik_benchmark::UpdownAwareIkResult& result,
+    IkCandidateSelectionStats* stats = nullptr) const;
+
 private:
   bool similar(
     const ik_benchmark::UpdownAwareIkCandidate& candidate,

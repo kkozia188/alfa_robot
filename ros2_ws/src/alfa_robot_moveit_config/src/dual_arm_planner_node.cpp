@@ -2863,28 +2863,13 @@ private:
     const ik_benchmark::UpdownAwareIkResult& ik_result,
     IkCandidateSelectionStats* stats) const
   {
-    std::vector<ik_benchmark::UpdownAwareIkCandidate> legal_candidates;
-    legal_candidates.reserve(ik_result.candidates.size());
-    for (const auto& candidate : ik_result.candidates) {
-      if (candidate.legal) {
-        legal_candidates.push_back(candidate);
-      }
-    }
-    std::sort(legal_candidates.begin(), legal_candidates.end(),
-              [](const auto& lhs, const auto& rhs) {
-                if (lhs.score != rhs.score) return lhs.score < rhs.score;
-                if (lhs.h_index != rhs.h_index) return lhs.h_index < rhs.h_index;
-                return lhs.seed_index < rhs.seed_index;
-              });
     if (ik_candidate_selector_) {
-      return ik_candidate_selector_->select(legal_candidates, stats);
+      return ik_candidate_selector_->selectLegalFromResult(ik_result, stats);
     }
     if (stats) {
-      stats->input_count = legal_candidates.size();
-      stats->unique_count = legal_candidates.size();
-      stats->selected_count = legal_candidates.size();
+      *stats = IkCandidateSelectionStats{};
     }
-    return legal_candidates;
+    return {};
   }
 
   moveit::core::RobotState make_extract_monitor_seed_state() const

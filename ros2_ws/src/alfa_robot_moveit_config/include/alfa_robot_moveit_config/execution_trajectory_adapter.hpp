@@ -1,6 +1,7 @@
 #pragma once
 
 #include <control_msgs/action/follow_joint_trajectory.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 
 #include <functional>
@@ -24,6 +25,24 @@ struct ExecutionTrajectoryBuildRequest
   std::function<double(const std::string& moveit_joint_name)> hold_position;
 };
 
+struct ExecutionStateMatchRequest
+{
+  std::function<bool(const std::string& moveit_joint_name)> is_robot_variable;
+  std::function<double(const std::string& moveit_joint_name)> goal_position;
+  std::function<double(const std::string& moveit_joint_name)> current_position;
+  std::vector<std::string> target_names;
+  double tolerance = 0.0;
+};
+
+struct ExecutionJointStateMatchRequest
+{
+  std::function<bool(const std::string& moveit_joint_name)> is_robot_variable;
+  std::function<double(const std::string& moveit_joint_name)> goal_position;
+  const sensor_msgs::msg::JointState* current = nullptr;
+  std::vector<std::string> target_names;
+  double tolerance = 0.0;
+};
+
 class ExecutionTrajectoryAdapter
 {
 public:
@@ -41,6 +60,10 @@ public:
     const ExecutionTrajectoryBuildRequest& request,
     FollowJointTrajectory::Goal* goal,
     std::string* reason) const;
+
+  bool robotStateMatches(const ExecutionStateMatchRequest& request) const;
+
+  bool jointStateMatches(const ExecutionJointStateMatchRequest& request) const;
 
 private:
   static bool plannedJointChanges(

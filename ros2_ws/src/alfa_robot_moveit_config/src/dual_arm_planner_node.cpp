@@ -74,6 +74,8 @@ using alfa_robot::motion::ExtractBenchmarkRunner;
 using alfa_robot::motion::ExtractBenchmarkRunnerCallbacks;
 using alfa_robot::motion::ExecutionTrajectoryAdapter;
 using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
+using alfa_robot::motion::ExecutionJointStateMatchRequest;
+using alfa_robot::motion::ExecutionStateMatchRequest;
 using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
@@ -2560,14 +2562,18 @@ private:
     const moveit::core::RobotState& current_state,
     const std::vector<std::string>& target_names) const
   {
-    for (const auto& name : target_names) {
-      if (!is_robot_variable(name)) continue;
-      const double error = std::abs(current_state.getVariablePosition(name) - goal_state.getVariablePosition(name));
-      if (error > joint_goal_tolerance_rad_) {
-        return false;
-      }
-    }
-    return true;
+    const ExecutionTrajectoryAdapter adapter(execution_trajectory_adapter_config());
+    ExecutionStateMatchRequest request;
+    request.target_names = target_names;
+    request.tolerance = joint_goal_tolerance_rad_;
+    request.is_robot_variable = [this](const std::string& name) { return is_robot_variable(name); };
+    request.goal_position = [&goal_state](const std::string& name) {
+      return goal_state.getVariablePosition(name);
+    };
+    request.current_position = [&current_state](const std::string& name) {
+      return current_state.getVariablePosition(name);
+    };
+    return adapter.robotStateMatches(request);
   }
 
   bool joint_state_matches(
@@ -2575,22 +2581,16 @@ private:
     const sensor_msgs::msg::JointState& msg,
     const std::vector<std::string>& target_names) const
   {
-    for (const auto& name : target_names) {
-      auto it = std::find(msg.name.begin(), msg.name.end(), name);
-      if (it == msg.name.end()) {
-        const auto alfa_name = moveit_to_alfa_joint_name(name);
-        it = std::find(msg.name.begin(), msg.name.end(), alfa_name);
-      }
-      if (it == msg.name.end()) continue;
-      const size_t index = static_cast<size_t>(std::distance(msg.name.begin(), it));
-      if (index >= msg.position.size()) continue;
-      if (!is_robot_variable(name)) continue;
-      const double error = std::abs(msg.position[index] - goal_state.getVariablePosition(name));
-      if (error > joint_goal_tolerance_rad_) {
-        return false;
-      }
-    }
-    return true;
+    const ExecutionTrajectoryAdapter adapter(execution_trajectory_adapter_config());
+    ExecutionJointStateMatchRequest request;
+    request.current = &msg;
+    request.target_names = target_names;
+    request.tolerance = joint_goal_tolerance_rad_;
+    request.is_robot_variable = [this](const std::string& name) { return is_robot_variable(name); };
+    request.goal_position = [&goal_state](const std::string& name) {
+      return goal_state.getVariablePosition(name);
+    };
+    return adapter.jointStateMatches(request);
   }
 
   bool is_robot_variable(const std::string& name) const

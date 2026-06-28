@@ -968,3 +968,9 @@
 - 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `container_panels_json()`、`container_obstacle_json()`、`static_box_obstacles_json()`、`attached_box_config_json()`；`dual_arm_planner_node.cpp` 删除对应手写 JSON 循环；`test_extract_monitor_json.cpp` 增加场景 JSON 字段覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，8 个测试全绿。本轮只迁移记录 schema，不改变场景建模、碰撞、IK、抽离或负重规划算法路径。
 - 留给下个 AI：场景记录/回放 JSON 字段已集中到 `extract_monitor_json`；后续改 Rerun/JSONL 场景字段时优先改该模块，不要在节点里重新拼数组。
+
+## 2026-06-29 运控 / Codex / 执行到位匹配规则收口
+- 做了什么：把执行阶段“RobotState 是否到目标”和 `/joint_states` 是否到目标的匹配规则收口到 `ExecutionTrajectoryAdapter`，包括 MoveIt joint 名与 Alfa 执行 joint 名的兼容查找。
+- 改了哪里：`execution_trajectory_adapter.hpp/.cpp` 新增 `ExecutionStateMatchRequest`、`ExecutionJointStateMatchRequest`、`robotStateMatches()`、`jointStateMatches()`；`dual_arm_planner_node.cpp` 删除本地循环判断细节，改为构造 Adapter request；`test_execution_trajectory_adapter.cpp` 增加误差阈值、忽略非机器人变量、Alfa/MoveIt 名称兼容覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，8 个测试全绿。本轮不改变执行发送协议，只迁移到位判断职责。
+- 留给下个 AI：执行层轨迹转换和到位判断都已归 `ExecutionTrajectoryAdapter`；后续 PLC/mock 执行对接优先扩展该 Adapter，不要在主节点继续写 joint 名映射循环。

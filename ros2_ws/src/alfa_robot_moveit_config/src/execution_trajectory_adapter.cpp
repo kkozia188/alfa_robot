@@ -148,6 +148,53 @@ bool ExecutionTrajectoryAdapter::buildGoal(
   return true;
 }
 
+bool ExecutionTrajectoryAdapter::robotStateMatches(const ExecutionStateMatchRequest& request) const
+{
+  if (!request.is_robot_variable || !request.goal_position || !request.current_position) {
+    return false;
+  }
+  for (const auto& name : request.target_names) {
+    if (!request.is_robot_variable(name)) {
+      continue;
+    }
+    const double error = std::abs(request.current_position(name) - request.goal_position(name));
+    if (error > request.tolerance) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool ExecutionTrajectoryAdapter::jointStateMatches(const ExecutionJointStateMatchRequest& request) const
+{
+  if (!request.current || !request.is_robot_variable || !request.goal_position) {
+    return false;
+  }
+  const auto& current = *request.current;
+  for (const auto& name : request.target_names) {
+    auto it = std::find(current.name.begin(), current.name.end(), name);
+    if (it == current.name.end()) {
+      const auto alfa_name = moveItToAlfaJointName(name);
+      it = std::find(current.name.begin(), current.name.end(), alfa_name);
+    }
+    if (it == current.name.end()) {
+      continue;
+    }
+    const size_t index = static_cast<size_t>(std::distance(current.name.begin(), it));
+    if (index >= current.position.size()) {
+      continue;
+    }
+    if (!request.is_robot_variable(name)) {
+      continue;
+    }
+    const double error = std::abs(current.position[index] - request.goal_position(name));
+    if (error > request.tolerance) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool ExecutionTrajectoryAdapter::plannedJointChanges(
   const trajectory_msgs::msg::JointTrajectory& source,
   const std::string& joint_name)

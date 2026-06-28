@@ -29,6 +29,8 @@ int main()
   using alfa_robot::motion::ExecutionTrajectoryAdapter;
   using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
   using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
+  using alfa_robot::motion::ExecutionJointStateMatchRequest;
+  using alfa_robot::motion::ExecutionStateMatchRequest;
 
   ExecutionTrajectoryAdapterConfig config;
   config.include_turn = true;
@@ -71,6 +73,43 @@ int main()
     &reason);
   assert(!rejected);
   assert(reason.find("updown") != std::string::npos);
+
+  ExecutionStateMatchRequest state_match;
+  state_match.target_names = {"left_v5_joint1", "ignored_joint"};
+  state_match.tolerance = 0.05;
+  state_match.is_robot_variable = [](const std::string& name) {
+    return name == "left_v5_joint1";
+  };
+  state_match.goal_position = [](const std::string& name) {
+    return name == "left_v5_joint1" ? 1.0 : 0.0;
+  };
+  state_match.current_position = [](const std::string& name) {
+    return name == "left_v5_joint1" ? 1.02 : 100.0;
+  };
+  assert(adapter.robotStateMatches(state_match));
+  state_match.current_position = [](const std::string& name) {
+    return name == "left_v5_joint1" ? 1.10 : 0.0;
+  };
+  assert(!adapter.robotStateMatches(state_match));
+
+  sensor_msgs::msg::JointState joint_state;
+  joint_state.name = {"left_joint1", "right_v5_joint2"};
+  joint_state.position = {0.98, -0.51};
+  ExecutionJointStateMatchRequest joint_match;
+  joint_match.current = &joint_state;
+  joint_match.target_names = {"left_v5_joint1", "right_v5_joint2"};
+  joint_match.tolerance = 0.05;
+  joint_match.is_robot_variable = [](const std::string& name) {
+    return name == "left_v5_joint1" || name == "right_v5_joint2";
+  };
+  joint_match.goal_position = [](const std::string& name) {
+    if (name == "left_v5_joint1") return 1.0;
+    if (name == "right_v5_joint2") return -0.5;
+    return 0.0;
+  };
+  assert(adapter.jointStateMatches(joint_match));
+  joint_state.position[0] = 0.8;
+  assert(!adapter.jointStateMatches(joint_match));
 
   return 0;
 }

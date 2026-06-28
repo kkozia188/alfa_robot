@@ -908,3 +908,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `ExtractMonitorArmSeed` 与 `make_extract_monitor_joint_state()`；`dual_arm_planner_node.cpp` 的 `make_extract_monitor_seed_state()` 和 `make_extract_monitor_loaded_start_state()` 改为只传配置；`test_extract_monitor_state.cpp` 用极简 RobotModel 覆盖左右关节和 updown 写入。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2791.84ms，pre-attach 起点 updown=0.3、left_v5_joint2=-1.3089969389957472。
 - 留给下个 AI：monitor 初始状态装配规则进一步集中；主节点剩余主要是 ROS/MoveIt Adapter 和具体阶段调用顺序。
+
+## 2026-06-29 运控 / Codex / monitor 阶段完成消息收口
+- 做了什么：把 monitor IK/抽离/负重/最终阶段的中文完成消息格式从 `dual_arm_planner_node.cpp` 收口到 `extract_monitor_state` Module，减少主节点阶段实现中的样板输出拼接。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_*_stage_message()` 四个 helper；`dual_arm_planner_node.cpp` 改为直接调用；`test_extract_monitor_state.cpp` 增加消息格式断言。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2773.82ms，服务返回仍包含 `完整流程完成:`。
+- 留给下个 AI：monitor 阶段输出文本已有集中 seam；后续如调整控制台/服务返回文案，优先改 `extract_monitor_state`，不要在主节点里散写。

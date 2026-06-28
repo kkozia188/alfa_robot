@@ -206,6 +206,63 @@ ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
   return summary;
 }
 
+std::string extract_monitor_ik_stage_message(
+  size_t unique_count,
+  size_t legal_count,
+  size_t trial_count,
+  double elapsed_ms,
+  const std::string& snapshot_path)
+{
+  std::ostringstream out;
+  out << "IK阶段完成: unique=" << unique_count
+      << " legal=" << legal_count
+      << " trials=" << trial_count
+      << " elapsed=" << elapsed_ms << "ms snapshot=" << snapshot_path;
+  return out.str();
+}
+
+std::string extract_monitor_extract_stage_message(
+  size_t success_count,
+  size_t total_count,
+  size_t worker_count,
+  double elapsed_ms,
+  const std::string& snapshot_path)
+{
+  std::ostringstream out;
+  out << "抽离阶段完成: success=" << success_count << "/" << total_count
+      << " workers=" << worker_count
+      << " elapsed=" << elapsed_ms << "ms snapshot=" << snapshot_path;
+  return out.str();
+}
+
+std::string extract_monitor_loaded_stage_message(
+  size_t success_count,
+  size_t attempted_count,
+  size_t candidate_count,
+  double elapsed_ms,
+  const std::string& snapshot_path)
+{
+  std::ostringstream out;
+  out << "负重规划阶段完成: success=" << success_count
+      << " attempted=" << attempted_count
+      << " candidates=" << candidate_count
+      << " elapsed=" << elapsed_ms << "ms snapshot=" << snapshot_path;
+  return out.str();
+}
+
+std::string extract_monitor_final_stage_message(
+  const ExtractRolloutTiming& selected,
+  double elapsed_ms,
+  const std::string& snapshot_path)
+{
+  std::ostringstream out;
+  out << "最终方案已选择: candidate_order=" << selected.candidate_order
+      << " loaded_rank=" << selected.loaded_plan_rank
+      << " trajectory_distance=" << selected.loaded_plan_trajectory_distance
+      << " elapsed=" << elapsed_ms << "ms snapshot=" << snapshot_path;
+  return out.str();
+}
+
 ExtractRolloutTiming* select_extract_monitor_final_timing(
   std::vector<ExtractRolloutTiming>& timings,
   const ExtractMonitorTimingPredicate& preferred_predicate)

@@ -114,6 +114,32 @@ ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
   const std::vector<ExtractRolloutTiming>& timings,
   const std::vector<size_t>& plan_indices);
 
+std::string extract_monitor_ik_stage_message(
+  size_t unique_count,
+  size_t legal_count,
+  size_t trial_count,
+  double elapsed_ms,
+  const std::string& snapshot_path);
+
+std::string extract_monitor_extract_stage_message(
+  size_t success_count,
+  size_t total_count,
+  size_t worker_count,
+  double elapsed_ms,
+  const std::string& snapshot_path);
+
+std::string extract_monitor_loaded_stage_message(
+  size_t success_count,
+  size_t attempted_count,
+  size_t candidate_count,
+  double elapsed_ms,
+  const std::string& snapshot_path);
+
+std::string extract_monitor_final_stage_message(
+  const ExtractRolloutTiming& selected,
+  double elapsed_ms,
+  const std::string& snapshot_path);
+
 using ExtractMonitorTimingPredicate = std::function<bool(const ExtractRolloutTiming&)>;
 
 ExtractRolloutTiming* select_extract_monitor_final_timing(

@@ -84,10 +84,14 @@ using alfa_robot::motion::ExtractMonitorTransitionPlanner;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_final_snapshot;
+using alfa_robot::motion::extract_monitor_final_stage_message;
 using alfa_robot::motion::extract_monitor_full_selected_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
+using alfa_robot::motion::extract_monitor_ik_stage_message;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
+using alfa_robot::motion::extract_monitor_loaded_stage_message;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
+using alfa_robot::motion::extract_monitor_extract_stage_message;
 using alfa_robot::motion::extract_monitor_pre_attach_replay_extra;
 using alfa_robot::motion::extract_monitor_selected_lateral_shift_replay_stages;
 using alfa_robot::motion::extract_monitor_selected_loaded_plan_replay_stage;
@@ -3099,12 +3103,12 @@ private:
       return fail("extract monitor IK: failed to write snapshot");
     }
 
-    std::ostringstream out;
-    out << "IK阶段完成: unique=" << extract_monitor_state_.legal_candidates.size()
-        << " legal=" << ik_result.legal_count
-        << " trials=" << ik_result.trial_count
-        << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
-    *message = out.str();
+    *message = extract_monitor_ik_stage_message(
+      extract_monitor_state_.legal_candidates.size(),
+      ik_result.legal_count,
+      ik_result.trial_count,
+      elapsed_ms,
+      extract_monitor_snapshot_path_);
     return true;
   }
 
@@ -3166,11 +3170,12 @@ private:
       return fail("extract monitor extract: failed to write snapshot");
     }
 
-    std::ostringstream out;
-    out << "抽离阶段完成: success=" << summary.success_count << "/" << count
-        << " workers=" << worker_count
-        << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
-    *message = out.str();
+    *message = extract_monitor_extract_stage_message(
+      summary.success_count,
+      count,
+      worker_count,
+      elapsed_ms,
+      extract_monitor_snapshot_path_);
     return true;
   }
 
@@ -3228,12 +3233,12 @@ private:
       return fail("extract monitor loaded: failed to write snapshot");
     }
 
-    std::ostringstream out;
-    out << "负重规划阶段完成: success=" << summary.success_count
-        << " attempted=" << summary.attempted_count
-        << " candidates=" << batch.plan_indices.size()
-        << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
-    *message = out.str();
+    *message = extract_monitor_loaded_stage_message(
+      summary.success_count,
+      summary.attempted_count,
+      batch.plan_indices.size(),
+      elapsed_ms,
+      extract_monitor_snapshot_path_);
     return true;
   }
 
@@ -3435,12 +3440,7 @@ private:
       return fail("extract monitor final: failed to write snapshot");
     }
 
-    std::ostringstream out;
-    out << "最终方案已选择: candidate_order=" << selected->candidate_order
-        << " loaded_rank=" << selected->loaded_plan_rank
-        << " trajectory_distance=" << selected->loaded_plan_trajectory_distance
-        << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
-    *message = out.str();
+    *message = extract_monitor_final_stage_message(*selected, elapsed_ms, extract_monitor_snapshot_path_);
     return true;
   }
 

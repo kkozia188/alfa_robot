@@ -63,6 +63,10 @@ int main()
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::extract_monitor_candidate_for_timing;
+  using alfa_robot::motion::extract_monitor_extract_stage_message;
+  using alfa_robot::motion::extract_monitor_final_stage_message;
+  using alfa_robot::motion::extract_monitor_ik_stage_message;
+  using alfa_robot::motion::extract_monitor_loaded_stage_message;
   using alfa_robot::motion::extract_monitor_prefix;
   using alfa_robot::motion::extract_monitor_worker_count;
   using alfa_robot::motion::make_extract_monitor_initial_state;
@@ -280,6 +284,18 @@ int main()
   assert(loaded_summary.success_indices[0] == 0);
   assert(loaded_summary.failure_counts.at("rrt_failed") == 1);
   assert(loaded_summary.failure_counts.at("unknown") == 1);
+
+  assert(extract_monitor_ik_stage_message(64, 301, 512, 12.5, "/tmp/snapshot.json") ==
+         "IK阶段完成: unique=64 legal=301 trials=512 elapsed=12.5ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_extract_stage_message(8, 64, 16, 22.0, "/tmp/snapshot.json") ==
+         "抽离阶段完成: success=8/64 workers=16 elapsed=22ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_loaded_stage_message(1, 8, 8, 33.0, "/tmp/snapshot.json") ==
+         "负重规划阶段完成: success=1 attempted=8 candidates=8 elapsed=33ms snapshot=/tmp/snapshot.json");
+  timings[0].candidate_order = 7;
+  timings[0].loaded_plan_rank = 2;
+  timings[0].loaded_plan_trajectory_distance = 1.25;
+  assert(extract_monitor_final_stage_message(timings[0], 44.0, "/tmp/snapshot.json") ==
+         "最终方案已选择: candidate_order=7 loaded_rank=2 trajectory_distance=1.25 elapsed=44ms snapshot=/tmp/snapshot.json");
 
   std::vector<alfa_robot::motion::ExtractRolloutTiming> final_timings(4);
   final_timings[0].loaded_plan_success = true;

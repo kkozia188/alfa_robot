@@ -81,6 +81,7 @@ using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::extract_monitor_candidate_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
+using alfa_robot::motion::extract_monitor_final_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
@@ -3479,11 +3480,14 @@ private:
     const double elapsed_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
-    nlohmann::json snapshot = extract_monitor_snapshot_base(
-      "final_selected", "最终采用方案", elapsed_ms,
-      extract_monitor_state_.left_box_id, extract_monitor_state_.right_box_id, box_front_x_, scene_y_shift_);
-    snapshot["records"] = nlohmann::json::array({monitor_timing_json(*selected, 0, goal_state)});
-    snapshot["replay_stages"] = replay_stages;
+    const nlohmann::json snapshot = extract_monitor_final_snapshot(
+      elapsed_ms,
+      extract_monitor_state_.left_box_id,
+      extract_monitor_state_.right_box_id,
+      box_front_x_,
+      scene_y_shift_,
+      monitor_timing_json(*selected, 0, goal_state),
+      replay_stages);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor final: failed to write snapshot");
     }

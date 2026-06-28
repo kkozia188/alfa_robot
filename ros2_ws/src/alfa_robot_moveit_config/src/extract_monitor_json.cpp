@@ -312,4 +312,20 @@ nlohmann::json extract_monitor_loaded_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_final_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  const nlohmann::json& record,
+  const nlohmann::json& replay_stages)
+{
+  auto snapshot = extract_monitor_snapshot_base(
+    "final_selected", "最终采用方案", elapsed_ms, left_box_id, right_box_id, box_front_x, scene_y_shift);
+  snapshot["records"] = nlohmann::json::array({record});
+  snapshot["replay_stages"] = replay_stages;
+  return snapshot;
+}
+
 }  // namespace alfa_robot::motion

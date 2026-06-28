@@ -7,6 +7,7 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::attached_boxes_json;
   using alfa_robot::motion::extract_monitor_extract_snapshot;
+  using alfa_robot::motion::extract_monitor_final_snapshot;
   using alfa_robot::motion::extract_monitor_loaded_snapshot;
   using alfa_robot::motion::extract_monitor_replay_context_json;
   using alfa_robot::motion::extract_monitor_snapshot_base;
@@ -63,6 +64,21 @@ int main()
   assert(replay_context.at("loaded_plan_rank") == 3);
   assert(replay_context.at("left_box_id") == 6);
   assert(replay_context.at("right_box_id") == 8);
+
+  const auto final_snapshot = extract_monitor_final_snapshot(
+    45.0,
+    6,
+    8,
+    0.925,
+    -0.4,
+    nlohmann::json{{"candidate_order", 12}},
+    nlohmann::json::array({nlohmann::json{{"stage", "selected_loaded_plan"}}}));
+  assert(final_snapshot.at("phase") == "final_selected");
+  assert(final_snapshot.at("phase_label") == "最终采用方案");
+  assert(final_snapshot.at("records").size() == 1);
+  assert(final_snapshot.at("records")[0].at("candidate_order") == 12);
+  assert(final_snapshot.at("replay_stages").size() == 1);
+  assert(final_snapshot.at("replay_stages")[0].at("stage") == "selected_loaded_plan");
 
   return 0;
 }

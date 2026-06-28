@@ -848,3 +848,9 @@
 - 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_candidate_for_timing()`；`dual_arm_planner_node.cpp` 三处改为调用该 helper；`test_extract_monitor_state.cpp` 增加合法索引和越界返回空指针覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2831.58ms。
 - 留给下个 AI：candidate_order 解释权已集中；后续如果改候选排序/筛选后索引语义，优先检查 `extract_monitor_candidate_for_timing()` 和 `IkCandidateSelector`，不要在主节点散写数组访问。
+
+## 2026-06-29 运控 / Codex / monitor final snapshot 收口
+- 做了什么：把 extract monitor 最终阶段 `final_selected` 快照 JSON 拼装从 `DualArmPlannerNode` 收口到 `extract_monitor_json` Module，和 IK/抽离/负重阶段 snapshot helper 保持同一风格。
+- 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_final_snapshot()`；`dual_arm_planner_node.cpp` final 阶段改为只传入 record 和 replay stages；`test_extract_monitor_json.cpp` 增加 final snapshot 字段覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2768.47ms，snapshot phase=`full_selected`，records=1，replay_stages=18。
+- 留给下个 AI：四类 monitor snapshot 已全部有命名 helper；后续如改 monitor 快照格式，优先集中在 `extract_monitor_json`，主节点只负责提供业务数据。

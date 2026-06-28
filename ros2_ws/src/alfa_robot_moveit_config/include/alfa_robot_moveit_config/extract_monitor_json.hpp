@@ -103,4 +103,13 @@ nlohmann::json extract_monitor_loaded_snapshot(
   const std::map<std::string, size_t>& failure_counts,
   const nlohmann::json& records);
 
+nlohmann::json extract_monitor_final_snapshot(
+  double elapsed_ms,
+  int left_box_id,
+  int right_box_id,
+  double box_front_x,
+  double scene_y_shift,
+  const nlohmann::json& record,
+  const nlohmann::json& replay_stages);
+
 }  // namespace alfa_robot::motion

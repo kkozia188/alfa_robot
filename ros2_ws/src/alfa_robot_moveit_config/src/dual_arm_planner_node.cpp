@@ -88,6 +88,7 @@ using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
 using alfa_robot::motion::summarize_extract_monitor_timings;
+using alfa_robot::motion::summarize_loaded_plan_timings;
 using alfa_robot::motion::ExtractBenchmarkRunnerConfig;
 using alfa_robot::motion::ExtractCandidateScorer;
 using alfa_robot::motion::ExtractCandidateScorerConfig;
@@ -3210,27 +3211,14 @@ private:
       : LoadedPoseBatchPlanResult{};
 
     nlohmann::json records = nlohmann::json::array();
-    size_t success_count = 0;
-    size_t attempted_count = 0;
-    std::map<std::string, size_t> failure_counts;
-    for (const auto index : batch.plan_indices) {
-      if (index >= extract_monitor_state_.timings.size()) {
-        continue;
-      }
+    const auto summary = summarize_loaded_plan_timings(extract_monitor_state_.timings, batch.plan_indices);
+    for (const auto index : summary.attempted_indices) {
       const auto& timing = extract_monitor_state_.timings[index];
-      if (timing.loaded_plan_attempted) {
-        ++attempted_count;
-      }
       if (timing.loaded_plan_attempted && timing.final_state && loaded_pose_selector_) {
         moveit::core::RobotState record_state = timing.loaded_goal_state
           ? *timing.loaded_goal_state
           : loaded_pose_selector_->makeGoalState(*timing.final_state);
         records.push_back(monitor_timing_json(timing, records.size(), record_state));
-      }
-      if (timing.loaded_plan_success && timing.final_state && loaded_pose_selector_) {
-        ++success_count;
-      } else if (timing.loaded_plan_attempted) {
-        failure_counts[timing.loaded_plan_failure_reason.empty() ? "unknown" : timing.loaded_plan_failure_reason]++;
       }
     }
 
@@ -3244,20 +3232,20 @@ private:
       box_front_x_,
       scene_y_shift_,
       batch.plan_indices.size(),
-      attempted_count,
-      success_count,
+      summary.attempted_count,
+      summary.success_count,
       batch.wall_ms,
       options.parallel_workers,
       options.candidate_limit,
-      failure_counts,
+      summary.failure_counts,
       records);
     if (!write_extract_monitor_snapshot(snapshot)) {
       return fail("extract monitor loaded: failed to write snapshot");
     }
 
     std::ostringstream out;
-    out << "负重规划阶段完成: success=" << success_count
-        << " attempted=" << attempted_count
+    out << "负重规划阶段完成: success=" << summary.success_count
+        << " attempted=" << summary.attempted_count
         << " candidates=" << batch.plan_indices.size()
         << " elapsed=" << elapsed_ms << "ms snapshot=" << extract_monitor_snapshot_path_;
     *message = out.str();

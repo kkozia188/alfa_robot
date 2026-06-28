@@ -16,6 +16,7 @@ int main()
   using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::populate_extract_monitor_candidate_states;
   using alfa_robot::motion::summarize_extract_monitor_timings;
+  using alfa_robot::motion::summarize_loaded_plan_timings;
   using alfa_robot::motion::extract_monitor_next_phase_after;
   using alfa_robot::motion::extract_monitor_phase_before_running;
   using alfa_robot::motion::extract_monitor_stage_for_phase;
@@ -171,6 +172,20 @@ int main()
   assert(timing_summary.failure_counts.at("missing_final_state") == 1);
   assert(timing_summary.failure_counts.at("collision") == 1);
   assert(timing_summary.failure_counts.at("unknown") == 1);
+
+  timings[0].loaded_plan_attempted = true;
+  timings[0].loaded_plan_success = true;
+  timings[1].loaded_plan_attempted = true;
+  timings[1].loaded_plan_failure_reason = "rrt_failed";
+  timings[2].loaded_plan_attempted = true;
+  const auto loaded_summary = summarize_loaded_plan_timings(timings, {0, 1, 2, 99});
+  assert(loaded_summary.attempted_count == 3);
+  assert(loaded_summary.success_count == 1);
+  assert(loaded_summary.attempted_indices.size() == 3);
+  assert(loaded_summary.success_indices.size() == 1);
+  assert(loaded_summary.success_indices[0] == 0);
+  assert(loaded_summary.failure_counts.at("rrt_failed") == 1);
+  assert(loaded_summary.failure_counts.at("unknown") == 1);
 
   return 0;
 }

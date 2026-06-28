@@ -75,6 +75,19 @@ struct ExtractMonitorTimingSummary
 ExtractMonitorTimingSummary summarize_extract_monitor_timings(
   const std::vector<ExtractRolloutTiming>& timings);
 
+struct ExtractMonitorLoadedPlanSummary
+{
+  size_t attempted_count = 0;
+  size_t success_count = 0;
+  std::map<std::string, size_t> failure_counts;
+  std::vector<size_t> attempted_indices;
+  std::vector<size_t> success_indices;
+};
+
+ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
+  const std::vector<ExtractRolloutTiming>& timings,
+  const std::vector<size_t>& plan_indices);
+
 using ExtractMonitorStageRunner = std::function<bool(std::string*)>;
 
 struct ExtractMonitorStageCallbacks

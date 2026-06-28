@@ -99,6 +99,31 @@ ExtractMonitorTimingSummary summarize_extract_monitor_timings(
   return summary;
 }
 
+ExtractMonitorLoadedPlanSummary summarize_loaded_plan_timings(
+  const std::vector<ExtractRolloutTiming>& timings,
+  const std::vector<size_t>& plan_indices)
+{
+  ExtractMonitorLoadedPlanSummary summary;
+  for (const auto index : plan_indices) {
+    if (index >= timings.size()) {
+      continue;
+    }
+    const auto& timing = timings[index];
+    if (timing.loaded_plan_attempted) {
+      ++summary.attempted_count;
+      summary.attempted_indices.push_back(index);
+    }
+    if (timing.loaded_plan_success && timing.final_state) {
+      ++summary.success_count;
+      summary.success_indices.push_back(index);
+    } else if (timing.loaded_plan_attempted) {
+      summary.failure_counts[
+        timing.loaded_plan_failure_reason.empty() ? "unknown" : timing.loaded_plan_failure_reason]++;
+    }
+  }
+  return summary;
+}
+
 const char* extract_monitor_stage_failure_label(ExtractMonitorStage stage)
 {
   switch (stage) {

@@ -902,3 +902,9 @@
 - 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_selected_lateral_shift_replay_stages()` 与 `extract_monitor_selected_loaded_plan_replay_stage()`；`dual_arm_planner_node.cpp` 删除对应循环和空指针/轨迹空判断；`test_extract_monitor_json.cpp` 用极简 RobotModel 覆盖 replay stage 生成。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2726.10ms，最终 replay 首段为 pre_attach、末段为 selected_loaded_plan。
 - 留给下个 AI：最终 replay 生成细节进一步集中到 `extract_monitor_json`；主节点剩余主要是 ROS/MoveIt Adapter、IK 阶段装配和抽离 rollout Adapter。
+
+## 2026-06-29 运控 / Codex / monitor 起始关节状态构造收口
+- 做了什么：把 monitor 的 seed state / loaded start state 中“左右六轴 + updown 如何写入 RobotState”的规则从 `dual_arm_planner_node.cpp` 收口到 `extract_monitor_state` Module。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `ExtractMonitorArmSeed` 与 `make_extract_monitor_joint_state()`；`dual_arm_planner_node.cpp` 的 `make_extract_monitor_seed_state()` 和 `make_extract_monitor_loaded_start_state()` 改为只传配置；`test_extract_monitor_state.cpp` 用极简 RobotModel 覆盖左右关节和 updown 写入。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2791.84ms，pre-attach 起点 updown=0.3、left_v5_joint2=-1.3089969389957472。
+- 留给下个 AI：monitor 初始状态装配规则进一步集中；主节点剩余主要是 ROS/MoveIt Adapter 和具体阶段调用顺序。

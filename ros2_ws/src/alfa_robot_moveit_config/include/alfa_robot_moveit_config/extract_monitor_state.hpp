@@ -16,6 +16,13 @@
 namespace alfa_robot::motion
 {
 
+struct ExtractMonitorArmSeed
+{
+  std::vector<double> left_arm;
+  std::vector<double> right_arm;
+  double updown = 0.0;
+};
+
 enum class ExtractMonitorPhase
 {
   ReadyForIk,
@@ -57,6 +64,11 @@ ExtractMonitorState make_extract_monitor_initial_state(
   AttachedBoxSpec right_box,
   moveit::core::RobotStatePtr seed_state,
   moveit::core::RobotStatePtr loaded_start_state);
+
+moveit::core::RobotState make_extract_monitor_joint_state(
+  const moveit::core::RobotModelConstPtr& robot_model,
+  const moveit::core::JointModelGroup* joint_group,
+  const ExtractMonitorArmSeed& seed);
 
 using ExtractMonitorCandidateStateBuilder =
   std::function<moveit::core::RobotStatePtr(const ik_benchmark::UpdownAwareIkCandidate&)>;

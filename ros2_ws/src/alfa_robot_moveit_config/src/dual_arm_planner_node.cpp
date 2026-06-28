@@ -75,6 +75,7 @@ using alfa_robot::motion::ExecutionTrajectoryAdapter;
 using alfa_robot::motion::ExecutionTrajectoryAdapterConfig;
 using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
+using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
@@ -153,6 +154,7 @@ using alfa_robot::motion::make_attached_box_spec;
 using alfa_robot::motion::make_boxes;
 using alfa_robot::motion::make_box_wall_obstacles_for_opening;
 using alfa_robot::motion::make_container_panels;
+using alfa_robot::motion::make_extract_monitor_joint_state;
 using alfa_robot::motion::make_extract_monitor_initial_state;
 using alfa_robot::motion::make_identity_pose;
 using alfa_robot::motion::make_pick_pairs;
@@ -2915,34 +2917,18 @@ private:
 
   moveit::core::RobotState make_extract_monitor_seed_state() const
   {
-    moveit::core::RobotState seed_state(robot_model_);
-    seed_state.setToDefaultValues();
-    for (size_t i = 0; i < left_pregrasp_arm_.size(); ++i) {
-      seed_state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_pregrasp_arm_[i]);
-    }
-    for (size_t i = 0; i < right_pregrasp_arm_.size(); ++i) {
-      seed_state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
-    }
-    seed_state.setVariablePosition("updown", extract_grasp_ik_home_updown_);
-    seed_state.enforceBounds(joint_group_);
-    seed_state.update();
-    return seed_state;
+    return make_extract_monitor_joint_state(
+      robot_model_,
+      joint_group_,
+      ExtractMonitorArmSeed{left_pregrasp_arm_, right_pregrasp_arm_, extract_grasp_ik_home_updown_});
   }
 
   moveit::core::RobotState make_extract_monitor_loaded_start_state() const
   {
-    moveit::core::RobotState state(robot_model_);
-    state.setToDefaultValues();
-    for (size_t i = 0; i < left_loaded_arm_.size(); ++i) {
-      state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_loaded_arm_[i]);
-    }
-    for (size_t i = 0; i < right_loaded_arm_.size(); ++i) {
-      state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_loaded_arm_[i]);
-    }
-    state.setVariablePosition("updown", extract_grasp_ik_home_updown_);
-    state.enforceBounds(joint_group_);
-    state.update();
-    return state;
+    return make_extract_monitor_joint_state(
+      robot_model_,
+      joint_group_,
+      ExtractMonitorArmSeed{left_loaded_arm_, right_loaded_arm_, extract_grasp_ik_home_updown_});
   }
 
   void record_stage(

@@ -1,11 +1,61 @@
 #include "alfa_robot_moveit_config/extract_monitor_state.hpp"
 
+#include <moveit/robot_model/robot_model.h>
+#include <srdfdom/model.h>
+#include <urdf/model.h>
+
 #include <cassert>
+#include <memory>
 #include <string>
 #include <vector>
 
+namespace
+{
+
+moveit::core::RobotModelPtr monitor_seed_test_model()
+{
+  std::string urdf_xml = R"(
+<robot name="monitor_seed_robot">
+  <link name="base_link"/>
+  <link name="updown_link"/>
+  <joint name="updown" type="prismatic">
+    <parent link="base_link"/>
+    <child link="updown_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="1.0" effort="1" velocity="1"/>
+  </joint>
+)";
+  for (const auto side : {"left", "right"}) {
+    std::string parent = "updown_link";
+    for (int i = 1; i <= 6; ++i) {
+      const std::string link = std::string(side) + "_v5_link" + std::to_string(i);
+      urdf_xml +=
+        "  <link name=\"" + link + "\"/>\n"
+        "  <joint name=\"" + std::string(side) + "_v5_joint" + std::to_string(i) + "\" type=\"revolute\">\n"
+        "    <parent link=\"" + parent + "\"/>\n"
+        "    <child link=\"" + link + "\"/>\n"
+        "    <origin xyz=\"0 0 0\" rpy=\"0 0 0\"/>\n"
+        "    <axis xyz=\"0 0 1\"/>\n"
+        "    <limit lower=\"-3.14\" upper=\"3.14\" effort=\"1\" velocity=\"1\"/>\n"
+        "  </joint>\n";
+      parent = link;
+    }
+  }
+  urdf_xml += "</robot>";
+
+  auto urdf_model = std::make_shared<urdf::Model>();
+  assert(urdf_model->initString(urdf_xml));
+  auto srdf_model = std::make_shared<srdf::Model>();
+  assert(srdf_model->initString(*urdf_model, R"(<robot name="monitor_seed_robot"/>)"));
+  return std::make_shared<moveit::core::RobotModel>(urdf_model, srdf_model);
+}
+
+}  // namespace
+
 int main()
 {
+  using alfa_robot::motion::ExtractMonitorArmSeed;
   using alfa_robot::motion::ExtractMonitorFullRunResult;
   using alfa_robot::motion::ExtractMonitorController;
   using alfa_robot::motion::ExtractMonitorPhase;
@@ -24,6 +74,7 @@ int main()
   using alfa_robot::motion::extract_monitor_next_phase_after;
   using alfa_robot::motion::extract_monitor_phase_before_running;
   using alfa_robot::motion::extract_monitor_stage_for_phase;
+  using alfa_robot::motion::make_extract_monitor_joint_state;
   using alfa_robot::motion::run_extract_monitor_full_sequence;
   using alfa_robot::motion::run_extract_monitor_stage;
 
@@ -146,6 +197,18 @@ int main()
   assert(state.right_box.id == "right_box");
   assert(!state.seed_state);
   assert(!state.loaded_start_state);
+
+  const auto seed_model = monitor_seed_test_model();
+  const ExtractMonitorArmSeed arm_seed{
+    {0.1, 0.2, 0.3, 0.4, 0.5, 0.6},
+    {-0.1, -0.2, -0.3, -0.4, -0.5, -0.6},
+    0.35};
+  const auto seed_state = make_extract_monitor_joint_state(seed_model, nullptr, arm_seed);
+  assert(seed_state.getVariablePosition("updown") == 0.35);
+  assert(seed_state.getVariablePosition("left_v5_joint1") == 0.1);
+  assert(seed_state.getVariablePosition("left_v5_joint6") == 0.6);
+  assert(seed_state.getVariablePosition("right_v5_joint1") == -0.1);
+  assert(seed_state.getVariablePosition("right_v5_joint6") == -0.6);
 
   state.legal_candidates.resize(3);
   size_t built_count = 0;

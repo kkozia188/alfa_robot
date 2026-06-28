@@ -77,6 +77,29 @@ ExtractMonitorState make_extract_monitor_initial_state(
   return state;
 }
 
+moveit::core::RobotState make_extract_monitor_joint_state(
+  const moveit::core::RobotModelConstPtr& robot_model,
+  const moveit::core::JointModelGroup* joint_group,
+  const ExtractMonitorArmSeed& seed)
+{
+  moveit::core::RobotState state(robot_model);
+  state.setToDefaultValues();
+  for (size_t i = 0; i < seed.left_arm.size(); ++i) {
+    state.setVariablePosition("left_v5_joint" + std::to_string(i + 1), seed.left_arm[i]);
+  }
+  for (size_t i = 0; i < seed.right_arm.size(); ++i) {
+    state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), seed.right_arm[i]);
+  }
+  state.setVariablePosition("updown", seed.updown);
+  if (joint_group) {
+    state.enforceBounds(joint_group);
+  } else {
+    state.enforceBounds();
+  }
+  state.update();
+  return state;
+}
+
 void populate_extract_monitor_candidate_states(
   ExtractMonitorState& state,
   const ExtractMonitorCandidateStateBuilder& state_builder)

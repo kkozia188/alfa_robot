@@ -217,6 +217,7 @@ if(BUILD_TESTING)
 
   add_executable(test_extract_monitor_state test/test_extract_monitor_state.cpp)
   target_link_libraries(test_extract_monitor_state alfa_robot_motion_scene_adapter)
+  ament_target_dependencies(test_extract_monitor_state srdfdom urdf)
   add_test(NAME test_extract_monitor_state COMMAND test_extract_monitor_state)
 
   add_executable(test_extract_monitor_transition_planning test/test_extract_monitor_transition_planning.cpp)

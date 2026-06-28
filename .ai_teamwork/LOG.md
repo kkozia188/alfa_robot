@@ -890,3 +890,9 @@
 - 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_selected_lateral_shift_replay_extra()` 与 `extract_monitor_selected_loaded_plan_replay_extra()`；`dual_arm_planner_node.cpp` 改为调用这两个 helper；`test_extract_monitor_json.cpp` 增加字段语义覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，6 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2761.31ms，pre_attach 和 selected_loaded_plan 回放字段保留 candidate/rank/valid。
 - 留给下个 AI：monitor replay 的字段 schema 更集中；后续若继续重构，优先把 `build_final_replay_stages()` 的阶段组合 Interface 从主节点移出，而不是继续在主节点散写 JSON 字段。
+
+## 2026-06-29 运控 / Codex / monitor 重构代码地图补全
+- 做了什么：补充 `MOTION_PIPELINE_REFACTOR.md`，把本轮新增的交互式 monitor 相关 Module、数据流、测试入口和迁移建议写入文档，降低后续迁移到新仓库时的阅读门槛。
+- 改了哪里：`docs/运控/MOTION_PIPELINE_REFACTOR.md` 增加 `extract_monitor_state`、`extract_monitor_json`、`ExtractMonitorSnapshotWriter`、`ExtractMonitorTransitionPlanner` 的责任说明，以及 monitor 分阶段数据流说明。
+- 验证结果：检查文档中引用的头文件、实现文件和测试文件均存在；本提交为文档-only，沿用上一轮 `alfa_robot_moveit_config` 构建/测试和 L6/R8 代表流程验证结果。
+- 留给下个 AI：后续迁移时先读该文档第 2、3.7、4 节，不要直接复制 `dual_arm_planner_node.cpp` 的线性流程。

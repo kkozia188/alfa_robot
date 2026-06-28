@@ -33,6 +33,10 @@
 | `MotionFlowRecorder` | JSONL 文件、stage 序号、轨迹/summary 记录写入 | `include/alfa_robot_moveit_config/motion_flow_recorder.hpp` / `src/motion_flow_recorder.cpp` |
 | `BoxStackFlowOrchestrator` | 传统 box-stack flow 的按轮任务顺序、预抓取/抓取/负重/回预抓取流程编排 | `include/alfa_robot_moveit_config/box_stack_flow_orchestrator.hpp` / `src/box_stack_flow_orchestrator.cpp` |
 | `ExtractDemoOrchestrator` | 抽离 demo 的单 pair / 多 pair 遍历、失败传播和 summary 记录 | `include/alfa_robot_moveit_config/extract_demo_orchestrator.hpp` / `src/extract_demo_orchestrator.cpp` |
+| `extract_monitor_state` | 交互式 monitor 的阶段状态机、候选缓存、候选任务调度、抽离/负重统计、最终候选选择 | `include/alfa_robot_moveit_config/extract_monitor_state.hpp` / `src/extract_monitor_state.cpp` |
+| `extract_monitor_json` | monitor 的候选、阶段、快照、replay extra 字段 schema | `include/alfa_robot_moveit_config/extract_monitor_json.hpp` / `src/extract_monitor_json.cpp` |
+| `ExtractMonitorSnapshotWriter` | monitor 快照文件读写，保证目录创建和 JSON 落盘错误集中处理 | `include/alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp` / `src/extract_monitor_snapshot_writer.cpp` |
+| `ExtractMonitorTransitionPlanner` | monitor 最终回放中“负重位 → IK 吸附位”的过渡规划策略：插值、densify、碰撞验证、失败后 RRT、shortcut、再次验证 | `include/alfa_robot_moveit_config/extract_monitor_transition_planning.hpp` / `src/extract_monitor_transition_planning.cpp` |
 | `DualArmPlannerNode` | ROS 参数、MoveIt 后端、场景碰撞判定、service callback 装配 | `src/dual_arm_planner_node.cpp` |
 | 启动配置 | 暴露算法超参数和实验参数 | `launch/dual_arm_planner.launch.py` |
 | 回放工具 | 将 JSONL 转为 Rerun 场景 | `scripts/visualize_moveit_box_stack_flow.py` |
@@ -91,6 +95,25 @@
 - `MotionFlowRecorder` 写 JSONL header/stage/summary。
 - `ExtractBenchmarkCsvWriter` 写逐候选 timing CSV。
 - `visualize_moveit_box_stack_flow.py` 将 JSONL 转成 Rerun，系统 Python `/usr/bin/python3` 下可用。
+
+### 3.7 交互式 monitor 流程
+
+`extract_stage_monitor_console.py` 用于按一次命令运行或分阶段观察 `IK → 抽离 → 负重规划 → 最终回放`。它仍然通过 `DualArmPlannerNode` 的 ROS service 触发计算，但计算结果的状态、快照和 replay schema 已经拆到独立模块：
+
+1. `ExtractMonitorController` 根据当前 phase 调用 IK、抽离、负重、最终四个阶段；节点只提供四个阶段 Adapter。
+2. IK 阶段调用 `OptimizedDualIkSolver` 后，由 `IkCandidateSelector` 排序/去重，再由 `populate_extract_monitor_candidate_states()` 建候选状态缓存。
+3. 抽离阶段通过 `run_extract_monitor_candidate_tasks()` 统一调度候选任务，节点只描述“单个候选如何 rollout”。
+4. 负重阶段调用 `LoadedPosePlanner::planBatch()` 后，由 `summarize_loaded_plan_timings()` 汇总 attempted/success/failure。
+5. 最终阶段通过 `select_extract_monitor_final_timing()` 选择候选；`ExtractMonitorTransitionPlanner` 负责预吸附过渡规划；`extract_monitor_json` 负责所有 replay extra 字段。
+
+当前 monitor 相关测试：
+
+- `test_extract_monitor_state`：阶段状态机、候选缓存、调度、统计和最终选择规则。
+- `test_extract_monitor_json`：快照和 replay 字段 schema。
+- `test_extract_monitor_snapshot_writer`：快照写入错误处理。
+- `test_extract_monitor_transition_planning`：预吸附过渡规划的插值成功、RRT fallback 和失败传播。
+
+这部分的迁移建议：不要复制 `run_extract_monitor_*` 的线性实现；应优先迁移上述四个 monitor 模块，再在新仓库里重新写 ROS service Adapter。
 
 ## 4. 可复用库与迁移建议
 

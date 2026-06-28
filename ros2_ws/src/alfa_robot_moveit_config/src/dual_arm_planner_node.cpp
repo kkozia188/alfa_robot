@@ -46,7 +46,6 @@
 #include <Eigen/Geometry>
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -91,6 +90,7 @@ using alfa_robot::motion::extract_monitor_snapshot_base;
 using alfa_robot::motion::extract_monitor_stage_json;
 using alfa_robot::motion::extract_monitor_timing_json;
 using alfa_robot::motion::populate_extract_monitor_candidate_states;
+using alfa_robot::motion::run_extract_monitor_candidate_tasks;
 using alfa_robot::motion::select_extract_monitor_final_timing;
 using alfa_robot::motion::summarize_extract_monitor_timings;
 using alfa_robot::motion::summarize_loaded_plan_timings;
@@ -3098,63 +3098,45 @@ private:
 
     const auto stage_start = std::chrono::steady_clock::now();
     const size_t count = extract_monitor_state_.legal_candidates.size();
-    extract_monitor_state_.timings.clear();
-    extract_monitor_state_.timings.resize(count);
+    const size_t worker_count = run_extract_monitor_candidate_tasks(
+      extract_monitor_state_,
+      extract_benchmark_extract_workers_,
+      [&](size_t index, const ik_benchmark::UpdownAwareIkCandidate& candidate) {
+        const auto state = state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate);
+        std::vector<nlohmann::json> rollout_records;
+        auto record_step = [&](size_t step, const moveit::core::RobotState& step_state, const nlohmann::json& extra) {
+          const auto names = arm_joint_target_names();
+          const auto plan = single_state_plan(step_state, names, 0.1 * static_cast<double>(step));
 
-    const size_t worker_count = std::max<size_t>(1, std::min(extract_benchmark_extract_workers_, count));
-    std::atomic<size_t> next_index{0};
-    std::vector<std::thread> workers;
-    workers.reserve(worker_count);
-    for (size_t worker = 0; worker < worker_count; ++worker) {
-      workers.emplace_back([&, worker]() {
-        (void)worker;
-        while (true) {
-          const size_t index = next_index.fetch_add(1);
-          if (index >= count) {
-            break;
-          }
-          const auto state = state_from_ik_candidate(
-            *extract_monitor_state_.seed_state,
-            extract_monitor_state_.legal_candidates[index]);
-          std::vector<nlohmann::json> rollout_records;
-          auto record_step = [&](size_t step, const moveit::core::RobotState& step_state, const nlohmann::json& extra) {
-            const auto names = arm_joint_target_names();
-            const auto plan = single_state_plan(step_state, names, 0.1 * static_cast<double>(step));
-
-            nlohmann::json enriched = extra;
-            enriched["stage_kind"] = "monitor_selected_extract_replay";
-            enriched["candidate_order"] = index;
-            enriched["left_box_id"] = extract_monitor_state_.left_box_id;
-            enriched["right_box_id"] = extract_monitor_state_.right_box_id;
-            rollout_records.push_back(monitor_stage_json(
-              extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
-              plan,
-              step_state,
-              step_state,
-              names,
-              {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-              enriched));
-          };
-          auto timing = rollout_dual_extract_from_state(
-            state,
-            extract_monitor_state_.left_box,
-            extract_monitor_state_.left_box_id,
-            extract_monitor_state_.right_box,
-            extract_monitor_state_.right_box_id,
-            index,
-            extract_monitor_state_.legal_candidates[index],
-            record_step);
-          if (timing.success) {
-            timing.rollout_records = std::move(rollout_records);
-          }
-          fill_loaded_pose_distance_metrics(timing);
-          extract_monitor_state_.timings[index] = std::move(timing);
+          nlohmann::json enriched = extra;
+          enriched["stage_kind"] = "monitor_selected_extract_replay";
+          enriched["candidate_order"] = index;
+          enriched["left_box_id"] = extract_monitor_state_.left_box_id;
+          enriched["right_box_id"] = extract_monitor_state_.right_box_id;
+          rollout_records.push_back(monitor_stage_json(
+            extract_monitor_state_.prefix + "/selected_extract_step_" + std::to_string(step),
+            plan,
+            step_state,
+            step_state,
+            names,
+            {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+            enriched));
+        };
+        auto timing = rollout_dual_extract_from_state(
+          state,
+          extract_monitor_state_.left_box,
+          extract_monitor_state_.left_box_id,
+          extract_monitor_state_.right_box,
+          extract_monitor_state_.right_box_id,
+          index,
+          candidate,
+          record_step);
+        if (timing.success) {
+          timing.rollout_records = std::move(rollout_records);
         }
+        fill_loaded_pose_distance_metrics(timing);
+        return timing;
       });
-    }
-    for (auto& worker : workers) {
-      worker.join();
-    }
 
     nlohmann::json records = nlohmann::json::array();
     const auto summary = summarize_extract_monitor_timings(extract_monitor_state_.timings);

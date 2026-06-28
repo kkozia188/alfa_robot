@@ -14,8 +14,10 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::extract_monitor_candidate_for_timing;
   using alfa_robot::motion::extract_monitor_prefix;
+  using alfa_robot::motion::extract_monitor_worker_count;
   using alfa_robot::motion::make_extract_monitor_initial_state;
   using alfa_robot::motion::populate_extract_monitor_candidate_states;
+  using alfa_robot::motion::run_extract_monitor_candidate_tasks;
   using alfa_robot::motion::select_extract_monitor_final_timing;
   using alfa_robot::motion::summarize_extract_monitor_timings;
   using alfa_robot::motion::summarize_loaded_plan_timings;
@@ -157,6 +159,27 @@ int main()
   assert(state.candidate_states.size() == 3);
   populate_extract_monitor_candidate_states(state, {});
   assert(state.candidate_states.empty());
+
+  assert(extract_monitor_worker_count(0, 8) == 0);
+  assert(extract_monitor_worker_count(3, 8) == 3);
+  assert(extract_monitor_worker_count(3, 0) == 1);
+  assert(extract_monitor_worker_count(10, 4) == 4);
+
+  const size_t used_workers = run_extract_monitor_candidate_tasks(
+    state,
+    2,
+    [](size_t index, const ik_benchmark::UpdownAwareIkCandidate&) {
+      alfa_robot::motion::ExtractRolloutTiming timing;
+      timing.candidate_order = index;
+      timing.success = index != 1;
+      timing.failure_reason = timing.success ? "" : "synthetic_failure";
+      return timing;
+    });
+  assert(used_workers == 2);
+  assert(state.timings.size() == 3);
+  assert(state.timings[0].candidate_order == 0);
+  assert(state.timings[1].candidate_order == 1);
+  assert(state.timings[1].failure_reason == "synthetic_failure");
 
   alfa_robot::motion::ExtractRolloutTiming candidate_timing;
   candidate_timing.candidate_order = 1;

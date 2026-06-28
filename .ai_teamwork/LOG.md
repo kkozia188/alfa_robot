@@ -860,3 +860,9 @@
 - 改了哪里：`extract_monitor_json.hpp/.cpp` 新增 `extract_monitor_full_selected_snapshot()`；`dual_arm_planner_node.cpp` 改为调用 helper；`test_extract_monitor_json.cpp` 增加字段覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，5 个测试全部通过；L6/R8 `--once --no-rerun` 三次全流程内部耗时为 2762.59ms、2772.08ms、2790.77ms，仍在重构前约 2.7–3.0s 区间。
 - 留给下个 AI：本轮收口没有引入耗时回退；后续如果继续降低 `dual_arm_planner_node.cpp` 复杂度，优先整体迁出 monitor 阶段 Implementation，而不是再抽浅 helper。
+
+## 2026-06-29 运控 / Codex / monitor 候选任务调度收口
+- 做了什么：把 extract monitor 抽离阶段里手写的候选多线程调度、worker 数量裁剪、timings 写回规则收口到 `extract_monitor_state` Module。
+- 改了哪里：`extract_monitor_state.hpp/.cpp` 新增 `extract_monitor_worker_count()` 与 `run_extract_monitor_candidate_tasks()`；`dual_arm_planner_node.cpp` 抽离阶段改为只描述单个候选如何 rollout；`test_extract_monitor_state.cpp` 增加 worker 规则和任务写回覆盖。
+- 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config` 通过，robot_motion_scene_service 1 个测试、alfa_robot_moveit_config 5 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2942.44ms，仍在约 2.7–3.0s 波动区间。
+- 留给下个 AI：抽离阶段并行调度已经集中；后续如果改“候选怎么分配给线程/是否早停/是否保留失败样本”，优先改 `run_extract_monitor_candidate_tasks()`，不要在主节点恢复手写线程循环。

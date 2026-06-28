@@ -65,6 +65,16 @@ void populate_extract_monitor_candidate_states(
   ExtractMonitorState& state,
   const ExtractMonitorCandidateStateBuilder& state_builder);
 
+using ExtractMonitorCandidateTask =
+  std::function<ExtractRolloutTiming(size_t, const ik_benchmark::UpdownAwareIkCandidate&)>;
+
+size_t extract_monitor_worker_count(size_t candidate_count, size_t requested_worker_count);
+
+size_t run_extract_monitor_candidate_tasks(
+  ExtractMonitorState& state,
+  size_t requested_worker_count,
+  const ExtractMonitorCandidateTask& task);
+
 const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing(
   const ExtractMonitorState& state,
   const ExtractRolloutTiming& timing);

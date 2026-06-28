@@ -1,7 +1,10 @@
 #include "alfa_robot_moveit_config/extract_monitor_state.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <sstream>
+#include <thread>
 #include <utility>
 
 namespace alfa_robot::motion
@@ -86,6 +89,47 @@ void populate_extract_monitor_candidate_states(
   for (const auto& candidate : state.legal_candidates) {
     state.candidate_states.push_back(state_builder(candidate));
   }
+}
+
+size_t extract_monitor_worker_count(size_t candidate_count, size_t requested_worker_count)
+{
+  if (candidate_count == 0) {
+    return 0;
+  }
+  return std::max<size_t>(1, std::min(requested_worker_count, candidate_count));
+}
+
+size_t run_extract_monitor_candidate_tasks(
+  ExtractMonitorState& state,
+  size_t requested_worker_count,
+  const ExtractMonitorCandidateTask& task)
+{
+  const size_t count = state.legal_candidates.size();
+  state.timings.clear();
+  state.timings.resize(count);
+  if (count == 0 || !task) {
+    return 0;
+  }
+
+  const size_t worker_count = extract_monitor_worker_count(count, requested_worker_count);
+  std::atomic<size_t> next_index{0};
+  std::vector<std::thread> workers;
+  workers.reserve(worker_count);
+  for (size_t worker = 0; worker < worker_count; ++worker) {
+    workers.emplace_back([&]() {
+      while (true) {
+        const size_t index = next_index.fetch_add(1);
+        if (index >= count) {
+          break;
+        }
+        state.timings[index] = task(index, state.legal_candidates[index]);
+      }
+    });
+  }
+  for (auto& worker : workers) {
+    worker.join();
+  }
+  return worker_count;
 }
 
 const ik_benchmark::UpdownAwareIkCandidate* extract_monitor_candidate_for_timing(

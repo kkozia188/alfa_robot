@@ -5,9 +5,37 @@
 #include <rclcpp/duration.hpp>
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace alfa_robot::motion
 {
+
+namespace
+{
+
+moveit::planning_interface::MoveGroupInterface::Plan single_state_replay_plan(
+  const moveit::core::RobotState& state,
+  const std::vector<std::string>& target_names,
+  double time_from_start_sec)
+{
+  trajectory_msgs::msg::JointTrajectory traj;
+  traj.joint_names = target_names;
+  trajectory_msgs::msg::JointTrajectoryPoint point;
+  point.time_from_start = rclcpp::Duration::from_seconds(time_from_start_sec);
+  point.positions.reserve(target_names.size());
+  const auto& model_names = state.getRobotModel()->getVariableNames();
+  const std::unordered_set<std::string> variable_names(model_names.begin(), model_names.end());
+  for (const auto& name : target_names) {
+    point.positions.push_back(variable_names.count(name) > 0 ? state.getVariablePosition(name) : 0.0);
+  }
+  traj.points.push_back(point);
+
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  plan.trajectory_.joint_trajectory = traj;
+  return plan;
+}
+
+}  // namespace
 
 nlohmann::json attached_boxes_json(const std::vector<AttachedBoxSpec>& specs)
 {
@@ -335,6 +363,33 @@ nlohmann::json extract_monitor_selected_extract_replay_stage(
     carried_boxes,
     static_box_obstacles,
     enriched);
+}
+
+nlohmann::json extract_monitor_selected_extract_replay_state_stage(
+  const std::string& prefix,
+  size_t step,
+  size_t candidate_order,
+  const moveit::core::RobotState& state,
+  int left_box_id,
+  int right_box_id,
+  const std::vector<std::string>& target_names,
+  const std::vector<AttachedBoxSpec>& carried_boxes,
+  const nlohmann::json& static_box_obstacles,
+  const nlohmann::json& extra,
+  double time_from_start_sec)
+{
+  return extract_monitor_selected_extract_replay_stage(
+    prefix,
+    step,
+    candidate_order,
+    single_state_replay_plan(state, target_names, time_from_start_sec),
+    state,
+    left_box_id,
+    right_box_id,
+    target_names,
+    carried_boxes,
+    static_box_obstacles,
+    extra);
 }
 
 nlohmann::json extract_monitor_timing_json(

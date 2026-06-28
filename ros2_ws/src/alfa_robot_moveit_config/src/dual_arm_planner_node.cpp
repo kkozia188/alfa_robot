@@ -98,7 +98,7 @@ using alfa_robot::motion::extract_monitor_loaded_stage_message;
 using alfa_robot::motion::extract_monitor_candidate_for_timing;
 using alfa_robot::motion::extract_monitor_extract_stage_message;
 using alfa_robot::motion::extract_monitor_snapshot_base;
-using alfa_robot::motion::extract_monitor_selected_extract_replay_stage;
+using alfa_robot::motion::extract_monitor_selected_extract_replay_state_stage;
 using alfa_robot::motion::extract_monitor_timing_records_json;
 using alfa_robot::motion::ik_candidate_rejection_counts_json;
 using alfa_robot::motion::dual_arm_with_updown_joint_names;
@@ -2748,19 +2748,18 @@ private:
       return;
     }
     const auto names = dual_arm_with_updown_joint_names();
-    const auto plan = single_state_plan(state, names, 0.1 * static_cast<double>(step));
-    rollout_records->push_back(extract_monitor_selected_extract_replay_stage(
+    rollout_records->push_back(extract_monitor_selected_extract_replay_state_stage(
       extract_monitor_state_.prefix,
       step,
       candidate_order,
-      plan,
       state,
       extract_monitor_state_.left_box_id,
       extract_monitor_state_.right_box_id,
       names,
       {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
       static_box_obstacles_json(),
-      extra));
+      extra,
+      0.1 * static_cast<double>(step)));
   }
 
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const

@@ -980,3 +980,9 @@
 - 改了哪里：`pose_math.hpp/cpp` 新增 `make_front_grasp_pose`、`make_top_suction_pose`；`dual_arm_planner_node.cpp` 删除局部 `front_grasp_pose/top_suction_pose`；新增 `test_pose_math` 锁定坐标偏移和朝向。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 9/9 通过；L6/R8 冒烟成功，内部耗时约 2982ms，仍在同一档。
 - 留给下个 AI：下一步可继续收口 `dual_arm_planner_node.cpp` 中的 monitor replay/snapshot 胶水，但不要改变算法语义。
+
+## 2026-06-29 运控 / Codex / monitor 抽离回放单步收口
+- 做了什么：把 monitor 最终回放里“RobotState 单步抽离记录 -> replay stage”的轨迹构造和 JSON schema 从 `dual_arm_planner_node.cpp` 收口到 `extract_monitor_json`。
+- 改了哪里：`extract_monitor_json.hpp/cpp` 新增 `extract_monitor_selected_extract_replay_state_stage()`；`dual_arm_planner_node.cpp` 的 `record_monitor_extract_replay_step()` 不再手工构造单点 plan；`test_extract_monitor_json` 增加单关节模型用例覆盖 state-stage 轨迹点生成。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 9/9 通过；L6/R8 冒烟成功，内部耗时约 2945ms。
+- 留给下个 AI：`single_state_plan()` 仍被普通 keyframe 记录使用，暂不删除；后续可继续收口 snapshot 写入和 replay builder 装配。

@@ -938,3 +938,9 @@
 - 改了哪里：`loaded_pose_planning.hpp/.cpp` 新增 `LoadedPoseSelector::fillTimingDistanceMetrics()`；`dual_arm_planner_node.cpp` 两个调用点改为调用 selector；新增 `test_loaded_pose_selector.cpp` 并接入 CMake；`MOTION_PIPELINE_REFACTOR.md` 补充职责说明。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 通过，8 个测试全部通过；L6/R8 `--once --no-rerun` 全流程成功，内部耗时 2842.32ms，快照仍有 `loaded_pose_distance_sum/l2/max_joint_delta`。
 - 留给下个 AI：负重距离指标不再散落在节点；后续如改候选排序或负重姿态族代价，优先看 `LoadedPoseSelector` 与 `LoadedPosePlanner`，不要把逻辑写回 ROS 节点。
+
+## 2026-06-29 运控 / Codex / 重构整体 review 与耗时复核
+- 做了什么：整体 review 了 motion flow 重构后的模块边界、测试覆盖和代表流程耗时；发现并修正 `front_z_reach_lower/upper` 在节点兜底默认值、launch 默认值和文档之间不一致的问题。
+- 改了哪里：`dual_arm_planner_node.cpp` 的 front 侧吸高度窗兜底默认值对齐为 `0.45~1.25`；`docs/运控/MOTION_PIPELINE_REFACTOR.md` 同步参数表。
+- 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config` 通过，1+8 个测试全绿；L6/R8 `--once --no-rerun` 三次内部耗时为 2852.87ms、2809.78ms、2766.23ms，均值 2809.63ms，修正后复跑 2777.04ms，未见相对原 2.7~3.0s 基线的性能回退。
+- 留给下个 AI：当前重构后的模块划分基本稳定；若继续瘦身，应优先迁出 `dual_arm_planner_node.cpp` 中剩余 ROS/MoveIt Adapter，而不是再抽浅 helper。

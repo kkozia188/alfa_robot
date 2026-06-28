@@ -154,7 +154,7 @@ target_link_libraries(your_target
 | 参数 | 当前默认 | 含义 |
 | --- | --- | --- |
 | `extract_demo_pair_sequence` | `2,4;7,9;12,14;17,19` | 当前固定版原抓取任务 |
-| `front_z_reach_lower` / `front_z_reach_upper` | `0.9` / `1.3` | 侧吸目标高度窗：`updown + 0.9 ~ updown + 1.3` |
+| `front_z_reach_lower` / `front_z_reach_upper` | `0.45` / `1.25` | 侧吸目标高度窗：`updown + 0.45 ~ updown + 1.25` |
 | `top_z_reach_lower` / `top_z_reach_upper` | `0.3` / `0.45` | 顶吸目标高度窗 |
 | `ik_h_candidate_count` / `ik_seed_count` | `16` / `32` | 抓取 IK 主候选池大小 |
 | `ik_candidate_timeout` | `0.01` | 单次 BioIK timeout |

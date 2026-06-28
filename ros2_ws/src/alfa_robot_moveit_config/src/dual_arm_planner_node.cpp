@@ -284,8 +284,8 @@ public:
     ik_config_.left_tip = left_tip_;
     ik_config_.right_tip = right_tip_;
     ik_config_.tool0_offset = get_or_declare_parameter<double>("ik_tool0_offset", 0.0);
-    ik_config_.gripper_z_reach_lower = get_or_declare_parameter<double>("front_z_reach_lower", 0.9) - world_to_base_z_;
-    ik_config_.gripper_z_reach_upper = get_or_declare_parameter<double>("front_z_reach_upper", 1.3) - world_to_base_z_;
+    ik_config_.gripper_z_reach_lower = get_or_declare_parameter<double>("front_z_reach_lower", 0.45) - world_to_base_z_;
+    ik_config_.gripper_z_reach_upper = get_or_declare_parameter<double>("front_z_reach_upper", 1.25) - world_to_base_z_;
     ik_config_.top_suction_z_reach_lower = get_or_declare_parameter<double>("top_z_reach_lower", 0.3) - world_to_base_z_;
     ik_config_.top_suction_z_reach_upper = get_or_declare_parameter<double>("top_z_reach_upper", 0.45) - world_to_base_z_;
     ik_config_.h_lower = get_or_declare_parameter<double>("ik_h_lower", 0.0);

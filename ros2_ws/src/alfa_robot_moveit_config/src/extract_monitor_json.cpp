@@ -642,6 +642,25 @@ nlohmann::json extract_monitor_loaded_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_loaded_snapshot(
+  const ExtractMonitorLoadedSnapshotRequest& request)
+{
+  return extract_monitor_loaded_snapshot(
+    request.elapsed_ms,
+    request.left_box_id,
+    request.right_box_id,
+    request.box_front_x,
+    request.scene_y_shift,
+    request.extract_success_count,
+    request.attempted_count,
+    request.success_count,
+    request.loaded_plan_batch_wall_ms,
+    request.loaded_parallel_workers,
+    request.loaded_candidate_limit,
+    request.failure_counts,
+    request.records);
+}
+
 nlohmann::json extract_monitor_final_snapshot(
   double elapsed_ms,
   int left_box_id,

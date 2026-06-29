@@ -84,6 +84,7 @@ using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
+using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -3054,19 +3055,20 @@ private:
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
     const nlohmann::json snapshot = extract_monitor_loaded_snapshot(
-      elapsed_ms,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      box_front_x_,
-      scene_y_shift_,
-      batch.plan_indices.size(),
-      summary.attempted_count,
-      summary.success_count,
-      batch.wall_ms,
-      options.parallel_workers,
-      options.candidate_limit,
-      summary.failure_counts,
-      records);
+      ExtractMonitorLoadedSnapshotRequest{
+        elapsed_ms,
+        extract_monitor_state_.left_box_id,
+        extract_monitor_state_.right_box_id,
+        box_front_x_,
+        scene_y_shift_,
+        batch.plan_indices.size(),
+        summary.attempted_count,
+        summary.success_count,
+        batch.wall_ms,
+        options.parallel_workers,
+        options.candidate_limit,
+        summary.failure_counts,
+        records});
     if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor loaded")) {
       return false;
     }

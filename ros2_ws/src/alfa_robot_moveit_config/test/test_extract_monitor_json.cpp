@@ -59,6 +59,7 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::ContainerPanel;
   using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
+  using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::StaticBoxObstacle;
@@ -181,6 +182,31 @@ int main()
   assert(loaded_snapshot.at("attempted_count") == 4);
   assert(loaded_snapshot.at("success_count") == 1);
   assert(loaded_snapshot.at("loaded_parallel_workers") == 8);
+
+  const auto loaded_snapshot_from_request = extract_monitor_loaded_snapshot(
+    ExtractMonitorLoadedSnapshotRequest{
+      35.0,
+      6,
+      8,
+      0.925,
+      -0.4,
+      13,
+      5,
+      2,
+      31.0,
+      16,
+      10,
+      {{"direct_pipeline_planning_failed_code_99999", 4}},
+      nlohmann::json::array({nlohmann::json{{"loaded_plan_rank", 1}}})});
+  assert(loaded_snapshot_from_request.at("phase") == "loaded_plan_successes");
+  assert(loaded_snapshot_from_request.at("extract_success_count") == 13);
+  assert(loaded_snapshot_from_request.at("attempted_count") == 5);
+  assert(loaded_snapshot_from_request.at("success_count") == 2);
+  assert(loaded_snapshot_from_request.at("loaded_plan_batch_wall_ms") == 31.0);
+  assert(loaded_snapshot_from_request.at("loaded_parallel_workers") == 16);
+  assert(loaded_snapshot_from_request.at("loaded_candidate_limit") == 10);
+  assert(loaded_snapshot_from_request.at("failure_counts").at("direct_pipeline_planning_failed_code_99999") == 4);
+  assert(loaded_snapshot_from_request.at("records").size() == 1);
 
   alfa_robot::motion::ExtractRolloutTiming timing;
   timing.candidate_order = 12;

@@ -250,6 +250,26 @@ nlohmann::json extract_monitor_loaded_snapshot(
   const std::map<std::string, size_t>& failure_counts,
   const nlohmann::json& records);
 
+struct ExtractMonitorLoadedSnapshotRequest
+{
+  double elapsed_ms = 0.0;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  double box_front_x = 0.0;
+  double scene_y_shift = 0.0;
+  size_t extract_success_count = 0;
+  size_t attempted_count = 0;
+  size_t success_count = 0;
+  double loaded_plan_batch_wall_ms = 0.0;
+  size_t loaded_parallel_workers = 0;
+  size_t loaded_candidate_limit = 0;
+  std::map<std::string, size_t> failure_counts;
+  nlohmann::json records = nlohmann::json::array();
+};
+
+nlohmann::json extract_monitor_loaded_snapshot(
+  const ExtractMonitorLoadedSnapshotRequest& request);
+
 nlohmann::json extract_monitor_final_snapshot(
   double elapsed_ms,
   int left_box_id,

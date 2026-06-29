@@ -49,6 +49,20 @@ int main()
   assert(aabb_overlaps(a, b));
   assert(!aabb_overlaps(a, c));
 
+  std::string reason;
+  const StaticBoxObstacle static_obstacle{"box_wall", {0.0, 0.0, 0.0}, {0.5, 0.5, 0.5}};
+  assert(!carried_box_clear_obstacles(a, "carried_box", {static_obstacle}, {}, &reason));
+  assert(reason == "carried_box overlaps box_wall");
+
+  reason.clear();
+  const ContainerPanel ceiling{"container_ceiling", {0.0, 0.0, 0.45}, {2.0, 2.0, 0.1}};
+  assert(!carried_box_clear_obstacles(a, "carried_box", {}, {ceiling}, &reason));
+  assert(reason == "carried_box overlaps container_ceiling");
+
+  reason.clear();
+  assert(carried_box_clear_obstacles(c, "carried_box", {static_obstacle}, {ceiling}, &reason));
+  assert(reason.empty());
+
   std::cout << "scene geometry smoke passed\n";
   return 0;
 }

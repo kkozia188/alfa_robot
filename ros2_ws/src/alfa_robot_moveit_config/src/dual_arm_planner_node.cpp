@@ -1448,28 +1448,12 @@ private:
   {
     if (!enable_attached_box_collision_) return true;
     const auto carried_aabb = attached_box_world_aabb(state, carried_box);
-
-    if (enable_static_box_obstacles_) {
-      for (const auto& obstacle : static_box_obstacles()) {
-        const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
-        if (aabb_overlaps(carried_aabb, obstacle_aabb)) {
-          if (reason) *reason = carried_box.id + " overlaps " + obstacle.id;
-          return false;
-        }
-      }
-    }
-
-    if (enable_container_obstacle_) {
-      for (const auto& panel : container_panels()) {
-        const AxisAlignedBox panel_aabb{panel.center, panel.size};
-        if (aabb_overlaps(carried_aabb, panel_aabb)) {
-          if (reason) *reason = carried_box.id + " overlaps " + panel.id;
-          return false;
-        }
-      }
-    }
-
-    return true;
+    return carried_box_clear_obstacles(
+      carried_aabb,
+      carried_box.id,
+      enable_static_box_obstacles_ ? static_box_obstacles() : std::vector<StaticBoxObstacle>{},
+      enable_container_obstacle_ ? container_panels() : std::vector<ContainerPanel>{},
+      reason);
   }
 
   bool state_clear_for_extract(

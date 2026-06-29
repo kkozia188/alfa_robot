@@ -78,4 +78,11 @@ bool carried_box_detached_from_neighbors(
   const std::string& carried_box_id,
   std::string* reason);
 
+bool carried_box_clear_obstacles(
+  const AxisAlignedBox& carried_box,
+  const std::string& carried_box_id,
+  const std::vector<StaticBoxObstacle>& static_obstacles,
+  const std::vector<ContainerPanel>& container_panels,
+  std::string* reason);
+
 }  // namespace alfa_robot::motion

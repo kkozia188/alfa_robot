@@ -259,4 +259,30 @@ bool carried_box_detached_from_neighbors(
   return true;
 }
 
+bool carried_box_clear_obstacles(
+  const AxisAlignedBox& carried_box,
+  const std::string& carried_box_id,
+  const std::vector<StaticBoxObstacle>& static_obstacles,
+  const std::vector<ContainerPanel>& container_panels,
+  std::string* reason)
+{
+  for (const auto& obstacle : static_obstacles) {
+    const AxisAlignedBox obstacle_aabb{obstacle.center, obstacle.size};
+    if (aabb_overlaps(carried_box, obstacle_aabb)) {
+      if (reason) *reason = carried_box_id + " overlaps " + obstacle.id;
+      return false;
+    }
+  }
+
+  for (const auto& panel : container_panels) {
+    const AxisAlignedBox panel_aabb{panel.center, panel.size};
+    if (aabb_overlaps(carried_box, panel_aabb)) {
+      if (reason) *reason = carried_box_id + " overlaps " + panel.id;
+      return false;
+    }
+  }
+
+  return true;
+}
+
 }  // namespace alfa_robot::motion

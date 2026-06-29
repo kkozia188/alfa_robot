@@ -576,6 +576,25 @@ nlohmann::json extract_monitor_ik_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_ik_snapshot(
+  const ExtractMonitorIkSnapshotRequest& request)
+{
+  if (!request.ik_result) {
+    return nlohmann::json::object();
+  }
+  return extract_monitor_ik_snapshot(
+    request.snapshot_path,
+    request.elapsed_ms,
+    request.left_box_id,
+    request.right_box_id,
+    request.box_front_x,
+    request.scene_y_shift,
+    *request.ik_result,
+    request.dedup_stats,
+    request.rejection_counts,
+    request.records);
+}
+
 nlohmann::json extract_monitor_extract_snapshot(
   double elapsed_ms,
   int left_box_id,

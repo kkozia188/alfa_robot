@@ -206,6 +206,23 @@ nlohmann::json extract_monitor_ik_snapshot(
   const nlohmann::json& rejection_counts,
   const nlohmann::json& records);
 
+struct ExtractMonitorIkSnapshotRequest
+{
+  std::string snapshot_path;
+  double elapsed_ms = 0.0;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  double box_front_x = 0.0;
+  double scene_y_shift = 0.0;
+  const ik_benchmark::UpdownAwareIkResult* ik_result = nullptr;
+  IkCandidateSelectionStats dedup_stats;
+  nlohmann::json rejection_counts = nlohmann::json::object();
+  nlohmann::json records = nlohmann::json::array();
+};
+
+nlohmann::json extract_monitor_ik_snapshot(
+  const ExtractMonitorIkSnapshotRequest& request);
+
 nlohmann::json extract_monitor_extract_snapshot(
   double elapsed_ms,
   int left_box_id,

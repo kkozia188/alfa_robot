@@ -85,6 +85,7 @@ using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
+using alfa_robot::motion::ExtractMonitorIkSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
@@ -2912,16 +2913,17 @@ private:
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
     const nlohmann::json snapshot = extract_monitor_ik_snapshot(
-      extract_monitor_snapshot_path_,
-      elapsed_ms,
-      left_box_id,
-      right_box_id,
-      box_front_x_,
-      scene_y_shift_,
-      ik_result,
-      dedup_stats,
-      ik_candidate_rejection_counts_json(ik_result),
-      records);
+      ExtractMonitorIkSnapshotRequest{
+        extract_monitor_snapshot_path_,
+        elapsed_ms,
+        left_box_id,
+        right_box_id,
+        box_front_x_,
+        scene_y_shift_,
+        &ik_result,
+        dedup_stats,
+        ik_candidate_rejection_counts_json(ik_result),
+        records});
     if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor IK")) {
       return false;
     }

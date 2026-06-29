@@ -60,6 +60,7 @@ int main()
   using alfa_robot::motion::ContainerPanel;
   using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
+  using alfa_robot::motion::ExtractMonitorIkSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
@@ -148,6 +149,42 @@ int main()
   assert(snapshot.at("left_box_id") == 6);
   assert(snapshot.at("right_box_id") == 8);
   assert(snapshot.at("box_front_x") == 0.925);
+
+  ik_benchmark::UpdownAwareIkResult ik_result;
+  ik_result.trial_count = 512;
+  ik_result.legal_count = 128;
+  ik_result.wall_ms = 42.5;
+  alfa_robot::motion::IkCandidateSelectionStats dedup_stats;
+  dedup_stats.enabled = true;
+  dedup_stats.input_count = 128;
+  dedup_stats.unique_count = 64;
+  dedup_stats.removed_count = 64;
+  dedup_stats.selected_count = 32;
+  dedup_stats.elapsed_ms = 1.5;
+  const auto ik_snapshot_from_request = extract_monitor_ik_snapshot(
+    ExtractMonitorIkSnapshotRequest{
+      "/tmp/snapshot.json",
+      11.0,
+      6,
+      8,
+      0.925,
+      -0.4,
+      &ik_result,
+      dedup_stats,
+      nlohmann::json{{"tip_error_too_large", 7}},
+      nlohmann::json::array({nlohmann::json{{"candidate_index", 0}}})});
+  assert(ik_snapshot_from_request.at("phase") == "ik_candidates");
+  assert(ik_snapshot_from_request.at("snapshot_path") == "/tmp/snapshot.json");
+  assert(ik_snapshot_from_request.at("ik_trial_count") == 512);
+  assert(ik_snapshot_from_request.at("ik_legal_count") == 128);
+  assert(ik_snapshot_from_request.at("ik_wall_ms") == 42.5);
+  assert(ik_snapshot_from_request.at("ik_dedup_enabled") == true);
+  assert(ik_snapshot_from_request.at("ik_dedup_unique_count") == 64);
+  assert(ik_snapshot_from_request.at("rejection_counts").at("tip_error_too_large") == 7);
+  assert(ik_snapshot_from_request.at("records").size() == 1);
+  const auto empty_ik_snapshot = extract_monitor_ik_snapshot(ExtractMonitorIkSnapshotRequest{});
+  assert(empty_ik_snapshot.is_object());
+  assert(empty_ik_snapshot.empty());
 
   const auto extract_snapshot = extract_monitor_extract_snapshot(
     23.0, 6, 8, 0.925, -0.4, 64, 12, 8, {{"collision", 3}}, nlohmann::json::array());

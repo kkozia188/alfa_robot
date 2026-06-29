@@ -1070,3 +1070,9 @@
 - 改了哪里：`extract_monitor_json.hpp/cpp` 新增 final request overload；`dual_arm_planner_node.cpp` 的 final 阶段改用 request；`test_extract_monitor_json.cpp` 补 request 快照字段覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2852.44ms。
 - 留给下个 AI：monitor 快照长参数入口目前只剩 IK 阶段最明显；可继续做 `ExtractMonitorIkSnapshotRequest`，但字段包含 IK result/dedup/rejection，建议同样小步提交。
+
+## 2026-06-29 运控 / Codex / IK阶段快照请求收口
+- 做了什么：把 monitor IK 阶段快照的长位置参数收口为 `ExtractMonitorIkSnapshotRequest`，四个 monitor 阶段的快照入口现在都已有 request 化调用方式。
+- 改了哪里：`extract_monitor_json.hpp/cpp` 新增 IK request overload；`dual_arm_planner_node.cpp` 的 IK 阶段改用 request；`test_extract_monitor_json.cpp` 补 IK request 与空指针保护覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2930.64ms。
+- 留给下个 AI：monitor 快照入口已基本统一；下一步可以考虑把每个阶段的“生成快照 + 写入 + stage message”进一步收成 stage result helper，而不是继续扩展节点主流程。

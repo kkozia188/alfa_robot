@@ -93,6 +93,7 @@ using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorLoadedStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
+using alfa_robot::motion::ExtractMonitorStageSnapshotWriteRequest;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::ExtractMonitorReplayBuilder;
 using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
@@ -2754,16 +2755,27 @@ private:
         0.1 * static_cast<double>(step)}));
   }
 
-  bool write_extract_monitor_stage_snapshot(
+  bool finish_extract_monitor_stage(
     const nlohmann::json& snapshot,
-    const std::string& context)
+    const std::string& context,
+    const std::string& success_message,
+    std::string* message)
   {
-    std::string write_error;
-    if (extract_monitor_snapshot_writer_.write(snapshot, &write_error)) {
+    const auto result = extract_monitor_snapshot_writer_.writeStageSnapshot(
+      ExtractMonitorStageSnapshotWriteRequest{
+        &snapshot,
+        context,
+        success_message});
+    if (result.success) {
+      if (message) {
+        *message = result.message;
+      }
       return true;
     }
-    RCLCPP_ERROR(get_logger(), "%s", extract_monitor_snapshot_writer_.writeError(write_error).c_str());
-    return fail(extract_monitor_snapshot_writer_.writeFailureMessage(context));
+    if (!result.error_log_message.empty()) {
+      RCLCPP_ERROR(get_logger(), "%s", result.error_log_message.c_str());
+    }
+    return fail(result.message);
   }
 
   std::vector<ik_benchmark::UpdownAwareIkCandidate> selected_monitor_ik_candidates(
@@ -2928,18 +2940,17 @@ private:
         dedup_stats,
         ik_candidate_rejection_counts_json(ik_result),
         records});
-    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor IK")) {
-      return false;
-    }
-
-    *message = extract_monitor_ik_stage_message(
+    return finish_extract_monitor_stage(
+      snapshot,
+      "extract monitor IK",
+      extract_monitor_ik_stage_message(
       ExtractMonitorIkStageMessageRequest{
         extract_monitor_state_.legal_candidates.size(),
         ik_result.legal_count,
         ik_result.trial_count,
         elapsed_ms,
-        extract_monitor_snapshot_path_});
-    return true;
+        extract_monitor_snapshot_path_}),
+      message);
   }
 
   bool run_extract_monitor_extract_stage(std::string* message)
@@ -3004,18 +3015,17 @@ private:
         worker_count,
         summary.failure_counts,
         records});
-    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor extract")) {
-      return false;
-    }
-
-    *message = extract_monitor_extract_stage_message(
+    return finish_extract_monitor_stage(
+      snapshot,
+      "extract monitor extract",
+      extract_monitor_extract_stage_message(
       ExtractMonitorExtractStageMessageRequest{
         summary.success_count,
         count,
         worker_count,
         elapsed_ms,
-        extract_monitor_snapshot_path_});
-    return true;
+        extract_monitor_snapshot_path_}),
+      message);
   }
 
   bool run_extract_monitor_loaded_stage(std::string* message)
@@ -3078,18 +3088,17 @@ private:
         options.candidate_limit,
         summary.failure_counts,
         records});
-    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor loaded")) {
-      return false;
-    }
-
-    *message = extract_monitor_loaded_stage_message(
+    return finish_extract_monitor_stage(
+      snapshot,
+      "extract monitor loaded",
+      extract_monitor_loaded_stage_message(
       ExtractMonitorLoadedStageMessageRequest{
         summary.success_count,
         summary.attempted_count,
         batch.plan_indices.size(),
         elapsed_ms,
-        extract_monitor_snapshot_path_});
-    return true;
+        extract_monitor_snapshot_path_}),
+      message);
   }
 
   bool extract_monitor_pre_attach_transition_is_smooth(const ExtractRolloutTiming& timing)
@@ -3224,16 +3233,15 @@ private:
         scene_y_shift_,
         final_records.empty() ? nlohmann::json::object() : final_records[0],
         replay_stages});
-    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor final")) {
-      return false;
-    }
-
-    *message = extract_monitor_final_stage_message(
+    return finish_extract_monitor_stage(
+      snapshot,
+      "extract monitor final",
+      extract_monitor_final_stage_message(
       ExtractMonitorFinalStageMessageRequest{
         selected,
         elapsed_ms,
-        extract_monitor_snapshot_path_});
-    return true;
+        extract_monitor_snapshot_path_}),
+      message);
   }
 
   bool run_left_extract_demo()

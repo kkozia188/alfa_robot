@@ -16,6 +16,20 @@ struct ExtractMonitorFullSelectedSnapshotRequest
   std::array<double, 4> stage_elapsed_ms{};
 };
 
+struct ExtractMonitorStageSnapshotWriteRequest
+{
+  const nlohmann::json* snapshot = nullptr;
+  std::string context;
+  std::string success_message;
+};
+
+struct ExtractMonitorStageSnapshotWriteResult
+{
+  bool success = false;
+  std::string message;
+  std::string error_log_message;
+};
+
 class ExtractMonitorSnapshotWriter
 {
 public:
@@ -25,6 +39,8 @@ public:
   void setPath(std::string path);
 
   bool write(const nlohmann::json& snapshot, std::string* error = nullptr) const;
+  ExtractMonitorStageSnapshotWriteResult writeStageSnapshot(
+    const ExtractMonitorStageSnapshotWriteRequest& request) const;
   bool writeFullSelectedSnapshot(
     const ExtractMonitorFullSelectedSnapshotRequest& request,
     std::string* error = nullptr) const;

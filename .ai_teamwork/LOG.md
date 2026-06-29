@@ -1100,3 +1100,9 @@
 - 改了哪里：`extract_monitor_state.hpp/cpp` 新增 IK/final message request overload；`dual_arm_planner_node.cpp` 的 IK/final 阶段 message 改用 request；`test_extract_monitor_state.cpp` 补输出一致性覆盖。
 - 验证结果：`git diff --check` 通过；`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2808.24ms。
 - 留给下个 AI：monitor 阶段快照和消息的长参数已基本收口；下一步更有价值的是把“生成快照 + 写快照 + 生成消息”的阶段结果模式做成更深的 Module，而不是继续抽浅 helper。
+
+## 2026-06-29 运控 / Codex / monitor阶段完成写入收口
+- 做了什么：把 monitor 普通阶段的“写 snapshot + 返回成功消息 / 失败消息”的共同语义收口到 `ExtractMonitorSnapshotWriter::writeStageSnapshot()`，节点侧只保留 ROS 日志和 `fail()` 副作用，四个阶段末尾统一调用 `finish_extract_monitor_stage()`。
+- 改了哪里：`extract_monitor_snapshot_writer.hpp/cpp` 新增 stage snapshot write request/result；`dual_arm_planner_node.cpp` 删除旧的 `write_extract_monitor_stage_snapshot()`，IK/抽离/负重/final 阶段改用统一完成入口；`test_extract_monitor_snapshot_writer.cpp` 补成功和空 snapshot 失败覆盖。
+- 验证结果：`git diff --check` 通过；`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2859.15ms。
+- 留给下个 AI：monitor 阶段末尾的重复模式已收口；如果继续降 `dual_arm_planner_node.cpp` 阅读成本，下一步应优先把每个阶段的 records/snapshot request 组装迁到更靠近 `extract_monitor_json/state` 的 Module。

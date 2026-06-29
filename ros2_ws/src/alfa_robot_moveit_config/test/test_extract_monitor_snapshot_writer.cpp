@@ -28,6 +28,28 @@ int main()
   assert(loaded.at("phase") == "ik_candidates");
   assert(loaded.at("count") == 3);
 
+  const nlohmann::json stage_snapshot{{"phase", "extract_success"}, {"count", 8}};
+  const auto stage_result = writer.writeStageSnapshot(
+    alfa_robot::motion::ExtractMonitorStageSnapshotWriteRequest{
+      &stage_snapshot,
+      "extract monitor extract",
+      "抽离阶段完成"});
+  assert(stage_result.success);
+  assert(stage_result.message == "抽离阶段完成");
+  assert(stage_result.error_log_message.empty());
+  const auto stage_loaded = writer.readOrEmpty();
+  assert(stage_loaded.at("phase") == "extract_success");
+  assert(stage_loaded.at("count") == 8);
+
+  const auto null_stage_result = writer.writeStageSnapshot(
+    alfa_robot::motion::ExtractMonitorStageSnapshotWriteRequest{
+      nullptr,
+      "extract monitor final",
+      "最终方案完成"});
+  assert(!null_stage_result.success);
+  assert(null_stage_result.message == "extract monitor final: failed to write snapshot");
+  assert(null_stage_result.error_log_message == "extract monitor stage snapshot is null");
+
   const bool full_ok = writer.writeFullSelectedSnapshot(
     alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest{
       0.925,

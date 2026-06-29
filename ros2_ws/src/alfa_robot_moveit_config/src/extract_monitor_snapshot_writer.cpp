@@ -39,6 +39,30 @@ bool ExtractMonitorSnapshotWriter::write(const nlohmann::json& snapshot, std::st
   }
 }
 
+ExtractMonitorStageSnapshotWriteResult ExtractMonitorSnapshotWriter::writeStageSnapshot(
+  const ExtractMonitorStageSnapshotWriteRequest& request) const
+{
+  ExtractMonitorStageSnapshotWriteResult result;
+  if (!request.snapshot) {
+    result.success = false;
+    result.message = writeFailureMessage(request.context);
+    result.error_log_message = "extract monitor stage snapshot is null";
+    return result;
+  }
+
+  std::string error;
+  if (write(*request.snapshot, &error)) {
+    result.success = true;
+    result.message = request.success_message;
+    return result;
+  }
+
+  result.success = false;
+  result.message = writeFailureMessage(request.context);
+  result.error_log_message = writeError(error);
+  return result;
+}
+
 bool ExtractMonitorSnapshotWriter::writeFullSelectedSnapshot(
   const ExtractMonitorFullSelectedSnapshotRequest& request,
   std::string* error) const

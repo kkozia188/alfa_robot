@@ -77,6 +77,7 @@ REAL_CONTROLLER_JOINT_NAMES = [
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 import extract_stage_monitor_console as monitor  # noqa: E402
+import process_lifecycle  # noqa: E402
 
 
 def bash_source_command(command: str) -> list[str]:
@@ -91,27 +92,7 @@ def bash_source_command(command: str) -> list[str]:
 
 
 def terminate_process(process: subprocess.Popen[str] | None, timeout: float = 5.0) -> None:
-    if process is None or process.poll() is not None:
-        return
-    try:
-        os.killpg(os.getpgid(process.pid), signal.SIGINT)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=timeout)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-        process.wait(timeout=2.0)
-        return
-    except (ProcessLookupError, subprocess.TimeoutExpired):
-        pass
-    try:
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    process_lifecycle.terminate_process_tree(process, interrupt_timeout=timeout)
 
 
 def seconds_to_duration(seconds: float):
@@ -446,7 +427,7 @@ def compute_snapshot(args: argparse.Namespace, run_dir: Path) -> Path:
         return snapshot_path
     finally:
         terminate_process(planner)
-        time.sleep(1.0)
+        monitor.wait_until_planner_services_gone(15.0)
 
 
 def start_execution_bridge(run_dir: Path, hz: float, config_name: str) -> subprocess.Popen[str]:
@@ -530,6 +511,11 @@ def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
     )
     parser.add_argument("--save", type=Path, default=None, help="保存为 .rrd；不设置时默认打开实时 Rerun viewer")
     parser.add_argument("--connect", action="store_true", help="连接已有 Rerun viewer，而不是新开 viewer")
+    parser.add_argument(
+        "--ros-domain-id",
+        default="auto",
+        help="本次 ROS_DOMAIN_ID；auto 隔离自启动测试，inherit 表示沿用当前终端。",
+    )
     args = parser.parse_args()
     if args.output_root is None:
         args.output_root = DEFAULT_REAL_OUTPUT_ROOT if args.executor_mode == "real" else DEFAULT_MOCK_OUTPUT_ROOT
@@ -543,6 +529,7 @@ def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
 
 def main(default_executor_mode: str = "mock") -> int:
     args = parse_args(default_executor_mode)
+    domain = process_lifecycle.configure_ros_domain(args.ros_domain_id)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = args.output_root / f"L{args.left_box_id}_R{args.right_box_id}_{stamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -557,6 +544,7 @@ def main(default_executor_mode: str = "mock") -> int:
 
     bridge = None
     try:
+        print(f"ROS_DOMAIN_ID={domain if domain is not None else 'unset'}", flush=True)
         if args.executor_mode == "mock":
             bridge = start_execution_bridge(run_dir, args.hz, "execution_bridge.yaml")
             print("mock执行桥启动中。", flush=True)

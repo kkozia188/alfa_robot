@@ -18,7 +18,6 @@ import json
 import math
 import os
 import re
-import signal
 import subprocess
 import sys
 import time
@@ -32,6 +31,10 @@ rr: Any | None = None
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import process_lifecycle  # noqa: E402
 
 
 def find_repo_root() -> Path:
@@ -141,21 +144,21 @@ def wait_for_service(
     raise TimeoutError(f"service {name} not available after {timeout:.1f}s")
 
 
-def terminate_process(process: subprocess.Popen[str], timeout: float = 5.0) -> None:
-    if process.poll() is not None:
-        return
-    process.send_signal(signal.SIGINT)
-    try:
-        process.wait(timeout=timeout)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    process.terminate()
-    try:
-        process.wait(timeout=2.0)
-        return
-    except subprocess.TimeoutExpired:
-        process.kill()
+def terminate_process(process: subprocess.Popen[str] | None, timeout: float = 5.0) -> None:
+    process_lifecycle.terminate_process_tree(process, interrupt_timeout=timeout)
+
+
+def planner_monitor_service_exists() -> bool:
+    return process_lifecycle.any_service_exists(service_exists)
+
+
+def wait_until_planner_services_gone(timeout: float = 15.0) -> bool:
+    return process_lifecycle.wait_until_services_gone(service_exists, timeout=timeout)
+
+
+def cleanup_stale_planner_stack(timeout: float = 15.0) -> bool:
+    process_lifecycle.request_stale_planner_shutdown()
+    return wait_until_planner_services_gone(timeout)
 
 
 def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path: Path) -> str:
@@ -702,10 +705,21 @@ def main() -> int:
         help="full-selected: 回车后完整计算并只显示最终方案；staged: 每次回车推进一个内部阶段",
     )
     parser.add_argument("--no-start-planner", action="store_true", help="不启动 planner，只连接已有监控服务")
+    parser.add_argument(
+        "--ros-domain-id",
+        default="auto",
+        help="本次 ROS_DOMAIN_ID；auto 会隔离自启动测试，inherit 表示沿用当前终端。",
+    )
     parser.add_argument("--connect", action="store_true", help="连接已有 Rerun viewer，而不是 spawn 新 viewer")
     parser.add_argument("--no-rerun", action="store_true", help="只在终端打印，不显示 Rerun")
     parser.add_argument("--once", action="store_true", help="不等待回车，只完整计算一次后退出")
     parser.add_argument("--save", type=Path, default=None, help="保存最终选中流程为 .rrd；设置后自动只跑一次")
+    parser.add_argument(
+        "--cleanup-stale-planner",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="启动自管 planner 前自动清理旧 dual_arm_planner/move_group 服务。",
+    )
     parser.add_argument("--max-display", type=int, default=64)
     parser.add_argument("--grid-cols", type=int, default=8)
     parser.add_argument("--spacing", type=float, default=2.4)
@@ -723,6 +737,10 @@ def main() -> int:
         raise RuntimeError("--save 需要启用 Rerun 记录，不能和 --no-rerun 同时使用")
     if args.save is not None and args.mode != "full-selected":
         raise RuntimeError("--save 只支持 full-selected 模式")
+    if args.no_start_planner and args.ros_domain_id == "auto":
+        args.ros_domain_id = "inherit"
+    domain = process_lifecycle.configure_ros_domain(args.ros_domain_id)
+    log_event(f"ROS_DOMAIN_ID={domain if domain is not None else 'unset'}", run_start)
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_dir = args.output_root / f"L{args.left_box_id}_R{args.right_box_id}_{stamp}"
@@ -738,15 +756,25 @@ def main() -> int:
 
     planner: subprocess.Popen[str] | None = None
     if not args.no_start_planner:
-        if service_exists("/dual_arm_planner/run_extract_monitor_next") or service_exists("/dual_arm_planner/run_extract_monitor_full_selected"):
-            raise RuntimeError(
-                "检测到已有 /dual_arm_planner 监控服务。"
-                "这通常说明上一轮 planner 没关干净；为了避免连到旧节点，本次拒绝启动。\n"
-                "请先清理旧 ROS 进程，例如：pkill -INT -f 'dual_arm_planner|move_group|ros2 launch alfa_robot_moveit_config dual_arm_planner'"
-            )
+        if planner_monitor_service_exists():
+            if not args.cleanup_stale_planner:
+                raise RuntimeError(
+                    "检测到已有 /dual_arm_planner 监控服务。"
+                    "这通常说明上一轮 planner 没关干净；为了避免连到旧节点，本次拒绝启动。\n"
+                    "可去掉 --no-cleanup-stale-planner 让脚本自动清理，"
+                    "或手动关闭仍在运行的 dual_arm_planner/move_group。"
+                )
+            log_event("检测到旧 /dual_arm_planner 服务，尝试自动清理旧 planner/move_group", run_start)
+            if not cleanup_stale_planner_stack(15.0):
+                raise RuntimeError(
+                    "旧 /dual_arm_planner 服务清理超时。"
+                    "请检查是否有外部终端仍在运行 dual_arm_planner/move_group。"
+                )
         launch_command = build_launch_command(args, run_dir, snapshot_path)
+        domain_export = f"export ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}\n" if "ROS_DOMAIN_ID" in os.environ else ""
         (run_dir / "launch_command.sh").write_text(
             "#!/usr/bin/env bash\nset -e\n"
+            f"{domain_export}"
             "source /opt/ros/humble/setup.bash\n"
             f"source {ROS_WS}/install/setup.bash\n"
             f"cd {ROS_WS}\n{launch_command}\n"
@@ -872,7 +900,11 @@ def main() -> int:
         return 0
     finally:
         if planner is not None:
+            log_event("关闭 planner 进程组", run_start)
             terminate_process(planner)
+            if not wait_until_planner_services_gone(15.0):
+                log_event("planner 服务仍未消失，追加清理旧 planner/move_group", run_start)
+                cleanup_stale_planner_stack(15.0)
     return 0
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -17,6 +16,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import extract_stage_monitor_console as monitor
+import process_lifecycle
 
 
 DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_sequence_rerun")
@@ -66,25 +66,13 @@ def make_pair_args(args: argparse.Namespace, left_id: int, right_id: int) -> Sim
     )
 
 
-def wait_until_service_gone(timeout: float = 15.0) -> None:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if not (
-            monitor.service_exists("/dual_arm_planner/run_extract_monitor_next")
-            or monitor.service_exists("/dual_arm_planner/run_extract_monitor_full_selected")
-        ):
-            return
-        time.sleep(0.1)
+def wait_until_service_gone(timeout: float = 15.0) -> bool:
+    return monitor.wait_until_planner_services_gone(timeout)
 
 
-def cleanup_planner_processes() -> None:
-    subprocess.run(
-        ["pkill", "-INT", "-f", "dual_arm_planner|move_group|ros2 launch alfa_robot_moveit_config dual_arm_planner"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
-    wait_until_service_gone(15.0)
+def cleanup_planner_processes() -> bool:
+    process_lifecycle.request_stale_planner_shutdown()
+    return wait_until_service_gone(15.0)
 
 
 def log_sequence_replay(
@@ -156,11 +144,15 @@ def run_one_pair(
     os.environ["ROS_LOG_DIR"] = str(ros_log_dir)
 
     if monitor.service_exists("/dual_arm_planner/run_extract_monitor_full_selected"):
-        raise RuntimeError("检测到旧 /dual_arm_planner 服务，请先清理旧 ROS 进程")
+        print("检测到旧 /dual_arm_planner 服务，自动清理旧 planner/move_group...")
+        if not cleanup_planner_processes():
+            raise RuntimeError("旧 /dual_arm_planner 服务清理超时，请检查外部 ROS 进程")
 
     launch_command = monitor.build_launch_command(pair_args, run_dir, snapshot_path)
+    domain_export = f"export ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}\n" if "ROS_DOMAIN_ID" in os.environ else ""
     (run_dir / "launch_command.sh").write_text(
         "#!/usr/bin/env bash\nset -e\n"
+        f"{domain_export}"
         "source /opt/ros/humble/setup.bash\n"
         f"source {monitor.ROS_WS}/install/setup.bash\n"
         f"cd {monitor.ROS_WS}\n{launch_command}\n"
@@ -217,8 +209,7 @@ def run_one_pair(
         return True, sample_count, summary
     finally:
         monitor.terminate_process(planner)
-        wait_until_service_gone()
-        if monitor.service_exists("/dual_arm_planner/run_extract_monitor_full_selected"):
+        if not wait_until_service_gone():
             cleanup_planner_processes()
 
 
@@ -250,7 +241,14 @@ def main() -> int:
     parser.add_argument("--service-timeout", type=float, default=120.0)
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument("--continue-on-failure", action="store_true")
+    parser.add_argument(
+        "--ros-domain-id",
+        default="auto",
+        help="本次 ROS_DOMAIN_ID；auto 隔离自启动序列测试，inherit 表示沿用当前终端。",
+    )
     args = parser.parse_args()
+    domain = process_lifecycle.configure_ros_domain(args.ros_domain_id)
+    print(f"ROS_DOMAIN_ID={domain if domain is not None else 'unset'}")
 
     pairs = parse_pair_sequence(args.pair_sequence)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

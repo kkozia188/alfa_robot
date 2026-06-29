@@ -529,9 +529,6 @@ public:
     loaded_pose_selector_config_.enforce_bounds_group = joint_group_;
     loaded_pose_selector_ = std::make_unique<LoadedPoseSelector>(loaded_pose_selector_config_);
 
-    optimized_ik_solver_ = std::make_unique<ik_benchmark::ParallelUpdownAwareIkSolver>(ik_config_);
-    optimized_dual_ik_solver_ = std::make_unique<OptimizedDualIkSolver>(optimized_dual_ik_solver_config());
-
     planning_scene_monitor_ = std::make_shared<planning_scene_monitor::PlanningSceneMonitor>(
       shared_from_this(), "robot_description");
     if (!planning_scene_monitor_->getPlanningScene()) {
@@ -941,6 +938,27 @@ private:
       joint_group_,
       fixed_updown_,
     };
+  }
+
+  bool ensure_optimized_ik_solver()
+  {
+    if (optimized_dual_ik_solver_ && optimized_dual_ik_solver_->ready()) {
+      return true;
+    }
+    if (!optimized_ik_solver_) {
+      RCLCPP_INFO(
+        get_logger(),
+        "Initializing optimized IK solver on first use: h=%zu seed=%zu workers=%zu timeout=%.3fs",
+        ik_config_.h_candidate_count,
+        ik_config_.seed_count,
+        ik_config_.workers,
+        ik_config_.timeout);
+      optimized_ik_solver_ = std::make_unique<ik_benchmark::ParallelUpdownAwareIkSolver>(ik_config_);
+    }
+    if (!optimized_dual_ik_solver_) {
+      optimized_dual_ik_solver_ = std::make_unique<OptimizedDualIkSolver>(optimized_dual_ik_solver_config());
+    }
+    return optimized_dual_ik_solver_->ready();
   }
 
   MotionSceneAdapterConfig motion_scene_adapter_config() const
@@ -2046,7 +2064,7 @@ private:
     if (!start_state) {
       return fail(stage_name + ": cannot get start state");
     }
-    if (!optimized_dual_ik_solver_ || !optimized_dual_ik_solver_->ready()) {
+    if (!ensure_optimized_ik_solver()) {
       return fail(stage_name + ": optimized IK solver is not initialized");
     }
 
@@ -2087,7 +2105,7 @@ private:
     nlohmann::json* extra_out,
     ik_benchmark::UpdownAwareIkResult* result_out = nullptr)
   {
-    if (!optimized_dual_ik_solver_ || !optimized_dual_ik_solver_->ready()) {
+    if (!ensure_optimized_ik_solver()) {
       return fail(stage_name + ": optimized IK solver is not initialized");
     }
     if (!goal_state) {
@@ -2246,7 +2264,7 @@ private:
     const auto saved_boxes = active_attached_boxes();
     if (scene_adapter_) scene_adapter_->setActiveAttachedBoxesForRecordOnly(boxes);
 
-    const auto names = optimized_ik_solver_ ? optimized_ik_solver_->freeVariableNames() : robot_model_->getVariableNames();
+    const auto names = dual_arm_with_updown_joint_names();
     const auto plan = single_state_plan(state, names, 0.0);
     record_stage(stage_name, plan, state, state, names, extra);
 

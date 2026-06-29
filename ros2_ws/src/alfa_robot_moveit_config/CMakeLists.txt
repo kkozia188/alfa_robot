@@ -254,6 +254,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_loaded_pose_selector alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_loaded_pose_selector srdfdom urdf)
   add_test(NAME test_loaded_pose_selector COMMAND test_loaded_pose_selector)
+
+  add_test(
+    NAME test_process_lifecycle
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_process_lifecycle.py
+  )
 endif()
 
 ament_package()
@@ -280,6 +285,7 @@ install(PROGRAMS
   scripts/mujoco_planning_scene_bridge.py
   scripts/semantic_scene_to_planning_scene.py
   scripts/semantic_scene_utils.py
+  scripts/process_lifecycle.py
   scripts/extract_stage_monitor_console.py
   scripts/extract_sequence_rerun.py
   scripts/extract_failed_attempts_rerun.py

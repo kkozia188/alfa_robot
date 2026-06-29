@@ -146,7 +146,7 @@ target_link_libraries(your_target
 )
 ```
 
-`alfa_robot_motion_core` 只包含姿态/箱垛等轻量模块，并链接 `robot_motion_scene_service::robot_motion_scene_core` 复用场景几何。
+`alfa_robot_motion_core` 只包含姿态、角度、Pose/Eigen 转换和 JSON 辅助等轻量模块，并链接 `robot_motion_scene_service::robot_motion_scene_core` 复用 `task_geometry` 的箱垛/关节顺序结构。
 
 ```cmake
 target_link_libraries(your_target

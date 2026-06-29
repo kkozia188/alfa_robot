@@ -167,7 +167,6 @@ using alfa_robot::motion::OptimizedDualIkSolveRequest;
 using alfa_robot::motion::PickPair;
 using alfa_robot::motion::StaticBoxObstacle;
 using alfa_robot::motion::aabb_from_attached_box_transform;
-using alfa_robot::motion::aabb_overlaps;
 using alfa_robot::motion::carried_box_detached_from_neighbors;
 using alfa_robot::motion::deg_to_rad;
 using alfa_robot::motion::direct_pipeline_failure_diagnostic;

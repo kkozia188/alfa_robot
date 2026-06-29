@@ -25,8 +25,8 @@
 | --- | --- | --- |
 | `motion_core/task_geometry` | 箱子编号、箱垛坐标、抓取 pair、基础碰撞几何数据结构，以及 `updown + 双臂 12 轴` 的标准目标关节顺序 | `include/alfa_robot_moveit_config/motion_core/task_geometry.hpp` / `src/motion_core/task_geometry.cpp` |
 | `motion_core/pose_math` | 角度解析、抓取姿态、Pose/Eigen 转换、误差计算、JSON 辅助 | `include/alfa_robot_moveit_config/motion_core/pose_math.hpp` / `src/motion_core/pose_math.cpp` |
-| `motion_core/scene_geometry` | 集装箱板、动态箱墙、末端附着箱、AABB 与邻箱脱离判断 | `include/alfa_robot_moveit_config/motion_core/scene_geometry.hpp` / `src/motion_core/scene_geometry.cpp` |
-| `MotionSceneAdapter` | 将场景几何转换为 MoveIt collision/attached objects，并管理 ADD/REMOVE 与当前场景状态 | `include/alfa_robot_moveit_config/motion_scene_adapter.hpp` / `src/motion_scene_adapter.cpp` |
+| `robot_motion_scene_service/motion_core/scene_geometry` | 集装箱板、动态箱墙、末端附着箱、AABB 与邻箱脱离判断 | `ros2_ws/src/robot_motion_scene_service/include/robot_motion_scene_service/motion_core/scene_geometry.hpp` / `ros2_ws/src/robot_motion_scene_service/src/motion_core/scene_geometry.cpp` |
+| `MotionSceneAdapter` | 将场景几何转换为 MoveIt collision/attached objects，并管理 ADD/REMOVE 与当前场景状态；当前是库级 Adapter，不是独立 ROS 节点 | `ros2_ws/src/robot_motion_scene_service/include/robot_motion_scene_service/motion_scene_adapter.hpp` / `ros2_ws/src/robot_motion_scene_service/src/motion_scene_adapter.cpp` |
 | `optimized_ik_pipeline` | 抓取 IK 选优整体算法：`OptimizedDualIkSolver` 负责 fixed h × multi seed × cost scorer 求解，`IkCandidateSelector` 负责 legal candidate 排序、相似姿态去重和 TopN 截断 | `include/alfa_robot_moveit_config/optimized_ik_pipeline.hpp` / `src/optimized_ik_pipeline.cpp` |
 | `extract_planning_pipeline` | 抽箱子整体算法：抽离动作模板、单步 KDL IK、抽离候选评分、单臂/双臂 rollout、候选调度、CSV/summary 统计都在这里 | `include/alfa_robot_moveit_config/extract_planning_pipeline.hpp` / `src/extract_planning_pipeline.cpp` |
 | `loaded_pose_planning` | 负重姿态阶段整体算法：从抽离末态选择最近负重姿态族，并调用 MoveIt 批量规划到负重 joint state | `include/alfa_robot_moveit_config/loaded_pose_planning.hpp` / `src/loaded_pose_planning.cpp` |
@@ -49,7 +49,7 @@
 - `make_boxes(box_front_x)` 生成 5×5 箱垛坐标。
 - `parse_box_pair_list()` / `make_pick_pairs()` 生成抓取 pair。
 - `make_front_grasp_pose()` / `make_top_suction_pose()` 在 `motion_core/pose_math` 内结合抓取模式生成左右末端 Pose。
-- 集装箱和箱墙几何来自 `motion_core/scene_geometry`，再由 `MotionSceneAdapter` 注入 MoveIt。
+- 集装箱和箱墙几何来自 `robot_motion_scene_service/motion_core/scene_geometry`，再由 `MotionSceneAdapter` 注入 MoveIt。
 
 ### 3.2 抓取 IK
 
@@ -121,7 +121,20 @@
 
 ## 4. 可复用库与迁移建议
 
-当前 CMake 导出两个库：
+当前 CMake 导出两个层级：
+
+第一层是独立场景包 `robot_motion_scene_service`，负责场景几何和 MoveIt PlanningScene 适配：
+
+```cmake
+find_package(robot_motion_scene_service REQUIRED)
+
+target_link_libraries(your_target
+  robot_motion_scene_service::robot_motion_scene_core
+  robot_motion_scene_service::robot_motion_scene_adapter
+)
+```
+
+第二层是 `alfa_robot_moveit_config` 内的运控流程库：
 
 ```cmake
 find_package(alfa_robot_moveit_config REQUIRED)
@@ -131,7 +144,7 @@ target_link_libraries(your_target
 )
 ```
 
-`alfa_robot_motion_core` 只包含纯几何/姿态/箱垛模块，适合被非 MoveIt 算法复用。
+`alfa_robot_motion_core` 只包含姿态/箱垛等轻量模块，并链接 `robot_motion_scene_service::robot_motion_scene_core` 复用场景几何。
 
 ```cmake
 target_link_libraries(your_target
@@ -139,15 +152,15 @@ target_link_libraries(your_target
 )
 ```
 
-`alfa_robot_motion_scene_adapter` 包含 MoveIt 场景适配、IK 选优、抽离规划、负重规划、benchmark runner 等模块。它依赖 MoveIt、KDL 和 benchmark IK solver。
+`alfa_robot_motion_scene_adapter` 包含 IK 选优、抽离规划、负重规划、benchmark runner 和 monitor 辅助模块。它依赖 MoveIt、KDL、`robot_motion_scene_service` 和 benchmark IK solver。
 
 迁移到新运控包时建议顺序：
 
-1. 先迁移 `motion_core/*`，保持纯数据和几何不变。
-2. 再迁移 `optimized_ik_pipeline`，作为独立 IK 服务的核心算法。
+1. 先迁移 `robot_motion_scene_service`，让集装箱、箱墙、末端附着箱的碰撞口径先稳定下来。
+2. 再迁移 `motion_core/*` 和 `optimized_ik_pipeline`，作为独立 IK 服务的核心算法。
 3. 再迁移 `extract_planning_pipeline`，作为抽箱子动作生成、单步 IK、评分和 rollout 的完整模块。
-4. 最后迁移 `loaded_pose_planning` 和 `MotionSceneAdapter`，接入新 MoveIt/PlanningScene 后端。
-5. `DualArmPlannerNode` 不建议整文件复制；它只应作为 ROS 参数和 service/action 包装参考。
+4. 最后迁移 `loaded_pose_planning`，接入新 MoveIt/PlanningScene 后端。
+5. `DualArmPlannerNode` 不建议整文件复制；它只应作为 ROS 参数、MoveIt 后端和 service/action 包装参考。
 
 ## 5. 关键启动参数
 
@@ -180,7 +193,7 @@ target_link_libraries(your_target
 cd /mnt/mydisk/ALFA/alfa_robot/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF
+colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF
 ```
 
 运行原四组抽离 + 负重规划复现：
@@ -262,5 +275,6 @@ ros2 service call /dual_arm_planner/run_left_extract_demo std_srvs/srv/Trigger {
 
 - `DualArmPlannerNode` 仍有约 3600 行，主要剩 ROS 参数、MoveIt 后端、碰撞判定和 callback 装配；后续迁移时不要继续在该节点里堆新算法。
 - `ExtractRolloutPlanner` 通过 callback 复用节点内碰撞判定，这是刻意保留的 seam，避免重构时改变 PlanningScene 语义。
+- `robot_motion_scene_service` 虽然名字里有 service，但当前不是独立运行节点；它是场景几何与 PlanningScene Adapter 包。后续若要做真正场景服务，应在新仓库里另建 ROS node/action/service 包装层。
 - 负重规划依赖 MoveIt；如果 `start_move_group=false`，必须外部已有可用 move_group、robot state publisher 和 controller/joint state 相关支持节点，否则 `DualArmPlannerNode` 可能在 MoveGroupInterface 初始化阶段等待。
 - 当前 `alfa_robot_motion_scene_adapter` 名字偏窄，实际已经包含 IK、抽离和负重规划模块；后续迁移到新包时可以重命名为更准确的 motion pipeline/runtime 库。

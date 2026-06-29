@@ -32,7 +32,7 @@ STALE_PLANNER_PATTERN = (
 )
 
 
-def configure_ros_domain(domain_id: str | int | None, *, auto_base: int = 180, auto_span: int = 50) -> str | None:
+def configure_ros_domain(domain_id: str | int | None, *, auto_base: int = 180, auto_span: int = 32) -> str | None:
     """Configure ``ROS_DOMAIN_ID`` for self-contained benchmark scripts.
 
     ``auto`` gives every top-level script process a stable private-ish domain,
@@ -47,6 +47,15 @@ def configure_ros_domain(domain_id: str | int | None, *, auto_base: int = 180, a
         return os.environ.get("ROS_DOMAIN_ID")
     if text == "auto":
         text = str(auto_base + (os.getpid() % max(1, auto_span)))
+    try:
+        numeric_domain = int(text)
+    except ValueError as exc:
+        raise ValueError(f"ROS_DOMAIN_ID must be an integer, auto, or inherit: {domain_id!r}") from exc
+    if numeric_domain < 0 or numeric_domain > 232:
+        raise ValueError(
+            f"ROS_DOMAIN_ID={numeric_domain} is outside the FastDDS-safe range 0..232. "
+            "Use auto or a smaller explicit value."
+        )
     os.environ["ROS_DOMAIN_ID"] = text
     return text
 

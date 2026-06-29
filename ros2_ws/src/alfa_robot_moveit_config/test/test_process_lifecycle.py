@@ -77,6 +77,11 @@ def main() -> int:
         assert os.environ["ROS_DOMAIN_ID"] == "42"
         assert process_lifecycle.configure_ros_domain("auto", auto_base=200, auto_span=1) == "200"
         assert os.environ["ROS_DOMAIN_ID"] == "200"
+        try:
+            process_lifecycle.configure_ros_domain("233")
+            raise AssertionError("invalid ROS_DOMAIN_ID was accepted")
+        except ValueError:
+            pass
     finally:
         if previous_domain is None:
             os.environ.pop("ROS_DOMAIN_ID", None)

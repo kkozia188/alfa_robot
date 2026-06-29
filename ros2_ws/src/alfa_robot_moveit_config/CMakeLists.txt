@@ -286,6 +286,7 @@ install(PROGRAMS
   scripts/semantic_scene_to_planning_scene.py
   scripts/semantic_scene_utils.py
   scripts/process_lifecycle.py
+  scripts/extract_startup_stability_smoke.py
   scripts/extract_stage_monitor_console.py
   scripts/extract_sequence_rerun.py
   scripts/extract_failed_attempts_rerun.py

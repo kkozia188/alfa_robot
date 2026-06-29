@@ -121,6 +121,38 @@
 
 这部分的迁移建议：不要复制 `run_extract_monitor_*` 的线性实现；应优先迁移上述四个 monitor 模块，再在新仓库里重新写 ROS service Adapter。
 
+### 3.8 启动稳定性 smoke
+
+为了避免“上一轮 ROS 进程没关干净，下一轮测试连到旧服务”的问题，当前自启动 monitor/benchmark 脚本默认使用独立 `ROS_DOMAIN_ID=auto`，并在退出时按进程组清理 `ros2 launch` 及其子进程。公共逻辑在：
+
+- `ros2_ws/src/alfa_robot_moveit_config/scripts/process_lifecycle.py`
+- `ros2_ws/src/alfa_robot_moveit_config/test/test_process_lifecycle.py`
+
+推荐 AI 或工程师复测启动稳定性时直接运行：
+
+```bash
+cd /mnt/mydisk/ALFA/alfa_robot/ros2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+ros2 run alfa_robot_moveit_config extract_startup_stability_smoke.py \
+  --rounds 3 \
+  --ros-domain-id auto
+```
+
+这个 smoke 会在同一个隔离 ROS 域内连续执行 3 轮：
+
+1. 启动 `dual_arm_planner.launch.py`。
+2. 等待 `/dual_arm_planner/run_extract_monitor_full_selected` 服务。
+3. 调一次完整 `IK → 抽离 → 横向让位 → 负重规划`。
+4. 校验返回的 snapshot 路径必须属于本轮，避免误连旧 planner。
+5. 检查日志中旧关节名污染 `left_joint/right_joint` 必须为 0。
+6. 关闭 planner 进程组，并确认 `/dual_arm_planner` 服务消失。
+
+默认情况下，完整流程本身如果因为 IK/RRT 随机性没有选出最终方案，只会记录为 `flow_success=false`，不会把启动稳定性 smoke 判失败；因为这个脚本主要验证的是“服务能稳定启动、不会连旧节点、退出后不残留”。如果需要把算法完整成功也作为硬门槛，加 `--require-flow-success`。
+
+如果需要故意连接外部已经启动的 ROS 图，可以传 `--ros-domain-id inherit`；否则默认推荐保留 `auto`。
+
 ## 4. 可复用库与迁移建议
 
 当前 CMake 导出两个层级：

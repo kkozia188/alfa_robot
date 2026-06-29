@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Smoke test for extract planner startup/restart stability.
 
 The test intentionally starts and stops the full planner stack multiple times

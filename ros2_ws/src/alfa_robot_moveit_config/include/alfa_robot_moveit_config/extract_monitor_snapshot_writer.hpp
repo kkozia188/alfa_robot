@@ -2,10 +2,19 @@
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <string>
 
 namespace alfa_robot::motion
 {
+
+struct ExtractMonitorFullSelectedSnapshotRequest
+{
+  double box_front_x = 0.0;
+  double scene_y_shift = 0.0;
+  double total_elapsed_ms = 0.0;
+  std::array<double, 4> stage_elapsed_ms{};
+};
 
 class ExtractMonitorSnapshotWriter
 {
@@ -16,7 +25,11 @@ public:
   void setPath(std::string path);
 
   bool write(const nlohmann::json& snapshot, std::string* error = nullptr) const;
+  bool writeFullSelectedSnapshot(
+    const ExtractMonitorFullSelectedSnapshotRequest& request,
+    std::string* error = nullptr) const;
   std::string writeError(const std::string& error) const;
+  std::string appendSnapshotPath(const std::string& message) const;
   nlohmann::json readOrEmpty() const;
 
 private:

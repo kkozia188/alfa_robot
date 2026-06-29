@@ -1,7 +1,10 @@
 #include "alfa_robot_moveit_config/extract_monitor_snapshot_writer.hpp"
 
+#include "alfa_robot_moveit_config/extract_monitor_json.hpp"
+
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <utility>
 
 namespace alfa_robot::motion
@@ -36,9 +39,29 @@ bool ExtractMonitorSnapshotWriter::write(const nlohmann::json& snapshot, std::st
   }
 }
 
+bool ExtractMonitorSnapshotWriter::writeFullSelectedSnapshot(
+  const ExtractMonitorFullSelectedSnapshotRequest& request,
+  std::string* error) const
+{
+  const nlohmann::json full_snapshot = extract_monitor_full_selected_snapshot(
+    readOrEmpty(),
+    request.box_front_x,
+    request.scene_y_shift,
+    request.total_elapsed_ms,
+    request.stage_elapsed_ms);
+  return write(full_snapshot, error);
+}
+
 std::string ExtractMonitorSnapshotWriter::writeError(const std::string& error) const
 {
   return "Failed to write extract monitor snapshot " + path_ + ": " + error;
+}
+
+std::string ExtractMonitorSnapshotWriter::appendSnapshotPath(const std::string& message) const
+{
+  std::ostringstream out;
+  out << message << " snapshot=" << path_;
+  return out.str();
 }
 
 nlohmann::json ExtractMonitorSnapshotWriter::readOrEmpty() const

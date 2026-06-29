@@ -81,6 +81,7 @@ using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
+using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
@@ -92,7 +93,6 @@ using alfa_robot::motion::extract_monitor_candidate_records_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
 using alfa_robot::motion::extract_monitor_final_snapshot;
 using alfa_robot::motion::extract_monitor_final_stage_message;
-using alfa_robot::motion::extract_monitor_full_selected_snapshot;
 using alfa_robot::motion::extract_monitor_ik_snapshot;
 using alfa_robot::motion::extract_monitor_ik_stage_message;
 using alfa_robot::motion::extract_monitor_loaded_snapshot;
@@ -2827,24 +2827,20 @@ private:
       return false;
     }
 
-    nlohmann::json snapshot;
-    try {
-      snapshot = extract_monitor_snapshot_writer_.readOrEmpty();
-    } catch (const std::exception&) {
-      snapshot = nlohmann::json::object();
+    std::string error;
+    if (!extract_monitor_snapshot_writer_.writeFullSelectedSnapshot(
+      ExtractMonitorFullSelectedSnapshotRequest{
+        box_front_x_,
+        scene_y_shift_,
+        result.total_elapsed_ms,
+        result.stage_elapsed_ms},
+      &error))
+    {
+      RCLCPP_ERROR(get_logger(), "%s", extract_monitor_snapshot_writer_.writeError(error).c_str());
+      return fail("extract monitor full: failed to write snapshot");
     }
-    const nlohmann::json full_snapshot = extract_monitor_full_selected_snapshot(
-      snapshot,
-      box_front_x_,
-      scene_y_shift_,
-      result.total_elapsed_ms,
-      result.stage_elapsed_ms);
-    write_extract_monitor_snapshot(full_snapshot);
 
-    std::ostringstream out;
-    out << result.message
-        << " snapshot=" << extract_monitor_snapshot_path_;
-    *message = out.str();
+    *message = extract_monitor_snapshot_writer_.appendSnapshotPath(result.message);
     return true;
   }
 

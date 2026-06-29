@@ -1046,3 +1046,9 @@
 - 改了哪里：`extract_monitor_snapshot_writer.hpp/cpp` 新增 `ExtractMonitorFullSelectedSnapshotRequest`、`writeFullSelectedSnapshot()` 和 `appendSnapshotPath()`；`dual_arm_planner_node.cpp` 改用 writer 接口；`test_extract_monitor_snapshot_writer.cpp` 补 full snapshot 写回覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2875.68ms，快照 phase 为 `full_selected`。
 - 留给下个 AI：monitor 快照文件相关行为优先放在 `ExtractMonitorSnapshotWriter`，节点不要重新直接读写和拼装快照文件语义。
+
+## 2026-06-29 运控 / Codex / monitor阶段快照写入语义收口
+- 做了什么：把 monitor 普通阶段快照写入失败消息的构造集中到 `ExtractMonitorSnapshotWriter`，并保留节点侧 `fail()` 的记录副作用；IK/抽离/负重/final 四个阶段不再各自手写失败字符串。
+- 改了哪里：`extract_monitor_snapshot_writer.hpp/cpp` 新增 `writeFailureMessage()`；`dual_arm_planner_node.cpp` 用 `write_extract_monitor_stage_snapshot()` 统一日志与 fail；`test_extract_monitor_snapshot_writer.cpp` 补失败消息覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2882.69ms。
+- 留给下个 AI：如果继续拆 monitor 阶段，可继续把“生成快照 + 写快照 + 生成 stage message”的重复模式往专门的 monitor stage 结果模块里收，不要散回 callback 主流程。

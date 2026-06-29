@@ -2746,14 +2746,16 @@ private:
         0.1 * static_cast<double>(step)}));
   }
 
-  bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const
+  bool write_extract_monitor_stage_snapshot(
+    const nlohmann::json& snapshot,
+    const std::string& context)
   {
-    std::string error;
-    if (extract_monitor_snapshot_writer_.write(snapshot, &error)) {
+    std::string write_error;
+    if (extract_monitor_snapshot_writer_.write(snapshot, &write_error)) {
       return true;
     }
-    RCLCPP_ERROR(get_logger(), "%s", extract_monitor_snapshot_writer_.writeError(error).c_str());
-    return false;
+    RCLCPP_ERROR(get_logger(), "%s", extract_monitor_snapshot_writer_.writeError(write_error).c_str());
+    return fail(extract_monitor_snapshot_writer_.writeFailureMessage(context));
   }
 
   std::vector<ik_benchmark::UpdownAwareIkCandidate> selected_monitor_ik_candidates(
@@ -2917,8 +2919,8 @@ private:
       dedup_stats,
       ik_candidate_rejection_counts_json(ik_result),
       records);
-    if (!write_extract_monitor_snapshot(snapshot)) {
-      return fail("extract monitor IK: failed to write snapshot");
+    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor IK")) {
+      return false;
     }
 
     *message = extract_monitor_ik_stage_message(
@@ -2991,8 +2993,8 @@ private:
       worker_count,
       summary.failure_counts,
       records);
-    if (!write_extract_monitor_snapshot(snapshot)) {
-      return fail("extract monitor extract: failed to write snapshot");
+    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor extract")) {
+      return false;
     }
 
     *message = extract_monitor_extract_stage_message(
@@ -3063,8 +3065,8 @@ private:
       options.candidate_limit,
       summary.failure_counts,
       records);
-    if (!write_extract_monitor_snapshot(snapshot)) {
-      return fail("extract monitor loaded: failed to write snapshot");
+    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor loaded")) {
+      return false;
     }
 
     *message = extract_monitor_loaded_stage_message(
@@ -3207,8 +3209,8 @@ private:
       scene_y_shift_,
       final_records.empty() ? nlohmann::json::object() : final_records[0],
       replay_stages);
-    if (!write_extract_monitor_snapshot(snapshot)) {
-      return fail("extract monitor final: failed to write snapshot");
+    if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor final")) {
+      return false;
     }
 
     *message = extract_monitor_final_stage_message(*selected, elapsed_ms, extract_monitor_snapshot_path_);

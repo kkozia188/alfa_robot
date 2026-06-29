@@ -29,6 +29,7 @@ public:
     const ExtractMonitorFullSelectedSnapshotRequest& request,
     std::string* error = nullptr) const;
   std::string writeError(const std::string& error) const;
+  std::string writeFailureMessage(const std::string& context) const;
   std::string appendSnapshotPath(const std::string& message) const;
   nlohmann::json readOrEmpty() const;
 

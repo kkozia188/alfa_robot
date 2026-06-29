@@ -15,6 +15,8 @@ int main()
   const std::string formatted_error = writer.writeError("disk full");
   assert(formatted_error.find(path.string()) != std::string::npos);
   assert(formatted_error.find("disk full") != std::string::npos);
+  assert(writer.writeFailureMessage("extract monitor IK") ==
+    "extract monitor IK: failed to write snapshot");
 
   std::string error;
   const bool ok = writer.write({{"phase", "ik_candidates"}, {"count", 3}}, &error);

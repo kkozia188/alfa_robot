@@ -57,6 +57,11 @@ std::string ExtractMonitorSnapshotWriter::writeError(const std::string& error) c
   return "Failed to write extract monitor snapshot " + path_ + ": " + error;
 }
 
+std::string ExtractMonitorSnapshotWriter::writeFailureMessage(const std::string& context) const
+{
+  return context + ": failed to write snapshot";
+}
+
 std::string ExtractMonitorSnapshotWriter::appendSnapshotPath(const std::string& message) const
 {
   std::ostringstream out;

@@ -140,6 +140,18 @@ std::string extract_monitor_ik_stage_message(
   double elapsed_ms,
   const std::string& snapshot_path);
 
+struct ExtractMonitorIkStageMessageRequest
+{
+  size_t unique_count = 0;
+  size_t legal_count = 0;
+  size_t trial_count = 0;
+  double elapsed_ms = 0.0;
+  std::string snapshot_path;
+};
+
+std::string extract_monitor_ik_stage_message(
+  const ExtractMonitorIkStageMessageRequest& request);
+
 std::string extract_monitor_extract_stage_message(
   size_t success_count,
   size_t total_count,
@@ -182,6 +194,16 @@ std::string extract_monitor_final_stage_message(
   const ExtractRolloutTiming& selected,
   double elapsed_ms,
   const std::string& snapshot_path);
+
+struct ExtractMonitorFinalStageMessageRequest
+{
+  const ExtractRolloutTiming* selected = nullptr;
+  double elapsed_ms = 0.0;
+  std::string snapshot_path;
+};
+
+std::string extract_monitor_final_stage_message(
+  const ExtractMonitorFinalStageMessageRequest& request);
 
 using ExtractMonitorTimingPredicate = std::function<bool(const ExtractRolloutTiming&)>;
 

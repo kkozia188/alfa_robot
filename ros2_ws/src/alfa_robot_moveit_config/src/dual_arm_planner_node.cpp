@@ -84,9 +84,11 @@ using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorExtractStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
+using alfa_robot::motion::ExtractMonitorFinalStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorIkSnapshotRequest;
+using alfa_robot::motion::ExtractMonitorIkStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorLoadedStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
@@ -2931,11 +2933,12 @@ private:
     }
 
     *message = extract_monitor_ik_stage_message(
-      extract_monitor_state_.legal_candidates.size(),
-      ik_result.legal_count,
-      ik_result.trial_count,
-      elapsed_ms,
-      extract_monitor_snapshot_path_);
+      ExtractMonitorIkStageMessageRequest{
+        extract_monitor_state_.legal_candidates.size(),
+        ik_result.legal_count,
+        ik_result.trial_count,
+        elapsed_ms,
+        extract_monitor_snapshot_path_});
     return true;
   }
 
@@ -3225,7 +3228,11 @@ private:
       return false;
     }
 
-    *message = extract_monitor_final_stage_message(*selected, elapsed_ms, extract_monitor_snapshot_path_);
+    *message = extract_monitor_final_stage_message(
+      ExtractMonitorFinalStageMessageRequest{
+        selected,
+        elapsed_ms,
+        extract_monitor_snapshot_path_});
     return true;
   }
 

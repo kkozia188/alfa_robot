@@ -1094,3 +1094,9 @@
 - 改了哪里：本轮只追加协作日志，没有改运行代码；复核范围包含 `robot_motion_scene_service`、`alfa_robot_moveit_config`、monitor snapshot/message/replay 模块和 `DualArmPlannerNode` 调用点。
 - 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；两包单测 1+11 全绿；L6/R8 三次有效 smoke 内部耗时 2838.06ms、2953.68ms、2911.89ms，平均 2901.21ms，仍在近期约 2.7~3.0s 波动区间，未见重构导致的明显耗时回退。
 - 留给下个 AI：复核时一次 `ROS_DOMAIN_ID=233` 失败是 FastDDS 端口超限，不是代码问题；后续多轮 smoke 建议使用 0~120 这类安全 domain。代码层后续可继续收 IK/final stage message request，或把阶段 callback 的“快照+消息”组合成更深的 monitor stage helper。
+
+## 2026-06-29 运控 / Codex / IK与最终阶段消息请求收口
+- 做了什么：把 monitor IK 阶段和最终方案阶段完成消息的长参数收口为 `ExtractMonitorIkStageMessageRequest` 与 `ExtractMonitorFinalStageMessageRequest`，四个 monitor 阶段消息现在都支持具名 request 调用。
+- 改了哪里：`extract_monitor_state.hpp/cpp` 新增 IK/final message request overload；`dual_arm_planner_node.cpp` 的 IK/final 阶段 message 改用 request；`test_extract_monitor_state.cpp` 补输出一致性覆盖。
+- 验证结果：`git diff --check` 通过；`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2808.24ms。
+- 留给下个 AI：monitor 阶段快照和消息的长参数已基本收口；下一步更有价值的是把“生成快照 + 写快照 + 生成消息”的阶段结果模式做成更深的 Module，而不是继续抽浅 helper。

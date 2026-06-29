@@ -57,8 +57,10 @@ int main()
 {
   using alfa_robot::motion::ExtractMonitorArmSeed;
   using alfa_robot::motion::ExtractMonitorExtractStageMessageRequest;
+  using alfa_robot::motion::ExtractMonitorFinalStageMessageRequest;
   using alfa_robot::motion::ExtractMonitorFullRunResult;
   using alfa_robot::motion::ExtractMonitorController;
+  using alfa_robot::motion::ExtractMonitorIkStageMessageRequest;
   using alfa_robot::motion::ExtractMonitorInitialStateRequest;
   using alfa_robot::motion::ExtractMonitorLoadedStageMessageRequest;
   using alfa_robot::motion::ExtractMonitorPhase;
@@ -319,6 +321,9 @@ int main()
 
   assert(extract_monitor_ik_stage_message(64, 301, 512, 12.5, "/tmp/snapshot.json") ==
          "IK阶段完成: unique=64 legal=301 trials=512 elapsed=12.5ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_ik_stage_message(
+    ExtractMonitorIkStageMessageRequest{64, 301, 512, 12.5, "/tmp/snapshot.json"}) ==
+         "IK阶段完成: unique=64 legal=301 trials=512 elapsed=12.5ms snapshot=/tmp/snapshot.json");
   assert(extract_monitor_extract_stage_message(8, 64, 16, 22.0, "/tmp/snapshot.json") ==
          "抽离阶段完成: success=8/64 workers=16 elapsed=22ms snapshot=/tmp/snapshot.json");
   assert(extract_monitor_extract_stage_message(
@@ -333,6 +338,9 @@ int main()
   timings[0].loaded_plan_rank = 2;
   timings[0].loaded_plan_trajectory_distance = 1.25;
   assert(extract_monitor_final_stage_message(timings[0], 44.0, "/tmp/snapshot.json") ==
+         "最终方案已选择: candidate_order=7 loaded_rank=2 trajectory_distance=1.25 elapsed=44ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_final_stage_message(
+    ExtractMonitorFinalStageMessageRequest{&timings[0], 44.0, "/tmp/snapshot.json"}) ==
          "最终方案已选择: candidate_order=7 loaded_rank=2 trajectory_distance=1.25 elapsed=44ms snapshot=/tmp/snapshot.json");
 
   std::vector<alfa_robot::motion::ExtractRolloutTiming> final_timings(4);

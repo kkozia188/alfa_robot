@@ -251,6 +251,17 @@ std::string extract_monitor_ik_stage_message(
   return out.str();
 }
 
+std::string extract_monitor_ik_stage_message(
+  const ExtractMonitorIkStageMessageRequest& request)
+{
+  return extract_monitor_ik_stage_message(
+    request.unique_count,
+    request.legal_count,
+    request.trial_count,
+    request.elapsed_ms,
+    request.snapshot_path);
+}
+
 std::string extract_monitor_extract_stage_message(
   size_t success_count,
   size_t total_count,
@@ -313,6 +324,21 @@ std::string extract_monitor_final_stage_message(
       << " trajectory_distance=" << selected.loaded_plan_trajectory_distance
       << " elapsed=" << elapsed_ms << "ms snapshot=" << snapshot_path;
   return out.str();
+}
+
+std::string extract_monitor_final_stage_message(
+  const ExtractMonitorFinalStageMessageRequest& request)
+{
+  if (!request.selected) {
+    std::ostringstream out;
+    out << "最终方案选择失败: selected=null elapsed="
+        << request.elapsed_ms << "ms snapshot=" << request.snapshot_path;
+    return out.str();
+  }
+  return extract_monitor_final_stage_message(
+    *request.selected,
+    request.elapsed_ms,
+    request.snapshot_path);
 }
 
 ExtractRolloutTiming* select_extract_monitor_final_timing(

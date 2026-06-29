@@ -59,6 +59,7 @@ int main()
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::ContainerPanel;
   using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
+  using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
@@ -424,6 +425,20 @@ int main()
   assert(final_snapshot.at("records")[0].at("candidate_order") == 12);
   assert(final_snapshot.at("replay_stages").size() == 1);
   assert(final_snapshot.at("replay_stages")[0].at("stage") == "selected_loaded_plan");
+
+  const auto final_snapshot_from_request = extract_monitor_final_snapshot(
+    ExtractMonitorFinalSnapshotRequest{
+      46.0,
+      6,
+      8,
+      0.925,
+      -0.4,
+      nlohmann::json{{"candidate_order", 13}},
+      nlohmann::json::array({nlohmann::json{{"stage", "selected_extract_step"}}})});
+  assert(final_snapshot_from_request.at("phase") == "final_selected");
+  assert(final_snapshot_from_request.at("elapsed_ms") == 46.0);
+  assert(final_snapshot_from_request.at("records")[0].at("candidate_order") == 13);
+  assert(final_snapshot_from_request.at("replay_stages")[0].at("stage") == "selected_extract_step");
 
   const auto full_snapshot = extract_monitor_full_selected_snapshot(
     final_snapshot, 0.925, -0.4, 123.0, std::array<double, 4>{1.0, 2.0, 3.0, 4.0});

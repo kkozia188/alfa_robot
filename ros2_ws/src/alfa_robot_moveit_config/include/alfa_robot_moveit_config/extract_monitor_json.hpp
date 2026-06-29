@@ -279,6 +279,20 @@ nlohmann::json extract_monitor_final_snapshot(
   const nlohmann::json& record,
   const nlohmann::json& replay_stages);
 
+struct ExtractMonitorFinalSnapshotRequest
+{
+  double elapsed_ms = 0.0;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  double box_front_x = 0.0;
+  double scene_y_shift = 0.0;
+  nlohmann::json record = nlohmann::json::object();
+  nlohmann::json replay_stages = nlohmann::json::array();
+};
+
+nlohmann::json extract_monitor_final_snapshot(
+  const ExtractMonitorFinalSnapshotRequest& request);
+
 nlohmann::json extract_monitor_full_selected_snapshot(
   nlohmann::json snapshot,
   double box_front_x,

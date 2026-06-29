@@ -677,6 +677,19 @@ nlohmann::json extract_monitor_final_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_final_snapshot(
+  const ExtractMonitorFinalSnapshotRequest& request)
+{
+  return extract_monitor_final_snapshot(
+    request.elapsed_ms,
+    request.left_box_id,
+    request.right_box_id,
+    request.box_front_x,
+    request.scene_y_shift,
+    request.record,
+    request.replay_stages);
+}
+
 nlohmann::json extract_monitor_full_selected_snapshot(
   nlohmann::json snapshot,
   double box_front_x,

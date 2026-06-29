@@ -82,6 +82,7 @@ using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
+using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
@@ -3206,13 +3207,14 @@ private:
         return std::make_shared<moveit::core::RobotState>(goal_state);
       });
     const nlohmann::json snapshot = extract_monitor_final_snapshot(
-      elapsed_ms,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      box_front_x_,
-      scene_y_shift_,
-      final_records.empty() ? nlohmann::json::object() : final_records[0],
-      replay_stages);
+      ExtractMonitorFinalSnapshotRequest{
+        elapsed_ms,
+        extract_monitor_state_.left_box_id,
+        extract_monitor_state_.right_box_id,
+        box_front_x_,
+        scene_y_shift_,
+        final_records.empty() ? nlohmann::json::object() : final_records[0],
+        replay_stages});
     if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor final")) {
       return false;
     }

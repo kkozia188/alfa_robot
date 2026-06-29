@@ -517,6 +517,24 @@ nlohmann::json extract_monitor_timing_records_json(
   return records;
 }
 
+nlohmann::json extract_monitor_timing_records_json(
+  const ExtractMonitorTimingRecordsRequest& request)
+{
+  if (!request.timings) {
+    return nlohmann::json::array();
+  }
+  return extract_monitor_timing_records_json(
+    *request.timings,
+    request.indices,
+    request.prefix,
+    request.left_box_id,
+    request.right_box_id,
+    request.target_names,
+    request.carried_boxes,
+    request.static_box_obstacles,
+    request.record_state);
+}
+
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts)
 {
   nlohmann::json failure_json = nlohmann::json::object();

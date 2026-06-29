@@ -97,6 +97,22 @@ nlohmann::json extract_monitor_timing_records_json(
   const nlohmann::json& static_box_obstacles,
   const ExtractMonitorTimingRecordState& record_state);
 
+struct ExtractMonitorTimingRecordsRequest
+{
+  const std::vector<ExtractRolloutTiming>* timings = nullptr;
+  std::vector<size_t> indices;
+  std::string prefix;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  std::vector<std::string> target_names;
+  std::vector<AttachedBoxSpec> carried_boxes;
+  nlohmann::json static_box_obstacles = nlohmann::json::object();
+  ExtractMonitorTimingRecordState record_state;
+};
+
+nlohmann::json extract_monitor_timing_records_json(
+  const ExtractMonitorTimingRecordsRequest& request);
+
 nlohmann::json extract_monitor_replay_context_json(
   const ExtractRolloutTiming& timing,
   int left_box_id,

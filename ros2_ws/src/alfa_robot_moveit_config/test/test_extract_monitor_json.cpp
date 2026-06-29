@@ -63,6 +63,7 @@ int main()
   using alfa_robot::motion::ExtractMonitorIkSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
+  using alfa_robot::motion::ExtractMonitorTimingRecordsRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::StaticBoxObstacle;
   using alfa_robot::motion::attached_boxes_json;
@@ -425,6 +426,22 @@ int main()
   assert(timing_records[0].at("loaded_plan_rank") == 3);
   assert(timing_records[0].at("replay_stage_count") == 2);
   assert(timing_records[0].at("replay_stages")[0].at("attached_boxes").size() == 1);
+
+  const auto timing_records_from_request = extract_monitor_timing_records_json(
+    ExtractMonitorTimingRecordsRequest{
+      &timing_list,
+      {1, 99},
+      "extract_monitor_L6_R8",
+      6,
+      8,
+      {},
+      {box},
+      nlohmann::json::object(),
+      [start_state](const alfa_robot::motion::ExtractRolloutTiming&) {
+        return start_state;
+      }});
+  assert(timing_records_from_request == timing_records);
+  assert(extract_monitor_timing_records_json(ExtractMonitorTimingRecordsRequest{}).empty());
 
   const auto empty_timing_records = extract_monitor_timing_records_json(
     timing_list,

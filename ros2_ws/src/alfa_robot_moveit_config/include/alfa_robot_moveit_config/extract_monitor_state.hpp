@@ -23,6 +23,18 @@ struct ExtractMonitorArmSeed
   double updown = 0.0;
 };
 
+struct ExtractMonitorInitialStateRequest
+{
+  int left_box_id = 0;
+  int right_box_id = 0;
+  AttachedBoxSpec left_box;
+  AttachedBoxSpec right_box;
+  moveit::core::RobotModelConstPtr robot_model;
+  const moveit::core::JointModelGroup* joint_group = nullptr;
+  ExtractMonitorArmSeed grasp_seed;
+  ExtractMonitorArmSeed loaded_seed;
+};
+
 enum class ExtractMonitorPhase
 {
   ReadyForIk,
@@ -64,6 +76,9 @@ ExtractMonitorState make_extract_monitor_initial_state(
   AttachedBoxSpec right_box,
   moveit::core::RobotStatePtr seed_state,
   moveit::core::RobotStatePtr loaded_start_state);
+
+ExtractMonitorState make_extract_monitor_initial_state(
+  const ExtractMonitorInitialStateRequest& request);
 
 moveit::core::RobotState make_extract_monitor_joint_state(
   const moveit::core::RobotModelConstPtr& robot_model,

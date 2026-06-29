@@ -77,6 +77,26 @@ ExtractMonitorState make_extract_monitor_initial_state(
   return state;
 }
 
+ExtractMonitorState make_extract_monitor_initial_state(
+  const ExtractMonitorInitialStateRequest& request)
+{
+  return make_extract_monitor_initial_state(
+    request.left_box_id,
+    request.right_box_id,
+    request.left_box,
+    request.right_box,
+    std::make_shared<moveit::core::RobotState>(
+      make_extract_monitor_joint_state(
+        request.robot_model,
+        request.joint_group,
+        request.grasp_seed)),
+    std::make_shared<moveit::core::RobotState>(
+      make_extract_monitor_joint_state(
+        request.robot_model,
+        request.joint_group,
+        request.loaded_seed)));
+}
+
 moveit::core::RobotState make_extract_monitor_joint_state(
   const moveit::core::RobotModelConstPtr& robot_model,
   const moveit::core::JointModelGroup* joint_group,

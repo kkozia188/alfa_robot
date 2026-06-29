@@ -81,6 +81,7 @@ using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
+using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -2768,22 +2769,6 @@ private:
     return {};
   }
 
-  moveit::core::RobotState make_extract_monitor_seed_state() const
-  {
-    return make_extract_monitor_joint_state(
-      robot_model_,
-      joint_group_,
-      ExtractMonitorArmSeed{left_pregrasp_arm_, right_pregrasp_arm_, extract_grasp_ik_home_updown_});
-  }
-
-  moveit::core::RobotState make_extract_monitor_loaded_start_state() const
-  {
-    return make_extract_monitor_joint_state(
-      robot_model_,
-      joint_group_,
-      ExtractMonitorArmSeed{left_loaded_arm_, right_loaded_arm_, extract_grasp_ik_home_updown_});
-  }
-
   void record_stage(
     const std::string& stage_name,
     const moveit::planning_interface::MoveGroupInterface::Plan& plan,
@@ -2882,12 +2867,15 @@ private:
     set_static_box_wall_opening(left_box_id, right_box_id, "extract_monitor");
 
     extract_monitor_state_ = make_extract_monitor_initial_state(
-      left_box_id,
-      right_box_id,
-      make_carried_box_spec("left", left_box_id, false),
-      make_carried_box_spec("right", right_box_id, false),
-      std::make_shared<moveit::core::RobotState>(make_extract_monitor_seed_state()),
-      std::make_shared<moveit::core::RobotState>(make_extract_monitor_loaded_start_state()));
+      ExtractMonitorInitialStateRequest{
+        left_box_id,
+        right_box_id,
+        make_carried_box_spec("left", left_box_id, false),
+        make_carried_box_spec("right", right_box_id, false),
+        robot_model_,
+        joint_group_,
+        ExtractMonitorArmSeed{left_pregrasp_arm_, right_pregrasp_arm_, extract_grasp_ik_home_updown_},
+        ExtractMonitorArmSeed{left_loaded_arm_, right_loaded_arm_, extract_grasp_ik_home_updown_}});
 
     moveit::core::RobotState selected_state(*extract_monitor_state_.seed_state);
     nlohmann::json ik_extra;

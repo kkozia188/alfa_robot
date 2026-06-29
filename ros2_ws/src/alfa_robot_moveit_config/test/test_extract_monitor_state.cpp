@@ -58,6 +58,7 @@ int main()
   using alfa_robot::motion::ExtractMonitorArmSeed;
   using alfa_robot::motion::ExtractMonitorFullRunResult;
   using alfa_robot::motion::ExtractMonitorController;
+  using alfa_robot::motion::ExtractMonitorInitialStateRequest;
   using alfa_robot::motion::ExtractMonitorPhase;
   using alfa_robot::motion::ExtractMonitorStage;
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -214,6 +215,29 @@ int main()
   assert(seed_state.getVariablePosition("left_v5_joint6") == 0.6);
   assert(seed_state.getVariablePosition("right_v5_joint1") == -0.1);
   assert(seed_state.getVariablePosition("right_v5_joint6") == -0.6);
+
+  const auto initialized_state = make_extract_monitor_initial_state(
+    ExtractMonitorInitialStateRequest{
+      7,
+      9,
+      left_box,
+      right_box,
+      seed_model,
+      nullptr,
+      arm_seed,
+      ExtractMonitorArmSeed{
+        {1.1, 1.2, 1.3, 1.4, 1.5, 1.6},
+        {-1.1, -1.2, -1.3, -1.4, -1.5, -1.6},
+        0.45}});
+  assert(initialized_state.left_box_id == 7);
+  assert(initialized_state.right_box_id == 9);
+  assert(initialized_state.prefix == "extract_monitor_L7_R9");
+  assert(initialized_state.seed_state);
+  assert(initialized_state.loaded_start_state);
+  assert(initialized_state.seed_state->getVariablePosition("updown") == 0.35);
+  assert(initialized_state.loaded_start_state->getVariablePosition("updown") == 0.45);
+  assert(initialized_state.loaded_start_state->getVariablePosition("left_v5_joint1") == 1.1);
+  assert(initialized_state.loaded_start_state->getVariablePosition("right_v5_joint6") == -1.6);
 
   state.legal_candidates.resize(3);
   size_t built_count = 0;

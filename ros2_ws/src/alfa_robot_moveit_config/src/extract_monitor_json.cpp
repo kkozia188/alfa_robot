@@ -598,6 +598,22 @@ nlohmann::json extract_monitor_extract_snapshot(
   return snapshot;
 }
 
+nlohmann::json extract_monitor_extract_snapshot(
+  const ExtractMonitorExtractSnapshotRequest& request)
+{
+  return extract_monitor_extract_snapshot(
+    request.elapsed_ms,
+    request.left_box_id,
+    request.right_box_id,
+    request.box_front_x,
+    request.scene_y_shift,
+    request.input_candidate_count,
+    request.success_count,
+    request.worker_count,
+    request.failure_counts,
+    request.records);
+}
+
 nlohmann::json extract_monitor_loaded_snapshot(
   double elapsed_ms,
   int left_box_id,

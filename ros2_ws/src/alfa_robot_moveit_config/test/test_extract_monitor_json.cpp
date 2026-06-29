@@ -58,6 +58,7 @@ int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::ContainerPanel;
+  using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
   using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::StaticBoxObstacle;
@@ -153,6 +154,25 @@ int main()
   assert(extract_snapshot.at("success_count") == 12);
   assert(extract_snapshot.at("worker_count") == 8);
   assert(extract_snapshot.at("failure_counts").at("collision") == 3);
+
+  const auto extract_snapshot_from_request = extract_monitor_extract_snapshot(
+    ExtractMonitorExtractSnapshotRequest{
+      24.0,
+      6,
+      8,
+      0.925,
+      -0.4,
+      64,
+      13,
+      16,
+      {{"left_kdl_no_solution", 5}},
+      nlohmann::json::array({nlohmann::json{{"candidate_order", 12}}})});
+  assert(extract_snapshot_from_request.at("phase") == "extract_successes");
+  assert(extract_snapshot_from_request.at("input_candidate_count") == 64);
+  assert(extract_snapshot_from_request.at("success_count") == 13);
+  assert(extract_snapshot_from_request.at("worker_count") == 16);
+  assert(extract_snapshot_from_request.at("failure_counts").at("left_kdl_no_solution") == 5);
+  assert(extract_snapshot_from_request.at("records").size() == 1);
 
   const auto loaded_snapshot = extract_monitor_loaded_snapshot(
     34.0, 6, 8, 0.925, -0.4, 12, 4, 1, 30.0, 8, 8, {{"plan_failed", 3}}, nlohmann::json::array());

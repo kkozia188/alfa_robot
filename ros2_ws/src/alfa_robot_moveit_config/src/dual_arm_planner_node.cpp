@@ -81,6 +81,7 @@ using alfa_robot::motion::attached_boxes_json;
 using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
+using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
@@ -2983,16 +2984,17 @@ private:
       std::chrono::steady_clock::now() - stage_start).count();
     extract_monitor_last_stage_ms_ = elapsed_ms;
     const nlohmann::json snapshot = extract_monitor_extract_snapshot(
-      elapsed_ms,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      box_front_x_,
-      scene_y_shift_,
-      count,
-      summary.success_count,
-      worker_count,
-      summary.failure_counts,
-      records);
+      ExtractMonitorExtractSnapshotRequest{
+        elapsed_ms,
+        extract_monitor_state_.left_box_id,
+        extract_monitor_state_.right_box_id,
+        box_front_x_,
+        scene_y_shift_,
+        count,
+        summary.success_count,
+        worker_count,
+        summary.failure_counts,
+        records});
     if (!write_extract_monitor_stage_snapshot(snapshot, "extract monitor extract")) {
       return false;
     }

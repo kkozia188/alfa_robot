@@ -218,6 +218,23 @@ nlohmann::json extract_monitor_extract_snapshot(
   const std::map<std::string, size_t>& failure_counts,
   const nlohmann::json& records);
 
+struct ExtractMonitorExtractSnapshotRequest
+{
+  double elapsed_ms = 0.0;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  double box_front_x = 0.0;
+  double scene_y_shift = 0.0;
+  size_t input_candidate_count = 0;
+  size_t success_count = 0;
+  size_t worker_count = 0;
+  std::map<std::string, size_t> failure_counts;
+  nlohmann::json records = nlohmann::json::array();
+};
+
+nlohmann::json extract_monitor_extract_snapshot(
+  const ExtractMonitorExtractSnapshotRequest& request);
+
 nlohmann::json extract_monitor_loaded_snapshot(
   double elapsed_ms,
   int left_box_id,

@@ -1052,3 +1052,9 @@
 - 改了哪里：`extract_monitor_snapshot_writer.hpp/cpp` 新增 `writeFailureMessage()`；`dual_arm_planner_node.cpp` 用 `write_extract_monitor_stage_snapshot()` 统一日志与 fail；`test_extract_monitor_snapshot_writer.cpp` 补失败消息覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2882.69ms。
 - 留给下个 AI：如果继续拆 monitor 阶段，可继续把“生成快照 + 写快照 + 生成 stage message”的重复模式往专门的 monitor stage 结果模块里收，不要散回 callback 主流程。
+
+## 2026-06-29 运控 / Codex / 抽离阶段快照请求收口
+- 做了什么：把 monitor 抽离阶段快照的长位置参数收口为 `ExtractMonitorExtractSnapshotRequest`，让调用点显式描述 elapsed、box、candidate、worker、failure、records 等字段，降低读代码时猜参数含义的成本。
+- 改了哪里：`extract_monitor_json.hpp/cpp` 新增 request overload；`dual_arm_planner_node.cpp` 的抽离阶段改用 request；`test_extract_monitor_json.cpp` 补 request 快照字段覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2890.69ms。
+- 留给下个 AI：IK/loaded/final 快照仍可按同样方式逐步 request 化；每次只动一个 stage，降低 JSON schema 行为漂移风险。

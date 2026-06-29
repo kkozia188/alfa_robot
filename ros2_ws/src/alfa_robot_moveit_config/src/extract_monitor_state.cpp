@@ -291,6 +291,17 @@ std::string extract_monitor_loaded_stage_message(
   return out.str();
 }
 
+std::string extract_monitor_loaded_stage_message(
+  const ExtractMonitorLoadedStageMessageRequest& request)
+{
+  return extract_monitor_loaded_stage_message(
+    request.success_count,
+    request.attempted_count,
+    request.candidate_count,
+    request.elapsed_ms,
+    request.snapshot_path);
+}
+
 std::string extract_monitor_final_stage_message(
   const ExtractRolloutTiming& selected,
   double elapsed_ms,

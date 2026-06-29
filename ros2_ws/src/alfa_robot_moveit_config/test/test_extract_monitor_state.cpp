@@ -60,6 +60,7 @@ int main()
   using alfa_robot::motion::ExtractMonitorFullRunResult;
   using alfa_robot::motion::ExtractMonitorController;
   using alfa_robot::motion::ExtractMonitorInitialStateRequest;
+  using alfa_robot::motion::ExtractMonitorLoadedStageMessageRequest;
   using alfa_robot::motion::ExtractMonitorPhase;
   using alfa_robot::motion::ExtractMonitorStage;
   using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -324,6 +325,9 @@ int main()
     ExtractMonitorExtractStageMessageRequest{8, 64, 16, 22.0, "/tmp/snapshot.json"}) ==
          "抽离阶段完成: success=8/64 workers=16 elapsed=22ms snapshot=/tmp/snapshot.json");
   assert(extract_monitor_loaded_stage_message(1, 8, 8, 33.0, "/tmp/snapshot.json") ==
+         "负重规划阶段完成: success=1 attempted=8 candidates=8 elapsed=33ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_loaded_stage_message(
+    ExtractMonitorLoadedStageMessageRequest{1, 8, 8, 33.0, "/tmp/snapshot.json"}) ==
          "负重规划阶段完成: success=1 attempted=8 candidates=8 elapsed=33ms snapshot=/tmp/snapshot.json");
   timings[0].candidate_order = 7;
   timings[0].loaded_plan_rank = 2;

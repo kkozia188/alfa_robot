@@ -1082,3 +1082,9 @@
 - 改了哪里：`extract_monitor_state.hpp/cpp` 新增 extract message request overload；`dual_arm_planner_node.cpp` 的抽离阶段 message 改用 request；`test_extract_monitor_state.cpp` 补 request 输出一致性覆盖。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2793.05ms。
 - 留给下个 AI：阶段消息还剩 IK/loaded/final 可按相同模式 request 化；建议继续小步，避免一次性动所有 service 文案。
+
+## 2026-06-29 运控 / Codex / 负重阶段消息请求收口
+- 做了什么：把 monitor 负重规划阶段完成消息的长参数收口为 `ExtractMonitorLoadedStageMessageRequest`，让 success/attempted/candidates/elapsed/snapshot_path 在调用点具名。
+- 改了哪里：`extract_monitor_state.hpp/cpp` 新增 loaded message request overload；`dual_arm_planner_node.cpp` 的 loaded 阶段 message 改用 request；`test_extract_monitor_state.cpp` 补 request 输出一致性覆盖。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，阶段内部耗时 2940.95ms。
+- 留给下个 AI：阶段消息 request 化还剩 IK/final；继续保持小步提交和 smoke 验证。

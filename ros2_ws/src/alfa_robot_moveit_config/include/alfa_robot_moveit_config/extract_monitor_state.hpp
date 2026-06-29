@@ -166,6 +166,18 @@ std::string extract_monitor_loaded_stage_message(
   double elapsed_ms,
   const std::string& snapshot_path);
 
+struct ExtractMonitorLoadedStageMessageRequest
+{
+  size_t success_count = 0;
+  size_t attempted_count = 0;
+  size_t candidate_count = 0;
+  double elapsed_ms = 0.0;
+  std::string snapshot_path;
+};
+
+std::string extract_monitor_loaded_stage_message(
+  const ExtractMonitorLoadedStageMessageRequest& request);
+
 std::string extract_monitor_final_stage_message(
   const ExtractRolloutTiming& selected,
   double elapsed_ms,

@@ -88,6 +88,7 @@ using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
 using alfa_robot::motion::ExtractMonitorIkSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorLoadedSnapshotRequest;
+using alfa_robot::motion::ExtractMonitorLoadedStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
@@ -3079,11 +3080,12 @@ private:
     }
 
     *message = extract_monitor_loaded_stage_message(
-      summary.success_count,
-      summary.attempted_count,
-      batch.plan_indices.size(),
-      elapsed_ms,
-      extract_monitor_snapshot_path_);
+      ExtractMonitorLoadedStageMessageRequest{
+        summary.success_count,
+        summary.attempted_count,
+        batch.plan_indices.size(),
+        elapsed_ms,
+        extract_monitor_snapshot_path_});
     return true;
   }
 

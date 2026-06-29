@@ -1112,3 +1112,9 @@
 - 改了哪里：核心新增/调整包括 `ros2_ws/src/robot_motion_scene_service/`、`ros2_ws/src/alfa_robot_moveit_config/src/dual_arm_planner_node.cpp`、`ros2_ws/src/alfa_robot_moveit_config/include/alfa_robot_moveit_config/*`、`docs/运控/MOTION_PIPELINE_REFACTOR.md`。
 - 验证结果：`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`robot_motion_scene_service` 1/1 单测通过；`alfa_robot_moveit_config` 11/11 单测通过；L6/R8 monitor full-selected 烟测成功，功能链路可跑通。
 - 留给下个 AI：`DualArmPlannerNode` 仍约 3578 行，保留 ROS 参数、MoveIt 后端、碰撞判定和 callback 装配；不要继续往节点堆算法。L6/R8 烟测负重 RRT 阶段仍有随机耗时波动，曾出现约 3.8s 和约 14s 两类样本，属于 MoveIt/RRT 候选规划波动，不是本轮重构的确定性接口失败。迁移到新仓库时优先迁移 `robot_motion_scene_service`，再迁移 IK/抽离/负重模块，`dual_arm_planner_node.cpp` 只作包装参考。
+
+## 2026-06-29 Codex / 运控 / motion pipeline 迁移残留清理
+- 做了什么：基于最新 `v5_dev` 新建 `feature/motion-flow-followup-cleanup-20260629`，继续检查旧可读化重构分支遗留的半成品；删除已经迁到 `robot_motion_scene_service` 后仍滞留在 `alfa_robot_moveit_config` 的三份未编译旧实现，避免后续工程师误改僵尸代码。
+- 改了哪里：删除 `ros2_ws/src/alfa_robot_moveit_config/src/motion_core/scene_geometry.cpp`、`src/motion_core/task_geometry.cpp`、`src/motion_scene_adapter.cpp`；更新 `docs/运控/MOTION_PIPELINE_REFACTOR.md` 说明真实实现位置和转发头兼容边界；补充 `robot_motion_scene_service` README/职责文档；新增 `test_task_geometry` 覆盖箱垛坐标、pair 解析、顶吸追加和 joint 顺序。
+- 验证结果：`git diff --check` 通过；`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`robot_motion_scene_service` 2/2 单测通过；`alfa_robot_moveit_config` 11/11 单测通过。
+- 留给下个 AI：当前场景几何和 MoveIt 场景适配的真实实现只在 `robot_motion_scene_service`；`alfa_robot_moveit_config/include/alfa_robot_moveit_config/motion_core/*` 和 `motion_scene_adapter.hpp` 只是兼容旧 include 的转发头。后续若继续规范项目，优先减少 `DualArmPlannerNode` 的 ROS/MoveIt 装配复杂度，不要把已迁出的场景实现拷回 MoveIt 包。

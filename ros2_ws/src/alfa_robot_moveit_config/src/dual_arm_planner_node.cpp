@@ -82,6 +82,7 @@ using alfa_robot::motion::ExecutionTrajectoryBuildRequest;
 using alfa_robot::motion::ExtractMonitorArmSeed;
 using alfa_robot::motion::ExtractMonitorController;
 using alfa_robot::motion::ExtractMonitorExtractSnapshotRequest;
+using alfa_robot::motion::ExtractMonitorExtractStageMessageRequest;
 using alfa_robot::motion::ExtractMonitorFinalSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorFullSelectedSnapshotRequest;
 using alfa_robot::motion::ExtractMonitorInitialStateRequest;
@@ -3004,11 +3005,12 @@ private:
     }
 
     *message = extract_monitor_extract_stage_message(
-      summary.success_count,
-      count,
-      worker_count,
-      elapsed_ms,
-      extract_monitor_snapshot_path_);
+      ExtractMonitorExtractStageMessageRequest{
+        summary.success_count,
+        count,
+        worker_count,
+        elapsed_ms,
+        extract_monitor_snapshot_path_});
     return true;
   }
 

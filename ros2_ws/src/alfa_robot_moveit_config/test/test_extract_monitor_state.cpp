@@ -56,6 +56,7 @@ moveit::core::RobotModelPtr monitor_seed_test_model()
 int main()
 {
   using alfa_robot::motion::ExtractMonitorArmSeed;
+  using alfa_robot::motion::ExtractMonitorExtractStageMessageRequest;
   using alfa_robot::motion::ExtractMonitorFullRunResult;
   using alfa_robot::motion::ExtractMonitorController;
   using alfa_robot::motion::ExtractMonitorInitialStateRequest;
@@ -318,6 +319,9 @@ int main()
   assert(extract_monitor_ik_stage_message(64, 301, 512, 12.5, "/tmp/snapshot.json") ==
          "IK阶段完成: unique=64 legal=301 trials=512 elapsed=12.5ms snapshot=/tmp/snapshot.json");
   assert(extract_monitor_extract_stage_message(8, 64, 16, 22.0, "/tmp/snapshot.json") ==
+         "抽离阶段完成: success=8/64 workers=16 elapsed=22ms snapshot=/tmp/snapshot.json");
+  assert(extract_monitor_extract_stage_message(
+    ExtractMonitorExtractStageMessageRequest{8, 64, 16, 22.0, "/tmp/snapshot.json"}) ==
          "抽离阶段完成: success=8/64 workers=16 elapsed=22ms snapshot=/tmp/snapshot.json");
   assert(extract_monitor_loaded_stage_message(1, 8, 8, 33.0, "/tmp/snapshot.json") ==
          "负重规划阶段完成: success=1 attempted=8 candidates=8 elapsed=33ms snapshot=/tmp/snapshot.json");

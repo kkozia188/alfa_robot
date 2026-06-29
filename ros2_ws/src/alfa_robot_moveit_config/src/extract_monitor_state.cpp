@@ -265,6 +265,17 @@ std::string extract_monitor_extract_stage_message(
   return out.str();
 }
 
+std::string extract_monitor_extract_stage_message(
+  const ExtractMonitorExtractStageMessageRequest& request)
+{
+  return extract_monitor_extract_stage_message(
+    request.success_count,
+    request.total_count,
+    request.worker_count,
+    request.elapsed_ms,
+    request.snapshot_path);
+}
+
 std::string extract_monitor_loaded_stage_message(
   size_t success_count,
   size_t attempted_count,

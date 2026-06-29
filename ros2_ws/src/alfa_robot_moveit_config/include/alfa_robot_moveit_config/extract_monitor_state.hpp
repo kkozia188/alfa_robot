@@ -147,6 +147,18 @@ std::string extract_monitor_extract_stage_message(
   double elapsed_ms,
   const std::string& snapshot_path);
 
+struct ExtractMonitorExtractStageMessageRequest
+{
+  size_t success_count = 0;
+  size_t total_count = 0;
+  size_t worker_count = 0;
+  double elapsed_ms = 0.0;
+  std::string snapshot_path;
+};
+
+std::string extract_monitor_extract_stage_message(
+  const ExtractMonitorExtractStageMessageRequest& request);
+
 std::string extract_monitor_loaded_stage_message(
   size_t success_count,
   size_t attempted_count,

@@ -1028,3 +1028,9 @@
 - 改了哪里：`extract_monitor_state.hpp/cpp` 新增 request 工厂；`dual_arm_planner_node.cpp` 删除 `make_extract_monitor_seed_state()` 和 `make_extract_monitor_loaded_start_state()`；`test_extract_monitor_state` 增加初始化请求断言。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 10/10 通过；L6/R8 smoke 成功，内部耗时约 2809.8ms。
 - 留给下个 AI：monitor 初始化语义现在集中在 state 模块；后续若继续瘦主节点，可以优先处理 extract/loaded/final stage 的 snapshot request 构造，而不是拆 MoveIt callback 本身。
+
+## 2026-06-29 运控 / Codex / 记录文件header构造收口
+- 做了什么：把 `open_record_file()` 中手拼的大段 JSON header 收口为 `MotionFlowHeaderRequest` / `motion_flow_header_json()`，让节点只填运行参数，记录格式语义集中到 `MotionFlowRecorder` 模块。
+- 改了哪里：`motion_flow_recorder.hpp/cpp` 新增 header request 与 builder；`dual_arm_planner_node.cpp` 改为调用 builder；新增 `test_motion_flow_recorder` 并接入 CMake。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 11/11 通过；L6/R8 smoke 成功，内部耗时约 2835.8ms。
+- 留给下个 AI：记录 JSONL header schema 已集中；如果后续增加字段，优先改 `MotionFlowHeaderRequest`，不要再在 `DualArmPlannerNode::open_record_file()` 里堆 JSON。

@@ -216,6 +216,10 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_trajectory_plan_utils srdfdom urdf)
   add_test(NAME test_trajectory_plan_utils COMMAND test_trajectory_plan_utils)
 
+  add_executable(test_motion_flow_recorder test/test_motion_flow_recorder.cpp)
+  target_link_libraries(test_motion_flow_recorder alfa_robot_motion_scene_adapter)
+  add_test(NAME test_motion_flow_recorder COMMAND test_motion_flow_recorder)
+
   add_executable(test_extract_monitor_snapshot_writer test/test_extract_monitor_snapshot_writer.cpp)
   target_link_libraries(test_extract_monitor_snapshot_writer alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_extract_monitor_snapshot_writer nlohmann_json)

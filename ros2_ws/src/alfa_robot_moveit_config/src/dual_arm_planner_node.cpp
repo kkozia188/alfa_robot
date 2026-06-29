@@ -148,6 +148,7 @@ using alfa_robot::motion::LoadedPoseSelector;
 using alfa_robot::motion::LoadedPoseSelectorConfig;
 using alfa_robot::motion::MotionSceneAdapter;
 using alfa_robot::motion::MotionSceneAdapterConfig;
+using alfa_robot::motion::MotionFlowHeaderRequest;
 using alfa_robot::motion::MotionFlowRecorder;
 using alfa_robot::motion::OptimizedDualIkSolver;
 using alfa_robot::motion::OptimizedDualIkSolverConfig;
@@ -170,6 +171,7 @@ using alfa_robot::motion::make_extract_monitor_joint_state;
 using alfa_robot::motion::make_extract_monitor_initial_state;
 using alfa_robot::motion::make_extract_monitor_replay_request;
 using alfa_robot::motion::make_identity_pose;
+using alfa_robot::motion::motion_flow_header_json;
 using alfa_robot::motion::make_pick_pairs;
 using alfa_robot::motion::make_pose;
 using alfa_robot::motion::names_values_json;
@@ -2628,32 +2630,29 @@ private:
   void open_record_file()
   {
     if (!record_trajectories_ || record_jsonl_path_.empty()) return;
-    nlohmann::json header = {
-      {"type", "header"},
-      {"schema", "moveit_box_stack_flow_v1"},
-      {"ik_strategy", "fixed_discrete_h_multi_seed_cost_scorer"},
-      {"planning_group", planning_group_},
-      {"box_front_x", box_front_x_},
-      {"scene_y_shift", scene_y_shift_},
-      {"world_to_base_z", world_to_base_z_},
-      {"fixed_updown", fixed_updown_},
-      {"velocity_scale", velocity_scale_},
-      {"acceleration_scale", acceleration_scale_},
-      {"max_rounds", max_rounds_},
-      {"include_top_suction", include_top_suction_},
-      {"execute", execute_},
-      {"container_obstacle", container_obstacle_json()},
-      {"static_box_obstacles", static_box_obstacles_json()},
-      {"attached_box_collision", attached_box_config_json()},
-      {"loaded_pose_family", {
+    const auto header = motion_flow_header_json(MotionFlowHeaderRequest{
+      planning_group_,
+      box_front_x_,
+      scene_y_shift_,
+      world_to_base_z_,
+      fixed_updown_,
+      velocity_scale_,
+      acceleration_scale_,
+      max_rounds_,
+      include_top_suction_,
+      execute_,
+      container_obstacle_json(),
+      static_box_obstacles_json(),
+      attached_box_config_json(),
+      {
         {"left_candidates_deg", pose_family_degrees_json(left_loaded_pose_family_)},
         {"right_candidates_deg", pose_family_degrees_json(right_loaded_pose_family_)},
         {"left_preferred_index", left_preferred_loaded_pose_index_},
         {"right_preferred_index", right_preferred_loaded_pose_index_},
         {"family_distance_weight", ik_config_.cost_loaded_family_distance},
         {"preferred_distance_weight", ik_config_.cost_loaded_preferred_distance}
-      }},
-      {"ik_config", {
+      },
+      {
         {"fixed_group", ik_config_.fixed_group},
         {"free_group", ik_config_.free_group},
         {"solver_plugin", ik_config_.solver_plugin},
@@ -2668,8 +2667,7 @@ private:
         {"check_collision", ik_config_.check_collision},
         {"cost_loaded_family_distance", ik_config_.cost_loaded_family_distance},
         {"cost_loaded_preferred_distance", ik_config_.cost_loaded_preferred_distance}
-      }}
-    };
+      }});
     recorder_ = std::make_unique<MotionFlowRecorder>();
     std::string error;
     if (!recorder_->open(record_jsonl_path_, header, &error)) {

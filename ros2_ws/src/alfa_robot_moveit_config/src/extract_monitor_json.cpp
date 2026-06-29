@@ -363,6 +363,26 @@ nlohmann::json extract_monitor_selected_extract_replay_state_stage(
     extra);
 }
 
+nlohmann::json extract_monitor_selected_extract_replay_state_stage(
+  const ExtractMonitorSelectedExtractReplayStateRequest& request)
+{
+  if (!request.state) {
+    return nlohmann::json::object();
+  }
+  return extract_monitor_selected_extract_replay_state_stage(
+    request.prefix,
+    request.step,
+    request.candidate_order,
+    *request.state,
+    request.left_box_id,
+    request.right_box_id,
+    request.target_names,
+    request.carried_boxes,
+    request.static_box_obstacles,
+    request.extra,
+    request.time_from_start_sec);
+}
+
 nlohmann::json extract_monitor_timing_json(
   const ExtractRolloutTiming& timing,
   size_t display_index,

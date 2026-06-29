@@ -58,6 +58,7 @@ int main()
 {
   using alfa_robot::motion::AttachedBoxSpec;
   using alfa_robot::motion::ContainerPanel;
+  using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
   using alfa_robot::motion::LoadedPoseReplayStage;
   using alfa_robot::motion::StaticBoxObstacle;
   using alfa_robot::motion::attached_boxes_json;
@@ -292,6 +293,29 @@ int main()
   assert(state_replay_stage.at("trajectory").at("points").size() == 1);
   assert(state_replay_stage.at("trajectory").at("points")[0].at("positions")[0] == 0.42);
   assert(state_replay_stage.at("trajectory").at("points")[0].at("positions")[1] == 0.0);
+
+  const auto request_state_replay_stage = extract_monitor_selected_extract_replay_state_stage(
+    ExtractMonitorSelectedExtractReplayStateRequest{
+      "extract_monitor_L6_R8",
+      7,
+      13,
+      &joint_state,
+      6,
+      8,
+      {"joint1", "missing_joint"},
+      {box},
+      nlohmann::json{{"boxes", nlohmann::json::array()}},
+      nlohmann::json{{"valid", true}, {"source", "request"}},
+      0.7});
+  assert(request_state_replay_stage.at("stage") == "extract_monitor_L6_R8/selected_extract_step_7");
+  assert(request_state_replay_stage.at("extra").at("candidate_order") == 13);
+  assert(request_state_replay_stage.at("extra").at("source") == "request");
+  assert(request_state_replay_stage.at("trajectory").at("points")[0].at("positions")[0] == 0.42);
+
+  const auto empty_request_state_replay_stage = extract_monitor_selected_extract_replay_state_stage(
+    ExtractMonitorSelectedExtractReplayStateRequest{});
+  assert(empty_request_state_replay_stage.is_object());
+  assert(empty_request_state_replay_stage.empty());
 
   timing.loaded_start_state = start_state;
   timing.loaded_goal_state = goal_state;

@@ -86,6 +86,7 @@ using alfa_robot::motion::ExtractMonitorSnapshotWriter;
 using alfa_robot::motion::ExtractMonitorState;
 using alfa_robot::motion::ExtractMonitorStageCallbacks;
 using alfa_robot::motion::ExtractMonitorReplayBuilder;
+using alfa_robot::motion::ExtractMonitorSelectedExtractReplayStateRequest;
 using alfa_robot::motion::ExtractMonitorTransitionPlanner;
 using alfa_robot::motion::extract_monitor_candidate_records_json;
 using alfa_robot::motion::extract_monitor_extract_snapshot;
@@ -2731,17 +2732,18 @@ private:
     }
     const auto names = dual_arm_with_updown_joint_names();
     rollout_records->push_back(extract_monitor_selected_extract_replay_state_stage(
-      extract_monitor_state_.prefix,
-      step,
-      candidate_order,
-      state,
-      extract_monitor_state_.left_box_id,
-      extract_monitor_state_.right_box_id,
-      names,
-      {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
-      static_box_obstacles_json(),
-      extra,
-      0.1 * static_cast<double>(step)));
+      ExtractMonitorSelectedExtractReplayStateRequest{
+        extract_monitor_state_.prefix,
+        step,
+        candidate_order,
+        &state,
+        extract_monitor_state_.left_box_id,
+        extract_monitor_state_.right_box_id,
+        names,
+        {extract_monitor_state_.left_box, extract_monitor_state_.right_box},
+        static_box_obstacles_json(),
+        extra,
+        0.1 * static_cast<double>(step)}));
   }
 
   bool write_extract_monitor_snapshot(const nlohmann::json& snapshot) const

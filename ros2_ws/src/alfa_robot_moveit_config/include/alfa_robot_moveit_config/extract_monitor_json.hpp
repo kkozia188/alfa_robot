@@ -152,6 +152,21 @@ nlohmann::json extract_monitor_selected_extract_replay_stage(
   const nlohmann::json& static_box_obstacles,
   const nlohmann::json& extra);
 
+struct ExtractMonitorSelectedExtractReplayStateRequest
+{
+  std::string prefix;
+  size_t step = 0;
+  size_t candidate_order = 0;
+  const moveit::core::RobotState* state = nullptr;
+  int left_box_id = 0;
+  int right_box_id = 0;
+  std::vector<std::string> target_names;
+  std::vector<AttachedBoxSpec> carried_boxes;
+  nlohmann::json static_box_obstacles = nlohmann::json::object();
+  nlohmann::json extra = nlohmann::json::object();
+  double time_from_start_sec = 0.0;
+};
+
 nlohmann::json extract_monitor_selected_extract_replay_state_stage(
   const std::string& prefix,
   size_t step,
@@ -164,6 +179,9 @@ nlohmann::json extract_monitor_selected_extract_replay_state_stage(
   const nlohmann::json& static_box_obstacles,
   const nlohmann::json& extra,
   double time_from_start_sec);
+
+nlohmann::json extract_monitor_selected_extract_replay_state_stage(
+  const ExtractMonitorSelectedExtractReplayStateRequest& request);
 
 nlohmann::json failure_counts_json(const std::map<std::string, size_t>& failure_counts);
 

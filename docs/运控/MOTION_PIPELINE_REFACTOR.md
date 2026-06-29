@@ -153,6 +153,27 @@ ros2 run alfa_robot_moveit_config extract_startup_stability_smoke.py \
 
 如果需要故意连接外部已经启动的 ROS 图，可以传 `--ros-domain-id inherit`；否则默认推荐保留 `auto`。
 
+### 3.9 关于算法进程和任务进程拆分
+
+本轮启动稳定性问题的主要根因不是“算法和任务必须拆成两个 ROS 进程”，而是：
+
+- 旧 `ros2 launch` 子进程没有随父进程完全退出，留下旧 `/dual_arm_planner` 服务。
+- 自启动测试复用默认 ROS 图，容易被旧 `/joint_states` 或旧服务污染。
+- fixed-h IK 流程在部分路径上提前碰到 free-h 求解池初始化，造成首次调用变慢。
+
+这些问题已经通过 `process_lifecycle.py`、`ROS_DOMAIN_ID=auto` 和 IK 懒初始化处理。因此当前不建议为了“看起来分层”立刻把算法进程、任务进程硬拆开：如果只是把现有 callback 包一层 ROS service，而调用顺序、场景状态、MoveIt planning scene 和候选缓存仍然全部外泄，那个 seam 会很浅，接口复杂度接近实现复杂度，反而更容易生成新残留进程和新同步问题。
+
+后续如果真的要拆进程，建议先满足两个条件：
+
+1. `DualArmPlannerNode` 内的 ROS/MoveIt Adapter 继续变薄，核心算法只通过明确 request/result 结构交互。
+2. 至少存在两个真实 Adapter，例如“同进程直接调用”和“跨进程 ROS 调用”，否则这个 seam 还只是理论 seam。
+
+当前更实际的维护策略是：
+
+- 用 `extract_startup_stability_smoke.py` 作为启动/关闭 gate。
+- 继续把 `DualArmPlannerNode` 中的纯算法请求构造、快照、记录、回放语义下沉到已有 deep module。
+- 保留一个一键总体启动/测试入口，避免 AI 或工程师为了验证一次流程手动拼多条命令。
+
 ## 4. 可复用库与迁移建议
 
 当前 CMake 导出两个层级：

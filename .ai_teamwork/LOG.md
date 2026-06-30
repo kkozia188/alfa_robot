@@ -1124,3 +1124,21 @@
 - 改了哪里：`ros2_ws/src/alfa_robot_moveit_config/scripts/process_lifecycle.py` 统一清理/域配置；`extract_stage_monitor_console.py`、`extract_sequence_rerun.py`、`run_extract_live_benchmark.py`、`extract_failed_attempts_rerun.py`、`execute_l6_r8_mock_live.py` 接入隔离与清理；`parallel_updown_aware_ik_solver` 避免 fixed 流程误触 free-h 求解池；新增 `extract_startup_stability_smoke.py` 与文档 `docs/运控/MOTION_PIPELINE_REFACTOR.md`。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config` 12/12 通过；`ros2 run alfa_robot_moveit_config extract_startup_stability_smoke.py --rounds 2 --ros-domain-id auto` 通过，两轮服务就绪约 2.0s、旧 joint 名称污染为 0、退出后无 `/dual_arm_planner` 服务/进程残留。
 - 留给下个 AI：后续启动/复启稳定性优先跑 `extract_startup_stability_smoke.py`，不要手工拼散命令；`--ros-domain-id auto` 会选 FastDDS 安全范围，显式传 233 以上会被拒绝，避免 robot_state_publisher 无限重启刷屏。算法完整流程偶发 `flow_success=false` 不等于启动稳定性失败，如需把算法成功率也作为门槛再加 `--require-flow-success`。
+
+## 2026-06-30 Codex / 运控 / planner复用与IK预热边界修正
+- 做了什么：针对“全流程 IK 阶段从约 0.5~0.8s 异常变成约 4s”的误判，确认根因是每组箱子重复启动 `dual_arm_planner_node`，把 16 个 BioIK solver 首次初始化算进单任务；新增 `/dual_arm_planner/configure_extract_monitor`，将 IK solver 预热归入启动期，并让一整段 pair sequence 复用同一个 planner。
+- 改了哪里：`dual_arm_planner_node.cpp` 新增 configure service 和任务切换/预热逻辑；`srv/ConfigureExtractMonitor.srv` 新增任务配置接口；`extract_sequence_rerun.py`、`extract_stage_monitor_console.py`、`extract_failed_attempts_rerun.py`、`execute_l6_r8_mock_live.py`、`extract_startup_stability_smoke.py` 接入“启动预热一次、每任务 configure、再 trigger compute”；`.gitignore` 放行该 srv 文件；`docs/运控/MOTION_PIPELINE_REFACTOR.md` 补充服务复用与耗时口径。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；`extract_startup_stability_smoke.py --rounds 1 --ros-domain-id auto` 中 startup+prewarm 约 5971ms，单次完整流程内部 total 约 2654ms、IK 约 766ms；三组短序列共享 planner 复测中 L6/R3、L7/R8、L11/R12 的 IK 分别约 719ms、742ms、619ms，没有再把 4s 初始化混入 IK。
+- 留给下个 AI：新增入口不要每个 box pair 重启 planner；正确顺序是等待 `/dual_arm_planner/configure_extract_monitor`、先 configure/prewarm，再调用 `/dual_arm_planner/run_extract_monitor_full_selected`。如果直接触发 full selected 而不 configure，首次调用仍可能把懒初始化算进任务耗时。
+
+## 2026-06-30 Codex / 运控 / extract sequence服务客户端复用
+- 做了什么：在 `extract_sequence_rerun.py` 的长序列入口中复用同一个 rclpy service client，避免每个任务都重新创建/销毁 ROS node；这不是核心算法优化，但能去掉 Python/DDS 客户端层面的数百毫秒外部墙钟开销。
+- 改了哪里：`extract_stage_monitor_console.py` 新增 `ExtractMonitorServiceClient`；`extract_sequence_rerun.py` 的启动预热、每任务 configure 和 trigger 都改用同一个 client；`run_extract_live_benchmark.py` 也纳入跟踪并接入 configure/prewarm，避免被安装的旧入口继续走落后口径。
+- 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；三组短序列复测 `L6/R3;L7/R8;L11/R12` 共享 planner 成功，启动预热约 6100ms，任务 configure 外部墙钟分别约 0.4ms、25.6ms、34.3ms，IK 分别约 674ms、717ms、592ms。
+- 留给下个 AI：长序列、多任务 benchmark 应优先使用可复用 client；一次性手动工具可以继续用 one-shot service helper，但不要用它作为性能口径。
+
+## 2026-06-30 Codex / 运控 / 全流程复用边界与负重耗时口径复核
+- 做了什么：按用户反馈重新从完整 `IK → 抽离 → 横向让位 → 负重规划 → 最终回放` 生命周期审计，而不是只盯 IK；确认 MoveIt backend、场景适配器、monitor 状态机、BioIK solver 池、长序列 service client 都可在同一 planner 生命周期内复用，任务级只切 box pair、箱墙开洞和 snapshot 路径。
+- 改了哪里：`ExtractMonitorState` 记录负重规划 batch wall time、candidate/attempt/success/workers 等字段；最终 full-selected snapshot 保留这些字段；`extract_sequence_rerun.py` summary 同步输出 `loaded_plan_batch_wall_ms` 与负重候选统计；`MOTION_PIPELINE_REFACTOR.md` 明确 `loaded_elapsed_ms` 是负重阶段总耗时、`loaded_plan_batch_wall_ms` 才是并行规划批次耗时。
+- 验证结果：待本轮最终构建/测试与短序列复跑补充；本轮目标是避免再次把启动预热、Python service client、snapshot 记录或 Rerun 回放误算成单任务核心算法耗时。
+- 留给下个 AI：后续分析慢点时优先看 snapshot 中的分层字段：`startup_ms/configure_ms/ik_elapsed_ms/extract_elapsed_ms/loaded_elapsed_ms/loaded_plan_batch_wall_ms/final_elapsed_ms`，不要只看外部 `wall_ms`。

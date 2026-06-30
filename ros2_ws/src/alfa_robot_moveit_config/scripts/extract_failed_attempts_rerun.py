@@ -250,6 +250,17 @@ def main() -> int:
 
     try:
         monitor.wait_for_service("/dual_arm_planner/run_extract_monitor_next", planner, args.service_timeout, launch_log)
+        prewarm_ok, prewarm_output, prewarm_ms = monitor.call_configure_extract_monitor_service(
+            "/dual_arm_planner/configure_extract_monitor",
+            args.left_box_id,
+            args.right_box_id,
+            snapshot_path,
+            args.service_timeout,
+        )
+        print(prewarm_output)
+        if not prewarm_ok:
+            raise RuntimeError(f"IK solver 预热失败：{prewarm_output}")
+        print(f"planner 启动完成，IK solver 已预热：{prewarm_ms:.1f}ms")
 
         global rr
         import rerun as rr

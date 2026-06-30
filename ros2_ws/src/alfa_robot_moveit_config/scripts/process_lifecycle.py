@@ -19,6 +19,7 @@ from typing import TextIO
 PLANNER_SERVICE_NAMES = (
     "/dual_arm_planner/run_extract_monitor_next",
     "/dual_arm_planner/run_extract_monitor_full_selected",
+    "/dual_arm_planner/configure_extract_monitor",
     "/dual_arm_planner/run_left_extract_demo",
     "/dual_arm_planner/run_box_stack_flow",
     "/dual_arm_planner/plan_and_execute",

@@ -34,6 +34,7 @@ find_package(Eigen3 REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SemanticCargo.msg"
   "msg/SemanticScene.msg"
+  "srv/ConfigureExtractMonitor.srv"
   DEPENDENCIES std_msgs geometry_msgs
 )
 ament_export_dependencies(rosidl_default_runtime)
@@ -135,6 +136,9 @@ target_link_libraries(dual_arm_planner_node
   robot_motion_scene_service::robot_motion_scene_core
   robot_motion_scene_service::robot_motion_scene_adapter
 )
+
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(dual_arm_planner_node "${cpp_typesupport_target}")
 
 ament_target_dependencies(dual_arm_planner_node
   rclcpp

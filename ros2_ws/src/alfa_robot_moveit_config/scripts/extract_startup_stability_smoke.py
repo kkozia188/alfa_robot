@@ -121,9 +121,19 @@ def run_once(args: argparse.Namespace, run_index: int, run_root: Path) -> dict:
 
     service_name = "/dual_arm_planner/run_extract_monitor_full_selected"
     try:
-        monitor.wait_for_service(service_name, planner, args.service_timeout, launch_log)
+        monitor.wait_for_service("/dual_arm_planner/configure_extract_monitor", planner, args.service_timeout, launch_log)
+        prewarm_ok, prewarm_output, prewarm_ms = monitor.call_configure_extract_monitor_service(
+            "/dual_arm_planner/configure_extract_monitor",
+            args.left_box_id,
+            args.right_box_id,
+            snapshot_path,
+            args.service_timeout,
+        )
+        print(prewarm_output, flush=True)
+        if not prewarm_ok:
+            raise RuntimeError(f"IK solver 预热失败：{prewarm_output}")
         ready_ms = (time.monotonic() - started_at) * 1000.0
-        print(f"service ready: {ready_ms:.1f} ms", flush=True)
+        print(f"service ready + IK prewarm: {ready_ms:.1f} ms (prewarm call {prewarm_ms:.1f} ms)", flush=True)
         success, output, service_ms = monitor.call_trigger_service(service_name, args.service_timeout)
         total_ms = parse_total_ms(output)
         print(output, flush=True)

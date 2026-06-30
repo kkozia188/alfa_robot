@@ -251,6 +251,158 @@ def call_trigger_service(service_name: str, timeout: float) -> tuple[bool, str, 
         rclpy.shutdown()
 
 
+def call_configure_extract_monitor_service(
+    service_name: str,
+    left_box_id: int,
+    right_box_id: int,
+    snapshot_path: Path,
+    timeout: float,
+) -> tuple[bool, str, float]:
+    start = time.monotonic()
+    try:
+        import rclpy
+        from alfa_robot_moveit_config.srv import ConfigureExtractMonitor
+    except Exception:
+        command = (
+            f"ros2 service call {service_name} "
+            "alfa_robot_moveit_config/srv/ConfigureExtractMonitor "
+            f"\"{{left_box_id: {left_box_id}, right_box_id: {right_box_id}, "
+            f"snapshot_path: '{snapshot_path}'}}\""
+        )
+        result = run_text(command, timeout=timeout)
+        elapsed = (time.monotonic() - start) * 1000.0
+        output = result.stdout.strip()
+        success = result.returncode == 0 and ("success=True" in output or "success: true" in output)
+        return success, output, elapsed
+
+    rclpy.init(args=None)
+    node = rclpy.create_node("extract_monitor_config_client")
+    try:
+        client = node.create_client(ConfigureExtractMonitor, service_name)
+        if not client.wait_for_service(timeout_sec=timeout):
+            elapsed = (time.monotonic() - start) * 1000.0
+            return False, f"service {service_name} not available after {timeout:.1f}s", elapsed
+        request = ConfigureExtractMonitor.Request()
+        request.left_box_id = int(left_box_id)
+        request.right_box_id = int(right_box_id)
+        request.snapshot_path = str(snapshot_path)
+        future = client.call_async(request)
+        deadline = time.monotonic() + timeout
+        while rclpy.ok() and not future.done() and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.05)
+        elapsed = (time.monotonic() - start) * 1000.0
+        if not future.done():
+            return False, f"service {service_name} call timed out after {timeout:.1f}s", elapsed
+        response = future.result()
+        if response is None:
+            return False, "service returned no response", elapsed
+        output = (
+            "requester: direct rclpy ConfigureExtractMonitor request\n\n"
+            f"response:\nConfigureExtractMonitor_Response(success={response.success}, "
+            f"message='{response.message}')"
+        )
+        return bool(response.success), output, elapsed
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+class ExtractMonitorServiceClient:
+    """Reusable rclpy clients for repeated extract monitor calls."""
+
+    def __init__(
+        self,
+        *,
+        configure_service: str,
+        trigger_service: str,
+        timeout: float,
+        node_name: str = "extract_monitor_service_client",
+    ) -> None:
+        import rclpy
+        from alfa_robot_moveit_config.srv import ConfigureExtractMonitor
+        from std_srvs.srv import Trigger
+
+        self._rclpy = rclpy
+        self._configure_type = ConfigureExtractMonitor
+        self._trigger_type = Trigger
+        self._owns_rclpy = not rclpy.ok()
+        if self._owns_rclpy:
+            rclpy.init(args=None)
+        self.node = rclpy.create_node(node_name)
+        self.configure_service = configure_service
+        self.trigger_service = trigger_service
+        self.configure_client = self.node.create_client(ConfigureExtractMonitor, configure_service)
+        self.trigger_client = self.node.create_client(Trigger, trigger_service)
+        self.wait_for_services(timeout)
+
+    def wait_for_services(self, timeout: float) -> None:
+        deadline = time.monotonic() + timeout
+        for client, service_name in (
+            (self.configure_client, self.configure_service),
+            (self.trigger_client, self.trigger_service),
+        ):
+            while time.monotonic() < deadline:
+                if client.wait_for_service(timeout_sec=0.1):
+                    break
+            else:
+                raise TimeoutError(f"service {service_name} not available after {timeout:.1f}s")
+
+    def configure(
+        self,
+        left_box_id: int,
+        right_box_id: int,
+        snapshot_path: Path,
+        timeout: float,
+    ) -> tuple[bool, str, float]:
+        start = time.monotonic()
+        request = self._configure_type.Request()
+        request.left_box_id = int(left_box_id)
+        request.right_box_id = int(right_box_id)
+        request.snapshot_path = str(snapshot_path)
+        future = self.configure_client.call_async(request)
+        self._rclpy.spin_until_future_complete(self.node, future, timeout_sec=timeout)
+        elapsed = (time.monotonic() - start) * 1000.0
+        if not future.done():
+            return False, f"ConfigureExtractMonitor timeout after {timeout:.1f}s", elapsed
+        response = future.result()
+        if response is None:
+            return False, f"ConfigureExtractMonitor failed: {future.exception()}", elapsed
+        output = (
+            "requester: reusable rclpy ConfigureExtractMonitor request\n\n"
+            f"response:\n{response}"
+        )
+        return bool(response.success), output, elapsed
+
+    def trigger(self, timeout: float) -> tuple[bool, str, float]:
+        start = time.monotonic()
+        future = self.trigger_client.call_async(self._trigger_type.Request())
+        self._rclpy.spin_until_future_complete(self.node, future, timeout_sec=timeout)
+        elapsed = (time.monotonic() - start) * 1000.0
+        if not future.done():
+            return False, f"Trigger timeout after {timeout:.1f}s", elapsed
+        response = future.result()
+        if response is None:
+            return False, f"Trigger failed: {future.exception()}", elapsed
+        output = (
+            "requester: reusable rclpy Trigger request\n\n"
+            f"response:\n{response}"
+        )
+        return bool(response.success), output, elapsed
+
+    def close(self) -> None:
+        if getattr(self, "node", None) is not None:
+            self.node.destroy_node()
+            self.node = None
+        if self._owns_rclpy and self._rclpy.ok():
+            self._rclpy.shutdown()
+
+    def __enter__(self) -> "ExtractMonitorServiceClient":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+
 def read_snapshot(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(path)
@@ -814,14 +966,30 @@ def main() -> int:
             if args.mode == "staged"
             else "/dual_arm_planner/run_extract_monitor_full_selected"
         )
+        log_offset = 0
         log_event(f"等待监控服务：{service_name}", run_start)
         wait_for_service(service_name, planner, args.service_timeout, launch_log)
-        log_event("监控服务已就绪", run_start)
+        if planner is not None:
+            log_event("预热 IK solver：配置初始抽箱任务", run_start)
+            prewarm_ok, prewarm_output, prewarm_ms = call_configure_extract_monitor_service(
+                "/dual_arm_planner/configure_extract_monitor",
+                args.left_box_id,
+                args.right_box_id,
+                snapshot_path,
+                args.service_timeout,
+            )
+            if launch_log.exists():
+                log_offset = stream_planner_log(launch_log, 0)
+            print(prewarm_output)
+            if not prewarm_ok:
+                raise RuntimeError(f"IK solver 预热失败：{prewarm_output}")
+            log_event(f"监控服务已就绪，IK solver 已预热：{prewarm_ms:.1f} ms", run_start)
+        else:
+            log_event("监控服务已就绪", run_start)
         if args.mode == "staged":
             print("回车顺序：1 IK候选 -> 2 抽离成功 -> 3 负重规划成功 -> 4 最终方案；第5次会重新开始。Ctrl-C 退出。")
         else:
             print("回车一次：从零开始完整计算 IK→抽离→负重规划，并只显示最终采用方案。Ctrl-C 退出。")
-        log_offset = 0
         if args.once or args.save is not None:
             ok, sample_count, log_offset = run_full_selected_once(
                 service_name=service_name,

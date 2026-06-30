@@ -198,6 +198,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"extract_loaded_planning_attempts:={args.loaded_planning_attempts}",
         "extract_loaded_use_direct_pipeline:=true",
         f"extract_loaded_parallel_workers:={args.loaded_workers}",
+        f"loaded_preferred_pose_index:={getattr(args, 'loaded_preferred_pose_index', 0)}",
         "extract_use_independent_kdl:=true",
         f"extract_kdl_timeout:={args.extract_kdl_timeout}",
         f"planning_attempts:={args.loaded_planning_attempts}",

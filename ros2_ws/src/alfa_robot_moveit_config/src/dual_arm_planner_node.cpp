@@ -462,7 +462,7 @@ public:
       right_loaded_pose_family_.push_back(deg_to_rad({0, -75, 135, 0, 60, 0}));
     }
     const size_t loaded_preferred_index = static_cast<size_t>(
-      std::max(0, get_or_declare_parameter<int>("loaded_preferred_pose_index", 1)));
+      std::max(0, get_or_declare_parameter<int>("loaded_preferred_pose_index", 0)));
     left_preferred_loaded_pose_index_ = std::min(loaded_preferred_index, left_loaded_pose_family_.size() - 1);
     right_preferred_loaded_pose_index_ = std::min(loaded_preferred_index, right_loaded_pose_family_.size() - 1);
     ik_config_.left_loaded_pose_family = left_loaded_pose_family_;

@@ -44,12 +44,21 @@ def make_pair_args(args: argparse.Namespace, left_id: int, right_id: int) -> Sim
         box_front_x=args.box_front_x,
         scene_y_shift=args.scene_y_shift,
         fixed_updown=args.fixed_updown,
+        grasp_mode=args.grasp_mode,
         front_z_reach_lower=args.front_z_reach_lower,
         front_z_reach_upper=args.front_z_reach_upper,
+        top_z_reach_lower=args.top_z_reach_lower,
+        top_z_reach_upper=args.top_z_reach_upper,
+        ik_h_candidate_count=args.ik_h_candidate_count,
+        ik_seed_count=args.ik_seed_count,
+        ik_candidate_timeout=args.ik_candidate_timeout,
+        ik_try_target_orders=args.ik_try_target_orders,
+        ik_use_reversed_target_order=args.ik_use_reversed_target_order,
         left_box_id=left_id,
         right_box_id=right_id,
         extract_workers=args.extract_workers,
         candidate_limit=args.candidate_limit,
+        extract_step_x=args.extract_step_x,
         dedup_joint_threshold_deg=args.dedup_joint_threshold_deg,
         dedup_h_threshold=args.dedup_h_threshold,
         loaded_candidate_limit=args.loaded_candidate_limit,
@@ -218,10 +227,19 @@ def main() -> int:
     parser.add_argument("--box-front-x", type=float, default=0.925)
     parser.add_argument("--scene-y-shift", type=float, default=-0.4)
     parser.add_argument("--fixed-updown", type=float, default=0.3)
+    parser.add_argument("--grasp-mode", choices=["front", "top_suction"], default="front")
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
+    parser.add_argument("--top-z-reach-lower", type=float, default=0.3)
+    parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
+    parser.add_argument("--ik-h-candidate-count", type=int, default=16)
+    parser.add_argument("--ik-seed-count", type=int, default=32)
+    parser.add_argument("--ik-candidate-timeout", type=float, default=0.01)
+    parser.add_argument("--ik-try-target-orders", action="store_true")
+    parser.add_argument("--ik-use-reversed-target-order", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--candidate-limit", type=int, default=64)
     parser.add_argument("--extract-workers", type=int, default=16)
+    parser.add_argument("--extract-step-x", type=float, default=0.03)
     parser.add_argument("--loaded-candidate-limit", type=int, default=8)
     parser.add_argument("--loaded-workers", type=int, default=8)
     parser.add_argument("--loaded-planning-time", type=float, default=1.0)

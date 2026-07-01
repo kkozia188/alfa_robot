@@ -194,6 +194,9 @@ struct ExtractCandidateSolverConfig
   double orientation_tolerance = 0.05;
   double max_tip_z_drop = 0.002;
   double min_tool_normal_z = -1e-4;
+  bool enforce_tool_normal_not_down = true;
+  bool top_suction = false;
+  double top_suction_orientation_tolerance = 0.12217304763960307;
   double max_joint_delta = 0.0;
   int independent_kdl_max_iterations = 120;
   double independent_kdl_eps = 1e-5;
@@ -341,6 +344,9 @@ struct ExtractRolloutPlannerConfig
   std::string right_tip = "right_v5_tool0";
   bool fail_fast = true;
   bool dual_async = false;
+  bool top_suction = false;
+  double top_suction_updown_step = 0.01;
+  double top_suction_max_lift = 0.5;
   size_t success_extra_steps = 3;
   size_t top_valid_limit = 6;
   ExtractSingleClearCallback single_clear_callback;

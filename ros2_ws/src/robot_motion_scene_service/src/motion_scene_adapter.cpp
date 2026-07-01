@@ -156,9 +156,13 @@ moveit_msgs::msg::AttachedCollisionObject MotionSceneAdapter::makeAttachedCollis
   if (spec.link_name.rfind("left_", 0) == 0) {
     attached.touch_links.push_back("left_v5_link6");
     attached.touch_links.push_back("left_v5_link5");
+    attached.touch_links.push_back("left_v5_link4");
+    attached.touch_links.push_back("left_v5_link3");
   } else if (spec.link_name.rfind("right_", 0) == 0) {
     attached.touch_links.push_back("right_v5_link6");
     attached.touch_links.push_back("right_v5_link5");
+    attached.touch_links.push_back("right_v5_link4");
+    attached.touch_links.push_back("right_v5_link3");
   }
 
   attached.object.header.frame_id = spec.link_name;

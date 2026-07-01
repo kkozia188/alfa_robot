@@ -243,9 +243,13 @@ std::vector<std::string> touch_links_for_attached_box(const AttachedBoxSpec& box
   if (box.link_name.rfind("left_", 0) == 0) {
     links.push_back("left_v5_link6");
     links.push_back("left_v5_link5");
+    links.push_back("left_v5_link4");
+    links.push_back("left_v5_link3");
   } else if (box.link_name.rfind("right_", 0) == 0) {
     links.push_back("right_v5_link6");
     links.push_back("right_v5_link5");
+    links.push_back("right_v5_link4");
+    links.push_back("right_v5_link3");
   }
   return links;
 }

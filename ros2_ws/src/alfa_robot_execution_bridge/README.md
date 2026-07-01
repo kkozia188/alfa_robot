@@ -58,4 +58,6 @@ ros2 launch alfa_robot_moveit_config dual_arm_planner.launch.py \
 
 ## 方向关系
 
-`config/*.yaml` 中的 `direction_signs` 记录当前实机方向标定关系。默认 `apply_direction_signs=false`，表示电控侧 ros2_control / 硬件层已经处理方向；如果确认下游没有处理方向，再打开该参数，避免双重翻转。
+`alfa_robot_execution_bridge/joints.py` 是当前实机方向标定的唯一真相源，包含 joint 顺序和 `ROS/Rerun -> EtherCAT` 方向映射。
+
+`config/*.yaml` 不再复制 `direction_signs`。默认 `apply_direction_signs=false`，表示电控侧 ros2_control / 硬件层已经处理方向；如果确认下游没有处理方向，再打开该参数，运行时会自动使用 `joints.py` 中的方向表，避免双重翻转和配置漂移。

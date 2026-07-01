@@ -83,11 +83,40 @@ OptimizedDualIkSolveResult OptimizedDualIkSolver::solve(
 
   output.ik_result = config_.solver->solve(ik_request);
   if (!output.ik_result.success) {
+    const auto rejection_counts = ik_candidate_rejection_counts_json(output.ik_result);
+    double best_pos_error = std::numeric_limits<double>::infinity();
+    double best_ori_error = std::numeric_limits<double>::infinity();
+    std::string best_reason;
+    size_t best_h_index = 0;
+    size_t best_seed_index = 0;
+    double best_h = 0.0;
+    for (const auto& candidate : output.ik_result.candidates) {
+      const double combined_error = candidate.direct_pos_error + candidate.direct_ori_error;
+      const double best_combined_error = best_pos_error + best_ori_error;
+      if (combined_error < best_combined_error) {
+        best_pos_error = candidate.direct_pos_error;
+        best_ori_error = candidate.direct_ori_error;
+        best_reason = candidate.rejection_reason;
+        best_h_index = candidate.h_index;
+        best_seed_index = candidate.seed_index;
+        best_h = candidate.h;
+      }
+    }
     std::ostringstream oss;
     oss << "optimized IK failed reason=" << output.ik_result.failure_reason
         << " trials=" << output.ik_result.trial_count
         << " legal=" << output.ik_result.legal_count
-        << " wall_ms=" << output.ik_result.wall_ms;
+        << " wall_ms=" << output.ik_result.wall_ms
+        << " h_interval=[" << output.ik_result.h_interval_lower << ","
+        << output.ik_result.h_interval_upper << "]"
+        << " h_candidates=" << vector_json(output.ik_result.h_candidates).dump()
+        << " reject=" << rejection_counts.dump()
+        << " best_pos=" << best_pos_error
+        << " best_ori=" << best_ori_error
+        << " best_reason=" << best_reason
+        << " best_h=" << best_h
+        << " best_h_index=" << best_h_index
+        << " best_seed_index=" << best_seed_index;
     output.failure_reason = oss.str();
     return output;
   }

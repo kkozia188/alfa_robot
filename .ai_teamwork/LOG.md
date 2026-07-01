@@ -1160,3 +1160,21 @@
 - 改了哪里：`docs/运控/工程化护栏/MOTION_ENGINEERING_GUARDS.md`、`docs/运控/MOTION_PIPELINE_REFACTOR.md`、`ros2_ws/src/alfa_robot_moveit_config/config/motion_baselines/current_motion_baseline.yaml`、`ros2_ws/src/alfa_robot_moveit_config/scripts/motion_contracts/`、`dual_arm_planner_node.cpp`、`dual_arm_planner.launch.py`、`.gitignore`、`CMakeLists.txt`。
 - 验证结果：`colcon build --packages-select alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select alfa_robot_moveit_config --return-code-on-test-failure` 13/13 通过；`ros2 run alfa_robot_moveit_config check_joint_contract.py` 通过；`generate_motion_baseline.py --print-id` 输出 `motion-baseline-2fb1335d1044bcca`。
 - 留给下个 AI：当前未改高风险项：关节重命名、硬件协议/总线行为、生产生命周期、安全硬门槛、替换 BioIK/MoveIt/FCL。`scripts/ik_benchmark/scripts/preview_initial_yaw_turn_rerun.py` 是本轮前已有未提交改动，未触碰。
+
+## 2026-07-01 Codex / 机械模型 / v9机器人URDF迁移
+- 做了什么：将 `/mnt/mydisk/ALFA/backpack/alfa_robot_v2_arm_v9` 的 SolidWorks 导出模型迁入当前分支；保留项目既有 `left_v5_*`/`right_v5_*`/`tool0` 对外接口名，避免 MoveIt、运控、测试代码大面积改名。
+- 改了哪里：新增 `ros2_ws/src/alfa_robot_description/meshes/alfa_robot_v2_arm_v9/{visual,collision}` 42 个 STL；重写 `ros2_ws/src/alfa_robot_description/urdf/alfa_robot.urdf.xacro` 使用 v9 惯量、mesh、关节原点；同步 `ros2_ws/src/alfa_robot_description/urdf/alfa_robot/alfa_robot_macro.ros2_control.xacro` 的 updown 控制上限为 v9 的 0.92m。
+- 验证结果：`xacro` + `check_urdf` 对 description 和 MoveIt wrapper 均通过；`colcon build --packages-select alfa_robot_description` 通过；`colcon build --packages-select alfa_robot_moveit_config` 通过。
+- 留给下个 AI：v9 原始 URDF 没有 `tool0`，当前沿用旧项目 `tool0_fixed xyz="0 0 0.209"`，需要机械/末端工具确认 TCP 是否仍正确；MoveIt SRDF 仍保留旧 v5 命名和碰撞矩阵，建议 RViz/MoveIt 可视化后再按 v9 外形重采样自碰撞禁用矩阵。
+
+## 2026-07-01 Codex / 机械模型 / v9默认姿态归零
+- 做了什么：将 v9 迁移后的默认启动姿态从负重姿态改为全 0；包括 description-only 预览、MoveIt home/initial positions、MuJoCo seed、ros2_control mock 初值。
+- 改了哪里：`view_alfa_robot.launch.py`、`initial_positions.yaml`、`mujoco_initial_positions.yaml`、`alfa_robot.srdf`、`alfa_robot_macro.ros2_control.xacro`。
+- 验证结果：启动姿态残留搜索只剩 joint limit 中的合法限位值；description 和 MoveIt wrapper 的 `xacro`/`check_urdf` 通过；`colcon build --packages-select alfa_robot_description alfa_robot_moveit_config` 通过。
+- 留给下个 AI：当前 home/preview/mock 都是全 0；如果后续需要负重姿态，应新增命名 group_state 或配置项，不要覆盖默认 home。
+
+## 2026-07-01 Codex / 机械模型 / joint4-5零位重映射
+- 做了什么：将左右臂 joint4、joint5 的新 0 位重映射到旧模型的 +180° 位；joint5 限位同步改为 ±180°，joint4 已保持 ±180°。
+- 改了哪里：`alfa_robot.urdf.xacro` 中左右 joint4/5 的 origin rpy 烘入 π 偏置；`joint_limits.yaml` 与 `alfa_robot_macro.ros2_control.xacro` 中左右 joint5 限位改为 ±π。
+- 验证结果：description 和 MoveIt wrapper 的 `xacro`/`check_urdf` 通过；`colcon build --packages-select alfa_robot_description alfa_robot_moveit_config` 通过。
+- 留给下个 AI：当前初始姿态仍为全 0；若实机编码器零位未同步，需要运控侧确认硬件零点/方向映射是否也要跟随此次语义重映射。

@@ -169,6 +169,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"box_front_x:={args.box_front_x}",
         f"scene_y_shift:={args.scene_y_shift}",
         f"fixed_updown:={args.fixed_updown}",
+        f"extract_monitor_turn:={getattr(args, 'turn_rad', 0.0)}",
         f"front_z_reach_lower:={args.front_z_reach_lower}",
         f"front_z_reach_upper:={args.front_z_reach_upper}",
         f"top_z_reach_lower:={args.top_z_reach_lower}",
@@ -842,6 +843,7 @@ def main() -> int:
     parser.add_argument("--scene-y-shift", type=float, default=None, help="场景相对机器人 y 偏移；机器人左移 0.4m 时通常传 -0.4")
     parser.add_argument("--box-stack-y-shift", type=float, default=None, help="兼容旧参数名；等同于 --scene-y-shift")
     parser.add_argument("--fixed-updown", type=float, default=0.3)
+    parser.add_argument("--turn-deg", type=float, default=0.0)
     parser.add_argument("--grasp-mode", choices=["front", "top_suction"], default="front")
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
@@ -902,6 +904,7 @@ def main() -> int:
         help="full-selected 默认 mesh 动态回放；staged 多候选模式可用 skeleton 避免爆显存",
     )
     args = parser.parse_args()
+    args.turn_rad = math.radians(args.turn_deg)
     if args.scene_y_shift is None:
         args.scene_y_shift = 0.0 if args.box_stack_y_shift is None else args.box_stack_y_shift
     if args.save is not None and args.no_rerun:

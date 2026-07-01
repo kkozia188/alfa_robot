@@ -110,6 +110,7 @@ moveit::core::RobotState make_extract_monitor_joint_state(
   for (size_t i = 0; i < seed.right_arm.size(); ++i) {
     state.setVariablePosition("right_v5_joint" + std::to_string(i + 1), seed.right_arm[i]);
   }
+  state.setVariablePosition("turn", seed.turn);
   state.setVariablePosition("updown", seed.updown);
   if (joint_group) {
     state.enforceBounds(joint_group);

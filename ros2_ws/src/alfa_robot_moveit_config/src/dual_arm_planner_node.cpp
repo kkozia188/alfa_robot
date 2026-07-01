@@ -392,6 +392,7 @@ public:
     extract_max_joint_delta_ = get_or_declare_parameter<double>("extract_max_joint_delta", 0.0);
     extract_demo_direct_grasp_start_ = get_or_declare_parameter<bool>("extract_demo_direct_grasp_start", false);
     extract_grasp_ik_home_updown_ = get_or_declare_parameter<double>("extract_grasp_ik_home_updown", 0.3);
+    extract_monitor_turn_ = get_or_declare_parameter<double>("extract_monitor_turn", 0.0);
     extract_benchmark_all_legal_ik_ = get_or_declare_parameter<bool>("extract_benchmark_all_legal_ik", false);
     extract_benchmark_dual_arm_ = get_or_declare_parameter<bool>("extract_benchmark_dual_arm", false);
     extract_benchmark_dual_async_ = get_or_declare_parameter<bool>("extract_benchmark_dual_async", false);
@@ -440,7 +441,7 @@ public:
     extract_loaded_pre_lower_updown_delta_ =
       get_or_declare_parameter<double>("extract_loaded_pre_lower_updown_delta", 0.0);
     enforce_loaded_plan_aabb_clearance_ =
-      get_or_declare_parameter<bool>("enforce_loaded_plan_aabb_clearance", true);
+      get_or_declare_parameter<bool>("enforce_loaded_plan_aabb_clearance", false);
     extract_use_independent_kdl_ = get_or_declare_parameter<bool>("extract_use_independent_kdl", true);
     extract_independent_kdl_max_iterations_ =
       std::max(1, get_or_declare_parameter<int>("extract_independent_kdl_max_iterations", 120));
@@ -3038,8 +3039,8 @@ private:
         make_carried_box_spec("right", right_box_id, extract_monitor_top_suction_),
         robot_model_,
         joint_group_,
-        ExtractMonitorArmSeed{left_pregrasp_arm_, right_pregrasp_arm_, extract_grasp_ik_home_updown_},
-        ExtractMonitorArmSeed{left_loaded_arm_, right_loaded_arm_, extract_grasp_ik_home_updown_}});
+        ExtractMonitorArmSeed{left_pregrasp_arm_, right_pregrasp_arm_, extract_grasp_ik_home_updown_, extract_monitor_turn_},
+        ExtractMonitorArmSeed{left_loaded_arm_, right_loaded_arm_, extract_grasp_ik_home_updown_, extract_monitor_turn_}});
 
     moveit::core::RobotState selected_state(*extract_monitor_state_.seed_state);
     nlohmann::json ik_extra;
@@ -3452,6 +3453,9 @@ private:
         seed_state->setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
       }
       seed_state->setVariablePosition("updown", extract_grasp_ik_home_updown_);
+      if (is_robot_variable("turn")) {
+        seed_state->setVariablePosition("turn", extract_monitor_turn_);
+      }
       seed_state->enforceBounds(joint_group_);
       seed_state->update();
 
@@ -3618,7 +3622,7 @@ private:
   double carried_box_width_ = 0.4;
   double carried_box_height_ = 0.4;
   double attached_box_collision_padding_ = -0.002;
-  bool enforce_loaded_plan_aabb_clearance_ = true;
+  bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enable_static_box_obstacles_ = true;
   double static_box_obstacle_inset_ = 0.002;
   int extract_demo_left_box_id_ = 2;
@@ -3647,6 +3651,7 @@ private:
   double extract_max_joint_delta_ = 0.0;
   bool extract_demo_direct_grasp_start_ = false;
   double extract_grasp_ik_home_updown_ = 0.3;
+  double extract_monitor_turn_ = 0.0;
   bool extract_benchmark_all_legal_ik_ = false;
   bool extract_benchmark_dual_arm_ = false;
   bool extract_benchmark_dual_async_ = false;

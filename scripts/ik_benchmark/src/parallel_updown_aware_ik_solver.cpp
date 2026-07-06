@@ -798,8 +798,8 @@ double ParallelUpdownAwareIkSolver::armTorqueProxy(
     const UpdownAwareIkCandidate& candidate, const std::string& prefix) const
 {
     const bool is_left = prefix == "left";
-    const double q2 = jointValue(candidate, prefix + "_v5_joint2");
-    const double q3 = jointValue(candidate, prefix + "_v5_joint3");
+    const double q2 = jointValue(candidate, prefix + "joint2");
+    const double q3 = jointValue(candidate, prefix + "joint3");
     const double q2_zero = is_left ? config_.left_joint2_horizontal_angle : config_.right_joint2_horizontal_angle;
     const double q3_zero = is_left ? config_.left_joint3_horizontal_angle : config_.right_joint3_horizontal_angle;
 
@@ -832,7 +832,7 @@ double ParallelUpdownAwareIkSolver::loadedPoseDistance(
     }
     double squared_sum = 0.0;
     for (size_t i = 0; i < 6; ++i) {
-        const std::string joint_name = prefix + "_v5_joint" + std::to_string(i + 1);
+        const std::string joint_name = prefix + "joint" + std::to_string(i + 1);
         const double diff = angularDistance(jointValue(candidate, joint_name), pose[i]);
         squared_sum += diff * diff;
     }
@@ -873,8 +873,8 @@ double ParallelUpdownAwareIkSolver::jointLeverProxy(
     const UpdownAwareIkCandidate& candidate, const std::string& prefix, int joint_index) const
 {
     const bool is_left = prefix == "left";
-    const double q2 = jointValue(candidate, prefix + "_v5_joint2");
-    const double q3 = jointValue(candidate, prefix + "_v5_joint3");
+    const double q2 = jointValue(candidate, prefix + "joint2");
+    const double q3 = jointValue(candidate, prefix + "joint3");
     const double q2_zero = is_left ? config_.left_joint2_horizontal_angle : config_.right_joint2_horizontal_angle;
     const double q3_zero = is_left ? config_.left_joint3_horizontal_angle : config_.right_joint3_horizontal_angle;
     const double shoulder_angle = q2 - q2_zero;

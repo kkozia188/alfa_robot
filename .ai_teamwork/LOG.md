@@ -1178,3 +1178,27 @@
 - 改了哪里：`alfa_robot.urdf.xacro` 中左右 joint4/5 的 origin rpy 烘入 π 偏置；`joint_limits.yaml` 与 `alfa_robot_macro.ros2_control.xacro` 中左右 joint5 限位改为 ±π。
 - 验证结果：description 和 MoveIt wrapper 的 `xacro`/`check_urdf` 通过；`colcon build --packages-select alfa_robot_description alfa_robot_moveit_config` 通过。
 - 留给下个 AI：当前初始姿态仍为全 0；若实机编码器零位未同步，需要运控侧确认硬件零点/方向映射是否也要跟随此次语义重映射。
+
+## 2026-07-05 Codex / 机械模型 / v10机器人URDF迁移
+- 做了什么：按用户要求切换到 `feature/new-arm-iteration-motion-59-20260701`（HEAD `33cae9e`），将 `/mnt/mydisk/ALFA/backpack/alfa_robot_v2_arm_v10` 作为最新机械结构来源迁入；保留项目内 `left_v5_*`/`right_v5_*`/`tool0` 接口名。
+- 改了哪里：新增待跟踪的 `ros2_ws/src/alfa_robot_description/meshes/current_robot/{visual,collision}` 42 个 STL；重生成 `ros2_ws/src/alfa_robot_description/urdf/alfa_robot.urdf.xacro` 指向包内 `current_robot` mesh，并保留 joint4/joint5 的 +180° 零位重映射与 ±180° 限位；同步 `initial_positions.yaml`、`mujoco_initial_positions.yaml`。
+- 验证结果：description 和 MoveIt wrapper 的 `xacro`/`check_urdf` 通过；`colcon build --packages-select alfa_robot_description alfa_robot_moveit_config --symlink-install` 通过。
+- 留给下个 AI：v10 原始模型把原 `lidar_updown` 替换为 `front_sensor`，SRDF 未新增该 sensor 的碰撞禁用矩阵；当前继续沿用旧 `tool0_fixed xyz="0 0 0.209"`，等用户 RViz 查看后再确认 TCP 与碰撞矩阵是否要重采样。
+
+## 2026-07-06 Codex / 机械模型 / v10 MoveIt全0碰撞矩阵修正
+- 做了什么：复现 MoveIt demo 全 0 姿态碰撞；确认机械臂组本身无碰撞，碰撞来自 v10 新固定传感器/雷达与父 link 的 SRDF 禁碰矩阵未同步。
+- 改了哪里：`ros2_ws/src/alfa_robot_moveit_config/config/alfa_robot.srdf` 新增 `updown-front_sensor`、`turn-lidar_front`、`turn-lidar_rear`、`turn-cam_front`、`turn-cam_rear` 的 Adjacent 禁碰项。
+- 验证结果：临时 MoveIt checker 检查 all/left/right/dual/with_base 全 0 均 `collision=false`；`check_urdf` 通过；`colcon build --packages-select alfa_robot_description alfa_robot_moveit_config` 通过。
+- 留给下个 AI：这次只禁用了固定相邻传感器与父 link，不影响机械臂-底座、机械臂-传感器等其他碰撞关系；后续如继续换 CAD，SRDF 仍建议按新几何重采样。
+
+## 2026-07-06 Codex / 机械模型 / 新机械臂去版本命名适配
+- 做了什么：按用户要求停止沿用 `v5` 命名，把当前 ROS2 核心包从“新机械结构 + v5 对外命名”调整为“新机械结构 + 无版本语义命名”；同步思考全流程从 demo runner 走向稳定仿真/孪生服务的架构问题。
+- 改了哪里：`alfa_robot_description` 主 URDF 改为 `leftjoint1..6/rightjoint1..6`、`left_arm_base/right_arm_base`、`left_tool0/right_tool0`；当前 mesh 资产改为 `meshes/current_robot`，并移除 description 包内旧代际 mesh/vendor/raw 资产，安装规则只安装当前 mesh；`alfa_robot_moveit_config` 的 SRDF、kinematics、joint_limits、controller、planner、IK、抽离、负重、执行 Adapter 与相关测试同步改为 `left_arm/right_arm/dual_arm/dual_arm_with_base` 等无版本名；`robot_motion_scene_service` 的 joint list、attached box link、touch links 同步改名；`alfa_robot_bringup` 控制器配置和 launch 同步改名；删除未引用的 `alfa_robot_v5_proxy_backup.urdf.xacro`；新增文档 `docs/运控/工程化护栏/新机械臂命名与仿真服务化说明.md`。
+- 验证结果：ROS2 核心包内 `left_v5/right_v5/dual_v5/_v5_` 搜索无残留；active/runtime 范围版本命名扫描无残留；`xacro` + `check_urdf` 通过；SRDF 引用检查 0 个坏引用；`current_robot` mesh 引用缺失数为 0；清理重建 `alfa_robot_description` 后，install/share 下 mesh 目录只剩 `current_robot`；`colcon build --packages-select alfa_robot_description robot_motion_scene_service alfa_robot_moveit_config alfa_robot_bringup alfa_robot_execution_bridge --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；`colcon build --packages-select robot_motion_scene_service alfa_robot_moveit_config --symlink-install --cmake-args -DBUILD_TESTING=ON` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config --return-code-on-test-failure` 通过，15/15 单测成功；`move_group.launch.py` 烟测可加载模型、规划管线和 `dual_arm_controller`，仅保留未配置 Octomap 传感器的既有提示。
+- 留给下个 AI：`simulation/mujoco/` 已清理为无版本命名，但还只是实验仿真资产；如果要把 MuJoCo 正式纳入孪生服务，必须做模型版本、场景状态和执行状态的 Adapter 验证。当前执行接口仍保留 `left_joint*/right_joint*` 作为对外易读名，由 `ExecutionTrajectoryAdapter` 转换到 MoveIt 内部 `leftjoint*/rightjoint*`，不要把这两个 Interface 混在一起。
+
+## 2026-07-06 Codex / 仓库清理 / 旧IK包与实验资产瘦身
+- 做了什么：按用户要求清理当前不再使用的 IK 包、旧 STL 资产和非最新 Rerun 结果；保留当前机械臂 `current_robot` mesh 与 BioIK/KDL 主线能力。
+- 改了哪里：删除 `ros2_ws/src/pick_ik`、`ros2_ws/src/trac_ik`、`ros2_ws/src/dependencies.repos`、`scripts/setup_pickik.sh`；`scripts/ik_benchmark` 默认和快捷入口改为仅保留 `kdl`/`bio_ik`；`docs/运控/IK/ik_service.md` 更新为当前 IK 口径；删除 description 包旧 `meshes/alfa_robot` 与旧 `alfa_robot_macro.xacro`，删除 MuJoCo 旧生成 mesh 缓存；`data/**/*.rrd` 按“同目录同任务/朝向保留最新”策略删除 159 个旧文件，manifest 写入 `data/cleanup_manifests/rrd_cleanup_20260706_180429.txt`。
+- 验证结果：当前 `alfa_robot_description` 源码和安装目录均只剩 `meshes/current_robot`；`colcon list` 中无 `pick_ik`/`trac_ik` 包；URDF mesh 引用 42 个、缺失 0 个；`xacro` + `check_urdf` 通过；`git diff --check` 通过；`colcon build --packages-select alfa_robot_description robot_motion_scene_service alfa_robot_moveit_config alfa_robot_bringup alfa_robot_execution_bridge alfa_robot_benchmarks --symlink-install --cmake-args -DBUILD_TESTING=OFF` 通过；`colcon test --packages-select robot_motion_scene_service alfa_robot_moveit_config --return-code-on-test-failure` 通过，15/15 单测成功。`data` 从约 14.6GiB 降到约 7.5GiB，RRD 从 278 个/11.96GiB 降到 119 个/4.86GiB。
+- 留给下个 AI：`scripts/dh_workspace/configs/alfa_v*_urdf_left_arm_with_base.yaml` 仍保留旧 `alfa_robot_macro.xacro` 路径作为历史来源说明，不应用作当前 URDF 加载入口；历史报告中提到 pick/trac 只是历史对比，不代表当前仓库仍能运行这些插件。提交时注意把 `meshes/current_robot` 的 42 个 STL 纳入版本控制。

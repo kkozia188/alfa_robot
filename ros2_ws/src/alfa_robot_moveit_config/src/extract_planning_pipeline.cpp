@@ -200,7 +200,7 @@ bool ExtractCandidateSolver::initArmKdlChain(const std::string& side, ArmKdlChai
   const auto* group = groupForSide(side);
   if (!group) return false;
 
-  const std::string base_link = side == "left" ? "left_v5_link0" : "right_v5_link0";
+  const std::string base_link = side == "left" ? "left_arm_base" : "right_arm_base";
   const std::string tip_link = tipForSide(side);
 
   KDL::Tree tree;

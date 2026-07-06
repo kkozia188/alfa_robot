@@ -209,15 +209,15 @@ std::vector<std::string> touch_links_for_attached_box(const AttachedBoxSpec& box
 {
   std::vector<std::string> links{box.link_name};
   if (box.link_name.rfind("left_", 0) == 0) {
-    links.push_back("left_v5_link6");
-    links.push_back("left_v5_link5");
-    links.push_back("left_v5_link4");
-    links.push_back("left_v5_link3");
+    links.push_back("leftjoint6");
+    links.push_back("leftjoint5");
+    links.push_back("leftjoint4");
+    links.push_back("leftjoint3");
   } else if (box.link_name.rfind("right_", 0) == 0) {
-    links.push_back("right_v5_link6");
-    links.push_back("right_v5_link5");
-    links.push_back("right_v5_link4");
-    links.push_back("right_v5_link3");
+    links.push_back("rightjoint6");
+    links.push_back("rightjoint5");
+    links.push_back("rightjoint4");
+    links.push_back("rightjoint3");
   }
   return links;
 }
@@ -264,9 +264,9 @@ public:
 
   void init()
   {
-    planning_group_ = get_or_declare_parameter<std::string>("planning_group", "dual_v5_arm_with_base");
-    left_tip_ = get_or_declare_parameter<std::string>("left_tip", "left_v5_tool0");
-    right_tip_ = get_or_declare_parameter<std::string>("right_tip", "right_v5_tool0");
+    planning_group_ = get_or_declare_parameter<std::string>("planning_group", "dual_arm_with_base");
+    left_tip_ = get_or_declare_parameter<std::string>("left_tip", "left_tool0");
+    right_tip_ = get_or_declare_parameter<std::string>("right_tip", "right_tool0");
     execute_ = get_or_declare_parameter<bool>("execute", true);
     execution_backend_ = get_or_declare_parameter<std::string>("execution_backend", "moveit");
     execution_action_name_ = get_or_declare_parameter<std::string>(
@@ -304,8 +304,8 @@ public:
       "/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_stage_monitor/latest_snapshot.json");
     extract_monitor_snapshot_writer_.setPath(extract_monitor_snapshot_path_);
 
-    ik_config_.fixed_group = get_or_declare_parameter<std::string>("ik_fixed_group", "dual_v5_arm");
-    ik_config_.free_group = get_or_declare_parameter<std::string>("ik_free_group", "dual_v5_arm_with_base");
+    ik_config_.fixed_group = get_or_declare_parameter<std::string>("ik_fixed_group", "dual_arm");
+    ik_config_.free_group = get_or_declare_parameter<std::string>("ik_free_group", "dual_arm_with_base");
     ik_config_.solver_plugin = get_or_declare_parameter<std::string>("ik_solver_plugin", "bio_ik/BioIKKinematicsPlugin");
     ik_config_.base_frame = get_or_declare_parameter<std::string>("ik_base_frame", "base_link");
     ik_config_.left_tip = left_tip_;
@@ -411,7 +411,7 @@ public:
     extract_benchmark_plan_loaded_after_success_ =
       get_or_declare_parameter<bool>("extract_benchmark_plan_loaded_after_success", false);
     extract_loaded_planning_group_ =
-      get_or_declare_parameter<std::string>("extract_loaded_planning_group", "dual_v5_arm_with_base");
+      get_or_declare_parameter<std::string>("extract_loaded_planning_group", "dual_arm_with_base");
     extract_loaded_planning_time_ = get_or_declare_parameter<double>("extract_loaded_planning_time", 1.0);
     extract_loaded_planning_attempts_ =
       std::max(1, get_or_declare_parameter<int>("extract_loaded_planning_attempts", 8));
@@ -528,10 +528,10 @@ public:
     if (!joint_group_) {
       throw std::runtime_error("No JointModelGroup named " + planning_group_);
     }
-    left_arm_group_ = robot_model_->getJointModelGroup("left_v5_arm");
-    right_arm_group_ = robot_model_->getJointModelGroup("right_v5_arm");
+    left_arm_group_ = robot_model_->getJointModelGroup("left_arm");
+    right_arm_group_ = robot_model_->getJointModelGroup("right_arm");
     if (!left_arm_group_ || !right_arm_group_) {
-      throw std::runtime_error("Missing single-arm JointModelGroup left_v5_arm/right_v5_arm");
+      throw std::runtime_error("Missing single-arm JointModelGroup left_arm/right_arm");
     }
 
     loaded_pose_selector_config_.enforce_bounds_group = joint_group_;
@@ -2089,10 +2089,10 @@ private:
     sensor_msgs::msg::JointState target;
     target.name = {
       "updown",
-      "left_v5_joint1", "left_v5_joint2", "left_v5_joint3",
-      "left_v5_joint4", "left_v5_joint5", "left_v5_joint6",
-      "right_v5_joint1", "right_v5_joint2", "right_v5_joint3",
-      "right_v5_joint4", "right_v5_joint5", "right_v5_joint6",
+      "leftjoint1", "leftjoint2", "leftjoint3",
+      "leftjoint4", "leftjoint5", "leftjoint6",
+      "rightjoint1", "rightjoint2", "rightjoint3",
+      "rightjoint4", "rightjoint5", "rightjoint6",
     };
     target.position.reserve(target.name.size());
     target.position.push_back(updown);
@@ -2436,7 +2436,7 @@ private:
         : prefix + (accepted ? "/extract_step_" : "/extract_failed_step_") + std::to_string(step);
       nlohmann::json enriched = extra;
       enriched["stage_kind"] = accepted ? "left_extract_primitive" : "left_extract_primitive_candidates";
-      enriched["extract_ik"] = "left_v5_arm_kdl_fixed_updown";
+      enriched["extract_ik"] = "left_arm_kdl_fixed_updown";
       enriched["left_box_id"] = left_box_id;
       record_extract_keyframe(stage, state, left_box, enriched);
     };
@@ -3447,10 +3447,10 @@ private:
       auto seed_state = std::make_shared<moveit::core::RobotState>(robot_model_);
       seed_state->setToDefaultValues();
       for (size_t i = 0; i < left_pregrasp_arm_.size(); ++i) {
-        seed_state->setVariablePosition("left_v5_joint" + std::to_string(i + 1), left_pregrasp_arm_[i]);
+        seed_state->setVariablePosition("leftjoint" + std::to_string(i + 1), left_pregrasp_arm_[i]);
       }
       for (size_t i = 0; i < right_pregrasp_arm_.size(); ++i) {
-        seed_state->setVariablePosition("right_v5_joint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
+        seed_state->setVariablePosition("rightjoint" + std::to_string(i + 1), right_pregrasp_arm_[i]);
       }
       seed_state->setVariablePosition("updown", extract_grasp_ik_home_updown_);
       if (is_robot_variable("turn")) {
@@ -3663,7 +3663,7 @@ private:
   double extract_ik_dedup_joint_threshold_ = 1.0 * M_PI / 180.0;
   double extract_ik_dedup_h_threshold_ = 0.005;
   bool extract_benchmark_plan_loaded_after_success_ = false;
-  std::string extract_loaded_planning_group_ = "dual_v5_arm_with_base";
+  std::string extract_loaded_planning_group_ = "dual_arm_with_base";
   double extract_loaded_planning_time_ = 1.0;
   int extract_loaded_planning_attempts_ = 8;
   bool extract_loaded_use_direct_pipeline_ = false;

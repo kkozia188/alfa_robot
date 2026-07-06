@@ -54,7 +54,7 @@ ros2 launch alfa_robot_moveit_config dual_arm_planner.launch.py \
   execution_action_name:=/alfa_execution/execute_joint_trajectory
 ```
 
-该路径会把 MoveIt 里的 `left_v5_joint*` / `right_v5_joint*` 映射成执行接口里的 `left_joint*` / `right_joint*`，并默认带上 `turn` 保持当前值。若规划里有未映射且发生变化的轴，例如 `updown`，会默认拒绝执行，避免静默丢轴。
+该路径会把 MoveIt 里的 `leftjoint*` / `rightjoint*` 映射成执行接口里的 `left_joint*` / `right_joint*`，并默认带上 `turn` 保持当前值。若规划里有未映射且发生变化的轴，例如 `updown`，会默认拒绝执行，避免静默丢轴。
 
 ## 方向关系
 

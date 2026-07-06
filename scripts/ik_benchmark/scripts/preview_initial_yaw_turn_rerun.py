@@ -222,7 +222,7 @@ def main() -> int:
     }
     for side in ("left", "right"):
         for idx in range(1, 7):
-            joint_map[f"{side}_v5_joint{idx}"] = 0.0
+            joint_map[f"{side}joint{idx}"] = 0.0
 
     helpers.set_sample_time(0)
     log_robot(

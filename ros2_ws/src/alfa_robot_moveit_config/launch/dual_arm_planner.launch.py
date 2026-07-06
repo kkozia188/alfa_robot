@@ -114,7 +114,7 @@ def generate_launch_description():
         DeclareLaunchArgument("extract_ik_dedup_joint_threshold_deg", default_value="1.0"),
         DeclareLaunchArgument("extract_ik_dedup_h_threshold", default_value="0.005"),
         DeclareLaunchArgument("extract_benchmark_plan_loaded_after_success", default_value="false"),
-        DeclareLaunchArgument("extract_loaded_planning_group", default_value="dual_v5_arm_with_base"),
+        DeclareLaunchArgument("extract_loaded_planning_group", default_value="dual_arm_with_base"),
         DeclareLaunchArgument("extract_loaded_planning_time", default_value="1.0"),
         DeclareLaunchArgument("extract_loaded_planning_attempts", default_value="8"),
         DeclareLaunchArgument("extract_loaded_use_direct_pipeline", default_value="false"),

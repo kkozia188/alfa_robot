@@ -186,8 +186,8 @@ struct ExtractCandidateSolverConfig
   const moveit::core::JointModelGroup* joint_group = nullptr;
   const moveit::core::JointModelGroup* left_arm_group = nullptr;
   const moveit::core::JointModelGroup* right_arm_group = nullptr;
-  std::string left_tip = "left_v5_tool0";
-  std::string right_tip = "right_v5_tool0";
+  std::string left_tip = "left_tool0";
+  std::string right_tip = "right_tool0";
   bool use_independent_kdl = false;
   double kdl_timeout = 0.01;
   double position_tolerance = 0.01;
@@ -260,8 +260,8 @@ struct ExtractCandidateScorerConfig
 {
   const moveit::core::JointModelGroup* left_arm_group = nullptr;
   const moveit::core::JointModelGroup* right_arm_group = nullptr;
-  std::string left_tip = "left_v5_tool0";
-  std::string right_tip = "right_v5_tool0";
+  std::string left_tip = "left_tool0";
+  std::string right_tip = "right_tool0";
   double step_x = 0.03;
   double lift_weight = 10.0;
   double pitch_weight = 0.02;
@@ -340,8 +340,8 @@ struct ExtractRolloutPlannerConfig
   const moveit::core::JointModelGroup* joint_group = nullptr;
   const moveit::core::JointModelGroup* left_arm_group = nullptr;
   const moveit::core::JointModelGroup* right_arm_group = nullptr;
-  std::string left_tip = "left_v5_tool0";
-  std::string right_tip = "right_v5_tool0";
+  std::string left_tip = "left_tool0";
+  std::string right_tip = "right_tool0";
   bool fail_fast = true;
   bool dual_async = false;
   bool top_suction = false;

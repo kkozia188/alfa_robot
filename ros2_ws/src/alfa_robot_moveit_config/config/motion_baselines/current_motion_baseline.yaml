@@ -13,8 +13,8 @@ robot_model:
   srdf: ros2_ws/src/alfa_robot_moveit_config/config/alfa_robot.srdf
   joint_limits: ros2_ws/src/alfa_robot_moveit_config/config/joint_limits.yaml
   ros2_control: ros2_ws/src/alfa_robot_moveit_config/config/alfa_robot.ros2_control.xacro
-  left_tip: left_v5_tool0
-  right_tip: right_v5_tool0
+  left_tip: left_tool0
+  right_tip: right_tool0
   tool0_semantics: current URDF tool0 is the planning TCP used by IK, collision replay, and Rerun
 
 frames:

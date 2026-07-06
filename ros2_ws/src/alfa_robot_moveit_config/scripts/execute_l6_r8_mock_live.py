@@ -90,10 +90,10 @@ def duration_to_seconds(duration: Any) -> float:
 
 
 def moveit_to_execution_name(name: str) -> str | None:
-    if name.startswith("left_v5_joint"):
-        return "left_joint" + name.removeprefix("left_v5_joint")
-    if name.startswith("right_v5_joint"):
-        return "right_joint" + name.removeprefix("right_v5_joint")
+    if name.startswith("left_joint"):
+        return "left_joint" + name.removeprefix("left_joint")
+    if name.startswith("right_joint"):
+        return "right_joint" + name.removeprefix("right_joint")
     if name == "turn":
         return "turn"
     return None
@@ -101,9 +101,9 @@ def moveit_to_execution_name(name: str) -> str | None:
 
 def execution_to_moveit_name(name: str) -> str:
     if name.startswith("left_joint"):
-        return "left_v5_joint" + name.removeprefix("left_joint")
+        return "left_joint" + name.removeprefix("left_joint")
     if name.startswith("right_joint"):
-        return "right_v5_joint" + name.removeprefix("right_joint")
+        return "right_joint" + name.removeprefix("right_joint")
     return name
 
 

@@ -11,7 +11,7 @@ int main()
   ContainerGeometryConfig container;
   container.center_x = 0.8;
   container.center_y = 0.0;
-  container.width = 1.5;
+  container.width = 1.8;
   container.height = 2.4;
   container.length = 4.0;
   container.wall_thickness = 0.02;
@@ -41,7 +41,7 @@ int main()
   wall.box_front_x = 0.925;
   wall.scene_y_shift = 0.0;
   wall.container_center_y = 0.0;
-  wall.container_width = 1.5;
+  wall.container_width = 1.8;
   wall.container_floor_z = 0.0;
   const auto obstacles = make_box_wall_obstacles_for_opening(4, 6, wall);
   for (const auto& obstacle : obstacles) {
@@ -72,12 +72,16 @@ int main()
   assert(left_box.size[0] == CarriedBoxGeometryConfig{}.carried_box_height);
   assert(left_box.size[1] == CarriedBoxGeometryConfig{}.carried_box_width);
   assert(left_box.size[2] == CarriedBoxGeometryConfig{}.carried_box_depth);
+  assert(std::abs(
+    left_box.center_in_link[1] + CarriedBoxGeometryConfig{}.grasp_lateral_offset) < 1e-9);
   assert(left_box.center_in_link[2] > 0.0);
 
   const auto top_box = make_attached_box_spec("left", 10, true, CarriedBoxGeometryConfig{});
   assert(top_box.id == "carried_left_box_10");
   assert(top_box.link_name == "left_tool0");
   assert(top_box.size[2] == CarriedBoxGeometryConfig{}.carried_box_height);
+  assert(std::abs(
+    top_box.center_in_link[1] + CarriedBoxGeometryConfig{}.grasp_lateral_offset) < 1e-9);
   assert(top_box.center_in_link[2] > 0.0);
 
   Eigen::Isometry3d rotated_box_transform = Eigen::Isometry3d::Identity();

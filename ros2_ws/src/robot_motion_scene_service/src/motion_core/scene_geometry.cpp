@@ -183,11 +183,14 @@ AttachedBoxSpec make_attached_box_spec(
   AttachedBoxSpec spec;
   spec.id = "carried_" + side + "_box_" + std::to_string(box_id);
   spec.link_name = side + "_tool0";
+  const double lateral_offset = side == "left"
+    ? -config.grasp_lateral_offset
+    : config.grasp_lateral_offset;
   if (top_suction) {
-    spec.center_in_link = {0.0, 0.0, config.carried_box_height * 0.5};
+    spec.center_in_link = {0.0, lateral_offset, config.carried_box_height * 0.5};
     spec.size = {config.carried_box_depth, config.carried_box_width, config.carried_box_height};
   } else {
-    spec.center_in_link = {0.0, 0.0, config.carried_box_depth * 0.5};
+    spec.center_in_link = {0.0, lateral_offset, config.carried_box_depth * 0.5};
     spec.size = {config.carried_box_height, config.carried_box_width, config.carried_box_depth};
   }
   return spec;

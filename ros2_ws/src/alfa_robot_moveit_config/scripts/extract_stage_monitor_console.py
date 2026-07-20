@@ -163,7 +163,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"top_z_reach_lower:={args.top_z_reach_lower}",
         f"top_z_reach_upper:={args.top_z_reach_upper}",
         f"top_suction_x_offset:={getattr(args, 'top_suction_x_offset', 0.15)}",
-        f"top_suction_z_offset:={getattr(args, 'top_suction_z_offset', 0.25)}",
+        f"top_suction_z_offset:={getattr(args, 'top_suction_z_offset', 0.2)}",
         f"ik_top_position_tolerance:={getattr(args, 'ik_top_position_tolerance', 0.04)}",
         f"ik_top_orientation_tolerance_deg:={getattr(args, 'ik_top_orientation_tolerance_deg', 7.0)}",
         f"ik_h_candidate_count:={args.ik_h_candidate_count}",
@@ -578,14 +578,15 @@ def matrix_to_quaternion(matrix: np.ndarray) -> list[float]:
 
 def all_boxes(box_x: float, y_shift: float = 0.0) -> dict[int, tuple[float, float, float]]:
     rows = [
-        [(1, 0.4), (2, 0.0), (3, -0.4)],
-        [(4, 0.4), (5, 0.0), (6, -0.4)],
-        [(7, 0.4), (8, 0.0), (9, -0.4)],
-        [(10, 0.4), (11, 0.0), (12, -0.4)],
+        [(1, 0.5), (2, 0.0), (3, -0.5)],
+        [(4, 0.5), (5, 0.0), (6, -0.5)],
+        [(7, 0.5), (8, 0.0), (9, -0.5)],
+        [(10, 0.5), (11, 0.0), (12, -0.5)],
+        [(13, 0.5), (14, 0.0), (15, -0.5)],
     ]
     out: dict[int, tuple[float, float, float]] = {}
     for row_i, row in enumerate(rows):
-        z = (len(rows) - row_i - 0.5) * 0.5
+        z = (len(rows) - row_i - 0.5) * 0.4
         for box_id, y in row:
             out[box_id] = (box_x, y + y_shift, z)
     return out
@@ -1045,7 +1046,7 @@ def main() -> int:
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
-    parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
+    parser.add_argument("--top-z-reach-upper", type=float, default=0.6)
     parser.add_argument("--top-suction-x-offset", type=float, default=0.15)
     parser.add_argument("--top-suction-z-offset", type=float, default=0.25)
     parser.add_argument("--ik-top-position-tolerance", type=float, default=0.04)

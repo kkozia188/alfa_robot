@@ -17,10 +17,7 @@ SPEC.loader.exec_module(MODULE)
 
 def main() -> int:
     expected_pairs = [
-        (1, 3), (1, 6),
-        (4, 3), (4, 6), (4, 9),
-        (7, 6), (7, 9), (7, 12),
-        (10, 9), (10, 12),
+        (1, 3), (4, 6), (7, 9), (10, 12), (13, 15),
     ]
     pairs = MODULE.parse_pair_sequence(MODULE.DEFAULT_SEQUENCE)
     assert pairs == expected_pairs, pairs
@@ -28,46 +25,34 @@ def main() -> int:
     left_modes = MODULE.parse_arm_grasp_mode_sequence("", pairs, "left")
     right_modes = MODULE.parse_arm_grasp_mode_sequence("", pairs, "right")
     raw_left_modes = [
-        "front", "front",
-        "front", "front", "front",
-        "top_suction", "top_suction", "top_suction",
-        "top_suction", "top_suction",
+        "front", "front", "top_suction", "top_suction", "top_suction",
     ]
     raw_right_modes = [
-        "front", "front",
-        "front", "front", "top_suction",
-        "front", "top_suction", "top_suction",
-        "top_suction", "top_suction",
+        "front", "front", "top_suction", "top_suction", "top_suction",
     ]
     assert left_modes == raw_left_modes, left_modes
     assert right_modes == raw_right_modes, right_modes
 
     left_modes, right_modes = MODULE.convert_mixed_grasp_modes_to_front(left_modes, right_modes)
     assert left_modes == [
-        "front", "front",
-        "front", "front", "front",
-        "front", "top_suction", "top_suction",
-        "top_suction", "top_suction",
+        "front", "front", "top_suction", "top_suction", "top_suction",
     ], left_modes
     assert right_modes == [
-        "front", "front",
-        "front", "front", "front",
-        "front", "top_suction", "top_suction",
-        "top_suction", "top_suction",
+        "front", "front", "top_suction", "top_suction", "top_suction",
     ], right_modes
 
     vehicle_modes = [
         MODULE.pair_vehicle_mode(left_mode, right_mode)
         for left_mode, right_mode in zip(left_modes, right_modes)
     ]
-    assert vehicle_modes.count("front") == 6, vehicle_modes
-    assert vehicle_modes.count("top_suction") == 4, vehicle_modes
+    assert vehicle_modes.count("front") == 2, vehicle_modes
+    assert vehicle_modes.count("top_suction") == 3, vehicle_modes
 
     parser_source = SCRIPT.read_text()
     assert 'parser.add_argument("--loaded-updown", type=float, default=0.3)' in parser_source
     assert 'default="box_pose_rrt"' in parser_source
     assert '"--ik-only-raw"' in parser_source
-    print("extract sequence definition passed: 10 pairs, mixed tasks converted to dual front")
+    print("extract sequence definition passed: 5 equal-height pairs, 2 front + 3 top")
     return 0
 
 

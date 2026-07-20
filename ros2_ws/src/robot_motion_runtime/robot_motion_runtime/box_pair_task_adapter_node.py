@@ -16,7 +16,12 @@ from sensor_msgs.msg import JointState
 from robot_motion_interfaces.msg import AttachedBox, RobotMotionState
 from robot_motion_interfaces.srv import RunBoxPairTask, RunDualArmPoseTask
 from robot_motion_runtime.common import RuntimeStatusPublisher, clamp_motion_scale
-from robot_motion_runtime.dual_grasp_strategy import BOX_DEPTH_M, BOX_HEIGHT_M, BOX_WIDTH_M
+from robot_motion_runtime.dual_grasp_strategy import (
+    BOX_DEPTH_M,
+    BOX_HEIGHT_M,
+    BOX_WIDTH_M,
+    OUTER_BOX_GRASP_LATERAL_OFFSET_M,
+)
 
 
 DEFAULT_JOINT_NAMES = [
@@ -50,10 +55,11 @@ class BoxSpec:
 
 def make_boxes(front_x: float, y_shift: float) -> dict[int, BoxSpec]:
     rows_top_to_bottom = [
-        [(1, 0.4), (2, 0.0), (3, -0.4)],
-        [(4, 0.4), (5, 0.0), (6, -0.4)],
-        [(7, 0.4), (8, 0.0), (9, -0.4)],
-        [(10, 0.4), (11, 0.0), (12, -0.4)],
+        [(1, 0.5), (2, 0.0), (3, -0.5)],
+        [(4, 0.5), (5, 0.0), (6, -0.5)],
+        [(7, 0.5), (8, 0.0), (9, -0.5)],
+        [(10, 0.5), (11, 0.0), (12, -0.5)],
+        [(13, 0.5), (14, 0.0), (15, -0.5)],
     ]
     row_count = len(rows_top_to_bottom)
     boxes: dict[int, BoxSpec] = {}
@@ -185,6 +191,10 @@ def make_attached_box(side: str, box_id: int, top_suction: bool) -> AttachedBox:
     out.grasp_mode = "top_suction" if top_suction else "front"
     out.link_name = f"{side}_tool0"
     out.center_in_link.orientation.w = 1.0
+    out.center_in_link.position.y = (
+        -OUTER_BOX_GRASP_LATERAL_OFFSET_M if side == "left"
+        else OUTER_BOX_GRASP_LATERAL_OFFSET_M
+    )
     out.size = Vector3()
     if top_suction:
         out.center_in_link.position.z = BOX_HEIGHT_M * 0.5
@@ -221,7 +231,7 @@ class BoxPairTaskAdapterNode(Node):
         self.declare_parameter("updown_logical_lower_m", 0.0)
         self.declare_parameter("updown_logical_upper_m", 0.7)
         self.declare_parameter("default_top_suction_x_offset", 0.15)
-        self.declare_parameter("default_top_suction_z_offset", 0.25)
+        self.declare_parameter("default_top_suction_z_offset", 0.2)
         self.declare_parameter("default_candidate_limit", 8)
         self.declare_parameter("default_planning_mode", "shortcut")
 
@@ -297,6 +307,7 @@ class BoxPairTaskAdapterNode(Node):
 
     def pose_for_box(
         self,
+        side: str,
         box: BoxSpec,
         mode: str,
         world_to_base_z: float,
@@ -304,8 +315,14 @@ class BoxPairTaskAdapterNode(Node):
         top_z_offset: float,
     ) -> Pose:
         if mode == "top_suction":
-            return make_top_suction_pose(box, world_to_base_z, top_x_offset, top_z_offset)
-        return make_front_grasp_pose(box, world_to_base_z)
+            pose = make_top_suction_pose(box, world_to_base_z, top_x_offset, top_z_offset)
+        else:
+            pose = make_front_grasp_pose(box, world_to_base_z)
+        pose.position.y = box.y + (
+            -OUTER_BOX_GRASP_LATERAL_OFFSET_M if side == "left"
+            else OUTER_BOX_GRASP_LATERAL_OFFSET_M
+        )
+        return pose
 
     @staticmethod
     def pose_stamped(pose: Pose) -> PoseStamped:
@@ -373,8 +390,8 @@ class BoxPairTaskAdapterNode(Node):
 
             left_mode = normalize_grasp_mode(request.left_grasp_mode, request.left_box_id)
             right_mode = normalize_grasp_mode(request.right_grasp_mode, request.right_box_id)
-            left_pose = self.pose_for_box(boxes[request.left_box_id], left_mode, world_to_base_z, top_x_offset, top_z_offset)
-            right_pose = self.pose_for_box(boxes[request.right_box_id], right_mode, world_to_base_z, top_x_offset, top_z_offset)
+            left_pose = self.pose_for_box("left", boxes[request.left_box_id], left_mode, world_to_base_z, top_x_offset, top_z_offset)
+            right_pose = self.pose_for_box("right", boxes[request.right_box_id], right_mode, world_to_base_z, top_x_offset, top_z_offset)
             response.left_target = self.pose_stamped(left_pose)
             response.right_target = self.pose_stamped(right_pose)
             response.attached_boxes = [

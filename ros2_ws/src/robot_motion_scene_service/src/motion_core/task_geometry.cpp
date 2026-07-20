@@ -140,7 +140,7 @@ std::vector<PickPair> make_pick_pairs(
   }
   if (include_top_suction) {
     const int round = static_cast<int>(pairs.size() + 1);
-    pairs.push_back({round, 10, 12, true});
+    pairs.push_back({round, 13, 15, true});
   }
   return pairs;
 }

@@ -25,7 +25,7 @@ import numpy as np
 
 
 DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_sequence_rerun")
-DEFAULT_SEQUENCE = "1,3;1,6;4,3;4,6;4,9;7,6;7,9;7,12;10,9;10,12"
+DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
 FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
 FRONT_TOOL_ORIENTATION_XYZW = [0.70710678, 0.0, 0.70710678, 0.0]
@@ -237,6 +237,7 @@ def explicit_grasp_target(args: argparse.Namespace, box_id: int, grasp_mode: str
     else:
         position = [box_x, box_y, box_z - float(args.world_to_base_z)]
         orientation = FRONT_TOOL_ORIENTATION_XYZW
+    position[1] = (0.45 if box_id % 3 == 1 else -0.45) + float(args.scene_y_shift)
     return {
         "frame_id": "base_link",
         "position": position,
@@ -312,7 +313,11 @@ def make_pair_args(
         extract_rrt_goal_limit=args.extract_rrt_goal_limit,
         extract_rollout_mode=args.extract_rollout_mode,
         extract_box_pose_rrt_edge_scene_collision=args.extract_box_pose_rrt_edge_scene_collision,
-        extract_box_pose_rrt_max_iterations=args.extract_box_pose_rrt_max_iterations,
+        extract_box_pose_rrt_max_iterations=(
+            max(400, args.extract_box_pose_rrt_max_iterations)
+            if {left_id, right_id} == {13, 15}
+            else args.extract_box_pose_rrt_max_iterations
+        ),
         extract_box_pose_rrt_paths_per_arm=args.extract_box_pose_rrt_paths_per_arm,
         extract_box_pose_rrt_path_pair_limit=args.extract_box_pose_rrt_path_pair_limit,
         extract_box_pose_rrt_parent_candidates=args.extract_box_pose_rrt_parent_candidates,
@@ -362,6 +367,7 @@ def make_pair_args(
         service_timeout=args.service_timeout,
         stride=args.stride,
         continue_on_failure=args.continue_on_failure,
+        extract_only=args.extract_only,
         ik_only_raw=args.ik_only_raw,
         ik_scene_rejected=args.ik_scene_rejected,
     )
@@ -717,15 +723,41 @@ def run_one_pair(
             }
             return False, 1, summary
 
-        if args.ik_only_raw:
-            print("计算开始：仅生成代价函数前的全部合法 IK 解")
+        ik_stage_ms = 0.0
+        extract_stage_ms = 0.0
+        if args.extract_only:
+            print("计算开始：IK → 抽离（抽离完成即结束）")
+            start = time.monotonic()
+            ik_success, ik_output, ik_service_ms = service_client.trigger(args.service_timeout)
+            print(ik_output)
+            if ik_success:
+                ik_stage_ms = float(monitor.read_snapshot(snapshot_path).get("elapsed_ms", 0.0))
+                success, output, extract_service_ms = service_client.trigger(args.service_timeout)
+                print(output)
+                if snapshot_path.exists():
+                    extract_stage_ms = float(
+                        monitor.read_snapshot(snapshot_path).get("elapsed_ms", 0.0)
+                    )
+            else:
+                success = False
+                output = ik_output
+                extract_service_ms = 0.0
+            elapsed_ms = ik_service_ms + extract_service_ms
+            wall_ms = (time.monotonic() - start) * 1000.0
+            print(
+                f"计算结束：success={success} service={elapsed_ms:.1f}ms wall={wall_ms:.1f}ms "
+                f"ik={ik_stage_ms:.1f}ms extract={extract_stage_ms:.1f}ms"
+            )
         else:
-            print("计算开始：IK → 抽离 → 横向让位 → 负重规划")
-        start = time.monotonic()
-        success, output, elapsed_ms = service_client.trigger(args.service_timeout)
-        wall_ms = (time.monotonic() - start) * 1000.0
-        print(output)
-        print(f"计算结束：success={success} service={elapsed_ms:.1f}ms wall={wall_ms:.1f}ms")
+            if args.ik_only_raw:
+                print("计算开始：仅生成代价函数前的全部合法 IK 解")
+            else:
+                print("计算开始：IK → 抽离 → 横向让位 → 负重规划")
+            start = time.monotonic()
+            success, output, elapsed_ms = service_client.trigger(args.service_timeout)
+            wall_ms = (time.monotonic() - start) * 1000.0
+            print(output)
+            print(f"计算结束：success={success} service={elapsed_ms:.1f}ms wall={wall_ms:.1f}ms")
         returned_snapshot = monitor.extract_snapshot_path_from_service_output(output)
         if returned_snapshot is not None and returned_snapshot != snapshot_path:
             raise RuntimeError(f"服务连到了旧 planner：expected={snapshot_path}, got={returned_snapshot}")
@@ -778,9 +810,16 @@ def run_one_pair(
             return success, sample_count, summary
         summary.update(
             {
-                "total_ms": float(snapshot.get("elapsed_ms", 0.0)),
-                "ik_ms": float(snapshot.get("ik_elapsed_ms", 0.0)),
-                "extract_ms": float(snapshot.get("extract_elapsed_ms", 0.0)),
+                "total_ms": (
+                    ik_stage_ms + extract_stage_ms
+                    if args.extract_only else float(snapshot.get("elapsed_ms", 0.0))
+                ),
+                "ik_ms": (
+                    ik_stage_ms if args.extract_only else float(snapshot.get("ik_elapsed_ms", 0.0))
+                ),
+                "extract_ms": (
+                    extract_stage_ms if args.extract_only else float(snapshot.get("extract_elapsed_ms", 0.0))
+                ),
                 "loaded_ms": float(snapshot.get("loaded_elapsed_ms", 0.0)),
                 "loaded_plan_batch_wall_ms": float(snapshot.get("loaded_plan_batch_wall_ms", 0.0)),
                 "loaded_plan_candidate_count": int(snapshot.get("loaded_plan_candidate_count", 0)),
@@ -798,7 +837,7 @@ def run_one_pair(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成 10 次抽箱任务连续全流程 Rerun")
+    parser = argparse.ArgumentParser(description="生成 5 次等高双臂抽箱任务连续全流程 Rerun")
     parser.add_argument("--pair-sequence", default=DEFAULT_SEQUENCE)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--save", type=Path, default=None)
@@ -823,9 +862,9 @@ def main() -> int:
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
-    parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
+    parser.add_argument("--top-z-reach-upper", type=float, default=0.6)
     parser.add_argument("--top-suction-x-offset", type=float, default=0.15, help="顶吸目标相对箱子前表面向箱体内部的 x 偏移")
-    parser.add_argument("--top-suction-z-offset", type=float, default=0.25, help="顶吸目标相对箱子中心的 z 偏移")
+    parser.add_argument("--top-suction-z-offset", type=float, default=0.2, help="顶吸目标相对箱子中心的 z 偏移")
     parser.add_argument("--ik-top-position-tolerance", type=float, default=0.04)
     parser.add_argument("--ik-top-orientation-tolerance-deg", type=float, default=7.0)
     parser.add_argument("--ik-h-candidate-count", type=int, default=64)
@@ -937,6 +976,12 @@ def main() -> int:
     parser.add_argument("--startup-retries", type=int, default=1, help="planner 启动超时后的重试次数")
     parser.add_argument("--stride", type=int, default=1)
     parser.add_argument("--continue-on-failure", action="store_true")
+    parser.add_argument(
+        "--extract-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="新五任务场景默认在抽离完成后结束，不进入负重规划。",
+    )
     parser.add_argument(
         "--ik-only-raw",
         action="store_true",
@@ -1065,7 +1110,7 @@ def main() -> int:
                 configure_service="/dual_arm_planner/configure_extract_monitor",
                 trigger_service=(
                     "/dual_arm_planner/run_extract_monitor_next"
-                    if args.ik_only_raw or args.ik_scene_rejected
+                    if args.extract_only or args.ik_only_raw or args.ik_scene_rejected
                     else "/dual_arm_planner/run_extract_monitor_full_selected"
                 ),
                 timeout=args.service_timeout,

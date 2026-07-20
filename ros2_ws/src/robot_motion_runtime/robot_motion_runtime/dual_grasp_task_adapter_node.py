@@ -32,6 +32,7 @@ from robot_motion_runtime.dual_grasp_strategy import (
     BOX_DEPTH_M,
     BOX_HEIGHT_M,
     BOX_WIDTH_M,
+    OUTER_BOX_GRASP_LATERAL_OFFSET_M,
     DualGraspStrategyValue,
     normalize_grasp_mode,
     pose6d_value,
@@ -71,6 +72,10 @@ def make_attached_box_for_task(side: str, task_id: str, mode: str) -> AttachedBo
     out.grasp_mode = mode
     out.link_name = f"{side}_tool0"
     out.center_in_link.orientation.w = 1.0
+    out.center_in_link.position.y = (
+        -OUTER_BOX_GRASP_LATERAL_OFFSET_M if side == "left"
+        else OUTER_BOX_GRASP_LATERAL_OFFSET_M
+    )
     out.size = Vector3()
     if top_suction:
         out.center_in_link.position.z = BOX_HEIGHT_M * 0.5

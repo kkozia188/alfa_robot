@@ -301,7 +301,7 @@ public:
     scene_y_shift_ = get_or_declare_parameter<double>("scene_y_shift", 0.0);
     world_to_base_z_ = get_or_declare_parameter<double>("world_to_base_z", 0.202094);
     top_suction_x_offset_ = get_or_declare_parameter<double>("top_suction_x_offset", 0.15);
-    top_suction_z_offset_ = get_or_declare_parameter<double>("top_suction_z_offset", 0.25);
+    top_suction_z_offset_ = get_or_declare_parameter<double>("top_suction_z_offset", 0.2);
     max_rounds_ = get_or_declare_parameter<int>("max_rounds", 10);
     include_top_suction_ = get_or_declare_parameter<bool>("include_top_suction", true);
     ik_timeout_ = get_or_declare_parameter<double>("ik_timeout", 2.0);
@@ -334,7 +334,7 @@ public:
     ik_config_.gripper_z_reach_lower = get_or_declare_parameter<double>("front_z_reach_lower", 0.45) - world_to_base_z_;
     ik_config_.gripper_z_reach_upper = get_or_declare_parameter<double>("front_z_reach_upper", 1.25) - world_to_base_z_;
     ik_config_.top_suction_z_reach_lower = get_or_declare_parameter<double>("top_z_reach_lower", 0.0) - world_to_base_z_;
-    ik_config_.top_suction_z_reach_upper = get_or_declare_parameter<double>("top_z_reach_upper", 0.45) - world_to_base_z_;
+    ik_config_.top_suction_z_reach_upper = get_or_declare_parameter<double>("top_z_reach_upper", 0.6) - world_to_base_z_;
     ik_config_.h_lower = get_or_declare_parameter<double>("ik_h_lower", 0.0);
     ik_config_.h_upper = get_or_declare_parameter<double>("ik_h_upper", 0.7);
     ik_config_.full_h_range_scan = get_or_declare_parameter<bool>("ik_full_h_range_scan", false);
@@ -389,7 +389,7 @@ public:
     vehicle_drift_rotation_threshold_rad_ =
       get_or_declare_parameter<double>("vehicle_drift_rotation_threshold_rad", 0.02);
     container_length_ = get_or_declare_parameter<double>("container_length", 4.0);
-    container_width_ = get_or_declare_parameter<double>("container_width", 1.5);
+    container_width_ = get_or_declare_parameter<double>("container_width", 1.8);
     container_height_ = get_or_declare_parameter<double>("container_height", 2.4);
     container_center_x_ = get_or_declare_parameter<double>("container_center_x", 0.8);
     container_center_y_ = get_or_declare_parameter<double>("container_center_y", 0.0);
@@ -401,8 +401,10 @@ public:
     container_wall_thickness_ = get_or_declare_parameter<double>("container_wall_thickness", 0.02);
     enable_attached_box_collision_ = get_or_declare_parameter<bool>("enable_attached_box_collision", true);
     carried_box_depth_ = get_or_declare_parameter<double>("carried_box_depth", 0.3);
-    carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.4);
-    carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.5);
+    carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.5);
+    carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.4);
+    carried_box_grasp_lateral_offset_ =
+      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.05);
     attached_box_collision_padding_ = get_or_declare_parameter<double>("attached_box_collision_padding", -0.002);
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
@@ -411,11 +413,9 @@ public:
     extract_demo_right_box_id_ = get_or_declare_parameter<int>("extract_demo_right_box_id", 3);
     extract_demo_pair_sequence_ = parse_box_pair_list(
       get_or_declare_parameter<std::string>(
-        "extract_demo_pair_sequence", "1,3;1,6;4,3;4,6;4,9;7,6;7,9;7,12;10,9;10,12"));
+        "extract_demo_pair_sequence", "1,3;4,6;7,9;10,12;13,15"));
     if (extract_demo_pair_sequence_.empty()) {
-      extract_demo_pair_sequence_ = {
-        {1, 3}, {1, 6}, {4, 3}, {4, 6}, {4, 9},
-        {7, 6}, {7, 9}, {7, 12}, {10, 9}, {10, 12}};
+      extract_demo_pair_sequence_ = {{1, 3}, {4, 6}, {7, 9}, {10, 12}, {13, 15}};
     }
     extract_demo_all_rows_ = get_or_declare_parameter<bool>("extract_demo_all_rows", false);
     extract_monitor_top_suction_ = get_or_declare_parameter<bool>("extract_monitor_top_suction", false);
@@ -1095,6 +1095,7 @@ private:
       carried_box_width_,
       carried_box_height_,
       carried_box_depth_,
+      carried_box_grasp_lateral_offset_,
     };
   }
 
@@ -1633,18 +1634,8 @@ private:
       const BoxSpec& left_box,
       const BoxSpec& right_box,
       bool top_suction) {
-      const auto left_pose = top_suction ? make_top_suction_pose(
-                                             left_box,
-                                             world_to_base_z_,
-                                             top_suction_x_offset_,
-                                             top_suction_z_offset_)
-                                         : make_front_grasp_pose(left_box, world_to_base_z_);
-      const auto right_pose = top_suction ? make_top_suction_pose(
-                                              right_box,
-                                              world_to_base_z_,
-                                              top_suction_x_offset_,
-                                              top_suction_z_offset_)
-                                          : make_front_grasp_pose(right_box, world_to_base_z_);
+      const auto left_pose = make_outer_box_grasp_pose(left_box, top_suction, true);
+      const auto right_pose = make_outer_box_grasp_pose(right_box, top_suction, false);
       return plan_dual_tip_ik(stage_name, left_pose, right_pose, top_suction);
     };
     callbacks.attach_boxes = [this](int left_box_id, int right_box_id, bool top_suction) {
@@ -1889,6 +1880,22 @@ private:
     return scene_adapter_
       ? scene_adapter_->makeCarriedBoxSpec(side, box_id, top_suction)
       : make_attached_box_spec(side, box_id, top_suction, carried_box_geometry_config());
+  }
+
+  geometry_msgs::msg::Pose make_outer_box_grasp_pose(
+    const BoxSpec& box,
+    bool top_suction,
+    bool left_side) const
+  {
+    auto pose = top_suction
+      ? make_top_suction_pose(
+          box, world_to_base_z_, top_suction_x_offset_, top_suction_z_offset_)
+      : make_front_grasp_pose(box, world_to_base_z_);
+    pose.position.y = scene_y_shift_ +
+      (left_side
+        ? alfa_robot::motion::kOuterBoxGraspTargetY
+        : -alfa_robot::motion::kOuterBoxGraspTargetY);
+    return pose;
   }
 
   bool is_top_suction_box_spec(const AttachedBoxSpec& box) const
@@ -4519,14 +4526,10 @@ private:
     robot_motion::core::UpdownAwareIkResult ik_result;
     const auto left_pose = extract_monitor_use_explicit_targets_
       ? extract_monitor_left_target_
-      : (extract_monitor_left_top_suction_
-        ? make_top_suction_pose(left_it->second, world_to_base_z_, top_suction_x_offset_, top_suction_z_offset_)
-        : make_front_grasp_pose(left_it->second, world_to_base_z_));
+      : make_outer_box_grasp_pose(left_it->second, extract_monitor_left_top_suction_, true);
     const auto right_pose = extract_monitor_use_explicit_targets_
       ? extract_monitor_right_target_
-      : (extract_monitor_right_top_suction_
-        ? make_top_suction_pose(right_it->second, world_to_base_z_, top_suction_x_offset_, top_suction_z_offset_)
-        : make_front_grasp_pose(right_it->second, world_to_base_z_));
+      : make_outer_box_grasp_pose(right_it->second, extract_monitor_right_top_suction_, false);
     if (!solve_dual_tip_ik_state(
           extract_monitor_state_.prefix + "/monitor_ik",
           left_pose,
@@ -5417,8 +5420,8 @@ private:
     const std::string prefix = "left_extract_demo_L" + std::to_string(left_box_id) +
                                "_R" + std::to_string(right_box_id);
 
-    const auto left_pose = make_front_grasp_pose(left_it->second, world_to_base_z_);
-    const auto right_pose = make_front_grasp_pose(right_it->second, world_to_base_z_);
+    const auto left_pose = make_outer_box_grasp_pose(left_it->second, false, true);
+    const auto right_pose = make_outer_box_grasp_pose(right_it->second, false, false);
 
     if (extract_demo_direct_grasp_start_) {
       auto seed_state = std::make_shared<moveit::core::RobotState>(robot_model_);
@@ -5579,7 +5582,7 @@ private:
   double scene_y_shift_ = 0.0;
   double world_to_base_z_ = 0.202094;
   double top_suction_x_offset_ = 0.15;
-  double top_suction_z_offset_ = 0.25;
+  double top_suction_z_offset_ = 0.2;
   double ik_timeout_ = 2.0;
   double planning_time_ = 8.0;
   double velocity_scale_ = 1.0;
@@ -5593,7 +5596,7 @@ private:
   double vehicle_drift_translation_threshold_m_ = 0.05;
   double vehicle_drift_rotation_threshold_rad_ = 0.02;
   double container_length_ = 4.0;
-  double container_width_ = 1.5;
+  double container_width_ = 1.8;
   double container_height_ = 2.4;
   double container_center_x_ = 0.8;
   double container_center_y_ = 0.0;
@@ -5606,8 +5609,9 @@ private:
   double container_wall_thickness_ = 0.02;
   bool enable_attached_box_collision_ = true;
   double carried_box_depth_ = 0.3;
-  double carried_box_width_ = 0.4;
-  double carried_box_height_ = 0.5;
+  double carried_box_width_ = 0.5;
+  double carried_box_height_ = 0.4;
+  double carried_box_grasp_lateral_offset_ = 0.05;
   double attached_box_collision_padding_ = -0.002;
   bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;
@@ -5616,8 +5620,7 @@ private:
   int extract_demo_left_box_id_ = 1;
   int extract_demo_right_box_id_ = 3;
   std::vector<std::pair<int, int>> extract_demo_pair_sequence_{
-    {1, 3}, {1, 6}, {4, 3}, {4, 6}, {4, 9},
-    {7, 6}, {7, 9}, {7, 12}, {10, 9}, {10, 12}};
+    {1, 3}, {4, 6}, {7, 9}, {10, 12}, {13, 15}};
   bool extract_demo_all_rows_ = false;
   bool extract_monitor_top_suction_ = false;
   bool extract_monitor_left_top_suction_ = false;

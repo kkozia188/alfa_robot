@@ -79,8 +79,8 @@ def make_attached_box_for_task(side: str, task_id: str, mode: str) -> AttachedBo
         out.size.z = BOX_HEIGHT_M
     else:
         out.center_in_link.position.z = BOX_DEPTH_M * 0.5
-        out.size.x = BOX_WIDTH_M
-        out.size.y = BOX_HEIGHT_M
+        out.size.x = BOX_HEIGHT_M
+        out.size.y = BOX_WIDTH_M
         out.size.z = BOX_DEPTH_M
     return out
 

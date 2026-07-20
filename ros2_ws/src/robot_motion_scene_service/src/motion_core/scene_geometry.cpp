@@ -188,7 +188,7 @@ AttachedBoxSpec make_attached_box_spec(
     spec.size = {config.carried_box_depth, config.carried_box_width, config.carried_box_height};
   } else {
     spec.center_in_link = {0.0, 0.0, config.carried_box_depth * 0.5};
-    spec.size = {config.carried_box_width, config.carried_box_height, config.carried_box_depth};
+    spec.size = {config.carried_box_height, config.carried_box_width, config.carried_box_depth};
   }
   return spec;
 }

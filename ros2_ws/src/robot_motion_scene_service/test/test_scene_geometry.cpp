@@ -69,7 +69,9 @@ int main()
   const auto left_box = make_attached_box_spec("left", 4, false, CarriedBoxGeometryConfig{});
   assert(left_box.id == "carried_left_box_4");
   assert(left_box.link_name == "left_tool0");
-  assert(left_box.size[0] > 0.0);
+  assert(left_box.size[0] == CarriedBoxGeometryConfig{}.carried_box_height);
+  assert(left_box.size[1] == CarriedBoxGeometryConfig{}.carried_box_width);
+  assert(left_box.size[2] == CarriedBoxGeometryConfig{}.carried_box_depth);
   assert(left_box.center_in_link[2] > 0.0);
 
   const auto top_box = make_attached_box_spec("left", 10, true, CarriedBoxGeometryConfig{});

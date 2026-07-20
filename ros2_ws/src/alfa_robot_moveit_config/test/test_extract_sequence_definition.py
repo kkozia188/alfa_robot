@@ -5,6 +5,7 @@ import importlib.util
 import math
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "extract_sequence_rerun.py"
@@ -27,6 +28,7 @@ def main() -> int:
         "centered": 0.0,
         "right_shift_0p1": 0.05,
     }
+    assert MODULE.DIRECT_UPDOWN_LIFT_PAIRS == {(7, 9)}
     assert math.isclose(
         MODULE.OUTER_GRASP_TARGET_Y_M + MODULE.TASK_LAYOUT_Y_OFFSETS["right_shift_0p1"],
         0.50,
@@ -61,6 +63,16 @@ def main() -> int:
     ]
     assert vehicle_modes.count("front") == 3, vehicle_modes
     assert vehicle_modes.count("top_suction") == 2, vehicle_modes
+    rollout_args = SimpleNamespace(
+        extract_rollout_mode="box_pose_rrt",
+        top_extract_rollout_mode="top_updown_lift",
+    )
+    assert MODULE.extract_rollout_mode_for_pair(rollout_args, 1, 3, "front") == "box_pose_rrt"
+    assert MODULE.extract_rollout_mode_for_pair(rollout_args, 7, 9, "front") == "direct_updown_lift"
+    assert (
+        MODULE.extract_rollout_mode_for_pair(rollout_args, 10, 12, "top_suction")
+        == "top_updown_lift"
+    )
 
     parser_source = SCRIPT.read_text()
     assert 'parser.add_argument("--loaded-updown", type=float, default=0.1)' in parser_source
@@ -76,6 +88,7 @@ def main() -> int:
     assert 'default=False,\n        help="只计算 IK 和抽离' in parser_source
     assert 'default="box_pose_rrt"' in parser_source
     assert 'default="top_updown_lift"' in parser_source
+    assert '"direct_updown_lift"' in parser_source
     assert 'default=0.40' in parser_source
     assert '"--ik-only-raw"' in parser_source
     print("extract sequence definition passed: 5 equal-height pairs, 3 front + 2 direct top lifts")

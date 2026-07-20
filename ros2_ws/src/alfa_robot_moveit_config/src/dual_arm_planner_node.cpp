@@ -3422,7 +3422,7 @@ private:
     return true;
   }
 
-  ExtractRolloutTiming rollout_dual_top_suction_lift_from_state(
+  ExtractRolloutTiming rollout_dual_updown_lift_from_state(
     const moveit::core::RobotState& start_state,
     const AttachedBoxSpec& left_box,
     int left_box_id,
@@ -3446,6 +3446,9 @@ private:
     const double target_lift = require_full_updown_lift
       ? extract_top_updown_lift_distance_
       : std::min(0.45, extract_max_x_);
+    const std::string lift_stage = require_full_updown_lift
+      ? "direct_updown_lift"
+      : "top_suction_lift";
 
     auto record_state = [&](
       size_t step,
@@ -3459,9 +3462,7 @@ private:
       const double previous_lift_z = step == 0 ? 0.0 : std::min(
         target_lift, extract_step_x_ * static_cast<double>(step - 1));
       nlohmann::json extra = {
-        {"stage_kind", require_full_updown_lift
-          ? "top_suction_direct_updown_lift"
-          : "top_suction_lift_extract"},
+        {"stage_kind", lift_stage + "_extract"},
         {"accepted", accepted},
         {"candidate_order", candidate_order},
         {"step", step},
@@ -3471,7 +3472,7 @@ private:
         {"right_detached", right_detached},
         {"left_box_id", left_box_id},
         {"right_box_id", right_box_id},
-        {"grasp_mode", "top_suction"},
+        {"grasp_mode", extract_monitor_both_top_suction() ? "top_suction" : "front"},
         {"required_lift", require_full_updown_lift ? extract_top_updown_lift_distance_ : 0.0},
         {"rejection_reason", reason}
       };
@@ -3494,20 +3495,24 @@ private:
     bool right_detached = false;
     std::string clear_reason;
     if (!is_state_valid_with_attached_boxes(current_state, {left_box, right_box}, true, &clear_reason)) {
-      timing.failure_reason = "top_suction_lift_start_invalid: " + clear_reason;
+      timing.failure_reason = lift_stage + "_start_invalid: " + clear_reason;
       record_state(0, current_state, false, left_detached, right_detached, clear_reason);
       return timing;
     }
     if (!carried_box_clear_scene_obstacles(current_state, left_box, &clear_reason) ||
         !carried_box_clear_scene_obstacles(current_state, right_box, &clear_reason)) {
-      timing.failure_reason = "top_suction_lift_start_invalid: " + clear_reason;
+      timing.failure_reason = lift_stage + "_start_invalid: " + clear_reason;
       record_state(0, current_state, false, left_detached, right_detached, clear_reason);
       return timing;
     }
     std::string left_detach_reason;
     std::string right_detach_reason;
-    left_detached = top_suction_box_detached_from_stack(current_state, left_box, left_box_id, &left_detach_reason);
-    right_detached = top_suction_box_detached_from_stack(current_state, right_box, right_box_id, &right_detach_reason);
+    left_detached = is_top_suction_box_spec(left_box)
+      ? top_suction_box_detached_from_stack(current_state, left_box, left_box_id, &left_detach_reason)
+      : carried_box_detached_for_extract_mode(current_state, left_box, left_box_id, &left_detach_reason);
+    right_detached = is_top_suction_box_spec(right_box)
+      ? top_suction_box_detached_from_stack(current_state, right_box, right_box_id, &right_detach_reason)
+      : carried_box_detached_for_extract_mode(current_state, right_box, right_box_id, &right_detach_reason);
     clear_reason = left_detached ? right_detach_reason : left_detach_reason;
     record_state(0, current_state, true, left_detached, right_detached, clear_reason);
     if (!require_full_updown_lift && left_detached && right_detached) {
@@ -3532,28 +3537,36 @@ private:
       left_detached = false;
       right_detached = false;
       if (!next_state.satisfiesBounds(joint_group_)) {
-        timing.failure_reason = "top_suction_lift_target_out_of_bounds_step_" +
+        timing.failure_reason = lift_stage + "_target_out_of_bounds_step_" +
           std::to_string(step);
         record_state(step, next_state, false, left_detached, right_detached, timing.failure_reason);
         return timing;
       }
       if (!is_state_valid_with_attached_boxes(next_state, {left_box, right_box}, true, &step_reason)) {
-        timing.failure_reason = "top_suction_lift_collision_step_" + std::to_string(step) + ": " + step_reason;
+        timing.failure_reason = lift_stage + "_collision_step_" +
+          std::to_string(step) + ": " + step_reason;
         record_state(step, next_state, false, left_detached, right_detached, step_reason);
         return timing;
       }
       if (!carried_box_clear_scene_obstacles(next_state, left_box, &step_reason) ||
           !carried_box_clear_scene_obstacles(next_state, right_box, &step_reason)) {
-        timing.failure_reason = "top_suction_lift_collision_step_" + std::to_string(step) + ": " + step_reason;
+        timing.failure_reason = lift_stage + "_collision_step_" +
+          std::to_string(step) + ": " + step_reason;
         record_state(step, next_state, false, left_detached, right_detached, step_reason);
         return timing;
       }
       std::string left_step_detach_reason;
       std::string right_step_detach_reason;
-      left_detached = top_suction_box_detached_from_stack(
-        next_state, left_box, left_box_id, &left_step_detach_reason);
-      right_detached = top_suction_box_detached_from_stack(
-        next_state, right_box, right_box_id, &right_step_detach_reason);
+      left_detached = is_top_suction_box_spec(left_box)
+        ? top_suction_box_detached_from_stack(
+            next_state, left_box, left_box_id, &left_step_detach_reason)
+        : carried_box_detached_for_extract_mode(
+            next_state, left_box, left_box_id, &left_step_detach_reason);
+      right_detached = is_top_suction_box_spec(right_box)
+        ? top_suction_box_detached_from_stack(
+            next_state, right_box, right_box_id, &right_step_detach_reason)
+        : carried_box_detached_for_extract_mode(
+            next_state, right_box, right_box_id, &right_step_detach_reason);
       step_reason = left_detached ? right_step_detach_reason : left_step_detach_reason;
 
       current_state = next_state;
@@ -4742,17 +4755,18 @@ private:
     if (box_pose_solver_profile_) box_pose_solver_profile_->reset();
     const size_t count = extract_monitor_state_.legal_candidates.size();
     size_t worker_count = 1;
-    const bool direct_top_updown_lift =
-      extract_monitor_both_top_suction() && extract_rollout_mode_ == "top_updown_lift";
-    if (extract_monitor_both_top_suction() &&
-        (extract_rollout_mode_ == "top_lift_legacy" || direct_top_updown_lift)) {
+    const bool direct_updown_lift =
+      extract_rollout_mode_ == "top_updown_lift" ||
+      extract_rollout_mode_ == "direct_updown_lift";
+    if ((extract_monitor_both_top_suction() && extract_rollout_mode_ == "top_lift_legacy") ||
+        direct_updown_lift) {
       extract_monitor_state_.timings.clear();
       extract_monitor_state_.timings.reserve(extract_monitor_state_.legal_candidates.size());
       worker_count = 1;
       for (size_t index = 0; index < extract_monitor_state_.legal_candidates.size(); ++index) {
         const auto& candidate = extract_monitor_state_.legal_candidates[index];
         auto state = robot_state_from_ik_candidate(*extract_monitor_state_.seed_state, candidate, joint_group_);
-        auto timing = rollout_dual_top_suction_lift_from_state(
+        auto timing = rollout_dual_updown_lift_from_state(
           state,
           extract_monitor_state_.left_box,
           extract_monitor_state_.left_box_id,
@@ -4760,7 +4774,7 @@ private:
           extract_monitor_state_.right_box_id,
           index,
           candidate,
-          direct_top_updown_lift);
+          direct_updown_lift);
         if (loaded_pose_selector_) {
           loaded_pose_selector_->fillTimingDistanceMetrics(timing);
         }

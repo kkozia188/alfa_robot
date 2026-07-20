@@ -1606,3 +1606,7 @@
 - 做了什么：五任务默认距离拆分为侧吸 x=0.90m、顶吸 x=0.70m，其他策略保持不变。
 - 验证结果：侧吸三任务全流程 L1/R3、L4/R6 成功，L7/R9 抽离失败，成功率 2/3；Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/front_three_tasks_x090_loaded010.rrd。
 - 留给下个 AI：顶吸沿用上一版 0.70m 直升 0.40m 的成功结果；本轮未做速度优化。
+## 2026-07-20 运控 / Codex / L7/R9 侧吸直升
+- 做了什么：L7/R9 保持侧吸 IK 和侧吸附着箱建模，但抽离改为双臂关节不动、updown 固定上升 0.40m；普通侧吸与顶吸任务策略不变。
+- 验证结果：L7/R9 完整流程成功，快照确认模式为 front/front + direct_updown_lift，updown 由 0.02m 到 0.42m。Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/L7_R9_front_direct_lift040_x090_loaded010.rrd。
+- 留给下个 AI：序列脚本会为 L7/R9 单独重启对应策略的 planner，避免与 L1/R3、L4/R6 的侧吸 RRT 配置混用。

@@ -28,6 +28,7 @@ DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extrac
 DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
 FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6, 7, 9}
+DIRECT_UPDOWN_LIFT_PAIRS = {(7, 9)}
 OUTER_GRASP_TARGET_Y_M = 0.45
 TASK_LAYOUT_Y_OFFSETS = {
     "centered": 0.0,
@@ -227,6 +228,19 @@ def effective_box_front_x(args: argparse.Namespace, grasp_mode: str) -> float:
     return float(args.box_front_x)
 
 
+def extract_rollout_mode_for_pair(
+    args: argparse.Namespace,
+    left_box_id: int,
+    right_box_id: int,
+    grasp_mode: str,
+) -> str:
+    if (int(left_box_id), int(right_box_id)) in DIRECT_UPDOWN_LIFT_PAIRS:
+        return "direct_updown_lift"
+    if grasp_mode == "top_suction":
+        return str(args.top_extract_rollout_mode)
+    return str(args.extract_rollout_mode)
+
+
 def explicit_grasp_target(args: argparse.Namespace, box_id: int, grasp_mode: str) -> dict[str, Any]:
     boxes = monitor.all_boxes(float(args.box_front_x), float(args.scene_y_shift))
     if box_id not in boxes:
@@ -321,11 +335,7 @@ def make_pair_args(
         extract_rrt_planning_attempts=args.extract_rrt_planning_attempts,
         extract_rrt_endpoint_per_arm_limit=args.extract_rrt_endpoint_per_arm_limit,
         extract_rrt_goal_limit=args.extract_rrt_goal_limit,
-        extract_rollout_mode=(
-            args.top_extract_rollout_mode
-            if mode == "top_suction"
-            else args.extract_rollout_mode
-        ),
+        extract_rollout_mode=extract_rollout_mode_for_pair(args, left_id, right_id, mode),
         extract_top_updown_lift_distance=args.extract_top_updown_lift_distance,
         extract_box_pose_rrt_edge_scene_collision=args.extract_box_pose_rrt_edge_scene_collision,
         extract_box_pose_rrt_max_iterations=(
@@ -933,7 +943,14 @@ def main() -> int:
     parser.add_argument("--extract-max-joint-delta", type=float, default=10.0 * math.pi / 180.0)
     parser.add_argument(
         "--extract-rollout-mode",
-        choices=["greedy", "box_pose_rrt", "moveit_rrt_legacy", "top_lift_legacy", "top_updown_lift"],
+        choices=[
+            "greedy",
+            "box_pose_rrt",
+            "moveit_rrt_legacy",
+            "top_lift_legacy",
+            "top_updown_lift",
+            "direct_updown_lift",
+        ],
         default="box_pose_rrt",
         help="侧吸抽离策略；该序列实验默认使用箱体位姿 RRT",
     )
@@ -1153,7 +1170,7 @@ def main() -> int:
         group_index: int,
     ) -> tuple[subprocess.Popen[str], monitor.ExtractMonitorServiceClient, float]:
         nonlocal current_mode
-        group_label = f"{layout_name}_{mode}"
+        group_label = f"{layout_name}_{mode}_{initial_args.extract_rollout_mode}"
         launch_log = run_root / f"planner_{group_index:02d}_{group_label}.log"
         initial_snapshot = run_root / f"initial_stage_snapshot_{group_index:02d}_{group_label}.json"
         launch_command = monitor.build_launch_command(initial_args, run_root, initial_snapshot)
@@ -1251,8 +1268,8 @@ def main() -> int:
                         task_layout=layout_name,
                         scene_y_shift=layout_scene_y_shift,
                     )
-                    group_key = f"{layout_name}:{mode}"
-                    group_label = f"{layout_name}_{mode}"
+                    group_key = f"{layout_name}:{mode}:{pair_args.extract_rollout_mode}"
+                    group_label = f"{layout_name}_{mode}_{pair_args.extract_rollout_mode}"
                     if current_mode != group_key:
                         stop_current_planner()
                         group_index += 1

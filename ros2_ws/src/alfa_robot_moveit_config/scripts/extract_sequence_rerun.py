@@ -344,7 +344,7 @@ def make_pair_args(
         extract_ik_candidate_reserve_stratified=args.extract_ik_candidate_reserve_stratified,
         extract_ik_candidate_reserve_interleave_stride=args.extract_ik_candidate_reserve_interleave_stride,
         extract_ik_loaded_distance_order_weight=args.extract_ik_loaded_distance_order_weight,
-        extract_monitor_build_final_replay=not args.no_rerun,
+        extract_monitor_build_final_replay=args.place_cycle_enabled or not args.no_rerun,
         loaded_candidate_limit=args.loaded_candidate_limit,
         lateral_shift_enabled=lateral_shift_enabled,
         lateral_shift_distance=args.lateral_shift_distance,
@@ -364,6 +364,11 @@ def make_pair_args(
         loaded_preferred_pose_index=loaded_preferred_pose_index,
         loaded_left_pose_family_deg=loaded_left_pose_family_deg,
         loaded_right_pose_family_deg=loaded_right_pose_family_deg,
+        place_cycle_enabled=args.place_cycle_enabled,
+        place_updown=args.place_updown,
+        place_transition_updown=args.place_transition_updown,
+        place_left_pose_deg=args.place_left_pose_deg,
+        place_right_pose_deg=args.place_right_pose_deg,
         service_timeout=args.service_timeout,
         stride=args.stride,
         continue_on_failure=args.continue_on_failure,
@@ -752,7 +757,7 @@ def run_one_pair(
             if args.ik_only_raw:
                 print("计算开始：仅生成代价函数前的全部合法 IK 解")
             else:
-                print("计算开始：IK → 抽离 → 横向让位 → 负重规划")
+                print("计算开始：负重初始位 → 预接触 → IK吸附位 → 抽离 → 负重位 → 放置位 → 回负重位")
             start = time.monotonic()
             success, output, elapsed_ms = service_client.trigger(args.service_timeout)
             wall_ms = (time.monotonic() - start) * 1000.0
@@ -803,11 +808,16 @@ def run_one_pair(
                     "loaded_plan_success_count": 0,
                     "loaded_parallel_workers": 0,
                     "final_ms": 0.0,
+                    "loaded_to_place_ms": 0.0,
+                    "place_to_loaded_ms": 0.0,
                     "samples": sample_count,
                     "failure_reason": output,
                 }
             )
             return success, sample_count, summary
+        place_cycle = snapshot.get("place_cycle", {})
+        if not isinstance(place_cycle, dict):
+            place_cycle = {}
         summary.update(
             {
                 "total_ms": (
@@ -827,6 +837,8 @@ def run_one_pair(
                 "loaded_plan_success_count": int(snapshot.get("loaded_plan_success_count", 0)),
                 "loaded_parallel_workers": int(snapshot.get("loaded_parallel_workers", 0)),
                 "final_ms": float(snapshot.get("final_elapsed_ms", 0.0)),
+                "loaded_to_place_ms": float(place_cycle.get("loaded_to_place_ms", 0.0)),
+                "place_to_loaded_ms": float(place_cycle.get("place_to_loaded_ms", 0.0)),
                 "samples": sample_count,
                 "failure_reason": "" if success else output,
             }
@@ -929,7 +941,7 @@ def main() -> int:
     parser.add_argument("--loaded-candidate-limit", type=int, default=8)
     parser.add_argument("--loaded-workers", type=int, default=8)
     parser.add_argument("--loaded-planner-id", default="")
-    parser.add_argument("--loaded-planning-mode", choices=["rrt", "shortcut"], default="rrt")
+    parser.add_argument("--loaded-planning-mode", choices=["rrt", "shortcut"], default="shortcut")
     parser.add_argument("--loaded-planning-time", type=float, default=1.0)
     parser.add_argument("--loaded-planning-attempts", type=int, default=8)
     parser.add_argument("--loaded-sort-by-pose-distance", action=argparse.BooleanOptionalAction, default=True)
@@ -955,6 +967,22 @@ def main() -> int:
         default="",
         help="顶吸专用负重姿态族；留空则沿用 --loaded-right-pose-family-deg",
     )
+    parser.add_argument(
+        "--place-cycle-enabled",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="负重后规划到放置姿态，释放箱体，再返回负重姿态。",
+    )
+    parser.add_argument("--place-updown", type=float, default=0.20)
+    parser.add_argument("--place-transition-updown", type=float, default=0.10)
+    parser.add_argument(
+        "--place-left-pose-deg",
+        default="[0.0,-55.0,-50.0,-60.0,0.0,0.0]",
+    )
+    parser.add_argument(
+        "--place-right-pose-deg",
+        default="[0.0,-55.0,-50.0,-60.0,0.0,0.0]",
+    )
     parser.add_argument("--lateral-shift-enabled", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--lateral-shift-enabled-auto", action=argparse.BooleanOptionalAction, default=True, help="按吸附模式自动控制负重前横向让位：侧吸开启，顶吸关闭")
     parser.add_argument("--lateral-shift-distance", type=float, default=0.5)
@@ -979,8 +1007,8 @@ def main() -> int:
     parser.add_argument(
         "--extract-only",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="新五任务场景默认在抽离完成后结束，不进入负重规划。",
+        default=False,
+        help="只计算 IK 和抽离；默认运行 IK→抽离→负重→放置→回负重完整循环。",
     )
     parser.add_argument(
         "--ik-only-raw",
@@ -1227,6 +1255,8 @@ def main() -> int:
             "extract_ms",
             "loaded_ms",
             "final_ms",
+            "loaded_to_place_ms",
+            "place_to_loaded_ms",
             "loaded_plan_batch_wall_ms",
             "loaded_plan_candidate_count",
             "loaded_plan_attempted_count",
@@ -1261,6 +1291,8 @@ def main() -> int:
             f"startup={item.get('startup_ms', 0.0):.1f}ms "
             f"total={item.get('total_ms', 0.0):.1f}ms "
             f"loaded_batch={item.get('loaded_plan_batch_wall_ms', 0.0):.1f}ms "
+            f"place={item.get('loaded_to_place_ms', 0.0):.1f}ms "
+            f"return={item.get('place_to_loaded_ms', 0.0):.1f}ms "
             f"samples={item.get('samples', 0)}"
         )
     if not args.no_rerun:

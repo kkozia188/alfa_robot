@@ -50,6 +50,11 @@ def main() -> int:
 
     parser_source = SCRIPT.read_text()
     assert 'parser.add_argument("--loaded-updown", type=float, default=0.3)' in parser_source
+    assert 'choices=["rrt", "shortcut"], default="shortcut"' in parser_source
+    assert '"--place-cycle-enabled"' in parser_source
+    assert 'default=True,\n        help="负重后规划到放置姿态' in parser_source
+    assert '"--extract-only"' in parser_source
+    assert 'default=False,\n        help="只计算 IK 和抽离' in parser_source
     assert 'default="box_pose_rrt"' in parser_source
     assert '"--ik-only-raw"' in parser_source
     print("extract sequence definition passed: 5 equal-height pairs, 2 front + 3 top")

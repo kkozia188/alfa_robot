@@ -163,6 +163,7 @@ def generate_launch_description():
         DeclareLaunchArgument("extract_monitor_build_final_replay", default_value="true"),
         DeclareLaunchArgument("extract_monitor_place_cycle_enabled", default_value="false"),
         DeclareLaunchArgument("extract_monitor_place_updown", default_value="0.20"),
+        DeclareLaunchArgument("extract_monitor_place_transition_updown", default_value="0.10"),
         DeclareLaunchArgument(
             "extract_monitor_place_left_pose_deg",
             default_value="[0.0,-55.0,-50.0,-60.0,0.0,0.0]",
@@ -389,6 +390,7 @@ def generate_launch_description():
                 "extract_monitor_build_final_replay": ParameterValue(LaunchConfiguration("extract_monitor_build_final_replay"), value_type=bool),
                 "extract_monitor_place_cycle_enabled": ParameterValue(LaunchConfiguration("extract_monitor_place_cycle_enabled"), value_type=bool),
                 "extract_monitor_place_updown": ParameterValue(LaunchConfiguration("extract_monitor_place_updown"), value_type=float),
+                "extract_monitor_place_transition_updown": ParameterValue(LaunchConfiguration("extract_monitor_place_transition_updown"), value_type=float),
                 "extract_monitor_place_left_pose_deg": ParameterValue(LaunchConfiguration("extract_monitor_place_left_pose_deg"), value_type=str),
                 "extract_monitor_place_right_pose_deg": ParameterValue(LaunchConfiguration("extract_monitor_place_right_pose_deg"), value_type=str),
                 "extract_rollout_mode": ParameterValue(LaunchConfiguration("extract_rollout_mode"), value_type=str),

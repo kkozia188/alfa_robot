@@ -207,6 +207,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"extract_monitor_build_final_replay:={str(getattr(args, 'extract_monitor_build_final_replay', True)).lower()}",
         f"extract_monitor_place_cycle_enabled:={str(getattr(args, 'place_cycle_enabled', False)).lower()}",
         f"extract_monitor_place_updown:={getattr(args, 'place_updown', 0.20)}",
+        f"extract_monitor_place_transition_updown:={getattr(args, 'place_transition_updown', 0.10)}",
         f"extract_monitor_place_left_pose_deg:='{getattr(args, 'place_left_pose_deg', '[0.0,-55.0,-50.0,-60.0,0.0,0.0]')}'",
         f"extract_monitor_place_right_pose_deg:='{getattr(args, 'place_right_pose_deg', '[0.0,-55.0,-50.0,-60.0,0.0,0.0]')}'",
         f"extract_rollout_mode:={getattr(args, 'extract_rollout_mode', 'greedy')}",

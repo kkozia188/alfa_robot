@@ -487,6 +487,8 @@ public:
       get_or_declare_parameter<bool>("extract_monitor_place_cycle_enabled", false);
     extract_monitor_place_updown_ =
       get_or_declare_parameter<double>("extract_monitor_place_updown", 0.20);
+    extract_monitor_place_transition_updown_ =
+      get_or_declare_parameter<double>("extract_monitor_place_transition_updown", 0.10);
     auto left_place_family = parse_pose_family_degrees(get_or_declare_parameter<std::string>(
       "extract_monitor_place_left_pose_deg",
       "[0.0,-55.0,-50.0,-60.0,0.0,0.0]"));
@@ -5220,22 +5222,64 @@ private:
     const auto static_obstacles = static_box_obstacles_json();
 
     const auto outbound_start = std::chrono::steady_clock::now();
+    const double place_transition_updown = extract_monitor_both_top_suction()
+      ? std::min(extract_monitor_place_updown_, extract_monitor_place_transition_updown_)
+      : extract_monitor_place_updown_;
+    moveit::core::RobotState place_transition_state(loaded_state);
+    place_transition_state.setVariablePosition("updown", place_transition_updown);
+    place_transition_state.enforceBounds();
+    place_transition_state.update(true);
+    moveit::core::RobotState place_arm_state(place_state);
+    place_arm_state.setVariablePosition("updown", place_transition_updown);
+    place_arm_state.enforceBounds();
+    place_arm_state.update(true);
+
+    const bool needs_place_height_transition = std::abs(
+      loaded_state.getVariablePosition("updown") -
+      place_transition_state.getVariablePosition("updown")) > 1e-6;
+    alfa_robot::motion::ExtractMonitorTransitionPlanResult height_transition;
+    if (needs_place_height_transition) {
+      height_transition = extract_monitor_transition_planner(
+        carried_boxes, extract_monitor_state_.prefix + "/selected_loaded_to_place_height").plan(
+        loaded_state, place_transition_state);
+      if (!height_transition.valid) {
+        if (reason) {
+          *reason = "place_cycle_loaded_to_place_height_failed: " +
+            height_transition.failure_reason;
+        }
+        return false;
+      }
+      replay_stages->push_back(alfa_robot::motion::extract_monitor_stage_json(
+        extract_monitor_state_.prefix + "/selected_loaded_to_place_height",
+        height_transition.plan,
+        loaded_state,
+        place_transition_state,
+        target_names,
+        carried_boxes,
+        static_obstacles,
+        {
+          {"stage_kind", "monitor_selected_loaded_to_place_height_replay"},
+          {"valid", true},
+          {"method", height_transition.method},
+          {"release_after_stage", false},
+          {"place_transition_updown", place_transition_updown},
+        }));
+    }
+
     const auto outbound = extract_monitor_transition_planner(
-      carried_boxes, extract_monitor_state_.prefix + "/selected_loaded_to_place").plan(
-      loaded_state, place_state);
-    const double outbound_ms = std::chrono::duration<double, std::milli>(
-      std::chrono::steady_clock::now() - outbound_start).count();
+      carried_boxes, extract_monitor_state_.prefix + "/selected_loaded_to_place_arms").plan(
+      place_transition_state, place_arm_state);
     if (!outbound.valid) {
       if (reason) {
-        *reason = "place_cycle_loaded_to_place_failed: " + outbound.failure_reason;
+        *reason = "place_cycle_loaded_to_place_arms_failed: " + outbound.failure_reason;
       }
       return false;
     }
     replay_stages->push_back(alfa_robot::motion::extract_monitor_stage_json(
-      extract_monitor_state_.prefix + "/selected_loaded_to_place",
+      extract_monitor_state_.prefix + "/selected_loaded_to_place_arms",
       outbound.plan,
-      loaded_state,
-      place_state,
+      place_transition_state,
+      place_arm_state,
       target_names,
       carried_boxes,
       static_obstacles,
@@ -5243,10 +5287,47 @@ private:
         {"stage_kind", "monitor_selected_loaded_to_place_replay"},
         {"valid", true},
         {"method", outbound.method},
-        {"transition_ms", outbound_ms},
-        {"release_after_stage", true},
+        {"release_after_stage", false},
+        {"place_transition_updown", place_transition_updown},
         {"place_updown", extract_monitor_place_updown_},
       }));
+
+    const bool needs_final_place_height_transition = std::abs(
+      place_arm_state.getVariablePosition("updown") -
+      place_state.getVariablePosition("updown")) > 1e-6;
+    alfa_robot::motion::ExtractMonitorTransitionPlanResult final_height_transition;
+    if (needs_final_place_height_transition) {
+      final_height_transition = extract_monitor_transition_planner(
+        carried_boxes, extract_monitor_state_.prefix + "/selected_place_final_height").plan(
+        place_arm_state, place_state);
+      if (!final_height_transition.valid) {
+        if (reason) {
+          *reason = "place_cycle_final_place_height_failed: " +
+            final_height_transition.failure_reason;
+        }
+        return false;
+      }
+      replay_stages->push_back(alfa_robot::motion::extract_monitor_stage_json(
+        extract_monitor_state_.prefix + "/selected_place_final_height",
+        final_height_transition.plan,
+        place_arm_state,
+        place_state,
+        target_names,
+        carried_boxes,
+        static_obstacles,
+        {
+          {"stage_kind", "monitor_selected_place_final_height_replay"},
+          {"valid", true},
+          {"method", final_height_transition.method},
+          {"release_after_stage", true},
+          {"place_transition_updown", place_transition_updown},
+          {"place_updown", extract_monitor_place_updown_},
+        }));
+    } else {
+      (*replay_stages)[replay_stages->size() - 1]["extra"]["release_after_stage"] = true;
+    }
+    const double outbound_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - outbound_start).count();
 
     const auto return_start = std::chrono::steady_clock::now();
     const auto return_plan = extract_monitor_transition_planner(
@@ -5280,10 +5361,14 @@ private:
       *metrics = {
         {"enabled", true},
         {"loaded_to_place_ms", outbound_ms},
-        {"loaded_to_place_method", outbound.method},
+        {"loaded_to_place_method", needs_place_height_transition
+          ? height_transition.method + "+" + outbound.method +
+            (needs_final_place_height_transition ? "+" + final_height_transition.method : "")
+          : outbound.method},
         {"place_to_loaded_ms", return_ms},
         {"place_to_loaded_method", return_plan.method},
         {"place_updown", extract_monitor_place_updown_},
+        {"place_transition_updown", place_transition_updown},
       };
     }
     return true;
@@ -5684,6 +5769,7 @@ private:
   bool extract_monitor_build_final_replay_ = true;
   bool extract_monitor_place_cycle_enabled_ = false;
   double extract_monitor_place_updown_ = 0.20;
+  double extract_monitor_place_transition_updown_ = 0.10;
   std::vector<double> extract_monitor_place_left_arm_;
   std::vector<double> extract_monitor_place_right_arm_;
   std::string extract_rollout_mode_ = "greedy";

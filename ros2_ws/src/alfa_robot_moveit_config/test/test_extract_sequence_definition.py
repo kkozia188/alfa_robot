@@ -64,7 +64,8 @@ def main() -> int:
 
     parser_source = SCRIPT.read_text()
     assert 'parser.add_argument("--loaded-updown", type=float, default=0.1)' in parser_source
-    assert 'parser.add_argument("--box-front-x", type=float, default=0.70)' in parser_source
+    assert 'parser.add_argument("--box-front-x", type=float, default=0.90)' in parser_source
+    assert 'parser.add_argument("--top-box-front-x", type=float, default=0.70' in parser_source
     assert 'choices=["centered", "right_shift_0p1", "both"]' in parser_source
     assert 'OUTER_GRASP_TARGET_Y_M = 0.45' in parser_source
     assert 'default=True,\n        help="默认在0~0.7m范围' in parser_source

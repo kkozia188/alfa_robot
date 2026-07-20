@@ -874,9 +874,9 @@ def main() -> int:
     parser.add_argument("--no-rerun", action="store_true", help="不生成 Rerun，只保存 snapshot/summary/stats CSV")
     parser.add_argument("--repeat", type=int, default=1, help="重复运行整组 pair sequence 的次数")
     parser.add_argument("--stats-csv", type=Path, default=None, help="统计 CSV 输出路径；默认写入 run_root/stats.csv")
-    parser.add_argument("--box-front-x", type=float, default=0.70)
+    parser.add_argument("--box-front-x", type=float, default=0.90)
     parser.add_argument("--top-approach-forward", type=float, default=0.0, help="顶吸额外前移量；默认0，侧吸顶吸统一使用box-front-x")
-    parser.add_argument("--top-box-front-x", type=float, default=None, help="顶吸专用箱墙前表面 x；优先级高于 --top-approach-forward")
+    parser.add_argument("--top-box-front-x", type=float, default=0.70, help="顶吸专用箱墙前表面 x；默认 0.70m")
     parser.add_argument("--scene-y-shift", type=float, default=0.0)
     parser.add_argument(
         "--task-layout",

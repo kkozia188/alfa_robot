@@ -1602,3 +1602,7 @@
 - 改了哪里：alfa_robot_moveit_config 的序列脚本、planner 参数/实现、launch、定义测试和实验文档。
 - 验证结果：构建通过；五任务全流程成功 2/5，顶吸 L10/R12、L13/R15 均精确上升 0.40m 并完成全循环。Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/five_tasks_x070_loaded010_top_direct_lift040.rrd。
 - 留给下个 AI：三组侧吸均已完成抽离但失败在负重规划；本轮按用户要求不继续优化速度或放宽碰撞。
+## 2026-07-20 运控 / Codex / 侧吸 0.90 米复测
+- 做了什么：五任务默认距离拆分为侧吸 x=0.90m、顶吸 x=0.70m，其他策略保持不变。
+- 验证结果：侧吸三任务全流程 L1/R3、L4/R6 成功，L7/R9 抽离失败，成功率 2/3；Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/front_three_tasks_x090_loaded010.rrd。
+- 留给下个 AI：顶吸沿用上一版 0.70m 直升 0.40m 的成功结果；本轮未做速度优化。

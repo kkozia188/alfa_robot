@@ -337,10 +337,10 @@ public:
     ik_config_.top_suction_z_reach_upper = get_or_declare_parameter<double>("top_z_reach_upper", 0.6) - world_to_base_z_;
     ik_config_.h_lower = get_or_declare_parameter<double>("ik_h_lower", 0.0);
     ik_config_.h_upper = get_or_declare_parameter<double>("ik_h_upper", 0.7);
-    ik_config_.full_h_range_scan = get_or_declare_parameter<bool>("ik_full_h_range_scan", false);
+    ik_config_.full_h_range_scan = get_or_declare_parameter<bool>("ik_full_h_range_scan", true);
     ik_config_.h_search_mode = robot_motion::core::UpdownAwareIkConfig::HSearchMode::FixedDiscrete;
     ik_config_.h_search_margin = get_or_declare_parameter<double>("ik_h_search_margin", 0.2);
-    ik_config_.h_step = get_or_declare_parameter<double>("ik_h_step", 0.1);
+    ik_config_.h_step = get_or_declare_parameter<double>("ik_h_step", 0.01);
     ik_config_.h_candidate_count = static_cast<size_t>(std::max(1, get_or_declare_parameter<int>("ik_h_candidate_count", 64)));
     ik_config_.seed_count = static_cast<size_t>(std::max(1, get_or_declare_parameter<int>("ik_seed_count", 32)));
     ik_config_.cost_loaded_family_distance =
@@ -404,7 +404,7 @@ public:
     carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.5);
     carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.4);
     carried_box_grasp_lateral_offset_ =
-      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.05);
+      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.10);
     attached_box_collision_padding_ = get_or_declare_parameter<double>("attached_box_collision_padding", -0.002);
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
@@ -486,7 +486,7 @@ public:
     extract_monitor_place_cycle_enabled_ =
       get_or_declare_parameter<bool>("extract_monitor_place_cycle_enabled", false);
     extract_monitor_place_updown_ =
-      get_or_declare_parameter<double>("extract_monitor_place_updown", 0.20);
+      get_or_declare_parameter<double>("extract_monitor_place_updown", 0.10);
     extract_monitor_place_transition_updown_ =
       get_or_declare_parameter<double>("extract_monitor_place_transition_updown", 0.10);
     auto left_place_family = parse_pose_family_degrees(get_or_declare_parameter<std::string>(
@@ -5696,7 +5696,7 @@ private:
   double carried_box_depth_ = 0.3;
   double carried_box_width_ = 0.5;
   double carried_box_height_ = 0.4;
-  double carried_box_grasp_lateral_offset_ = 0.05;
+  double carried_box_grasp_lateral_offset_ = 0.10;
   double attached_box_collision_padding_ = -0.002;
   bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;
@@ -5768,7 +5768,7 @@ private:
   bool extract_monitor_capture_raw_ik_ = false;
   bool extract_monitor_build_final_replay_ = true;
   bool extract_monitor_place_cycle_enabled_ = false;
-  double extract_monitor_place_updown_ = 0.20;
+  double extract_monitor_place_updown_ = 0.10;
   double extract_monitor_place_transition_updown_ = 0.10;
   std::vector<double> extract_monitor_place_left_arm_;
   std::vector<double> extract_monitor_place_right_arm_;

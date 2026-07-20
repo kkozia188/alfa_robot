@@ -28,6 +28,11 @@ DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extrac
 DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
 FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
+OUTER_GRASP_TARGET_Y_M = 0.40
+TASK_LAYOUT_Y_OFFSETS = {
+    "centered": 0.0,
+    "right_shift_0p1": 0.10,
+}
 FRONT_TOOL_ORIENTATION_XYZW = [0.70710678, 0.0, 0.70710678, 0.0]
 TOP_TOOL_ORIENTATION_XYZW = [1.0, 0.0, 0.0, 0.0]
 
@@ -237,7 +242,9 @@ def explicit_grasp_target(args: argparse.Namespace, box_id: int, grasp_mode: str
     else:
         position = [box_x, box_y, box_z - float(args.world_to_base_z)]
         orientation = FRONT_TOOL_ORIENTATION_XYZW
-    position[1] = (0.45 if box_id % 3 == 1 else -0.45) + float(args.scene_y_shift)
+    position[1] = (
+        OUTER_GRASP_TARGET_Y_M if box_id % 3 == 1 else -OUTER_GRASP_TARGET_Y_M
+    ) + float(args.scene_y_shift)
     return {
         "frame_id": "base_link",
         "position": position,
@@ -252,6 +259,8 @@ def make_pair_args(
     grasp_mode: str | None = None,
     left_grasp_mode: str | None = None,
     right_grasp_mode: str | None = None,
+    task_layout: str = "centered",
+    scene_y_shift: float | None = None,
 ) -> SimpleNamespace:
     left_mode = left_grasp_mode or grasp_mode_for_box(left_id)
     right_mode = right_grasp_mode or grasp_mode_for_box(right_id)
@@ -270,7 +279,8 @@ def make_pair_args(
         box_front_x=effective_box_front_x(args, mode),
         top_box_front_x=effective_box_front_x(args, mode),
         top_approach_forward=0.0,
-        scene_y_shift=args.scene_y_shift,
+        scene_y_shift=args.scene_y_shift if scene_y_shift is None else scene_y_shift,
+        task_layout=task_layout,
         world_to_base_z=args.world_to_base_z,
         fixed_updown=args.fixed_updown,
         turn_rad=math.radians(args.turn_deg),
@@ -700,7 +710,10 @@ def run_one_pair(
     run_dir = run_root / f"{task_index:02d}_L{left_id}_R{right_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
     snapshot_path = run_dir / "stage_snapshot.json"
-    print(f"\n===== 任务 {task_index}/{pair_count}: L{left_id}/R{right_id} =====")
+    print(
+        f"\n===== 任务 {task_index}/{pair_count}: "
+        f"[{getattr(args, 'task_layout', 'centered')}] L{left_id}/R{right_id} ====="
+    )
     try:
         config_ok, config_output, config_ms = service_client.configure(
             left_id,
@@ -856,10 +869,16 @@ def main() -> int:
     parser.add_argument("--no-rerun", action="store_true", help="不生成 Rerun，只保存 snapshot/summary/stats CSV")
     parser.add_argument("--repeat", type=int, default=1, help="重复运行整组 pair sequence 的次数")
     parser.add_argument("--stats-csv", type=Path, default=None, help="统计 CSV 输出路径；默认写入 run_root/stats.csv")
-    parser.add_argument("--box-front-x", type=float, default=0.925)
-    parser.add_argument("--top-approach-forward", type=float, default=0.30, help="顶吸时车向箱墙前进距离；未指定 --top-box-front-x 时，顶吸 box_front_x=box_front_x-该值")
+    parser.add_argument("--box-front-x", type=float, default=0.80)
+    parser.add_argument("--top-approach-forward", type=float, default=0.0, help="顶吸额外前移量；默认0，侧吸顶吸统一使用box-front-x")
     parser.add_argument("--top-box-front-x", type=float, default=None, help="顶吸专用箱墙前表面 x；优先级高于 --top-approach-forward")
     parser.add_argument("--scene-y-shift", type=float, default=0.0)
+    parser.add_argument(
+        "--task-layout",
+        choices=["centered", "right_shift_0p1", "both"],
+        default="centered",
+        help="横向布局：居中、按用户定义右偏0.1m（目标y=+0.50/-0.30m），或两套连续运行。",
+    )
     parser.add_argument("--world-to-base-z", type=float, default=0.202094)
     parser.add_argument("--fixed-updown", type=float, default=0.3)
     parser.add_argument("--turn-deg", type=float, default=0.0)
@@ -883,7 +902,12 @@ def main() -> int:
     parser.add_argument("--ik-h-lower", type=float, default=0.0)
     parser.add_argument("--ik-h-upper", type=float, default=0.7)
     parser.add_argument("--ik-h-step", type=float, default=0.01)
-    parser.add_argument("--ik-full-h-range-scan", action="store_true")
+    parser.add_argument(
+        "--ik-full-h-range-scan",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="默认在0~0.7m范围按ik-h-step逐点扫描。",
+    )
     parser.add_argument("--ik-seed-count", type=int, default=32)
     parser.add_argument("--ik-workers", type=int, default=1)
     parser.add_argument("--ik-candidate-timeout", type=float, default=0.01)
@@ -973,7 +997,7 @@ def main() -> int:
         default=True,
         help="负重后规划到放置姿态，释放箱体，再返回负重姿态。",
     )
-    parser.add_argument("--place-updown", type=float, default=0.20)
+    parser.add_argument("--place-updown", type=float, default=0.10)
     parser.add_argument("--place-transition-updown", type=float, default=0.10)
     parser.add_argument(
         "--place-left-pose-deg",
@@ -1044,6 +1068,12 @@ def main() -> int:
             pair_vehicle_mode(left_mode, right_mode)
             for left_mode, right_mode in zip(left_grasp_modes, right_grasp_modes)
         ]
+    task_layouts = (
+        list(TASK_LAYOUT_Y_OFFSETS)
+        if args.task_layout == "both"
+        else [args.task_layout]
+    )
+    total_task_count = len(pairs) * len(task_layouts) * args.repeat
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_root = args.output_root / f"sequence_{stamp}"
     run_root.mkdir(parents=True, exist_ok=True)
@@ -1097,27 +1127,28 @@ def main() -> int:
         current_mode = None
 
     def start_planner_for_mode(
+        group_key: str,
+        layout_name: str,
         mode: str,
-        left_mode: str,
-        right_mode: str,
+        initial_args: argparse.Namespace,
         left_id: int,
         right_id: int,
         group_index: int,
     ) -> tuple[subprocess.Popen[str], monitor.ExtractMonitorServiceClient, float]:
         nonlocal current_mode
-        launch_log = run_root / f"planner_{group_index:02d}_{mode}.log"
-        initial_snapshot = run_root / f"initial_stage_snapshot_{group_index:02d}_{mode}.json"
-        initial_args = make_pair_args(args, left_id, right_id, mode, left_mode, right_mode)
+        group_label = f"{layout_name}_{mode}"
+        launch_log = run_root / f"planner_{group_index:02d}_{group_label}.log"
+        initial_snapshot = run_root / f"initial_stage_snapshot_{group_index:02d}_{group_label}.json"
         launch_command = monitor.build_launch_command(initial_args, run_root, initial_snapshot)
         domain_export = f"export ROS_DOMAIN_ID={os.environ['ROS_DOMAIN_ID']}\n" if "ROS_DOMAIN_ID" in os.environ else ""
-        (run_root / f"launch_command_{group_index:02d}_{mode}.sh").write_text(
+        (run_root / f"launch_command_{group_index:02d}_{group_label}.sh").write_text(
             "#!/usr/bin/env bash\nset -e\n"
             f"{domain_export}"
             "source /opt/ros/humble/setup.bash\n"
             f"source {monitor.ROS_WS}/install/setup.bash\n"
             f"cd {monitor.ROS_WS}\n{launch_command}\n"
         )
-        print(f"启动 planner[{mode}]，日志：{launch_log}")
+        print(f"启动 planner[{group_label}]，日志：{launch_log}")
         start = time.monotonic()
         with launch_log.open("w") as log_file:
             new_planner = subprocess.Popen(
@@ -1148,17 +1179,17 @@ def main() -> int:
                 right_id,
                 initial_snapshot,
                 args.service_timeout,
-                left_mode == "top_suction",
-                right_mode == "top_suction",
+                initial_args.left_grasp_mode == "top_suction",
+                initial_args.right_grasp_mode == "top_suction",
                 explicit_grasp_target(
-                    make_pair_args(args, left_id, right_id, mode, left_mode, right_mode),
+                    initial_args,
                     left_id,
-                    left_mode,
+                    initial_args.left_grasp_mode,
                 ),
                 explicit_grasp_target(
-                    make_pair_args(args, left_id, right_id, mode, left_mode, right_mode),
+                    initial_args,
                     right_id,
-                    right_mode,
+                    initial_args.right_grasp_mode,
                 ),
             )
             print(prewarm_output)
@@ -1166,8 +1197,8 @@ def main() -> int:
                 new_client.close()
                 raise RuntimeError(f"planner[{mode}] IK 预热失败：{prewarm_output}")
             elapsed = (time.monotonic() - start) * 1000.0
-            print(f"planner[{mode}] 启动完成：startup={elapsed:.1f}ms prewarm={prewarm_ms:.1f}ms")
-            current_mode = mode
+            print(f"planner[{group_label}] 启动完成：startup={elapsed:.1f}ms prewarm={prewarm_ms:.1f}ms")
+            current_mode = group_key
             return new_planner, new_client, elapsed
         except Exception:
             monitor.terminate_process(new_planner)
@@ -1177,59 +1208,94 @@ def main() -> int:
     try:
         group_index = 0
         task_global_index = 0
+        stop_sequence = False
         for repeat_index in range(1, args.repeat + 1):
             print(f"\n######## 重复轮次 {repeat_index}/{args.repeat} ########")
-            for pair_index, ((left_id, right_id), left_mode, right_mode, mode) in enumerate(
-                zip(pairs, left_grasp_modes, right_grasp_modes, vehicle_modes),
-                start=1,
-            ):
-                task_global_index += 1
-                pair_args = make_pair_args(args, left_id, right_id, mode, left_mode, right_mode)
-                if current_mode != mode:
-                    stop_current_planner()
-                    group_index += 1
-                    last_error: Exception | None = None
-                    for attempt in range(args.startup_retries + 1):
-                        try:
-                            if attempt > 0:
-                                print(f"planner[{mode}] 启动重试 {attempt}/{args.startup_retries}")
-                            planner, service_client, startup_ms = start_planner_for_mode(
-                                mode, left_mode, right_mode, left_id, right_id, group_index)
-                            last_error = None
-                            break
-                        except Exception as exc:
-                            last_error = exc
-                            cleanup_planner_processes()
-                    if last_error is not None:
-                        raise last_error
-                assert planner is not None
-                assert service_client is not None
-                ok, sample_count, summary = run_one_pair(
-                    pair_args,
-                    helpers,
-                    robot,
-                    run_root,
-                    planner,
-                    run_root / f"planner_{group_index:02d}_{mode}.log",
-                    service_client,
-                    startup_ms,
-                    left_id,
-                    right_id,
-                    task_global_index,
-                    len(pairs) * args.repeat,
-                    sample,
+            for layout_name in task_layouts:
+                layout_scene_y_shift = (
+                    float(args.scene_y_shift) + TASK_LAYOUT_Y_OFFSETS[layout_name]
                 )
-                startup_ms = 0.0
-                summary["repeat"] = repeat_index
-                summary["pair_index"] = pair_index
-                summary["grasp_mode"] = mode
-                summary["left_grasp_mode"] = left_mode
-                summary["right_grasp_mode"] = right_mode
-                summaries.append(summary)
-                sample += max(1, sample_count) + 5
-                if not ok and not args.continue_on_failure:
+                print(
+                    f"\n---- 横向布局 {layout_name}: "
+                    f"scene_y_shift={layout_scene_y_shift:+.2f}m ----"
+                )
+                for pair_index, ((left_id, right_id), left_mode, right_mode, mode) in enumerate(
+                    zip(pairs, left_grasp_modes, right_grasp_modes, vehicle_modes),
+                    start=1,
+                ):
+                    task_global_index += 1
+                    pair_args = make_pair_args(
+                        args,
+                        left_id,
+                        right_id,
+                        mode,
+                        left_mode,
+                        right_mode,
+                        task_layout=layout_name,
+                        scene_y_shift=layout_scene_y_shift,
+                    )
+                    group_key = f"{layout_name}:{mode}"
+                    group_label = f"{layout_name}_{mode}"
+                    if current_mode != group_key:
+                        stop_current_planner()
+                        group_index += 1
+                        last_error: Exception | None = None
+                        for attempt in range(args.startup_retries + 1):
+                            try:
+                                if attempt > 0:
+                                    print(
+                                        f"planner[{group_label}] 启动重试 "
+                                        f"{attempt}/{args.startup_retries}"
+                                    )
+                                planner, service_client, startup_ms = start_planner_for_mode(
+                                    group_key,
+                                    layout_name,
+                                    mode,
+                                    pair_args,
+                                    left_id,
+                                    right_id,
+                                    group_index,
+                                )
+                                last_error = None
+                                break
+                            except Exception as exc:
+                                last_error = exc
+                                cleanup_planner_processes()
+                        if last_error is not None:
+                            raise last_error
+                    assert planner is not None
+                    assert service_client is not None
+                    ok, sample_count, summary = run_one_pair(
+                        pair_args,
+                        helpers,
+                        robot,
+                        run_root,
+                        planner,
+                        run_root / f"planner_{group_index:02d}_{group_label}.log",
+                        service_client,
+                        startup_ms,
+                        left_id,
+                        right_id,
+                        task_global_index,
+                        total_task_count,
+                        sample,
+                    )
+                    startup_ms = 0.0
+                    summary["repeat"] = repeat_index
+                    summary["layout"] = layout_name
+                    summary["scene_y_shift"] = layout_scene_y_shift
+                    summary["pair_index"] = pair_index
+                    summary["grasp_mode"] = mode
+                    summary["left_grasp_mode"] = left_mode
+                    summary["right_grasp_mode"] = right_mode
+                    summaries.append(summary)
+                    sample += max(1, sample_count) + 5
+                    if not ok and not args.continue_on_failure:
+                        stop_sequence = True
+                        break
+                if stop_sequence:
                     break
-            if summaries and not summaries[-1].get("success") and not args.continue_on_failure:
+            if stop_sequence:
                 break
     finally:
         stop_current_planner()
@@ -1240,6 +1306,8 @@ def main() -> int:
     if summaries:
         fieldnames = [
             "repeat",
+            "layout",
+            "scene_y_shift",
             "pair_index",
             "left",
             "right",
@@ -1287,6 +1355,7 @@ def main() -> int:
     for item in summaries:
         status = "成功" if item.get("success") else "失败"
         print(
+            f"[{item.get('layout', 'centered')}] "
             f"L{item['left']}/R{item['right']}: {status} "
             f"startup={item.get('startup_ms', 0.0):.1f}ms "
             f"total={item.get('total_ms', 0.0):.1f}ms "

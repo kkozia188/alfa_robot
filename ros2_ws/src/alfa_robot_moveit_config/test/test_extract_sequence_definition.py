@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import math
 from pathlib import Path
 import sys
 
@@ -21,6 +22,19 @@ def main() -> int:
     ]
     pairs = MODULE.parse_pair_sequence(MODULE.DEFAULT_SEQUENCE)
     assert pairs == expected_pairs, pairs
+    assert MODULE.OUTER_GRASP_TARGET_Y_M == 0.40
+    assert MODULE.TASK_LAYOUT_Y_OFFSETS == {
+        "centered": 0.0,
+        "right_shift_0p1": 0.10,
+    }
+    assert math.isclose(
+        MODULE.OUTER_GRASP_TARGET_Y_M + MODULE.TASK_LAYOUT_Y_OFFSETS["right_shift_0p1"],
+        0.50,
+    )
+    assert math.isclose(
+        -MODULE.OUTER_GRASP_TARGET_Y_M + MODULE.TASK_LAYOUT_Y_OFFSETS["right_shift_0p1"],
+        -0.30,
+    )
 
     left_modes = MODULE.parse_arm_grasp_mode_sequence("", pairs, "left")
     right_modes = MODULE.parse_arm_grasp_mode_sequence("", pairs, "right")
@@ -50,6 +64,10 @@ def main() -> int:
 
     parser_source = SCRIPT.read_text()
     assert 'parser.add_argument("--loaded-updown", type=float, default=0.3)' in parser_source
+    assert 'parser.add_argument("--box-front-x", type=float, default=0.80)' in parser_source
+    assert 'choices=["centered", "right_shift_0p1", "both"]' in parser_source
+    assert 'OUTER_GRASP_TARGET_Y_M = 0.40' in parser_source
+    assert 'default=True,\n        help="默认在0~0.7m范围' in parser_source
     assert 'choices=["rrt", "shortcut"], default="shortcut"' in parser_source
     assert '"--place-cycle-enabled"' in parser_source
     assert 'default=True,\n        help="负重后规划到放置姿态' in parser_source

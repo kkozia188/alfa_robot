@@ -813,7 +813,7 @@ def build_planner_args(args: argparse.Namespace, run_dir: Path, snapshot_path: P
         ik_only_raw=False,
         extract_monitor_build_final_replay=True,
         place_cycle_enabled=getattr(args, "place_cycle_enabled", True),
-        place_updown=getattr(args, "place_updown", 0.20),
+        place_updown=getattr(args, "place_updown", 0.10),
         place_left_pose_deg=getattr(
             args, "place_left_pose_deg", "[0.0,-55.0,-50.0,-60.0,0.0,0.0]"
         ),
@@ -1104,7 +1104,7 @@ def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
     parser.add_argument("--loaded-sort-by-pose-distance", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-stop-on-first-success", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--place-cycle-enabled", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--place-updown", type=float, default=0.20)
+    parser.add_argument("--place-updown", type=float, default=0.10)
     parser.add_argument(
         "--place-left-pose-deg",
         default="[0.0,-55.0,-50.0,-60.0,0.0,0.0]",

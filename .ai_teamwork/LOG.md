@@ -1610,3 +1610,7 @@
 - 做了什么：L7/R9 保持侧吸 IK 和侧吸附着箱建模，但抽离改为双臂关节不动、updown 固定上升 0.40m；普通侧吸与顶吸任务策略不变。
 - 验证结果：L7/R9 完整流程成功，快照确认模式为 front/front + direct_updown_lift，updown 由 0.02m 到 0.42m。Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/L7_R9_front_direct_lift040_x090_loaded010.rrd。
 - 留给下个 AI：序列脚本会为 L7/R9 单独重启对应策略的 planner，避免与 L1/R3、L4/R6 的侧吸 RRT 配置混用。
+## 2026-07-20 运控 / Codex / 双布局十任务验证
+- 验证内容：居中与右偏布局各运行 L1/R3、L4/R6、L7/R9、L10/R12、L13/R15 五组完整流程。
+- 验证结果：10/10 全部成功；侧吸 x=0.90m、顶吸 x=0.70m，L7/R9 与两组顶吸均使用 updown 直升 0.40m。
+- 证据：data/ik_benchmark/container_1p8m_15box_flow/ten_tasks_both_layouts_front090_top070_direct_lift040_loaded010.rrd；汇总位于 data/ik_benchmark/extract_sequence_rerun/sequence_20260720_222046/。

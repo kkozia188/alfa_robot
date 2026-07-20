@@ -25,9 +25,9 @@ import numpy as np
 
 
 DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_sequence_rerun")
-DEFAULT_SEQUENCE = "1,3;1,8;6,3;6,8;6,13;11,8;11,13;11,18;16,13;16,18;16,23;21,18;21,23"
+DEFAULT_SEQUENCE = "1,3;1,6;4,3;4,6;4,9;7,6;7,9;7,12;10,9;10,12"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
-FRONT_SUCTION_BOX_IDS = {1, 3, 6, 8}
+FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
 FRONT_TOOL_ORIENTATION_XYZW = [0.70710678, 0.0, 0.70710678, 0.0]
 TOP_TOOL_ORIENTATION_XYZW = [1.0, 0.0, 0.0, 0.0]
 
@@ -627,7 +627,7 @@ def log_failure_marker(
 ) -> int:
     helpers.set_sample_time(sample_start)
     # 规划失败时没有 snapshot，也就没有权威的集装箱碰撞几何可画；不再画硬编码的
-    # 集装箱壳/5x5 箱堆（那属于"仅为好看"的伪几何）。仅保留下方的目标点标记，
+    # 集装箱壳/3x4 箱堆（那属于"仅为好看"的伪几何）。仅保留下方的目标点标记，
     # 目标点由 all_boxes 查表得到，与规划器 make_boxes 推导抓取目标同源。
     box_front_x = effective_box_front_x(args, getattr(args, "grasp_mode", "front"))
     boxes = monitor.all_boxes(box_front_x, args.scene_y_shift)
@@ -798,7 +798,7 @@ def run_one_pair(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="生成 6 次抽箱任务连续全流程 Rerun")
+    parser = argparse.ArgumentParser(description="生成 10 次抽箱任务连续全流程 Rerun")
     parser.add_argument("--pair-sequence", default=DEFAULT_SEQUENCE)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--save", type=Path, default=None)
@@ -808,7 +808,7 @@ def main() -> int:
     parser.add_argument("--box-front-x", type=float, default=0.925)
     parser.add_argument("--top-approach-forward", type=float, default=0.30, help="顶吸时车向箱墙前进距离；未指定 --top-box-front-x 时，顶吸 box_front_x=box_front_x-该值")
     parser.add_argument("--top-box-front-x", type=float, default=None, help="顶吸专用箱墙前表面 x；优先级高于 --top-approach-forward")
-    parser.add_argument("--scene-y-shift", type=float, default=-0.4)
+    parser.add_argument("--scene-y-shift", type=float, default=0.0)
     parser.add_argument("--world-to-base-z", type=float, default=0.202094)
     parser.add_argument("--fixed-updown", type=float, default=0.3)
     parser.add_argument("--turn-deg", type=float, default=0.0)
@@ -818,14 +818,14 @@ def main() -> int:
     parser.add_argument("--display-turn-offset-deg", type=float, default=0.0, help="仅用于 Rerun 回放显示外部底盘 yaw 后的 turn 反向补偿")
     parser.add_argument("--grasp-mode", choices=["front", "top_suction"], default="front")
     parser.add_argument("--grasp-mode-sequence", default="", help="每组任务吸附模式，例如 front;front;top_suction。留空则全部使用 --grasp-mode")
-    parser.add_argument("--left-grasp-mode-sequence", default="", help="左臂逐任务吸附模式；留空按箱号自动：1/6 为侧吸，其余顶吸")
-    parser.add_argument("--right-grasp-mode-sequence", default="", help="右臂逐任务吸附模式；留空按箱号自动：3/8 为侧吸，其余顶吸")
+    parser.add_argument("--left-grasp-mode-sequence", default="", help="左臂逐任务吸附模式；留空按箱号自动：1/4 为侧吸，其余顶吸")
+    parser.add_argument("--right-grasp-mode-sequence", default="", help="右臂逐任务吸附模式；留空按箱号自动：3/6 为侧吸，其余顶吸")
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
     parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
     parser.add_argument("--top-suction-x-offset", type=float, default=0.15, help="顶吸目标相对箱子前表面向箱体内部的 x 偏移")
-    parser.add_argument("--top-suction-z-offset", type=float, default=0.2, help="顶吸目标相对箱子中心的 z 偏移")
+    parser.add_argument("--top-suction-z-offset", type=float, default=0.25, help="顶吸目标相对箱子中心的 z 偏移")
     parser.add_argument("--ik-top-position-tolerance", type=float, default=0.04)
     parser.add_argument("--ik-top-orientation-tolerance-deg", type=float, default=7.0)
     parser.add_argument("--ik-h-candidate-count", type=int, default=64)

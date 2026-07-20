@@ -407,12 +407,15 @@ public:
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
 
-    extract_demo_left_box_id_ = get_or_declare_parameter<int>("extract_demo_left_box_id", 2);
-    extract_demo_right_box_id_ = get_or_declare_parameter<int>("extract_demo_right_box_id", 4);
+    extract_demo_left_box_id_ = get_or_declare_parameter<int>("extract_demo_left_box_id", 1);
+    extract_demo_right_box_id_ = get_or_declare_parameter<int>("extract_demo_right_box_id", 3);
     extract_demo_pair_sequence_ = parse_box_pair_list(
-      get_or_declare_parameter<std::string>("extract_demo_pair_sequence", "2,4;7,9;12,14;17,19"));
+      get_or_declare_parameter<std::string>(
+        "extract_demo_pair_sequence", "1,3;1,6;4,3;4,6;4,9;7,6;7,9;7,12;10,9;10,12"));
     if (extract_demo_pair_sequence_.empty()) {
-      extract_demo_pair_sequence_ = {{2, 4}, {7, 9}, {12, 14}, {17, 19}};
+      extract_demo_pair_sequence_ = {
+        {1, 3}, {1, 6}, {4, 3}, {4, 6}, {4, 9},
+        {7, 6}, {7, 9}, {7, 12}, {10, 9}, {10, 12}};
     }
     extract_demo_all_rows_ = get_or_declare_parameter<bool>("extract_demo_all_rows", false);
     extract_monitor_top_suction_ = get_or_declare_parameter<bool>("extract_monitor_top_suction", false);
@@ -5610,9 +5613,11 @@ private:
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;
   bool enable_static_box_obstacles_ = true;
   double static_box_obstacle_inset_ = 0.002;
-  int extract_demo_left_box_id_ = 2;
-  int extract_demo_right_box_id_ = 4;
-  std::vector<std::pair<int, int>> extract_demo_pair_sequence_{{2, 4}, {7, 9}, {12, 14}, {17, 19}};
+  int extract_demo_left_box_id_ = 1;
+  int extract_demo_right_box_id_ = 3;
+  std::vector<std::pair<int, int>> extract_demo_pair_sequence_{
+    {1, 3}, {1, 6}, {4, 3}, {4, 6}, {4, 9},
+    {7, 6}, {7, 9}, {7, 12}, {10, 9}, {10, 12}};
   bool extract_demo_all_rows_ = false;
   bool extract_monitor_top_suction_ = false;
   bool extract_monitor_left_top_suction_ = false;

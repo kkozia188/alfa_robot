@@ -50,7 +50,7 @@
 
 ### 3.1 箱垛与抓取目标
 
-- `make_boxes(box_front_x)` 生成 5×5 箱垛坐标。
+- `make_boxes(box_front_x)` 生成当前 3×4 箱垛坐标。
 - `parse_box_pair_list()` / `make_pick_pairs()` 生成抓取 pair。
 - `make_front_grasp_pose()` / `make_top_suction_pose()` 在 `motion_core/pose_math` 内结合抓取模式生成左右末端 Pose。
 - 集装箱和箱墙几何来自 `robot_motion_scene_service/motion_core/scene_geometry`，再由 `MotionSceneAdapter` 注入 MoveIt。
@@ -326,7 +326,7 @@ xdg-open http://127.0.0.1:8766
 - `motion_state_source_node`：发布 `/robot_motion/state`，提供 `/robot_motion/set_state`。
 - `motion_scene_source_node`：发布 `/robot_motion/scene`，提供 `/robot_motion/set_scene`。
 - `dual_arm_ik_candidate_service_node`：提供 `/robot_motion/plan_dual_arm_ik`，调用左右两次 `SolveArmIk` 并组合候选。
-- `box_pair_task_adapter_node`：提供 `/robot_motion/run_box_pair_task`，把 5×5 箱垛箱号、侧吸/顶吸模式和箱墙参数转换为左右目标 Pose 与 carried box，再调用 `/robot_motion/run_dual_arm_pose_task`。
+- `box_pair_task_adapter_node`：提供 `/robot_motion/run_box_pair_task`，把当前 3×4 箱垛箱号、侧吸/顶吸模式和箱墙参数转换为左右目标 Pose 与 carried box，再调用 `/robot_motion/run_dual_arm_pose_task`。
 - `plan_extract_service_node`：提供 `/robot_motion/plan_extract`。轻量模式是 deterministic shortcut；完整栈下会调用 `/robot_motion/check_collision` 并使用请求 scene 或 `/robot_motion/scene` 过滤候选轨迹。后续要把 C++ 抽离 rollout 迁入。
 - `plan_loaded_service_node`：提供 `/robot_motion/plan_loaded`。当前生成关节空间 shortcut；完整栈下会调用碰撞服务并使用请求 scene 或 `/robot_motion/scene` 过滤候选。后续要把 RRT/local-RRT 迁入。
 - `execute_trajectory_service_node`：提供 `/robot_motion/execute_trajectory`，可 dry-run 或转发到 FollowJointTrajectory action。

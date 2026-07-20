@@ -241,7 +241,7 @@ LOADED_RIGHT_POSE_FAMILY_DEG = [
     [0.0, -75.0, 135.0, 0.0, 60.0, 0.0],
     [-30.93, 74.17, -134.92, 0.0, -60.74, 30.93],
 ]
-FRONT_SUCTION_BOX_IDS = {1, 3, 6, 8}
+FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
 
 
 def normalize_grasp_mode(value: str) -> str:
@@ -753,7 +753,7 @@ def build_planner_args(args: argparse.Namespace, run_dir: Path, snapshot_path: P
         top_z_reach_lower=getattr(args, "top_z_reach_lower", 0.0),
         top_z_reach_upper=getattr(args, "top_z_reach_upper", 0.45),
         top_suction_x_offset=getattr(args, "top_suction_x_offset", 0.15),
-        top_suction_z_offset=getattr(args, "top_suction_z_offset", 0.2),
+        top_suction_z_offset=getattr(args, "top_suction_z_offset", 0.25),
         ik_top_position_tolerance=getattr(args, "ik_top_position_tolerance", 0.04),
         ik_top_orientation_tolerance_deg=getattr(args, "ik_top_orientation_tolerance_deg", 7.0),
         ik_h_candidate_count=getattr(args, "ik_h_candidate_count", 64),
@@ -1014,7 +1014,7 @@ def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
     parser.add_argument("--box-front-x", type=float, default=0.925)
     parser.add_argument("--top-approach-forward", type=float, default=0.30)
     parser.add_argument("--top-box-front-x", type=float, default=None)
-    parser.add_argument("--scene-y-shift", type=float, default=-0.4)
+    parser.add_argument("--scene-y-shift", type=float, default=0.0)
     parser.add_argument("--fixed-updown", type=float, default=0.3)
     parser.add_argument(
         "--loaded-updown",
@@ -1027,7 +1027,7 @@ def parse_args(default_executor_mode: str = "mock") -> argparse.Namespace:
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
     parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
     parser.add_argument("--top-suction-x-offset", type=float, default=0.15)
-    parser.add_argument("--top-suction-z-offset", type=float, default=0.2)
+    parser.add_argument("--top-suction-z-offset", type=float, default=0.25)
     parser.add_argument("--ik-top-position-tolerance", type=float, default=0.04)
     parser.add_argument("--ik-top-orientation-tolerance-deg", type=float, default=7.0)
     parser.add_argument("--ik-h-candidate-count", type=int, default=64)

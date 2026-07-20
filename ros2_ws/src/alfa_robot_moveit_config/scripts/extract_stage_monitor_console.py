@@ -163,7 +163,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"top_z_reach_lower:={args.top_z_reach_lower}",
         f"top_z_reach_upper:={args.top_z_reach_upper}",
         f"top_suction_x_offset:={getattr(args, 'top_suction_x_offset', 0.15)}",
-        f"top_suction_z_offset:={getattr(args, 'top_suction_z_offset', 0.2)}",
+        f"top_suction_z_offset:={getattr(args, 'top_suction_z_offset', 0.25)}",
         f"ik_top_position_tolerance:={getattr(args, 'ik_top_position_tolerance', 0.04)}",
         f"ik_top_orientation_tolerance_deg:={getattr(args, 'ik_top_orientation_tolerance_deg', 7.0)}",
         f"ik_h_candidate_count:={args.ik_h_candidate_count}",
@@ -578,15 +578,14 @@ def matrix_to_quaternion(matrix: np.ndarray) -> list[float]:
 
 def all_boxes(box_x: float, y_shift: float = 0.0) -> dict[int, tuple[float, float, float]]:
     rows = [
-        [(1, 0.8), (2, 0.4), (3, 0.0), (4, -0.4), (5, -0.8)],
-        [(6, 0.8), (7, 0.4), (8, 0.0), (9, -0.4), (10, -0.8)],
-        [(11, 0.8), (12, 0.4), (13, 0.0), (14, -0.4), (15, -0.8)],
-        [(16, 0.8), (17, 0.4), (18, 0.0), (19, -0.4), (20, -0.8)],
-        [(21, 0.8), (22, 0.4), (23, 0.0), (24, -0.4), (25, -0.8)],
+        [(1, 0.4), (2, 0.0), (3, -0.4)],
+        [(4, 0.4), (5, 0.0), (6, -0.4)],
+        [(7, 0.4), (8, 0.0), (9, -0.4)],
+        [(10, 0.4), (11, 0.0), (12, -0.4)],
     ]
     out: dict[int, tuple[float, float, float]] = {}
     for row_i, row in enumerate(rows):
-        z = 0.2 + 0.4 * (len(rows) - 1 - row_i)
+        z = (len(rows) - row_i - 0.5) * 0.5
         for box_id, y in row:
             out[box_id] = (box_x, y + y_shift, z)
     return out
@@ -1033,10 +1032,10 @@ def main() -> int:
     run_start = time.monotonic()
     parser = argparse.ArgumentParser(description="交互式抽箱流程阶段监控台")
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
-    parser.add_argument("--left-box-id", type=int, default=2)
+    parser.add_argument("--left-box-id", type=int, default=1)
     parser.add_argument("--right-box-id", type=int, default=3)
     parser.add_argument("--box-front-x", type=float, default=0.925)
-    parser.add_argument("--scene-y-shift", type=float, default=None, help="场景相对机器人 y 偏移；机器人左移 0.4m 时通常传 -0.4")
+    parser.add_argument("--scene-y-shift", type=float, default=None, help="箱堆中心相对机器人 y 偏移；默认 0 表示机器人对准中间列")
     parser.add_argument("--box-stack-y-shift", type=float, default=None, help="兼容旧参数名；等同于 --scene-y-shift")
     parser.add_argument("--fixed-updown", type=float, default=0.3)
     parser.add_argument("--turn-deg", type=float, default=0.0)
@@ -1048,7 +1047,7 @@ def main() -> int:
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
     parser.add_argument("--top-z-reach-upper", type=float, default=0.45)
     parser.add_argument("--top-suction-x-offset", type=float, default=0.15)
-    parser.add_argument("--top-suction-z-offset", type=float, default=0.2)
+    parser.add_argument("--top-suction-z-offset", type=float, default=0.25)
     parser.add_argument("--ik-top-position-tolerance", type=float, default=0.04)
     parser.add_argument("--ik-top-orientation-tolerance-deg", type=float, default=7.0)
     parser.add_argument("--ik-h-candidate-count", type=int, default=64)

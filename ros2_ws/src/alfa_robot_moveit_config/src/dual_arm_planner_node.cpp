@@ -503,6 +503,8 @@ public:
     extract_monitor_place_left_arm_ = std::move(left_place_family.front());
     extract_monitor_place_right_arm_ = std::move(right_place_family.front());
     extract_rollout_mode_ = get_or_declare_parameter<std::string>("extract_rollout_mode", "greedy");
+    extract_top_updown_lift_distance_ = std::max(
+      0.0, get_or_declare_parameter<double>("extract_top_updown_lift_distance", 0.40));
     extract_rrt_rollout_enabled_ = get_or_declare_parameter<bool>("extract_rrt_rollout_enabled", false);
     extract_box_pose_rrt_max_iterations_ = static_cast<size_t>(
       std::max(1, get_or_declare_parameter<int>("extract_box_pose_rrt_max_iterations", 160)));
@@ -3427,7 +3429,8 @@ private:
     const AttachedBoxSpec& right_box,
     int right_box_id,
     size_t candidate_order,
-    const robot_motion::core::UpdownAwareIkCandidate& ik_candidate)
+    const robot_motion::core::UpdownAwareIkCandidate& ik_candidate,
+    bool require_full_updown_lift)
   {
     ExtractRolloutTiming timing;
     timing.candidate_order = candidate_order;
@@ -3440,6 +3443,9 @@ private:
     moveit::core::RobotState current_state(start_state);
     current_state.setVariablePosition("updown", current_updown(start_state));
     current_state.update();
+    const double target_lift = require_full_updown_lift
+      ? extract_top_updown_lift_distance_
+      : std::min(0.45, extract_max_x_);
 
     auto record_state = [&](
       size_t step,
@@ -3448,18 +3454,25 @@ private:
       bool left_detached,
       bool right_detached,
       const std::string& reason) {
+      const double lift_z = std::min(
+        target_lift, extract_step_x_ * static_cast<double>(step));
+      const double previous_lift_z = step == 0 ? 0.0 : std::min(
+        target_lift, extract_step_x_ * static_cast<double>(step - 1));
       nlohmann::json extra = {
-        {"stage_kind", "top_suction_lift_extract"},
+        {"stage_kind", require_full_updown_lift
+          ? "top_suction_direct_updown_lift"
+          : "top_suction_lift_extract"},
         {"accepted", accepted},
         {"candidate_order", candidate_order},
         {"step", step},
-        {"lift_z", extract_step_x_ * static_cast<double>(step)},
-        {"lift_delta_z", step == 0 ? 0.0 : extract_step_x_},
+        {"lift_z", lift_z},
+        {"lift_delta_z", lift_z - previous_lift_z},
         {"left_detached", left_detached},
         {"right_detached", right_detached},
         {"left_box_id", left_box_id},
         {"right_box_id", right_box_id},
         {"grasp_mode", "top_suction"},
+        {"required_lift", require_full_updown_lift ? extract_top_updown_lift_distance_ : 0.0},
         {"rejection_reason", reason}
       };
       timing.rollout_records.push_back(extract_monitor_selected_extract_replay_state_stage(
@@ -3497,7 +3510,7 @@ private:
     right_detached = top_suction_box_detached_from_stack(current_state, right_box, right_box_id, &right_detach_reason);
     clear_reason = left_detached ? right_detach_reason : left_detach_reason;
     record_state(0, current_state, true, left_detached, right_detached, clear_reason);
-    if (left_detached && right_detached) {
+    if (!require_full_updown_lift && left_detached && right_detached) {
       timing.success = true;
       timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
       timing.accepted_steps = 0;
@@ -3506,15 +3519,24 @@ private:
 
     const size_t max_steps = std::max<size_t>(
       1,
-      static_cast<size_t>(std::ceil(std::min(0.45, extract_max_x_) / std::max(0.001, extract_step_x_))));
+      static_cast<size_t>(std::ceil(target_lift / std::max(0.001, extract_step_x_))));
+    const double initial_updown = current_updown(current_state);
     for (size_t step = 1; step <= max_steps; ++step) {
       moveit::core::RobotState next_state(current_state);
-      next_state.setVariablePosition("updown", current_updown(current_state) + extract_step_x_);
+      const double achieved_lift = std::min(
+        target_lift, extract_step_x_ * static_cast<double>(step));
+      next_state.setVariablePosition("updown", initial_updown + achieved_lift);
       next_state.update();
 
       std::string step_reason;
       left_detached = false;
       right_detached = false;
+      if (!next_state.satisfiesBounds(joint_group_)) {
+        timing.failure_reason = "top_suction_lift_target_out_of_bounds_step_" +
+          std::to_string(step);
+        record_state(step, next_state, false, left_detached, right_detached, timing.failure_reason);
+        return timing;
+      }
       if (!is_state_valid_with_attached_boxes(next_state, {left_box, right_box}, true, &step_reason)) {
         timing.failure_reason = "top_suction_lift_collision_step_" + std::to_string(step) + ": " + step_reason;
         record_state(step, next_state, false, left_detached, right_detached, step_reason);
@@ -3536,15 +3558,22 @@ private:
 
       current_state = next_state;
       timing.accepted_steps = step;
-      timing.final_lift_z = extract_step_x_ * static_cast<double>(step);
+      timing.final_lift_z = achieved_lift;
       timing.right_final_lift_z = timing.final_lift_z;
       record_state(step, current_state, true, left_detached, right_detached, step_reason);
-      if (left_detached && right_detached) {
+      if (!require_full_updown_lift && left_detached && right_detached) {
         timing.success = true;
         timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
         timing.failure_reason.clear();
         return timing;
       }
+    }
+
+    if (require_full_updown_lift) {
+      timing.success = true;
+      timing.final_state = std::make_shared<moveit::core::RobotState>(current_state);
+      timing.failure_reason.clear();
+      return timing;
     }
 
     timing.failure_reason = "top_suction_lift_reached_max_without_detachment";
@@ -4713,7 +4742,10 @@ private:
     if (box_pose_solver_profile_) box_pose_solver_profile_->reset();
     const size_t count = extract_monitor_state_.legal_candidates.size();
     size_t worker_count = 1;
-    if (extract_monitor_both_top_suction() && extract_rollout_mode_ == "top_lift_legacy") {
+    const bool direct_top_updown_lift =
+      extract_monitor_both_top_suction() && extract_rollout_mode_ == "top_updown_lift";
+    if (extract_monitor_both_top_suction() &&
+        (extract_rollout_mode_ == "top_lift_legacy" || direct_top_updown_lift)) {
       extract_monitor_state_.timings.clear();
       extract_monitor_state_.timings.reserve(extract_monitor_state_.legal_candidates.size());
       worker_count = 1;
@@ -4727,7 +4759,8 @@ private:
           extract_monitor_state_.right_box,
           extract_monitor_state_.right_box_id,
           index,
-          candidate);
+          candidate,
+          direct_top_updown_lift);
         if (loaded_pose_selector_) {
           loaded_pose_selector_->fillTimingDistanceMetrics(timing);
         }
@@ -5773,6 +5806,7 @@ private:
   std::vector<double> extract_monitor_place_left_arm_;
   std::vector<double> extract_monitor_place_right_arm_;
   std::string extract_rollout_mode_ = "greedy";
+  double extract_top_updown_lift_distance_ = 0.40;
   bool extract_rrt_rollout_enabled_ = false;
   size_t extract_box_pose_rrt_max_iterations_ = 160;
   size_t extract_box_pose_rrt_paths_per_arm_ = 8;

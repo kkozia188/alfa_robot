@@ -27,7 +27,7 @@ import numpy as np
 DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extract_sequence_rerun")
 DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
-FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
+FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6, 7, 9}
 OUTER_GRASP_TARGET_Y_M = 0.45
 TASK_LAYOUT_Y_OFFSETS = {
     "centered": 0.0,
@@ -321,7 +321,12 @@ def make_pair_args(
         extract_rrt_planning_attempts=args.extract_rrt_planning_attempts,
         extract_rrt_endpoint_per_arm_limit=args.extract_rrt_endpoint_per_arm_limit,
         extract_rrt_goal_limit=args.extract_rrt_goal_limit,
-        extract_rollout_mode=args.extract_rollout_mode,
+        extract_rollout_mode=(
+            args.top_extract_rollout_mode
+            if mode == "top_suction"
+            else args.extract_rollout_mode
+        ),
+        extract_top_updown_lift_distance=args.extract_top_updown_lift_distance,
         extract_box_pose_rrt_edge_scene_collision=args.extract_box_pose_rrt_edge_scene_collision,
         extract_box_pose_rrt_max_iterations=(
             max(400, args.extract_box_pose_rrt_max_iterations)
@@ -869,7 +874,7 @@ def main() -> int:
     parser.add_argument("--no-rerun", action="store_true", help="不生成 Rerun，只保存 snapshot/summary/stats CSV")
     parser.add_argument("--repeat", type=int, default=1, help="重复运行整组 pair sequence 的次数")
     parser.add_argument("--stats-csv", type=Path, default=None, help="统计 CSV 输出路径；默认写入 run_root/stats.csv")
-    parser.add_argument("--box-front-x", type=float, default=0.80)
+    parser.add_argument("--box-front-x", type=float, default=0.70)
     parser.add_argument("--top-approach-forward", type=float, default=0.0, help="顶吸额外前移量；默认0，侧吸顶吸统一使用box-front-x")
     parser.add_argument("--top-box-front-x", type=float, default=None, help="顶吸专用箱墙前表面 x；优先级高于 --top-approach-forward")
     parser.add_argument("--scene-y-shift", type=float, default=0.0)
@@ -888,8 +893,8 @@ def main() -> int:
     parser.add_argument("--display-turn-offset-deg", type=float, default=0.0, help="仅用于 Rerun 回放显示外部底盘 yaw 后的 turn 反向补偿")
     parser.add_argument("--grasp-mode", choices=["front", "top_suction"], default="front")
     parser.add_argument("--grasp-mode-sequence", default="", help="每组任务吸附模式，例如 front;front;top_suction。留空则全部使用 --grasp-mode")
-    parser.add_argument("--left-grasp-mode-sequence", default="", help="左臂逐任务吸附模式；留空按箱号自动：1/4 为侧吸，其余顶吸")
-    parser.add_argument("--right-grasp-mode-sequence", default="", help="右臂逐任务吸附模式；留空按箱号自动：3/6 为侧吸，其余顶吸")
+    parser.add_argument("--left-grasp-mode-sequence", default="", help="左臂逐任务吸附模式；留空按箱号自动：1/4/7 为侧吸，其余顶吸")
+    parser.add_argument("--right-grasp-mode-sequence", default="", help="右臂逐任务吸附模式；留空按箱号自动：3/6/9 为侧吸，其余顶吸")
     parser.add_argument("--front-z-reach-lower", type=float, default=0.45)
     parser.add_argument("--front-z-reach-upper", type=float, default=1.25)
     parser.add_argument("--top-z-reach-lower", type=float, default=0.0)
@@ -928,9 +933,21 @@ def main() -> int:
     parser.add_argument("--extract-max-joint-delta", type=float, default=10.0 * math.pi / 180.0)
     parser.add_argument(
         "--extract-rollout-mode",
-        choices=["greedy", "box_pose_rrt", "moveit_rrt_legacy", "top_lift_legacy"],
+        choices=["greedy", "box_pose_rrt", "moveit_rrt_legacy", "top_lift_legacy", "top_updown_lift"],
         default="box_pose_rrt",
-        help="抽离策略；该序列实验默认使用箱体位姿 RRT",
+        help="侧吸抽离策略；该序列实验默认使用箱体位姿 RRT",
+    )
+    parser.add_argument(
+        "--top-extract-rollout-mode",
+        choices=["box_pose_rrt", "top_lift_legacy", "top_updown_lift"],
+        default="top_updown_lift",
+        help="顶吸抽离策略；默认保持双臂关节不动，仅抬升 updown。",
+    )
+    parser.add_argument(
+        "--extract-top-updown-lift-distance",
+        type=float,
+        default=0.40,
+        help="top_updown_lift 模式固定抬升距离。",
     )
     parser.add_argument("--extract-rrt", action="store_true")
     parser.add_argument(
@@ -970,7 +987,7 @@ def main() -> int:
     parser.add_argument("--loaded-planning-attempts", type=int, default=8)
     parser.add_argument("--loaded-sort-by-pose-distance", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-stop-on-first-success", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--loaded-updown", type=float, default=0.3)
+    parser.add_argument("--loaded-updown", type=float, default=0.1)
     parser.add_argument("--loaded-preferred-pose-index", type=int, default=0)
     parser.add_argument(
         "--loaded-left-pose-family-deg",

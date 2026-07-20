@@ -1597,3 +1597,8 @@
 - 改了哪里：场景核心、MoveIt附着箱、runtime双抓取适配统一横向常量；五任务脚本支持两套布局连续运行；IK默认启用 `[0,0.7]m`、1cm步长全范围扫描，消除此前64点等分产生的非整厘米高度。
 - 验证结果：最小复现确认错误 `±0.40m` 会让338个合法IK全部撞 `box_wall_between <-> left_joint6`；恢复 `±0.45m` 后得到89个去重候选、18个抽离成功候选。严格按用户参数运行10个完整任务结果2/10，居中L1/R3和L4/R6成功；Rerun：`data/ik_benchmark/container_1p8m_15box_flow/ten_tasks_centered_right_shift_x080_full_cycle_corrected.rrd`。
 - 留给下个 AI：剩余失败已不是“所有候选被附着场景过滤”；主要是0.80m下的顶吸解析无解/抽离RRT无路径，以及偏差布局侧吸的抽离或负重局部路径失败。不要再次把横向目标改回±0.40m。详细记录见 `docs/运控/抽离策略实验/2026-07-20_0.8米双布局十任务验证.md`。
+## 2026-07-20 运控 / Codex / 五任务顶吸直升策略
+- 做了什么：箱墙前表面改为 x=0.70m，L7/R9 改为侧吸，吸附后负重 updown 改为 0.10m；第四、第五排顶吸新增保持双臂关节不动、updown 固定上升 0.40m 的无 RRT 抽离模式。
+- 改了哪里：alfa_robot_moveit_config 的序列脚本、planner 参数/实现、launch、定义测试和实验文档。
+- 验证结果：构建通过；五任务全流程成功 2/5，顶吸 L10/R12、L13/R15 均精确上升 0.40m 并完成全循环。Rerun 见 data/ik_benchmark/container_1p8m_15box_flow/five_tasks_x070_loaded010_top_direct_lift040.rrd。
+- 留给下个 AI：三组侧吸均已完成抽离但失败在负重规划；本轮按用户要求不继续优化速度或放宽碰撞。

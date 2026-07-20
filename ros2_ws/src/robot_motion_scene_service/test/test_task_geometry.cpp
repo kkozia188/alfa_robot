@@ -11,15 +11,21 @@ int main()
   assert(trim_copy("  2,4 \n") == "2,4");
   assert(trim_copy(" \t\r\n").empty());
 
-  const auto boxes = make_boxes(0.925, -0.4);
-  assert(boxes.size() == 25);
+  const auto boxes = make_boxes(0.925, 0.0);
+  assert(boxes.size() == 12);
   assert(std::abs(boxes.at(1).x - 0.925) < 1e-9);
   assert(std::abs(boxes.at(1).y - 0.4) < 1e-9);
-  assert(std::abs(boxes.at(1).z - 1.8) < 1e-9);
-  assert(std::abs(boxes.at(13).y - (-0.4)) < 1e-9);
-  assert(std::abs(boxes.at(13).z - 1.0) < 1e-9);
-  assert(std::abs(boxes.at(25).y - (-1.2)) < 1e-9);
-  assert(std::abs(boxes.at(25).z - 0.2) < 1e-9);
+  assert(std::abs(boxes.at(1).z - 1.75) < 1e-9);
+  assert(std::abs(boxes.at(5).y) < 1e-9);
+  assert(std::abs(boxes.at(5).z - 1.25) < 1e-9);
+  assert(std::abs(boxes.at(12).y - (-0.4)) < 1e-9);
+  assert(std::abs(boxes.at(12).z - 0.25) < 1e-9);
+  assert(box_column_from_left(1) == 1);
+  assert(box_column_from_left(2) == 2);
+  assert(box_column_from_left(3) == 3);
+  assert(box_row_from_top(10) == 3);
+  assert(box_column_from_left(13) == 0);
+  assert(box_row_from_top(0) == -1);
 
   const auto parsed = parse_box_pair_list(" 2,4 ; 7/9; ;12,14 ");
   assert(parsed.size() == 3);
@@ -38,8 +44,8 @@ int main()
   const auto with_top = make_pick_pairs(true, parsed);
   assert(with_top.size() == 4);
   assert(with_top.back().round == 4);
-  assert(with_top.back().left_box == 22);
-  assert(with_top.back().right_box == 24);
+  assert(with_top.back().left_box == 10);
+  assert(with_top.back().right_box == 12);
   assert(with_top.back().top_suction);
 
   const auto joint_names = dual_arm_with_updown_joint_names();

@@ -310,7 +310,7 @@ bool carried_box_detached_from_source_layers_xz(
   const auto boxes = make_boxes(box_front_x, scene_y_shift);
   const size_t levels = std::max<size_t>(1, clearance_levels);
   for (size_t level = 0; level < levels; ++level) {
-    const int layer_box_id = box_id - static_cast<int>(5 * level);
+    const int layer_box_id = box_id - static_cast<int>(kBoxStackColumnCount * level);
     if (layer_box_id <= 0) continue;
     const auto it = boxes.find(layer_box_id);
     if (it == boxes.end()) continue;
@@ -349,11 +349,17 @@ bool carried_box_detached_from_neighbors(
   const std::string& carried_box_id,
   std::string* reason)
 {
-  const int column = (box_id - 1) % 5 + 1;
-  const int row = (box_id - 1) / 5;
+  const int column = box_column_from_left(box_id);
+  const int row = box_row_from_top(box_id);
+  if (column == 0 || row < 0) {
+    if (reason) *reason = carried_box_id + " has invalid source box id";
+    return false;
+  }
   std::vector<int> neighbor_ids;
-  if (column > 1) neighbor_ids.push_back(row * 5 + column - 1);
-  if (column < 5) neighbor_ids.push_back(row * 5 + column + 1);
+  if (column > 1) neighbor_ids.push_back(row * kBoxStackColumnCount + column - 1);
+  if (column < kBoxStackColumnCount) {
+    neighbor_ids.push_back(row * kBoxStackColumnCount + column + 1);
+  }
 
   const auto boxes = make_boxes(box_front_x, scene_y_shift);
   const AxisAlignedBox carried = expanded_aabb(carried_box, margin);

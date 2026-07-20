@@ -676,8 +676,7 @@ double LoadedPosePlanner::currentUpdown(const moveit::core::RobotState& state)
 
 int LoadedPosePlanner::boxColumn(const AttachedBoxSpec& box)
 {
-  const int box_id = boxId(box);
-  return box_id > 0 ? (box_id - 1) % 5 + 1 : 0;
+  return box_column_from_left(boxId(box));
 }
 
 int LoadedPosePlanner::boxId(const AttachedBoxSpec& box)
@@ -707,7 +706,8 @@ bool LoadedPosePlanner::planLateralShift(
   }
 
   const AttachedBoxSpec* center_box = nullptr;
-  const int shift_column = std::max(1, std::min(5, config_.lateral_shift_column));
+  const int shift_column =
+    std::max(1, std::min(kBoxStackColumnCount, config_.lateral_shift_column));
   for (const auto& box : carried_boxes) {
     if (boxColumn(box) == shift_column) {
       center_box = &box;

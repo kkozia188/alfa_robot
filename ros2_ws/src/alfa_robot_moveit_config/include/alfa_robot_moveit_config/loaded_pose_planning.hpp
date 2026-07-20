@@ -171,7 +171,7 @@ struct LoadedPosePlannerConfig
   bool lateral_shift_enabled = false;
   double lateral_shift_distance = 0.4;
   double lateral_shift_step = 0.04;
-  int lateral_shift_column = 3;
+  int lateral_shift_column = 2;
   int pre_loaded_lower_left_box_id = 0;
   int pre_loaded_lower_right_box_id = 0;
   double pre_loaded_lower_updown_delta = 0.0;

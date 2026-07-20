@@ -301,7 +301,7 @@ public:
     scene_y_shift_ = get_or_declare_parameter<double>("scene_y_shift", 0.0);
     world_to_base_z_ = get_or_declare_parameter<double>("world_to_base_z", 0.202094);
     top_suction_x_offset_ = get_or_declare_parameter<double>("top_suction_x_offset", 0.15);
-    top_suction_z_offset_ = get_or_declare_parameter<double>("top_suction_z_offset", 0.2);
+    top_suction_z_offset_ = get_or_declare_parameter<double>("top_suction_z_offset", 0.25);
     max_rounds_ = get_or_declare_parameter<int>("max_rounds", 10);
     include_top_suction_ = get_or_declare_parameter<bool>("include_top_suction", true);
     ik_timeout_ = get_or_declare_parameter<double>("ik_timeout", 2.0);
@@ -389,7 +389,7 @@ public:
     vehicle_drift_rotation_threshold_rad_ =
       get_or_declare_parameter<double>("vehicle_drift_rotation_threshold_rad", 0.02);
     container_length_ = get_or_declare_parameter<double>("container_length", 4.0);
-    container_width_ = get_or_declare_parameter<double>("container_width", 2.2);
+    container_width_ = get_or_declare_parameter<double>("container_width", 1.5);
     container_height_ = get_or_declare_parameter<double>("container_height", 2.4);
     container_center_x_ = get_or_declare_parameter<double>("container_center_x", 0.8);
     container_center_y_ = get_or_declare_parameter<double>("container_center_y", 0.0);
@@ -402,7 +402,7 @@ public:
     enable_attached_box_collision_ = get_or_declare_parameter<bool>("enable_attached_box_collision", true);
     carried_box_depth_ = get_or_declare_parameter<double>("carried_box_depth", 0.3);
     carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.4);
-    carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.4);
+    carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.5);
     attached_box_collision_padding_ = get_or_declare_parameter<double>("attached_box_collision_padding", -0.002);
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
@@ -5576,7 +5576,7 @@ private:
   double scene_y_shift_ = 0.0;
   double world_to_base_z_ = 0.202094;
   double top_suction_x_offset_ = 0.15;
-  double top_suction_z_offset_ = 0.2;
+  double top_suction_z_offset_ = 0.25;
   double ik_timeout_ = 2.0;
   double planning_time_ = 8.0;
   double velocity_scale_ = 1.0;
@@ -5590,7 +5590,7 @@ private:
   double vehicle_drift_translation_threshold_m_ = 0.05;
   double vehicle_drift_rotation_threshold_rad_ = 0.02;
   double container_length_ = 4.0;
-  double container_width_ = 2.2;
+  double container_width_ = 1.5;
   double container_height_ = 2.4;
   double container_center_x_ = 0.8;
   double container_center_y_ = 0.0;
@@ -5604,7 +5604,7 @@ private:
   bool enable_attached_box_collision_ = true;
   double carried_box_depth_ = 0.3;
   double carried_box_width_ = 0.4;
-  double carried_box_height_ = 0.4;
+  double carried_box_height_ = 0.5;
   double attached_box_collision_padding_ = -0.002;
   bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;

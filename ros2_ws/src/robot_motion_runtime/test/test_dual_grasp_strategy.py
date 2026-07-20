@@ -65,7 +65,7 @@ def test_mixed_modes_degrade_to_dual_front():
         "front",
         "top",
         Pose6DValue(0.75, 0.2, 1.2, math.pi, math.pi / 2.0, math.pi),
-        Pose6DValue(0.9, -0.2, 1.4, math.pi, 0.0, math.pi),
+        Pose6DValue(0.9, -0.2, 1.45, math.pi, 0.0, math.pi),
     )
     assert strategy.task_type == MIXED_DEGRADED_TO_FRONT_EQUAL == MIXED_DEGRADED_TO_FRONT
     assert strategy.left.grasp_mode == "front"
@@ -93,4 +93,4 @@ def test_top_contact_converts_to_front_contact_using_box_geometry():
     front = degrade_top_target_to_front(top)
     assert math.isclose(front.x, 0.75, abs_tol=1e-9)
     assert math.isclose(front.y, 0.2, abs_tol=1e-9)
-    assert math.isclose(front.z, 1.2, abs_tol=1e-9)
+    assert math.isclose(front.z, 1.15, abs_tol=1e-9)

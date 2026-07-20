@@ -28,10 +28,10 @@ DEFAULT_OUTPUT_ROOT = Path("/mnt/mydisk/ALFA/alfa_robot/data/ik_benchmark/extrac
 DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
 FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6}
-OUTER_GRASP_TARGET_Y_M = 0.40
+OUTER_GRASP_TARGET_Y_M = 0.45
 TASK_LAYOUT_Y_OFFSETS = {
     "centered": 0.0,
-    "right_shift_0p1": 0.10,
+    "right_shift_0p1": 0.05,
 }
 FRONT_TOOL_ORIENTATION_XYZW = [0.70710678, 0.0, 0.70710678, 0.0]
 TOP_TOOL_ORIENTATION_XYZW = [1.0, 0.0, 0.0, 0.0]
@@ -877,7 +877,7 @@ def main() -> int:
         "--task-layout",
         choices=["centered", "right_shift_0p1", "both"],
         default="centered",
-        help="横向布局：居中、按用户定义右偏0.1m（目标y=+0.50/-0.30m），或两套连续运行。",
+        help="横向布局：居中、偏差版（目标y=+0.50/-0.40m），或两套连续运行。",
     )
     parser.add_argument("--world-to-base-z", type=float, default=0.202094)
     parser.add_argument("--fixed-updown", type=float, default=0.3)

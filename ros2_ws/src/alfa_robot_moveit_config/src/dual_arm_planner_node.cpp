@@ -404,7 +404,7 @@ public:
     carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.5);
     carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.4);
     carried_box_grasp_lateral_offset_ =
-      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.10);
+      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.05);
     attached_box_collision_padding_ = get_or_declare_parameter<double>("attached_box_collision_padding", -0.002);
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
@@ -5696,7 +5696,7 @@ private:
   double carried_box_depth_ = 0.3;
   double carried_box_width_ = 0.5;
   double carried_box_height_ = 0.4;
-  double carried_box_grasp_lateral_offset_ = 0.10;
+  double carried_box_grasp_lateral_offset_ = 0.05;
   double attached_box_collision_padding_ = -0.002;
   bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;

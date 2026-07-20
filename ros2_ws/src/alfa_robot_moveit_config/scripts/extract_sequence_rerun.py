@@ -708,7 +708,7 @@ def run_one_pair(
                 "left": left_id,
                 "right": right_id,
                 "success": False,
-                "startup_ms": startup_ms if task_index == 1 else 0.0,
+                "startup_ms": startup_ms,
                 "configure_ms": config_ms,
                 "service_ms": 0.0,
                 "wall_ms": 0.0,
@@ -735,7 +735,7 @@ def run_one_pair(
             "success": success,
             "loaded_planning_mode": getattr(args, "loaded_planning_mode", "rrt"),
             "loaded_planner_id": getattr(args, "loaded_planner_id", ""),
-            "startup_ms": startup_ms if task_index == 1 else 0.0,
+            "startup_ms": startup_ms,
             "configure_ms": config_ms,
             "service_ms": elapsed_ms,
             "wall_ms": wall_ms,
@@ -1146,6 +1146,7 @@ def main() -> int:
                     len(pairs) * args.repeat,
                     sample,
                 )
+                startup_ms = 0.0
                 summary["repeat"] = repeat_index
                 summary["pair_index"] = pair_index
                 summary["grasp_mode"] = mode
@@ -1153,7 +1154,6 @@ def main() -> int:
                 summary["right_grasp_mode"] = right_mode
                 summaries.append(summary)
                 sample += max(1, sample_count) + 5
-                startup_ms = 0.0
                 if not ok and not args.continue_on_failure:
                     break
             if summaries and not summaries[-1].get("success") and not args.continue_on_failure:

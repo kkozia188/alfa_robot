@@ -1561,3 +1561,9 @@
 - 改了哪里：新增 `alfa_robot_execution_bridge/updown.py` 作为四字段构造/校验唯一入口；更新 `jog_to_pose.py`、`execute_l6_r8_mock_live.py`、13任务发送器、运动学孪生消费者、安全哨兵及执行文档。工控机 `/home/ar/lhy_dev` 已备份旧文件到 `/home/ar/lhy_dev/backups/updown_plc_20260720_000049`，同步源码并把 execution bridge 纳入 `build_lhy_dev.sh`。
 - 验证结果：本地 execution bridge 单测 7/7、静态实机安全检查、9包构建通过；隔离 ROS smoke 明确拒绝 `[0.2]` 并接受 `[0.2,0.05,0.05,0.05]`。工控机 10 包构建通过，`run_jog_to_pose.sh --plc-only` dry-run、四字段构造、全流程参数转发、13任务列表通过；未写 PLC、未发送真实机械臂命令。上轮 13任务失败状态回放保存到 `data/ik_benchmark/dual_grasp_strategy_contract_20260719/loaded_failures_L6_R3_L11_R8.rrd`。
 - 留给下个 AI：电控真实硬件尚未验证新四字段运动；首次实机必须先单独小行程 updown，确认位置/速度/加减速度，再运行全流程。PLC 恢复只接服务调用边界，尚未自动嵌入“到吸附点开阀、到放货点关阀”的任务状态机。
+
+## 2026-07-20 运控 / Codex / 1.5 米集装箱十二箱十任务切换
+- 做了什么：将当前固定实验场景由 2.2m 宽、5列5层箱垛切换为 1.5m 宽、3列4层箱垛；`base_link` 对齐净宽中心，箱体尺寸改为深0.30m、宽0.40m、高0.50m；任务序列切换为十组 `1/3、1/6、4/3、4/6、4/9、7/6、7/9、7/12、10/9、10/12`，上两层侧吸、下两层顶吸，混合任务仍降级双侧吸。
+- 改了哪里：场景和箱号单一事实源在 `robot_motion_scene_service/motion_core/task_geometry.*`、`scene_geometry.*`；MoveIt 默认容器/附着箱参数、运行时箱号适配、十任务 Rerun 与工控机发送脚本、任务文档同步更新。另修复箱高改为0.5m后暴露的侧吸附着箱局部轴映射错误。
+- 验证结果：Release 构建通过，场景、规划器、运行时共34/34测试通过。十组完整流程实测3/10成功；累计算法耗时39.857s，IK仅0.125s，主要耗时在抽离34.655s。Rerun：`data/ik_benchmark/container_1p5m_12box_flow/container_1p5m_12box_10tasks_v2.rrd`；详细表见 `docs/运控/抽离策略实验/2026-07-20_1.5米集装箱十二箱十任务验证.md`。
+- 留给下个 AI：当前失败不是 IK 场景过滤误杀；主要为不等高/低位任务的箱体位姿 RRT 无可达抽离路径，以及 L1/R6、L4/R3 抽离后8个负重候选均规划失败。后续优化不能回退已统一的附着箱尺寸或放宽容器/箱墙碰撞口径。

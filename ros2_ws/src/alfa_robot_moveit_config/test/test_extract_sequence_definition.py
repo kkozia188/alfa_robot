@@ -23,7 +23,7 @@ def main() -> int:
     ]
     pairs = MODULE.parse_pair_sequence(MODULE.DEFAULT_SEQUENCE)
     assert pairs == expected_pairs, pairs
-    assert MODULE.OUTER_GRASP_TARGET_Y_M == 0.45
+    assert MODULE.OUTER_GRASP_TARGET_Y_M == 0.50
     assert MODULE.TASK_LAYOUT_Y_OFFSETS == {
         "centered": 0.0,
         "right_shift_0p1": 0.05,
@@ -31,11 +31,11 @@ def main() -> int:
     assert MODULE.DIRECT_UPDOWN_LIFT_PAIRS == {(7, 9)}
     assert math.isclose(
         MODULE.OUTER_GRASP_TARGET_Y_M + MODULE.TASK_LAYOUT_Y_OFFSETS["right_shift_0p1"],
-        0.50,
+        0.55,
     )
     assert math.isclose(
         -MODULE.OUTER_GRASP_TARGET_Y_M + MODULE.TASK_LAYOUT_Y_OFFSETS["right_shift_0p1"],
-        -0.40,
+        -0.45,
     )
 
     left_modes = MODULE.parse_arm_grasp_mode_sequence("", pairs, "left")
@@ -79,7 +79,7 @@ def main() -> int:
     assert 'parser.add_argument("--box-front-x", type=float, default=0.90)' in parser_source
     assert 'parser.add_argument("--top-box-front-x", type=float, default=0.70' in parser_source
     assert 'choices=["centered", "right_shift_0p1", "both"]' in parser_source
-    assert 'OUTER_GRASP_TARGET_Y_M = 0.45' in parser_source
+    assert 'OUTER_GRASP_TARGET_Y_M = 0.50' in parser_source
     assert 'default=True,\n        help="默认在0~0.7m范围' in parser_source
     assert 'choices=["rrt", "shortcut"], default="shortcut"' in parser_source
     assert '"--place-cycle-enabled"' in parser_source

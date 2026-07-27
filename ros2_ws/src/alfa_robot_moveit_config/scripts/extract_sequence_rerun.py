@@ -29,7 +29,7 @@ DEFAULT_SEQUENCE = "1,3;4,6;7,9;10,12;13,15"
 DEFAULT_LOADED_POSE_FAMILY_DEG = "[0.0,-45.0,120.0,-75.0,0.0,0.0]"
 FRONT_SUCTION_BOX_IDS = {1, 3, 4, 6, 7, 9}
 DIRECT_UPDOWN_LIFT_PAIRS = {(7, 9)}
-OUTER_GRASP_TARGET_Y_M = 0.45
+OUTER_GRASP_TARGET_Y_M = 0.50
 TASK_LAYOUT_Y_OFFSETS = {
     "centered": 0.0,
     "right_shift_0p1": 0.05,
@@ -379,6 +379,7 @@ def make_pair_args(
         pre_lower_right_box_id=args.pre_lower_right_box_id,
         pre_lower_updown_delta=args.pre_lower_updown_delta,
         loaded_updown=args.loaded_updown,
+        loaded_preserve_lower_updown=args.loaded_preserve_lower_updown,
         loaded_planner_id=args.loaded_planner_id,
         loaded_planning_mode=args.loaded_planning_mode,
         loaded_planning_time=args.loaded_planning_time,
@@ -878,6 +879,11 @@ def run_one_pair(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="生成 5 次等高双臂抽箱任务连续全流程 Rerun")
+    parser.add_argument(
+        "--planner-server",
+        action="store_true",
+        help="只启动并预热 planner，保持进程常驻；任务由外部配置服务提交。",
+    )
     parser.add_argument("--pair-sequence", default=DEFAULT_SEQUENCE)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--save", type=Path, default=None)
@@ -892,7 +898,7 @@ def main() -> int:
         "--task-layout",
         choices=["centered", "right_shift_0p1", "both"],
         default="centered",
-        help="横向布局：居中、偏差版（目标y=+0.50/-0.40m），或两套连续运行。",
+        help="横向布局：居中（目标y=+0.50/-0.50m）、偏差版（+0.55/-0.45m），或两套连续运行。",
     )
     parser.add_argument("--world-to-base-z", type=float, default=0.202094)
     parser.add_argument("--fixed-updown", type=float, default=0.3)
@@ -1005,6 +1011,12 @@ def main() -> int:
     parser.add_argument("--loaded-sort-by-pose-distance", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-stop-on-first-success", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-updown", type=float, default=0.1)
+    parser.add_argument(
+        "--loaded-preserve-lower-updown",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="把 --loaded-updown 作为回负重姿态的高度上限，抽离终态低于该值时保持原高度",
+    )
     parser.add_argument("--loaded-preferred-pose-index", type=int, default=0)
     parser.add_argument(
         "--loaded-left-pose-family-deg",
@@ -1299,6 +1311,15 @@ def main() -> int:
                             raise last_error
                     assert planner is not None
                     assert service_client is not None
+                    if args.planner_server:
+                        print(
+                            f"PLANNER_SERVER_READY startup_ms={startup_ms:.1f} "
+                            f"group={group_label}",
+                            flush=True,
+                        )
+                        while planner.poll() is None:
+                            time.sleep(0.5)
+                        return int(planner.returncode or 0)
                     ok, sample_count, summary = run_one_pair(
                         pair_args,
                         helpers,

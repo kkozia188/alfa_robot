@@ -151,7 +151,10 @@ moveit::core::RobotState LoadedPoseSelector::makeGoalState(
   const auto& left_pose = config_.left_pose_family[local_selection.left_index];
   const auto& right_pose = config_.right_pose_family[local_selection.right_index];
   if (hasVariable(goal_state, "updown")) {
-    goal_state.setVariablePosition("updown", config_.target_updown);
+    const double target_updown = config_.preserve_lower_updown
+      ? std::min(start_state.getVariablePosition("updown"), config_.target_updown)
+      : config_.target_updown;
+    goal_state.setVariablePosition("updown", target_updown);
   }
   for (size_t i = 0; i < left_pose.size(); ++i) {
     goal_state.setVariablePosition(jointName("left", i), left_pose[i]);

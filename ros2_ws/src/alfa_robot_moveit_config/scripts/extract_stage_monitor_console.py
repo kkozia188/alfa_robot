@@ -248,6 +248,7 @@ def build_launch_command(args: argparse.Namespace, run_dir: Path, snapshot_path:
         f"extract_loaded_pre_lower_right_box_id:={args.pre_lower_right_box_id}",
         f"extract_loaded_pre_lower_updown_delta:={args.pre_lower_updown_delta}",
         f"extract_loaded_target_updown:={getattr(args, 'loaded_updown', 0.1)}",
+        f"extract_loaded_preserve_lower_updown:={str(getattr(args, 'loaded_preserve_lower_updown', False)).lower()}",
         f"extract_loaded_planning_time:={args.loaded_planning_time}",
         f"extract_loaded_planning_attempts:={args.loaded_planning_attempts}",
         "extract_loaded_use_direct_pipeline:=true",
@@ -449,6 +450,7 @@ class ExtractMonitorServiceClient:
         right_top_suction: bool = False,
         left_target: dict[str, Any] | None = None,
         right_target: dict[str, Any] | None = None,
+        runtime_config: dict[str, Any] | None = None,
     ) -> tuple[bool, str, float]:
         start = time.monotonic()
         request = self._configure_type.Request()
@@ -458,6 +460,17 @@ class ExtractMonitorServiceClient:
         request.left_top_suction = bool(left_top_suction)
         request.right_top_suction = bool(right_top_suction)
         assign_explicit_targets(request, left_target, right_target)
+        if runtime_config is not None:
+            request.update_runtime_config = True
+            request.box_front_x = float(runtime_config["box_front_x"])
+            request.scene_y_shift = float(runtime_config["scene_y_shift"])
+            request.extract_rollout_mode = str(runtime_config["extract_rollout_mode"])
+            request.loaded_lateral_shift_enabled = bool(
+                runtime_config["loaded_lateral_shift_enabled"]
+            )
+            request.extract_box_pose_rrt_max_iterations = int(
+                runtime_config["extract_box_pose_rrt_max_iterations"]
+            )
         future = self.configure_client.call_async(request)
         self._rclpy.spin_until_future_complete(self.node, future, timeout_sec=timeout)
         elapsed = (time.monotonic() - start) * 1000.0
@@ -1111,6 +1124,12 @@ def main() -> int:
     parser.add_argument("--loaded-sort-by-pose-distance", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-stop-on-first-success", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loaded-updown", type=float, default=0.3)
+    parser.add_argument(
+        "--loaded-preserve-lower-updown",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="回负重姿态时仅把高于 --loaded-updown 的 updown 降到上限，低位保持不升高",
+    )
     parser.add_argument("--lateral-shift-enabled", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--lateral-shift-distance", type=float, default=0.5)
     parser.add_argument("--lateral-shift-step", type=float, default=0.01)

@@ -20,9 +20,9 @@ from robot_motion_runtime.dual_grasp_strategy import (
 )
 
 
-def test_outer_box_grasp_uses_45cm_target_and_5cm_attachment_offset():
-    assert math.isclose(OUTER_BOX_GRASP_TARGET_Y_M, 0.45, abs_tol=1e-9)
-    assert math.isclose(OUTER_BOX_GRASP_LATERAL_OFFSET_M, 0.05, abs_tol=1e-9)
+def test_outer_box_grasp_uses_50cm_target_without_attachment_offset():
+    assert math.isclose(OUTER_BOX_GRASP_TARGET_Y_M, 0.50, abs_tol=1e-9)
+    assert math.isclose(OUTER_BOX_GRASP_LATERAL_OFFSET_M, 0.0, abs_tol=1e-9)
 
 
 def test_dual_front_requires_both_boxes_detached():

@@ -15,7 +15,7 @@ inline constexpr int kBoxStackBoxCount = kBoxStackColumnCount * kBoxStackRowCoun
 inline constexpr double kBoxDepth = 0.3;
 inline constexpr double kBoxWidth = 0.5;
 inline constexpr double kBoxHeight = 0.4;
-inline constexpr double kOuterBoxGraspTargetY = 0.45;
+inline constexpr double kOuterBoxGraspTargetY = 0.50;
 inline constexpr double kOuterBoxGraspLateralOffset = kBoxWidth - kOuterBoxGraspTargetY;
 
 struct BoxSpec

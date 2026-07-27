@@ -44,6 +44,7 @@ struct LoadedPoseSelectorConfig
   size_t left_preferred_index = 0;
   size_t right_preferred_index = 0;
   double target_updown = 0.3;
+  bool preserve_lower_updown = false;
   const moveit::core::JointModelGroup* enforce_bounds_group = nullptr;
 };
 

@@ -20,8 +20,8 @@ int main()
   assert(std::abs(boxes.at(5).z - 1.4) < 1e-9);
   assert(std::abs(boxes.at(15).y - (-0.5)) < 1e-9);
   assert(std::abs(boxes.at(15).z - 0.2) < 1e-9);
-  assert(std::abs(kOuterBoxGraspTargetY - 0.45) < 1e-9);
-  assert(std::abs(kOuterBoxGraspLateralOffset - 0.05) < 1e-9);
+  assert(std::abs(kOuterBoxGraspTargetY - 0.50) < 1e-9);
+  assert(std::abs(kOuterBoxGraspLateralOffset) < 1e-9);
   assert(box_column_from_left(1) == 1);
   assert(box_column_from_left(2) == 2);
   assert(box_column_from_left(3) == 3);

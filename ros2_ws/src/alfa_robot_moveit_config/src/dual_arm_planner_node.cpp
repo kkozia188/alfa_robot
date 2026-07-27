@@ -71,6 +71,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 namespace
@@ -404,7 +405,7 @@ public:
     carried_box_width_ = get_or_declare_parameter<double>("carried_box_width", 0.5);
     carried_box_height_ = get_or_declare_parameter<double>("carried_box_height", 0.4);
     carried_box_grasp_lateral_offset_ =
-      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.05);
+      get_or_declare_parameter<double>("carried_box_grasp_lateral_offset", 0.0);
     attached_box_collision_padding_ = get_or_declare_parameter<double>("attached_box_collision_padding", -0.002);
     enable_static_box_obstacles_ = get_or_declare_parameter<bool>("enable_static_box_obstacles", true);
     static_box_obstacle_inset_ = get_or_declare_parameter<double>("static_box_obstacle_inset", 0.002);
@@ -583,6 +584,8 @@ public:
     extract_loaded_stop_on_first_success_ =
       get_or_declare_parameter<bool>("extract_loaded_stop_on_first_success", true);
     extract_loaded_target_updown_ = get_or_declare_parameter<double>("extract_loaded_target_updown", 0.3);
+    extract_loaded_preserve_lower_updown_ =
+      get_or_declare_parameter<bool>("extract_loaded_preserve_lower_updown", false);
     extract_loaded_lateral_shift_enabled_ =
       get_or_declare_parameter<bool>("extract_loaded_lateral_shift_enabled", false);
     extract_loaded_lateral_shift_distance_ =
@@ -636,6 +639,7 @@ public:
     loaded_pose_selector_config_.left_preferred_index = left_preferred_loaded_pose_index_;
     loaded_pose_selector_config_.right_preferred_index = right_preferred_loaded_pose_index_;
     loaded_pose_selector_config_.target_updown = extract_loaded_target_updown_;
+    loaded_pose_selector_config_.preserve_lower_updown = extract_loaded_preserve_lower_updown_;
 
     joint_state_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
     rclcpp::SubscriptionOptions joint_state_sub_options;
@@ -4362,6 +4366,46 @@ private:
   {
     std::lock_guard<std::mutex> lock(extract_monitor_mutex_);
     const auto configure_start = std::chrono::steady_clock::now();
+    if (request.update_runtime_config) {
+      if (!std::isfinite(request.box_front_x) || request.box_front_x <= 0.0) {
+        if (message) *message = "box_front_x must be finite and positive";
+        return fail("configure extract monitor: invalid box_front_x");
+      }
+      if (!std::isfinite(request.scene_y_shift)) {
+        if (message) *message = "scene_y_shift must be finite";
+        return fail("configure extract monitor: invalid scene_y_shift");
+      }
+      static const std::unordered_set<std::string> supported_rollout_modes{
+        "greedy",
+        "box_pose_rrt",
+        "moveit_rrt_legacy",
+        "top_lift_legacy",
+        "top_updown_lift",
+        "direct_updown_lift",
+      };
+      if (supported_rollout_modes.find(request.extract_rollout_mode) ==
+          supported_rollout_modes.end())
+      {
+        if (message) *message = "unsupported extract_rollout_mode: " + request.extract_rollout_mode;
+        return fail("configure extract monitor: unsupported extract_rollout_mode");
+      }
+      if (request.extract_box_pose_rrt_max_iterations <= 0) {
+        if (message) *message = "extract_box_pose_rrt_max_iterations must be positive";
+        return fail("configure extract monitor: invalid RRT iteration limit");
+      }
+
+      box_front_x_ = request.box_front_x;
+      scene_y_shift_ = request.scene_y_shift;
+      extract_rollout_mode_ = request.extract_rollout_mode;
+      extract_loaded_lateral_shift_enabled_ = request.loaded_lateral_shift_enabled;
+      extract_box_pose_rrt_max_iterations_ =
+        static_cast<size_t>(request.extract_box_pose_rrt_max_iterations);
+      if (scene_adapter_) {
+        scene_adapter_->updateContainerGeometry(container_geometry_config());
+        scene_adapter_->updateBoxWallGeometry(box_wall_geometry_config());
+      }
+      apply_container_obstacles();
+    }
     const auto boxes = make_boxes(box_front_x_, scene_y_shift_);
     if (boxes.find(request.left_box_id) == boxes.end() ||
         boxes.find(request.right_box_id) == boxes.end())
@@ -4471,6 +4515,9 @@ private:
                  "/R" + std::to_string(extract_demo_right_box_id_) +
                  " modes=(" + grasp_mode_label(extract_monitor_left_top_suction_) +
                  "," + grasp_mode_label(extract_monitor_right_top_suction_) + ")" +
+                 " box_front_x=" + std::to_string(box_front_x_) +
+                 " scene_y_shift=" + std::to_string(scene_y_shift_) +
+                 " rollout=" + extract_rollout_mode_ +
                  " front_clearance_levels=(" +
                  std::to_string(extract_monitor_left_front_clearance_levels_) + "," +
                  std::to_string(extract_monitor_right_front_clearance_levels_) + ")" +
@@ -5376,10 +5423,14 @@ private:
     const double outbound_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - outbound_start).count();
 
+    moveit::core::RobotState return_loaded_state(loaded_state);
+    return_loaded_state.setVariablePosition("updown", fixed_updown_);
+    return_loaded_state.enforceBounds();
+    return_loaded_state.update(true);
     const auto return_start = std::chrono::steady_clock::now();
     const auto return_plan = extract_monitor_transition_planner(
       {}, extract_monitor_state_.prefix + "/selected_place_to_loaded").plan(
-      place_state, loaded_state);
+      place_state, return_loaded_state);
     const double return_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - return_start).count();
     if (!return_plan.valid) {
@@ -5392,7 +5443,7 @@ private:
       extract_monitor_state_.prefix + "/selected_place_to_loaded",
       return_plan.plan,
       place_state,
-      loaded_state,
+      return_loaded_state,
       target_names,
       {},
       static_obstacles,
@@ -5402,7 +5453,7 @@ private:
         {"method", return_plan.method},
         {"transition_ms", return_ms},
         {"boxes_released", true},
-        {"loaded_updown", extract_loaded_target_updown_},
+        {"loaded_updown", fixed_updown_},
       }));
     if (metrics) {
       *metrics = {
@@ -5743,7 +5794,7 @@ private:
   double carried_box_depth_ = 0.3;
   double carried_box_width_ = 0.5;
   double carried_box_height_ = 0.4;
-  double carried_box_grasp_lateral_offset_ = 0.05;
+  double carried_box_grasp_lateral_offset_ = 0.0;
   double attached_box_collision_padding_ = -0.002;
   bool enforce_loaded_plan_aabb_clearance_ = false;
   bool enforce_loaded_static_box_wall_aabb_clearance_ = true;
@@ -5863,6 +5914,7 @@ private:
   bool extract_loaded_sort_by_pose_distance_ = false;
   bool extract_loaded_stop_on_first_success_ = false;
   double extract_loaded_target_updown_ = 0.3;
+  bool extract_loaded_preserve_lower_updown_ = false;
   bool extract_loaded_lateral_shift_enabled_ = false;
   double extract_loaded_lateral_shift_distance_ = 0.4;
   double extract_loaded_lateral_shift_step_ = 0.0;

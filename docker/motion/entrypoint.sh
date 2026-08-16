@@ -17,6 +17,12 @@ if [[ ! -d "${source_root}/ros2_ws/src" ]]; then
   git clone --branch "${repository_ref}" --single-branch "${repository_url}" "${source_root}"
 fi
 
+if [[ ! -f "${source_root}/ros2_ws/src/robot_interfaces/robot_motion_interfaces/package.xml" ]]; then
+  echo "FAIL: 缺少中央 robot_interfaces 源码。请在宿主仓库执行：" >&2
+  echo "  cd ${source_root}/ros2_ws && vcs import src < src/robot_interfaces.repos" >&2
+  exit 2
+fi
+
 mkdir -p \
   "${workspace}/build" \
   "${workspace}/install" \

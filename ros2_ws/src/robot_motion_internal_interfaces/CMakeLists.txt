@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(robot_motion_interfaces)
+project(robot_motion_internal_interfaces)
 
 find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)

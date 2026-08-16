@@ -140,9 +140,7 @@ class ManualDomainTask(Node):
             raise RuntimeError(f"{label} Goal 被拒绝")
         wrapped = _wait_future(goal_handle.get_result_async(), timeout_s, f"{label} Result")
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            raise RuntimeError(
-                f"{label} 失败 status={wrapped.status}: {wrapped.result.diagnostic}"
-            )
+            raise RuntimeError(f"{label} 失败 status={wrapped.status}: {wrapped.result.diagnostic}")
         print(f"{label} 完成: {wrapped.result.diagnostic}", flush=True)
         return wrapped.result
 

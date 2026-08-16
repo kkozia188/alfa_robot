@@ -8,12 +8,17 @@ REPO_SOURCE_WS="$(cd "${ROOT}/../../.." && pwd)/ros2_ws"
 if [[ -f "${REPO_SOURCE_WS}/install/setup.bash" ]]; then
   source "${REPO_SOURCE_WS}/install/setup.bash"
 fi
+if ! ros2 pkg prefix robot_motion_interfaces >/dev/null 2>&1; then
+  echo "缺少中央 robot_motion_interfaces。先在 ${REPO_SOURCE_WS} 执行：" >&2
+  echo "  vcs import src < src/robot_interfaces.repos" >&2
+  echo "  colcon build --packages-select robot_system_interfaces robot_motion_interfaces" >&2
+  exit 2
+fi
 set -u
 cd "${ROOT}/ros2_ws"
 ALL_PACKAGES=(
-  alfa_motion_interfaces
   robot_motion_core
-  robot_motion_interfaces
+  robot_motion_internal_interfaces
   robot_motion_scene_service
   robot_motion_runtime
   alfa_robot_analytic_ik

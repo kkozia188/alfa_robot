@@ -1,0 +1,5 @@
+repositories:
+  robot_interfaces:
+    type: git
+    url: git@github.com:SevenovaHangzhou/robot_interfaces.git
+    version: 1a60d83d52aa97952c8dbb3baafb50b6a95b9e86

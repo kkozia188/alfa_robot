@@ -30,7 +30,8 @@ from .common import (
 from .hardware_executor import ARM_JOINT_NAMES, HardwareExecutor
 from .planner_adapter import PlannerAdapter
 from .stage_contract import (
-    canonicalize_grasp_pose_orientation,
+    align_target_pair_to_lower_height,
+    canonicalize_stage_target_orientations,
     planning_task_from_resolved_targets,
     resolve_dual_stage_targets,
     validate_stage_pose_targets,
@@ -91,9 +92,6 @@ class DomainMotionServer(Node):
         self.declare_parameter("turn_tf_timeout_s", 1.0)
         self.declare_parameter("turn_zero_target_y_compensation_m", 0.0)
         self.declare_parameter("planner_timeout_s", 180.0)
-        self.declare_parameter("enable_trajectory_cache", True)
-        self.declare_parameter("require_trajectory_cache_hit", False)
-        self.declare_parameter("trajectory_cache_fallback_on_planning_failure", True)
         self.declare_parameter("interface_timeout_s", 10.0)
         self.declare_parameter("joint_state_topic", "/joint_states")
         self.declare_parameter(
@@ -153,18 +151,12 @@ class DomainMotionServer(Node):
             max_updown_acceleration_m_s2=updown_acceleration,
             speed_scale=speed_scale,
             timeout_s=float(self.get_parameter("planner_timeout_s").value),
-            trajectory_cache_enabled=bool(
-                self.get_parameter("enable_trajectory_cache").value
-            ),
-            trajectory_cache_required=bool(
-                self.get_parameter("require_trajectory_cache_hit").value
-            ),
-            trajectory_cache_fallback_on_planning_failure=bool(
-                self.get_parameter(
-                    "trajectory_cache_fallback_on_planning_failure"
-                ).value
-            ),
+            trajectory_cache_enabled=False,
+            trajectory_cache_required=False,
+            trajectory_cache_fallback_on_planning_failure=False,
         )
+        self.get_logger().info("Planner 启动期主动预热开始")
+        planner_startup_ms = self._planner.start()
         self._retime_parameters = {
             "rate_hz": rate_hz,
             "max_joint_speed_deg_s": max_joint_speed,
@@ -198,7 +190,8 @@ class DomainMotionServer(Node):
         self.get_logger().info(
             "Motion 域阶段服务已就绪："
             f"stage={self.get_parameter('stage_action').value} "
-            f"trajectory={self.get_parameter('trajectory_action').value}; "
+            f"trajectory={self.get_parameter('trajectory_action').value} "
+            f"planner_startup={planner_startup_ms:.1f}ms; "
             "吸附通路由 Autonomy/RT-Control 负责"
         )
 
@@ -207,11 +200,12 @@ class DomainMotionServer(Node):
         code: int,
         message: str = "",
         origin: str = "motion",
+        retryable: bool = False,
     ) -> MotionErrorInfo:
         error = MotionErrorInfo()
         error.code = int(code)
-        error.retryable = False
         error.message = str(message)
+        error.retryable = bool(retryable)
         error.origin = str(origin)
         return error
 
@@ -231,7 +225,9 @@ class DomainMotionServer(Node):
                 and self._recapture_sample is None
                 and not self._cycle_id
             ):
-                message.state = "DEVELOPMENT_READY" if partial_test else "INTEGRATION_BLOCKED"
+                message.state = (
+                    "DEVELOPMENT_READY" if partial_test else "INTEGRATION_BLOCKED"
+                )
             else:
                 message.state = self._stage_name(self._next_stage)
             message.last_error = self._last_error
@@ -318,7 +314,14 @@ class DomainMotionServer(Node):
         target.pose = pose
         return target
 
-    def _targets_for_zero_turn(self, request, current: MotionSample):
+    def _targets_for_zero_turn(
+        self,
+        request,
+        current: MotionSample,
+        *,
+        canonicalize_grasp_orientation: bool,
+        align_to_lower_height: bool,
+    ):
         current_turn = float(current.joints.get("turn", 0.0))
         corrected_request = copy.deepcopy(request)
         base_to_turn = None
@@ -337,14 +340,9 @@ class DomainMotionServer(Node):
         y_compensation_m = float(
             self.get_parameter("turn_zero_target_y_compensation_m").value
         )
-        canonicalize_grasp_orientation = (
-            int(request.execution_stage)
-            == ExecuteMotionStage.Goal.EXECUTION_STAGE_PREGRASP
-        )
-        orientation_deviations: dict[str, float] = {}
         for side in ("left", "right"):
-            stage_value = int(getattr(corrected_request.targets, f"{side}_stage"))
-            if stage_value == DualArmPoseTargets.STAGE_NO_MOVE:
+            grasp_mode = int(getattr(corrected_request.targets, f"{side}_stage"))
+            if grasp_mode == DualArmPoseTargets.STAGE_NO_MOVE:
                 continue
             original_pose = getattr(corrected_request.targets, f"{side}_pose")
             corrected_pose = original_pose
@@ -355,24 +353,32 @@ class DomainMotionServer(Node):
                     current_turn,
                 )
             corrected_pose = compensate_pose_y(corrected_pose, y_compensation_m)
-            if canonicalize_grasp_orientation:
-                corrected_pose, deviation = canonicalize_grasp_pose_orientation(
-                    corrected_pose,
-                    stage_value,
-                )
-                orientation_deviations[side] = deviation
             setattr(corrected_request.targets, f"{side}_pose", corrected_pose)
+        orientation_deviations: dict[str, float] = {}
+        if canonicalize_grasp_orientation:
+            corrected_request, orientation_deviations = (
+                canonicalize_stage_target_orientations(corrected_request)
+            )
         targets = resolve_dual_stage_targets(corrected_request)
+        original_left_z = float(targets.left_pose.position.z)
+        original_right_z = float(targets.right_pose.position.z)
+        if align_to_lower_height:
+            targets = align_target_pair_to_lower_height(targets)
         self.get_logger().info(
-            "目标 Pose 已换算到 Turn=0："
+            "目标 Pose 预处理完成："
             f"actual_turn={current_turn:.6f}rad "
             f"y_compensation={y_compensation_m:+.3f}m "
+            f"canonical_orientation={canonicalize_grasp_orientation} "
+            f"align_lower_height={align_to_lower_height} "
             f"left=({targets.left_pose.position.x:.3f},"
             f"{targets.left_pose.position.y:.3f},"
             f"{targets.left_pose.position.z:.3f}) "
             f"right=({targets.right_pose.position.x:.3f},"
             f"{targets.right_pose.position.y:.3f},"
             f"{targets.right_pose.position.z:.3f}) "
+            f"input_z=L{original_left_z:.3f}/R{original_right_z:.3f} "
+            f"output_z=L{targets.left_pose.position.z:.3f}/"
+            f"R{targets.right_pose.position.z:.3f} "
             f"grasp_orientation_correction_deg="
             f"L{math.degrees(orientation_deviations.get('left', 0.0)):.2f}/"
             f"R{math.degrees(orientation_deviations.get('right', 0.0)):.2f}"
@@ -427,7 +433,12 @@ class DomainMotionServer(Node):
                 goal_handle.publish_feedback(
                     self._feedback(ExecuteMotionStage.Feedback.MOTION_STATE_PLANNING)
                 )
-                targets = self._targets_for_zero_turn(request, current_with_turn)
+                targets = self._targets_for_zero_turn(
+                    request,
+                    current_with_turn,
+                    canonicalize_grasp_orientation=False,
+                    align_to_lower_height=False,
+                )
                 started = time.monotonic()
                 samples, metrics = self._planner.plan_recapture(
                     self._base_link_pose_stamped(targets.left_pose),
@@ -493,6 +504,8 @@ class DomainMotionServer(Node):
                 targets = self._targets_for_zero_turn(
                     request,
                     self._current_sample_for_planning(),
+                    canonicalize_grasp_orientation=True,
+                    align_to_lower_height=True,
                 )
                 task = planning_task_from_resolved_targets(targets, cycle_id)
                 started = time.monotonic()
@@ -557,7 +570,11 @@ class DomainMotionServer(Node):
                 }
                 else MotionErrorInfo.EXECUTION_FAILED
             )
-            error = self._error(error_code, str(exc))
+            error = self._error(
+                error_code,
+                str(exc),
+                retryable=error_code == MotionErrorInfo.PLANNING_FAILED,
+            )
             result.diagnostic = str(exc)
             goal_handle.abort()
             self._handle_stage_failure(stage, error)

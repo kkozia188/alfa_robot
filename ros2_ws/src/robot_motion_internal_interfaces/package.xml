@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>robot_motion_interfaces</name>
+  <name>robot_motion_internal_interfaces</name>
   <version>0.1.0</version>
-  <description>Stable motion-control interface contracts for IK, extraction, planning, collision checks, execution, and robot state.</description>
+  <description>Motion-domain internal contracts for IK, extraction, planning, collision checks, execution, and robot state.</description>
   <maintainer email="231055558@qq.com">Sevenova Motion Control Team</maintainer>
   <license>Proprietary</license>
 

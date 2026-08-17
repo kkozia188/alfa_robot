@@ -19,7 +19,18 @@ fi
 
 if [[ ! -f "${source_root}/ros2_ws/src/robot_interfaces/robot_motion_interfaces/package.xml" ]]; then
   echo "FAIL: 缺少中央 robot_interfaces 源码。请在宿主仓库执行：" >&2
-  echo "  cd ${source_root}/ros2_ws && vcs import src < src/robot_interfaces.repos" >&2
+  echo "  cd ${source_root}/ros2_ws && vcs import src < src/dependencies.repos" >&2
+  exit 2
+fi
+
+robot_interfaces_lock="${source_root}/ros2_ws/src/dependencies.lock.yaml"
+expected_robot_interfaces_sha="$(awk '$1 == "commit:" {print $2; exit}' "${robot_interfaces_lock}")"
+actual_robot_interfaces_sha="$(git -C "${source_root}/ros2_ws/src/robot_interfaces" rev-parse HEAD)"
+if [[ ! "${expected_robot_interfaces_sha}" =~ ^[0-9a-f]{40}$ ]] || \
+   [[ "${actual_robot_interfaces_sha}" != "${expected_robot_interfaces_sha}" ]]; then
+  echo "FAIL: robot_interfaces 未处于锁定提交。" >&2
+  echo "  expected=${expected_robot_interfaces_sha:-missing}" >&2
+  echo "  actual=${actual_robot_interfaces_sha:-missing}" >&2
   exit 2
 fi
 

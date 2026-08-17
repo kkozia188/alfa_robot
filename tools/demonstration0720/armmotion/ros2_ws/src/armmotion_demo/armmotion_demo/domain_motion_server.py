@@ -5,19 +5,21 @@ import math
 import os
 import threading
 import time
+import uuid
 from pathlib import Path
 
 import rclpy
 from alfa_robot_execution_bridge.joints import EXECUTION_JOINT_NAMES, RT_CONTROL_ACTION_NAME
-from alfa_motion_interfaces.action import ExecuteMotionStage
-from alfa_motion_interfaces.msg import DualArmPoseTargets, MotionErrorInfo, MotionReadiness
 from geometry_msgs.msg import PoseStamped
+from robot_interfaces_qos import latched
+from robot_motion_interfaces.action import ExecuteMotionStage
+from robot_motion_interfaces.msg import DualArmPoseTargets
+from robot_system_interfaces.msg import DomainReadiness, ErrorCode, ErrorInfo
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformException, TransformListener
@@ -37,14 +39,6 @@ from .stage_contract import (
     validate_stage_pose_targets,
 )
 from .turn_frame import compensate_pose_y, pose_at_zero_turn
-
-
-READINESS_QOS = QoSProfile(
-    reliability=ReliabilityPolicy.RELIABLE,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
-    history=HistoryPolicy.KEEP_LAST,
-    depth=1,
-)
 
 
 def pregrasp_entry_mode(
@@ -101,9 +95,6 @@ class DomainMotionServer(Node):
         self.declare_parameter("stage_action", "/motion/execute_stage")
         self.declare_parameter("readiness_topic", "/motion/readiness")
         self.declare_parameter("initialize_service", "/motion/dev/initialize_loaded_pose")
-        self.declare_parameter("interface_version", "autonomy-motion-action-v1")
-        self.declare_parameter("model_version", "alfa_robot_current")
-        self.declare_parameter("calibration_version", "rt_control_current")
         self.declare_parameter("allow_partial_domain_test", False)
 
         rate_hz = float(self.get_parameter("trajectory_rate_hz").value)
@@ -127,8 +118,9 @@ class DomainMotionServer(Node):
         self._recapture_sample = None
         self._cycle_serial = 0
         self._cycle_id = ""
+        self._producer_instance_id = str(uuid.uuid4())
         self._next_stage = ExecuteMotionStage.Goal.EXECUTION_STAGE_CAMERA_VIEW
-        self._last_error = self._error(MotionErrorInfo.SUCCESS)
+        self._last_error = self._error(ErrorCode.SUCCESS)
         self._hardware = HardwareExecutor(
             self,
             dry_run=bool(self.get_parameter("dry_run").value),
@@ -166,9 +158,9 @@ class DomainMotionServer(Node):
             "speed_scale": speed_scale,
         }
         self._readiness_pub = self.create_publisher(
-            MotionReadiness,
+            DomainReadiness,
             str(self.get_parameter("readiness_topic").value),
-            READINESS_QOS,
+            latched(),
         )
         self._readiness_timer = self.create_timer(1.0, self._publish_readiness)
         self._initialize_service = self.create_service(
@@ -201,39 +193,71 @@ class DomainMotionServer(Node):
         message: str = "",
         origin: str = "motion",
         retryable: bool = False,
-    ) -> MotionErrorInfo:
-        error = MotionErrorInfo()
+        severity: int | None = None,
+        detail: str = "",
+    ) -> ErrorInfo:
+        error = ErrorInfo()
         error.code = int(code)
         error.message = str(message)
         error.retryable = bool(retryable)
-        error.origin = str(origin)
+        if severity is not None:
+            error.severity = int(severity)
+        elif int(code) == ErrorCode.SUCCESS:
+            error.severity = ErrorInfo.OK
+        elif retryable:
+            error.severity = ErrorInfo.WARN
+        else:
+            error.severity = ErrorInfo.FAULT
+        error.source = str(origin)
+        error.detail = str(detail)
         return error
 
     def _publish_readiness(self) -> None:
-        message = MotionReadiness()
+        message = DomainReadiness()
         message.header.stamp = self.get_clock().now().to_msg()
+        message.domain = "motion"
+        message.readiness_name = "motion_execution"
+        message.map_version = ""
+        message.producer_instance_id = self._producer_instance_id
         with self._lock:
             partial_test = bool(self.get_parameter("allow_partial_domain_test").value)
             message.ready = partial_test and not self._busy and not self._goal_reserved
+            blockers: list[str] = []
             if self._scene_unknown:
-                message.state = "SCENE_UNKNOWN"
+                message.operational_state = "SCENE_UNKNOWN"
                 message.ready = False
+                blockers.append("scene_unknown")
             elif self._busy or self._goal_reserved:
-                message.state = "BUSY"
+                message.operational_state = "BUSY"
+                blockers.append("motion_busy")
             elif (
                 self._active_plan is None
                 and self._recapture_sample is None
                 and not self._cycle_id
             ):
-                message.state = (
+                message.operational_state = (
                     "DEVELOPMENT_READY" if partial_test else "INTEGRATION_BLOCKED"
                 )
             else:
-                message.state = self._stage_name(self._next_stage)
-            message.last_error = self._last_error
-        message.interface_version = str(self.get_parameter("interface_version").value)
-        message.model_version = str(self.get_parameter("model_version").value)
-        message.calibration_version = str(self.get_parameter("calibration_version").value)
+                message.operational_state = self._stage_name(self._next_stage)
+            if not partial_test:
+                blockers.append("partial_domain_test_disabled")
+            errors: list[ErrorInfo] = []
+            if int(self._last_error.code) != ErrorCode.SUCCESS:
+                readiness_error = copy.deepcopy(self._last_error)
+                if message.ready:
+                    readiness_error.severity = ErrorInfo.WARN
+                errors.append(readiness_error)
+            message.blockers = blockers
+            message.errors = errors
+            if message.ready:
+                message.status = (
+                    DomainReadiness.STATUS_DEGRADED
+                    if errors
+                    else DomainReadiness.STATUS_HEALTHY
+                )
+            else:
+                message.status = DomainReadiness.STATUS_UNAVAILABLE
         self._readiness_pub.publish(message)
 
     @staticmethod
@@ -341,8 +365,10 @@ class DomainMotionServer(Node):
             self.get_parameter("turn_zero_target_y_compensation_m").value
         )
         for side in ("left", "right"):
-            grasp_mode = int(getattr(corrected_request.targets, f"{side}_stage"))
-            if grasp_mode == DualArmPoseTargets.STAGE_NO_MOVE:
+            grasp_mode = int(
+                getattr(corrected_request.targets, f"{side}_grasp_mode")
+            )
+            if grasp_mode == DualArmPoseTargets.GRASP_MODE_NO_MOVE:
                 continue
             original_pose = getattr(corrected_request.targets, f"{side}_pose")
             corrected_pose = original_pose
@@ -555,26 +581,36 @@ class DomainMotionServer(Node):
             )
             goal_handle.succeed()
             with self._lock:
-                self._last_error = self._error(MotionErrorInfo.SUCCESS)
+                self._last_error = self._error(ErrorCode.SUCCESS)
+            result.ok = True
+            result.error = self._error(ErrorCode.SUCCESS)
         except InterruptedError as exc:
-            error = self._error(MotionErrorInfo.EXECUTION_FAILED, str(exc))
+            error = self._error(ErrorCode.CANCELED, str(exc))
+            result.ok = False
+            result.error = error
             result.diagnostic = str(exc)
             goal_handle.canceled()
             self._handle_stage_failure(stage, error)
         except Exception as exc:
             error_code = (
-                MotionErrorInfo.PLANNING_FAILED
+                self._planning_error_code(str(exc))
                 if stage in {
                     ExecuteMotionStage.Goal.EXECUTION_STAGE_CAMERA_VIEW,
                     ExecuteMotionStage.Goal.EXECUTION_STAGE_PREGRASP,
                 }
-                else MotionErrorInfo.EXECUTION_FAILED
+                else ErrorCode.MOTION_EXECUTION_FAILED
             )
             error = self._error(
                 error_code,
                 str(exc),
-                retryable=error_code == MotionErrorInfo.PLANNING_FAILED,
+                retryable=error_code in {
+                    ErrorCode.MOTION_PLANNING_FAILED,
+                    ErrorCode.MOTION_COLLISION_DETECTED,
+                    ErrorCode.MOTION_IK_NO_SOLUTION,
+                },
             )
+            result.ok = False
+            result.error = error
             result.diagnostic = str(exc)
             goal_handle.abort()
             self._handle_stage_failure(stage, error)
@@ -586,7 +622,16 @@ class DomainMotionServer(Node):
             self._publish_readiness()
         return result
 
-    def _handle_stage_failure(self, stage: int, error: MotionErrorInfo) -> None:
+    @staticmethod
+    def _planning_error_code(message: str) -> int:
+        normalized = message.lower()
+        if "collision" in normalized or "碰撞" in message:
+            return ErrorCode.MOTION_COLLISION_DETECTED
+        if "ik" in normalized or "逆解" in message or "无解" in message:
+            return ErrorCode.MOTION_IK_NO_SOLUTION
+        return ErrorCode.MOTION_PLANNING_FAILED
+
+    def _handle_stage_failure(self, stage: int, error: ErrorInfo) -> None:
         with self._lock:
             self._last_error = error
             if stage >= ExecuteMotionStage.Goal.EXECUTION_STAGE_APPROACH:

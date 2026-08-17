@@ -29,7 +29,7 @@
 
 ```bash
 cd ros2_ws
-vcs import src < src/robot_interfaces.repos
+vcs import src < src/dependencies.repos
 ```
 
 ```bash

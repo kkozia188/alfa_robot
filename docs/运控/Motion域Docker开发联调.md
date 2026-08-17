@@ -105,8 +105,8 @@ Result 包含 `ok`、结构化 `robot_system_interfaces/ErrorInfo error` 和仅�
 
 ```bash
 cd ros2_ws
-vcs import src < src/robot_interfaces.repos
-colcon build --packages-select robot_system_interfaces robot_motion_interfaces
+vcs import src < src/dependencies.repos
+colcon build --packages-select robot_interfaces_qos robot_system_interfaces robot_motion_interfaces
 ```
 
 Mock：

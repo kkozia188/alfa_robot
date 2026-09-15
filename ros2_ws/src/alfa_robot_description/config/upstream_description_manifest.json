@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "model_revision": "robot_v3.1.1",
+  "source_files": {
+    "model_sources/robot_v3_1_1/robot.urdf": "8293a59fd74b97d1af3636434cd853316039919be68bd52359fe2b038f2d998d",
+    "model_sources/robot_v3_1_1/user_model.json": "2e5b697a4d21d941a35d54e08f95ef807a56c8865b2dd97976a0df7b5db39593",
+    "model_sources/robot_v3_1_1/parts.json": "9115e7b93b6f4b17b464ff1c62866d4460c2d76122266492b6b2bdb07bbb7058",
+    "model_sources/robot_v3_1_1/export_report.json": "6f0e940bcfa8e019167cdc2ebe562c60571cbf0198e48d5b4773e09a276e3f9d"
+  },
+  "joint_name_mapping": {
+    "rear_suspension_joint": "rear_suspension_joint",
+    "front_left_steering_joint": "front_left_steering_joint",
+    "front_left_wheel_joint": "front_left_wheel_joint",
+    "front_right_steering_joint": "front_right_steering_joint",
+    "front_right_wheel_joint": "front_right_wheel_joint",
+    "rear_left_steering_joint": "rear_left_steering_joint",
+    "rear_left_wheel_joint": "rear_left_wheel_joint",
+    "rear_right_steering_joint": "rear_right_steering_joint",
+    "rear_right_wheel_joint": "rear_right_wheel_joint",
+    "lift_base_joint": "updown",
+    "head_joint": "head_joint",
+    "left_arm_link_1_joint": "right_joint1",
+    "left_arm_link_2_joint": "right_joint2",
+    "right_arm_link_3_joint": "right_joint3",
+    "right_arm_link_4_joint": "right_joint4",
+    "right_arm_link_5_joint": "right_joint5",
+    "right_arm_link_6_joint": "right_joint6",
+    "right_arm_link_7_joint": "right_joint7",
+    "right_gripper_joint": "right_hand_joint",
+    "left_arm_link_1_joint_2": "left_joint1",
+    "left_arm_link_2_joint_2": "left_joint2",
+    "left_arm_link_3_joint": "left_joint3",
+    "left_arm_link_4_joint": "left_joint4",
+    "left_arm_link_5_joint": "left_joint5",
+    "left_arm_link_6_joint": "left_joint6",
+    "left_arm_link_7_joint": "left_joint7",
+    "left_gripper_joint": "left_hand_joint"
+  },
+  "link_name_mapping": {
+    "base_link": "model_base",
+    "rear_suspension_link": "rear_suspension_link",
+    "front_left_steering_link": "front_left_steering_link",
+    "front_left_wheel_link": "front_left_wheel_link",
+    "front_right_steering_link": "front_right_steering_link",
+    "front_right_wheel_link": "front_right_wheel_link",
+    "rear_left_steering_link": "rear_left_steering_link",
+    "rear_left_wheel_link": "rear_left_wheel_link",
+    "rear_right_steering_link": "rear_right_steering_link",
+    "rear_right_wheel_link": "rear_right_wheel_link",
+    "lift_base_link": "arm_carriage",
+    "head_link": "head",
+    "right_arm_link_1": "right_joint1",
+    "right_arm_link_2": "right_joint2",
+    "right_arm_link_3": "right_joint3",
+    "right_arm_link_4": "right_joint4",
+    "right_arm_link_5": "right_joint5",
+    "right_arm_link_6": "right_joint6",
+    "right_arm_link_7": "right_joint7",
+    "right_gripper_link": "right_hand",
+    "left_arm_link_1": "left_joint1",
+    "left_arm_link_2": "left_joint2",
+    "left_arm_link_3": "left_joint3",
+    "left_arm_link_4": "left_joint4",
+    "left_arm_link_5": "left_joint5",
+    "left_arm_link_6": "left_joint6",
+    "left_arm_link_7": "left_joint7",
+    "left_gripper_link": "left_hand"
+  },
+  "source_joint_name_corrections": {
+    "left_arm_link_1_joint": "right_joint1",
+    "left_arm_link_2_joint": "right_joint2"
+  },
+  "arm_position_limit_overrides": {
+    "right_joint1": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "right_joint2": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -1.8325957145940461,
+        "upper": 1.8325957145940461
+      }
+    },
+    "right_joint3": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "right_joint4": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -2.53072742,
+        "upper": 2.53072742
+      }
+    },
+    "right_joint5": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "right_joint6": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -1.91986218,
+        "upper": 1.91986218
+      }
+    },
+    "right_joint7": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "left_joint1": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "left_joint2": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -1.8325957145940461,
+        "upper": 1.8325957145940461
+      }
+    },
+    "left_joint3": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "left_joint4": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -2.53072742,
+        "upper": 2.53072742
+      }
+    },
+    "left_joint5": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    },
+    "left_joint6": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -1.91986218,
+        "upper": 1.91986218
+      }
+    },
+    "left_joint7": {
+      "source": {
+        "lower": -1.57,
+        "upper": 1.57
+      },
+      "imported": {
+        "lower": -3.14159265,
+        "upper": 3.14159265
+      }
+    }
+  },
+  "coordinate_policy": {
+    "joint_origins_axes_and_zero": "unchanged_from_source",
+    "source_base_origin_xyz_mm": [
+      -225.15632629499999,
+      -40.237304689999974,
+      -94
+    ],
+    "previous_model_revision": "robot_v3.0.10",
+    "previous_base_origin_xyz_mm": [
+      -225.156326295,
+      -165.23730469,
+      -94.0
+    ],
+    "previous_base_to_model_xyz_m": [
+      -0.174000017371,
+      6.50500004219e-09,
+      0.677299964909
+    ],
+    "base_to_model_rpy_rad": [
+      1.5707963,
+      0.0,
+      1.57079632679
+    ],
+    "cad_origin_delta_mm": [
+      2.842170943040401e-14,
+      125.00000000000003,
+      0.0
+    ],
+    "base_to_model_translation_delta_m": [
+      -3.34936207312858e-09,
+      2.843810987941989e-17,
+      0.12499999999999999
+    ],
+    "base_footprint_calibration": "existing_mount_reference_not_new_hardware_validation"
+  },
+  "unassigned_source_parts": [
+    "part_012",
+    "part_013",
+    "part_014",
+    "part_015",
+    "part_017",
+    "part_018",
+    "part_019",
+    "part_020",
+    "part_041",
+    "part_043",
+    "part_047",
+    "part_049",
+    "part_053",
+    "part_056",
+    "part_057",
+    "part_059"
+  ],
+  "export_warnings": [
+    "Model has 16 unassigned CAD parts that will not be exported in any link: part_012, part_013, part_014, part_015, part_017..."
+  ],
+  "meshes": {
+    "meshes/robot_v3_1_1/part_001_solid_001.stl": {
+      "sha256": "ddb1c6b256483e981aae84f9b0c2bad4916e520c0f4a3171c9d7f2ae22a3d203",
+      "bytes": 792284
+    },
+    "meshes/robot_v3_1_1/part_002_solid_002.stl": {
+      "sha256": "49a978b890294572884825e45af393a7b3ba973f3f23df2524386baae876c131",
+      "bytes": 66484
+    },
+    "meshes/robot_v3_1_1/part_003_solid_003.stl": {
+      "sha256": "c48a3a9f8d137eb9adc11b5a1d9f3e630f7094aae0ba815ae9e1103f46e515f4",
+      "bytes": 36084
+    },
+    "meshes/robot_v3_1_1/part_004_solid_004.stl": {
+      "sha256": "0cb0af75afe1affd7dfa3d5b43c70737411d152c4b8f0b81c0eb432b494c2eab",
+      "bytes": 337084
+    },
+    "meshes/robot_v3_1_1/part_005_solid_005.stl": {
+      "sha256": "f05e5b47be1ad5fcad91d53cff508f35389ad5c1c858231d8155aceea57633de",
+      "bytes": 255484
+    },
+    "meshes/robot_v3_1_1/part_006_solid_006.stl": {
+      "sha256": "940b53b19bb497fb3471f615f34097aa8f8b48ba993033c29d7ec0750cf6bad6",
+      "bytes": 65884
+    },
+    "meshes/robot_v3_1_1/part_007_solid_007.stl": {
+      "sha256": "60762b8622a02b8a4bc9cdda9699335bbb3d7941c527e97b17503d760f41448a",
+      "bytes": 12684
+    },
+    "meshes/robot_v3_1_1/part_008_solid_008.stl": {
+      "sha256": "d4eb327551e2c1c42d8b38666a72119d71163046764b77c84f4ae4c2a7eef475",
+      "bytes": 235084
+    },
+    "meshes/robot_v3_1_1/part_009_solid_009.stl": {
+      "sha256": "0bd78e3664cfedcfaab7ecf137579b3fd112b65969ea75ad4b97379a12158456",
+      "bytes": 255484
+    },
+    "meshes/robot_v3_1_1/part_010_solid_010.stl": {
+      "sha256": "ed948a13bbdfa70e06c404c7963fc547a3eb3f2fae71566954747ac819f15079",
+      "bytes": 65884
+    },
+    "meshes/robot_v3_1_1/part_011_solid_011.stl": {
+      "sha256": "f4a3ea2d5d6f573b3d0cf7e741d2a857cfcf704b8c2836eebe10094184121d70",
+      "bytes": 56884
+    },
+    "meshes/robot_v3_1_1/part_016_solid_016.stl": {
+      "sha256": "4df937462f2112667507b33754dd7a1d11b26539a5642414c6fb23c041958a1f",
+      "bytes": 56884
+    },
+    "meshes/robot_v3_1_1/part_021_solid_021.stl": {
+      "sha256": "f4380acac79cc46b3cd91a1270dda22179b27e1f2d38d71eeef16263468f9b6c",
+      "bytes": 60734
+    },
+    "meshes/robot_v3_1_1/part_022_solid_022.stl": {
+      "sha256": "1008581f1bfc516519f30b03418e4f4b8eddedc40a675975c6db70386ee43527",
+      "bytes": 21484
+    },
+    "meshes/robot_v3_1_1/part_023_solid_023.stl": {
+      "sha256": "a9f22b06be66ebb1e759f761c806584dc94338c25841855a9462e1b35ae5d68c",
+      "bytes": 16284
+    },
+    "meshes/robot_v3_1_1/part_024_solid_024.stl": {
+      "sha256": "2fe5f0381552f168e60b9a2be8164b50eca2dcce20eab3dd57f39b7776e69d29",
+      "bytes": 24884
+    },
+    "meshes/robot_v3_1_1/part_025_solid_025.stl": {
+      "sha256": "cfc130849528c4951997f8978132d783748248730c21095a917fb779075310d3",
+      "bytes": 27484
+    },
+    "meshes/robot_v3_1_1/part_026_solid_026.stl": {
+      "sha256": "c0f4f37d4035efaf549bfdaea839322e2c3d115f49ce3feb845ec70142146ab5",
+      "bytes": 28284
+    },
+    "meshes/robot_v3_1_1/part_027_solid_027.stl": {
+      "sha256": "8b700d7580ff193744044bd4a7560eac6ae782758279d5a5e3275e4de8ecc182",
+      "bytes": 21684
+    },
+    "meshes/robot_v3_1_1/part_028_solid_028.stl": {
+      "sha256": "563dd7dd173c913658e27fcd072d670dabc3bc0a8415b575a4fc0b143c4830ec",
+      "bytes": 5084
+    },
+    "meshes/robot_v3_1_1/part_029_solid_029.stl": {
+      "sha256": "ed6030afe4d4f54f2d9d0eb3930beff55d5304be52558ca169847264d620cef6",
+      "bytes": 37684
+    },
+    "meshes/robot_v3_1_1/part_030_solid_030.stl": {
+      "sha256": "388183570df92932de612d15654a423dc1d8cb1cb937db1d9cc3548eb46c281f",
+      "bytes": 4084
+    },
+    "meshes/robot_v3_1_1/part_031_solid_031.stl": {
+      "sha256": "13e860973985ae20fdf1401d90889a95e3e44bf334e230042f287f16d7706556",
+      "bytes": 21484
+    },
+    "meshes/robot_v3_1_1/part_032_solid_032.stl": {
+      "sha256": "4d6eee9a5f74b31c2029de270b99f79a64a5788a51a71e6e81081fb60f3ffbc4",
+      "bytes": 16284
+    },
+    "meshes/robot_v3_1_1/part_033_solid_033.stl": {
+      "sha256": "f0bb0ccb85a85de98e011e4166c995e5b1cb13783396082b2c7b0d21fde18c9a",
+      "bytes": 24884
+    },
+    "meshes/robot_v3_1_1/part_034_solid_034.stl": {
+      "sha256": "dcf30cef9c8050585472203ff0ef454583821199a45d9126682f61d4c8671b5d",
+      "bytes": 27484
+    },
+    "meshes/robot_v3_1_1/part_035_solid_035.stl": {
+      "sha256": "a0a2b18b5ef70c1dbd1b9763027a0ed7e8004dfafd3770ea73831ceb1a740d09",
+      "bytes": 28284
+    },
+    "meshes/robot_v3_1_1/part_036_solid_036.stl": {
+      "sha256": "0e6edc54742a1ff10fae7912a9ffc298747817dda6e30f75c5ff98177af5bc7a",
+      "bytes": 21684
+    },
+    "meshes/robot_v3_1_1/part_037_solid_037.stl": {
+      "sha256": "a58f89d09766586c49864488713a6c880a73553990ad0701f48f42412ad7ca96",
+      "bytes": 5084
+    },
+    "meshes/robot_v3_1_1/part_038_solid_038.stl": {
+      "sha256": "0584b6a4e5024b1a2c5ba56497c2dd7dfc063c3eb5b38be02f53349d24a59a3c",
+      "bytes": 37684
+    },
+    "meshes/robot_v3_1_1/part_039_solid_039.stl": {
+      "sha256": "dbbdf2f0b2bbbc0a4f957885c8e9e2a5e78d6222395a7a9029d751289e453366",
+      "bytes": 4084
+    },
+    "meshes/robot_v3_1_1/part_040_solid_040.stl": {
+      "sha256": "56f0d274b1cb20143ad0bde8eb07470d53425fa4de3481260072bd4427832a4d",
+      "bytes": 37684
+    },
+    "meshes/robot_v3_1_1/part_042_solid_042.stl": {
+      "sha256": "fcff0fa6c590d7db604eca79143ee8873738ca64aaac4ab644757b8f8d85219d",
+      "bytes": 46084
+    },
+    "meshes/robot_v3_1_1/part_044_solid_044.stl": {
+      "sha256": "90a1ff3441adbbb81eb1d77b768e0957497fae377b115978384d71ea217f9162",
+      "bytes": 46084
+    },
+    "meshes/robot_v3_1_1/part_045_solid_045.stl": {
+      "sha256": "386e4f6de92639c76ba39d55aa1a53f2937aad6f2d60477ed9f55f72d67a7fba",
+      "bytes": 9884
+    },
+    "meshes/robot_v3_1_1/part_046_solid_046.stl": {
+      "sha256": "7fd1141a4308c037ae03bda3e33adab9233d7a9f6508ed20cd42f9f2dc940f18",
+      "bytes": 9884
+    },
+    "meshes/robot_v3_1_1/part_048_solid_048.stl": {
+      "sha256": "590ba3b57f924e2bdfaeb016ef167aea91e434f54d450e038a69e6523e7f6aff",
+      "bytes": 2484
+    },
+    "meshes/robot_v3_1_1/part_050_solid_050.stl": {
+      "sha256": "7f608489d57d1159678bc56c0c7b102e415e7a480c75f5269bf6479f967bd2d6",
+      "bytes": 46084
+    },
+    "meshes/robot_v3_1_1/part_051_solid_051.stl": {
+      "sha256": "060df53c4cdd7944b1f24269e52836c25b5a9bc5afdc2ff1e295069855740fd4",
+      "bytes": 9884
+    },
+    "meshes/robot_v3_1_1/part_052_solid_052.stl": {
+      "sha256": "c62dfd00ccb695adbdb46c5659afbbcc62e2e0b7d519d9b092527feb90ba7f4c",
+      "bytes": 9884
+    },
+    "meshes/robot_v3_1_1/part_054_solid_054.stl": {
+      "sha256": "c7189f6f566c89ae69af7744a63442af1b7a2245f89c3e94b016cce1761beb75",
+      "bytes": 46084
+    },
+    "meshes/robot_v3_1_1/part_055_solid_055.stl": {
+      "sha256": "11e83cedb545e41c2ca4eae35dc6133e8784d2df073692956953e0dac0da514f",
+      "bytes": 8884
+    },
+    "meshes/robot_v3_1_1/part_058_solid_058.stl": {
+      "sha256": "2651f0f6cb0b6e00af5fe578fd811341dcf702f037ae168014b2a8a6d502616d",
+      "bytes": 3484
+    },
+    "meshes/robot_v3_1_1/part_060_solid_060.stl": {
+      "sha256": "5558b4f070ea813841b970dbd0b4791adaada495714d9da683ab5734ae14fd43",
+      "bytes": 2484
+    },
+    "meshes/robot_v3_1_1/part_061_solid_061.stl": {
+      "sha256": "36577caf74832132e04234cefb5b57de13249c4d6ddf73be69fb1e15a274c3f2",
+      "bytes": 684
+    },
+    "meshes/robot_v3_1_1/part_062_solid_062.stl": {
+      "sha256": "3e2940db84da4708c5ee58e623348943f2c9417bda8d411f3d7871f02fdd7569",
+      "bytes": 684
+    },
+    "meshes/robot_v3_1_1/part_063_solid_063.stl": {
+      "sha256": "1c03ceb097d53b0546c13c08a71a89c88ae42cd93e87ccead845930929546669",
+      "bytes": 20884
+    },
+    "meshes/robot_v3_1_1/part_064_solid_064.stl": {
+      "sha256": "4abd40bc8ca5b9557f9decdbd16ab43f0890ba42a8151eec9aa7eab14b35c401",
+      "bytes": 20884
+    },
+    "meshes/robot_v3_1_1/part_065_solid_065.stl": {
+      "sha256": "b3bc467e9510984cee54b4306eeef35e92803d478371f7acb78be4cb47bb549a",
+      "bytes": 23884
+    },
+    "meshes/robot_v3_1_1/part_066_solid_066.stl": {
+      "sha256": "d3e824172a27586b273f191d39a8b3ec978d283a2baedc4770d95c07cac9e2fe",
+      "bytes": 23884
+    }
+  }
+}

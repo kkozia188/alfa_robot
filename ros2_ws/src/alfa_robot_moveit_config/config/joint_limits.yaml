@@ -1,13 +1,32 @@
+# Planning limits for the mock MoveIt demo, not validated hardware limits.
 joint_limits:
-  updown: {has_position_limits: true, min_position: -1.0, max_position: 0.0, has_velocity_limits: true, max_velocity: 0.15, has_acceleration_limits: true, max_acceleration: 0.15}
-  head_joint: {has_position_limits: true, min_position: -1.57, max_position: 1.57, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
-  left_joint1: &joint_180 {has_position_limits: true, min_position: -3.14159265, max_position: 3.14159265, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
-  left_joint2: &joint_105 {has_position_limits: true, min_position: -1.83259571, max_position: 1.83259571, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
+  rear_suspension_joint: &linear_aux
+    {has_position_limits: true, min_position: 0.0, max_position: 0.17, has_velocity_limits: true, max_velocity: 0.05, has_acceleration_limits: true, max_acceleration: 0.1}
+  front_left_steering_joint: &rotary_aux
+    {has_position_limits: true, min_position: -1.57, max_position: 1.57, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
+  front_left_wheel_joint: *rotary_aux
+  front_right_steering_joint: *rotary_aux
+  front_right_wheel_joint: *rotary_aux
+  rear_left_steering_joint: *rotary_aux
+  rear_left_wheel_joint: *rotary_aux
+  rear_right_steering_joint: *rotary_aux
+  rear_right_wheel_joint: *rotary_aux
+  updown:
+    {has_position_limits: true, min_position: -1.0, max_position: 0.0, has_velocity_limits: true, max_velocity: 0.15, has_acceleration_limits: true, max_acceleration: 0.15}
+  head_joint: *rotary_aux
+  left_joint1: &joint_180
+    {has_position_limits: true, min_position: -3.14159265, max_position: 3.14159265, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
+  left_joint2: &joint_105
+    {has_position_limits: true, min_position: -1.8325957145940461, max_position: 1.8325957145940461, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
   left_joint3: *joint_180
-  left_joint4: &joint_145 {has_position_limits: true, min_position: -2.53072742, max_position: 2.53072742, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
+  left_joint4: &joint_145
+    {has_position_limits: true, min_position: -2.53072742, max_position: 2.53072742, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
   left_joint5: *joint_180
-  left_joint6: &joint_110 {has_position_limits: true, min_position: -1.91986218, max_position: 1.91986218, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
+  left_joint6: &joint_110
+    {has_position_limits: true, min_position: -1.91986218, max_position: 1.91986218, has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}
   left_joint7: *joint_180
+  left_hand_joint: &hand
+    {has_position_limits: true, min_position: 0.0, max_position: 0.1, has_velocity_limits: true, max_velocity: 0.05, has_acceleration_limits: true, max_acceleration: 0.1}
   right_joint1: *joint_180
   right_joint2: *joint_105
   right_joint3: *joint_180
@@ -15,3 +34,4 @@ joint_limits:
   right_joint5: *joint_180
   right_joint6: *joint_110
   right_joint7: *joint_180
+  right_hand_joint: *hand

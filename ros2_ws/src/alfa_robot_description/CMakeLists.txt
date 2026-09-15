@@ -22,27 +22,7 @@ install(
 )
 
 install(
-  DIRECTORY meshes/robot_v3_0_4
-  DESTINATION share/${PROJECT_NAME}/meshes
-)
-
-install(
-  DIRECTORY meshes/robot_v3_0_5
-  DESTINATION share/${PROJECT_NAME}/meshes
-)
-
-install(
-  DIRECTORY meshes/robot_v3_0_6
-  DESTINATION share/${PROJECT_NAME}/meshes
-)
-
-install(
-  DIRECTORY meshes/robot_v3_0_7
-  DESTINATION share/${PROJECT_NAME}/meshes
-)
-
-install(
-  DIRECTORY meshes/robot_v3_0_8
+  DIRECTORY meshes/robot_v3_1_1
   DESTINATION share/${PROJECT_NAME}/meshes
 )
 
@@ -50,6 +30,7 @@ install(
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_alfa_robot_urdf_xacro test/alfa_robot_test_urdf_xacro.py)
+  ament_add_pytest_test(test_v311_consumer_contract test/test_v311_consumer_contract.py)
 endif()
 
 ament_package()

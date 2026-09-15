@@ -71,10 +71,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          left_arm_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           left_joint1:
             Alpha: 1
             Show Axes: false
@@ -110,14 +106,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          left_tool0:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          right_arm_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           right_joint1:
             Alpha: 1
             Show Axes: false
@@ -153,10 +141,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          right_tool0:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           world:
             Alpha: 1
             Show Axes: false
@@ -212,10 +196,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          left_arm_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           left_joint1:
             Alpha: 1
             Show Axes: false
@@ -251,14 +231,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          left_tool0:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-          right_arm_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           right_joint1:
             Alpha: 1
             Show Axes: false
@@ -294,10 +266,6 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-          right_tool0:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
           world:
             Alpha: 1
             Show Axes: false

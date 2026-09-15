@@ -26,3 +26,6 @@ source install/setup.bash
 ```
 
 包职责和依赖方向见 `docs/运控/系统架构与包职责边界.md`。
+
+V3.1.1通用MoveIt模型验收与启动方式见`V3_DEMO.md`。当前Demo固定消费独立
+`robot_description`仓库的版本锁，启动前会拒绝旧模型install。

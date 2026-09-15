@@ -9,6 +9,15 @@ moveit_simple_controller_manager:
     action_ns: follow_joint_trajectory
     default: true
     joints:
+      - rear_suspension_joint
+      - front_left_steering_joint
+      - front_left_wheel_joint
+      - front_right_steering_joint
+      - front_right_wheel_joint
+      - rear_left_steering_joint
+      - rear_left_wheel_joint
+      - rear_right_steering_joint
+      - rear_right_wheel_joint
       - updown
       - head_joint
       - left_joint1
@@ -18,6 +27,7 @@ moveit_simple_controller_manager:
       - left_joint5
       - left_joint6
       - left_joint7
+      - left_hand_joint
       - right_joint1
       - right_joint2
       - right_joint3
@@ -25,3 +35,4 @@ moveit_simple_controller_manager:
       - right_joint5
       - right_joint6
       - right_joint7
+      - right_hand_joint

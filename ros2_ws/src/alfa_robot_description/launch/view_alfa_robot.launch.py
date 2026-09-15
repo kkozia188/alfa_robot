@@ -83,15 +83,21 @@ def generate_launch_description():
         parameters = [robot_description]
         if use_model_initial_positions.perform(context).lower() not in ("false", "0", "no", "off"):
             # joint_state_publisher_gui does not read MoveIt's initial_positions.yaml.
-            initial_arm_positions = (-1.57079632679, -1.57079632679, 0.0,
-                                     -1.57079632679, 0.0, 0.0, 0.0)
-            parameters.append(
-                {
-                    f"zeros.{side}_joint{index}": initial_arm_positions[index - 1]
-                    for side in ("left", "right")
-                    for index in range(1, 8)
-                }
-            )
+            initial_positions = {
+                "updown": -0.5,
+                "rear_suspension_joint": 0.085,
+                "left": (2.61799387799, 1.57079632679, -0.0872664625997,
+                          2.09439510239, 0.0, 0.0, 0.0),
+                "right": (-2.61799387799, -1.57079632679, 0.0872664625997,
+                           -2.09439510239, 0.0, 0.0, 0.0),
+            }
+            initial_positions.update({
+                f"{side}_joint{index}": initial_positions[side][index - 1]
+                for side in ("left", "right")
+                for index in range(1, 8)
+            })
+            parameters.append({f"zeros.{name}": value for name, value in initial_positions.items()
+                               if name not in ("left", "right")})
         return [
             Node(
                 package="joint_state_publisher_gui",
@@ -107,6 +113,12 @@ def generate_launch_description():
         output="both",
         parameters=[robot_description],
     )
+    world_to_base_footprint_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0", "0", "0", "0", "0", "0", "world", "base_footprint"],
+        output="log",
+    )
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -119,6 +131,7 @@ def generate_launch_description():
         declared_arguments
         + [
             joint_state_publisher_node,
+            world_to_base_footprint_node,
             robot_state_publisher_node,
             rviz_node,
         ]

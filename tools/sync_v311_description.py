@@ -110,6 +110,36 @@ def check_snapshot(files):
         raise SystemExit("V3.1.1 description snapshot mismatch:\n" + "\n".join(mismatches))
 
 
+def check_local_snapshot():
+    lock_path = PACKAGE_ROOT / "config/upstream_description.lock.json"
+    manifest_path = PACKAGE_ROOT / "config/upstream_description_manifest.json"
+    active_xacro = PACKAGE_ROOT / f"urdf/alfa_robot/{ASSET_DIRECTORY}.xacro"
+    for path in (lock_path, manifest_path, active_xacro):
+        if not path.is_file():
+            raise SystemExit(f"V3.1.1 local snapshot file is missing: {path}")
+    lock = json.loads(lock_path.read_text())
+    manifest = json.loads(manifest_path.read_text())
+    if lock.get("model_revision") != EXPECTED_MODEL_REVISION:
+        raise SystemExit("V3.1.1 local snapshot lock has the wrong model revision")
+    if digest(manifest_path.read_bytes()) != lock["upstream_manifest_sha256"]:
+        raise SystemExit("V3.1.1 local manifest does not match its lock")
+    if digest(active_xacro.read_bytes()) != lock["active_xacro_sha256"]:
+        raise SystemExit("V3.1.1 active Xacro does not match its lock")
+    asset_root = PACKAGE_ROOT / "meshes" / ASSET_DIRECTORY
+    expected_meshes = {Path(relative_path).name for relative_path in manifest["meshes"]}
+    actual_meshes = {path.name for path in asset_root.glob("*.stl")}
+    if actual_meshes != expected_meshes or len(actual_meshes) != lock["mesh_count"]:
+        raise SystemExit("V3.1.1 local mesh inventory does not match its lock")
+    for relative_path, metadata in manifest["meshes"].items():
+        path = asset_root / Path(relative_path).name
+        if path.stat().st_size != metadata["bytes"] or digest(path.read_bytes()) != metadata["sha256"]:
+            raise SystemExit(f"V3.1.1 local mesh differs from its manifest: {path.name}")
+    print(
+        f"Local consumer snapshot matches {EXPECTED_MODEL_REVISION} at "
+        f"{lock['upstream_commit'][:10]}."
+    )
+
+
 def write_snapshot(files):
     asset_root = PACKAGE_ROOT / "meshes" / ASSET_DIRECTORY
     if asset_root.exists():
@@ -123,8 +153,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-repository", type=Path, default=DEFAULT_SOURCE_REPOSITORY)
     parser.add_argument("--source-ref", default=DEFAULT_SOURCE_REF)
-    parser.add_argument("--check", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="compare against the source repository")
+    mode.add_argument("--check-local", action="store_true", help="verify the pinned local snapshot only")
     arguments = parser.parse_args()
+    if arguments.check_local:
+        check_local_snapshot()
+        return
     source_repository = arguments.source_repository.resolve()
     snapshot = expected_snapshot(source_repository, arguments.source_ref)
     files = destination_files(snapshot)

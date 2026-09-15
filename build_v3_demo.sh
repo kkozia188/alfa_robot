@@ -3,7 +3,7 @@ set -eo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$ROOT/tools/ros_humble_env.sh"
-/usr/bin/python3 "$ROOT/tools/sync_v311_description.py" --check
+/usr/bin/python3 "$ROOT/tools/sync_v311_description.py" --check-local
 cd "$ROOT/ros2_ws"
 colcon build \
   --packages-select alfa_robot_description \

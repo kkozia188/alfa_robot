@@ -21,7 +21,7 @@ cd /mnt/mydisk/ALFA/alfa_robot_v3
 ./build_v3_moveit_demo.sh
 ```
 
-构建入口会先检查本地消费者快照是否仍与权威 description 提交一致，然后执行Release
+构建入口会先根据固定版本锁检查本地消费者快照，然后执行Release
 构建及description/MoveIt回归测试。`tools/check_v3_demo_install.py`会检查源码与install
 中的模型锁、活动Xacro、MoveIt限位和SRDF是否一致。
 
@@ -48,11 +48,14 @@ cd /mnt/mydisk/ALFA/alfa_robot_v3
 /usr/bin/python3 tools/sync_v311_description.py
 ```
 
-仅核对而不修改：
+仅核对本地固定快照，不要求权威仓库位于本机：
 
 ```bash
-/usr/bin/python3 tools/sync_v311_description.py --check
+/usr/bin/python3 tools/sync_v311_description.py --check-local
 ```
+
+需要与权威仓库重新对照时，使用`--check --source-repository /path/to/robot_description`；
+主动同步新版时必须显式确认来源仓库与ref。
 
 锁文件为`ros2_ws/src/alfa_robot_description/config/upstream_description.lock.json`。
 不要手工复制单个URDF或只修改MoveIt限位；模型、SRDF、ros2_control和控制器清单必须

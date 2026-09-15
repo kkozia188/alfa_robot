@@ -426,6 +426,18 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_analytic_moveit_fk alfa_robot_analytic_ik moveit_core srdfdom urdf)
   add_test(NAME test_analytic_moveit_fk COMMAND test_analytic_moveit_fk)
 
+  add_executable(test_v311_analytic_moveit_fk test/test_v311_analytic_moveit_fk.cpp)
+  target_link_libraries(test_v311_analytic_moveit_fk alfa_robot_analytic_ik::alfa_robot_analytic_ik)
+  ament_target_dependencies(
+    test_v311_analytic_moveit_fk
+    alfa_robot_analytic_ik
+    ament_index_cpp
+    moveit_core
+    srdfdom
+    urdf
+  )
+  add_test(NAME test_v311_analytic_moveit_fk COMMAND test_v311_analytic_moveit_fk)
+
   add_executable(validate_v3_wall_replay test/validate_v3_wall_replay.cpp)
   ament_target_dependencies(validate_v3_wall_replay moveit_core moveit_msgs moveit_ros_planning nlohmann_json srdfdom urdf)
 

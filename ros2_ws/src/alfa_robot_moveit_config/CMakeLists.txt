@@ -473,6 +473,11 @@ if(BUILD_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/test_package_boundaries.py
       ${CMAKE_CURRENT_SOURCE_DIR}/../../..
   )
+
+  add_test(
+    NAME test_v311_demo_contract
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v311_demo_contract.py
+  )
 endif()
 
 ament_package()

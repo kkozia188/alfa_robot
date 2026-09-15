@@ -36,30 +36,13 @@ right_arm:
     - RRTConnectkConfigDefault
     - RRTstarkConfigDefault
 
-head:
-  default_planner_config: RRTConnectkConfigDefault
-  planner_configs:
-    - RRTConnectkConfigDefault
-
-left_arm_with_updown:
-  default_planner_config: RRTConnectkConfigDefault
-  planner_configs:
-    - RRTConnectkConfigDefault
-    - RRTstarkConfigDefault
-
-right_arm_with_updown:
-  default_planner_config: RRTConnectkConfigDefault
-  planner_configs:
-    - RRTConnectkConfigDefault
-    - RRTstarkConfigDefault
-
 dual_arm_with_updown:
   default_planner_config: RRTConnectkConfigDefault
   planner_configs:
     - RRTConnectkConfigDefault
     - RRTstarkConfigDefault
 
-whole_body:
+whole:
   default_planner_config: RRTConnectkConfigDefault
   planner_configs:
     - RRTConnectkConfigDefault

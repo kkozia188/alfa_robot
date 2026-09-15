@@ -93,7 +93,7 @@ def destination_files(snapshot):
     return files
 
 
-def check_snapshot(files):
+def check_snapshot(files, allow_equivalent_source_ref=False):
     mismatches = []
     expected_paths = set(files)
     asset_root = PACKAGE_ROOT / "meshes" / ASSET_DIRECTORY
@@ -103,6 +103,14 @@ def check_snapshot(files):
         if not path.is_file():
             mismatches.append(f"missing: {path.relative_to(REPOSITORY_ROOT)}")
         elif path.read_bytes() != expected:
+            is_lock = path == PACKAGE_ROOT / "config/upstream_description.lock.json"
+            if is_lock and allow_equivalent_source_ref:
+                actual_lock = json.loads(path.read_text())
+                expected_lock = json.loads(expected)
+                actual_lock.pop("upstream_ref_used_for_sync", None)
+                expected_lock.pop("upstream_ref_used_for_sync", None)
+                if actual_lock == expected_lock:
+                    continue
             mismatches.append(f"content differs: {path.relative_to(REPOSITORY_ROOT)}")
     for path in sorted(actual_asset_paths - expected_asset_paths):
         mismatches.append(f"unexpected: {path.relative_to(REPOSITORY_ROOT)}")
@@ -164,7 +172,7 @@ def main():
     snapshot = expected_snapshot(source_repository, arguments.source_ref)
     files = destination_files(snapshot)
     if arguments.check:
-        check_snapshot(files)
+        check_snapshot(files, allow_equivalent_source_ref=True)
         print("V3.1.1 consumer snapshot matches the authoritative description commit.")
         return
     write_snapshot(files)

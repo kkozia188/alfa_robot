@@ -8,6 +8,13 @@ int main()
 {
   using namespace alfa_robot::motion;
 
+  const ContainerGeometryConfig default_container;
+  assert(default_container.width == 2.4);
+  assert(default_container.height == 2.4);
+  const BoxWallGeometryConfig default_wall;
+  assert(default_wall.container_width == 2.4);
+  assert(default_wall.container_height == 2.4);
+
   ContainerGeometryConfig container;
   container.center_x = 0.8;
   container.center_y = 0.0;

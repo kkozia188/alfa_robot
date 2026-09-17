@@ -27,8 +27,8 @@ def test_demo_consumes_pinned_v311_kkozia_profile():
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
     assert lock["upstream_branch"] == "robot_v3_suction_chassis"
-    assert lock["upstream_commit"] == "62662f48548fa475340b55f8ed251064d5c02cba"
-    assert lock["upstream_ref_used_for_sync"] == "feat/motion-94-v311-named-poses"
+    assert lock["upstream_commit"] == "510694697e543a30030c8432c878fcc461da9088"
+    assert lock["upstream_ref_used_for_sync"] == "feat/motion-204-v3-symmetric-zero-named-poses"
     for profile in ("", "_gripper", "_suction"):
         assert f"config/named_poses{profile}.yaml" in lock["managed_destination_files"]
 

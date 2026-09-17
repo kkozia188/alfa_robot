@@ -531,7 +531,7 @@
     <limit lower="-1" upper="0" effort="10" velocity="5" />
   </joint>
   <joint name="right_joint1" type="revolute">
-    <origin xyz="-0.33054221 -0.181 1.3500054" rpy="0 -1.3089969 0" />
+    <origin xyz="-0.33054221 -0.181 1.3500054" rpy="0 1.3089969 3.1415927" />
     <parent link="right_arm_base" />
     <child link="right_joint1" />
     <axis xyz="0 0 1" />
@@ -559,7 +559,7 @@
     <limit lower="-2.53072742" upper="2.53072742" effort="10" velocity="5" />
   </joint>
   <joint name="right_joint5" type="revolute">
-    <origin xyz="-0.22457775 0.060175428 0.068" rpy="-1.5707963 0 1.3089969" />
+    <origin xyz="-0.22457775 0.060175428 0.068" rpy="1.5707963 0 -1.8325957" />
     <parent link="right_joint4" />
     <child link="right_joint5" />
     <axis xyz="0 0 1" />

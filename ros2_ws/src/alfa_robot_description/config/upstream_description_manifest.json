@@ -12,6 +12,7 @@
     "v3_1_1": [
       "left_joint1..left_joint7 kinematics",
       "right_joint1..right_joint7 kinematics",
+      "right_joint1/right_joint5 symmetric logical zero with unchanged positive axes",
       "left_joint1..left_joint6 geometry and inertial data",
       "right_joint1..right_joint6 geometry and inertial data",
       "updown upper-zero coordinate semantics"

@@ -19,29 +19,29 @@ ARM_POSES = {
         "left_joint5": math.radians(-90.0),
         "left_joint6": math.radians(-40.0),
         "left_joint7": 0.0,
-        "right_joint1": math.radians(25.0),
+        "right_joint1": math.radians(-155.0),
         "right_joint2": math.radians(-105.0),
         "right_joint3": math.radians(-20.0),
         "right_joint4": math.radians(90.0),
-        "right_joint5": math.radians(-90.0),
+        "right_joint5": math.radians(90.0),
         "right_joint6": math.radians(40.0),
         "right_joint7": 0.0,
     },
     "unloading": {
-        "left_joint1": math.radians(-50.0),
-        "left_joint2": math.radians(90.0),
-        "left_joint3": math.radians(-50.0),
-        "left_joint4": math.radians(50.0),
-        "left_joint5": math.radians(20.0),
-        "left_joint6": math.radians(-40.0),
-        "left_joint7": math.radians(-60.0),
+        "left_joint1": math.radians(130.0),
+        "left_joint2": math.radians(-105.0),
+        "left_joint3": -3.14159265,
+        "left_joint4": math.radians(20.0),
+        "left_joint5": math.radians(-90.0),
+        "left_joint6": math.radians(-30.0),
+        "left_joint7": 0.0,
         "right_joint1": math.radians(-130.0),
-        "right_joint2": math.radians(90.0),
-        "right_joint3": math.radians(50.0),
-        "right_joint4": math.radians(50.0),
-        "right_joint5": math.radians(-20.0),
-        "right_joint6": math.radians(-40.0),
-        "right_joint7": math.radians(60.0),
+        "right_joint2": math.radians(-105.0),
+        "right_joint3": 3.14159265,
+        "right_joint4": math.radians(20.0),
+        "right_joint5": math.radians(90.0),
+        "right_joint6": math.radians(30.0),
+        "right_joint7": 0.0,
     },
 }
 
@@ -141,6 +141,27 @@ def test_v3_side_zero_and_group_semantics(end_effector):
         "xyz": "0.22457775 0.060175428 0.068",
         "rpy": "1.5707963 0 1.8325957",
     }
+    assert joints["right_joint1"].find("origin").attrib == {
+        "xyz": "-0.33054221 -0.181 1.3500054",
+        "rpy": "0 1.3089969 3.1415927",
+    }
+    assert joints["right_joint5"].find("origin").attrib == {
+        "xyz": "-0.22457775 0.060175428 0.068",
+        "rpy": "1.5707963 0 -1.8325957",
+    }
+    old_zero_rpy = {
+        "right_joint1": (0.0, -1.3089969, 0.0),
+        "right_joint5": (-1.5707963, 0.0, 1.3089969),
+    }
+    local_half_turn = rpy_matrix((0.0, 0.0, math.pi))
+    for name, old_rpy in old_zero_rpy.items():
+        new_rpy = tuple(float(value) for value in joints[name].find("origin").attrib["rpy"].split())
+        old_rotation = rpy_matrix(old_rpy)
+        new_rotation = rpy_matrix(new_rpy)
+        assert_matrix_close(new_rotation, matrix_multiply(old_rotation, local_half_turn), 1e-7)
+        for row in range(3):
+            assert abs(new_rotation[row][2] - old_rotation[row][2]) < 1e-7
+        assert joints[name].find("axis").attrib["xyz"] == "0 0 1"
     assert joints["left_joint7"].find("origin").attrib == {
         "xyz": "0.0993 0 -0.0615",
         "rpy": "0 -1.5707963 3.1415927",

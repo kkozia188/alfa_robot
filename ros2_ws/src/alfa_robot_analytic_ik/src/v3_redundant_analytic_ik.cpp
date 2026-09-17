@@ -165,7 +165,7 @@ TransformArray fixedJointTransforms(V3RedundantArmModel model)
     return {
       arm_mount * transformFromOrigin(
         {-0.33054221, -0.181, 1.3500054},
-        {0.0, -1.3089969, 0.0}),
+        {0.0, 1.3089969, kUrdfPi}),
       transformFromOrigin(
         {0.039999999, 0.0, 0.1512},
         {0.0, kUrdfHalfPi, 0.0}),
@@ -177,7 +177,7 @@ TransformArray fixedJointTransforms(V3RedundantArmModel model)
         {kUrdfHalfPi, 1.3089969, 0.0}),
       transformFromOrigin(
         {-0.22457775, 0.060175428, 0.068},
-        {-kUrdfHalfPi, 0.0, 1.3089969}),
+        {kUrdfHalfPi, 0.0, -1.8325957}),
       transformFromOrigin(
         {0.061499999, 0.0, 0.2415},
         {0.0, kUrdfHalfPi, 0.0}),

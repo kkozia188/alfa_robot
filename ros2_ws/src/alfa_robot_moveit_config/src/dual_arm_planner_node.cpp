@@ -392,8 +392,8 @@ public:
     vehicle_drift_rotation_threshold_rad_ =
       get_or_declare_parameter<double>("vehicle_drift_rotation_threshold_rad", 0.02);
     container_length_ = get_or_declare_parameter<double>("container_length", 4.0);
-    container_width_ = get_or_declare_parameter<double>("container_width", 1.8);
-    container_height_ = get_or_declare_parameter<double>("container_height", 2.2);
+    container_width_ = get_or_declare_parameter<double>("container_width", 2.4);
+    container_height_ = get_or_declare_parameter<double>("container_height", 2.4);
     container_center_x_ = get_or_declare_parameter<double>("container_center_x", 0.8);
     container_center_y_ = get_or_declare_parameter<double>("container_center_y", 0.0);
     container_pose_dynamic_ = get_or_declare_parameter<bool>("container_pose_dynamic", false);
@@ -6622,8 +6622,8 @@ private:
   double vehicle_drift_translation_threshold_m_ = 0.05;
   double vehicle_drift_rotation_threshold_rad_ = 0.02;
   double container_length_ = 4.0;
-  double container_width_ = 1.8;
-  double container_height_ = 2.2;
+  double container_width_ = 2.4;
+  double container_height_ = 2.4;
   double container_center_x_ = 0.8;
   double container_center_y_ = 0.0;
   bool container_pose_dynamic_ = false;

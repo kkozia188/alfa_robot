@@ -28,7 +28,7 @@ def main():
     lock = json.loads((DESCRIPTION_ROOT / "config/upstream_description.lock.json").read_text())
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
-    assert lock["upstream_commit"] == "62662f48548fa475340b55f8ed251064d5c02cba"
+    assert lock["upstream_commit"] == "510694697e543a30030c8432c878fcc461da9088"
 
     initial = yaml.safe_load((MOVEIT_ROOT / "config/initial_positions.yaml").read_text())["initial_positions"]
     named = yaml.safe_load((DESCRIPTION_ROOT / "config/named_poses.yaml").read_text())["named_poses"]

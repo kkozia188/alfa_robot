@@ -167,8 +167,8 @@ def main():
             b = env[name]
             return b['center'][axis] + sign * b['size'][axis] / 2
         assert np.isclose(face('ground', 2, 1), 0)
-        assert np.isclose(face('ceiling', 2, -1), 2.35)
-        assert np.isclose(face('right_wall', 1, -1) - face('left_wall', 1, 1), 2.38)
+        assert np.isclose(face('ceiling', 2, -1), 2.4)
+        assert np.isclose(face('right_wall', 1, -1) - face('left_wall', 1, 1), 2.4)
         assert np.isclose(face('front_wall', 0, -1) - face('left_wall', 0, -1), 4.)
         back = preview['box_center'][0] + preview['box_size'][0] / 2
         assert np.isclose(face('front_wall', 0, -1) - back, preview['contact_numerical_gap'], atol=1e-9)
@@ -194,8 +194,8 @@ def main():
             points = np.concatenate(points)
             low, high = points.min(axis=0), points.max(axis=0)
             assert low[0] > face('left_wall', 0, -1) and high[0] < face('front_wall', 0, -1)
-            assert low[1] > -1.19 and high[1] < 1.19
-            assert low[2] >= 0 and high[2] < 2.35
+            assert low[1] > -1.2 and high[1] < 1.2
+            assert low[2] >= 0 and high[2] < 2.4
             bounds[link.get('name')] = [low.tolist(), high.tolist()]
         chassis_links = ('model_base', 'chassis_base', 'active_suspension_carriage',
                          'caster01', 'caster02', 'caster03', 'caster04',

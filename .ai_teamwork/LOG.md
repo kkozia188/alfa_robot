@@ -2101,3 +2101,9 @@
 - 改了哪里：权威 description 变更位于 `robot_description` 分支 `feat/motion-94-v311-named-poses@62662f4`、Gitea PR #9；消费仓同名功能分支同步 description 哈希锁，更新 MoveIt SRDF、初始位置、mock ros2_control/Xacro 默认值及文档。
 - 验证结果：两组姿态经运行中 MoveIt `/check_state_validity` 返回 `valid=True, contacts=[]`；description 36项测试通过；消费仓 Release 构建及63项测试通过，新增 `test_v311_named_pose_collision` 使用安装后的URDF/SRDF和FCL校验两组命名姿态无自碰撞、无越界。
 - 留给下个 AI：建议先合并 description PR #9，再合并消费仓 PR；消费仓锁定内容源提交 `62662f4`，同步器允许目标分支 merge/squash 后在所有受管文件哈希完全相同时视为等价。
+## 2026-09-17 Description / Codex / MOTION-204 V3对称零位与装卸姿态合同
+- 做了什么：右J1/J5重标180deg逻辑零位但保持正轴不变；冻结镜像`home`和新`unloading`姿态，更新解析IK固定变换、description消费者锁与2.4m×2.4m集装箱默认场景。
+- 上游：`robot_description@510694697e543a30030c8432c878fcc461da9088`，分支`feat/motion-204-v3-symmetric-zero-named-poses`。
+- 验证结果：干净无Conda环境Release构建通过；`alfa_robot_description`、`alfa_robot_analytic_ik`、`robot_motion_scene_service`、`alfa_robot_moveit_config`共61项测试全部通过。全零位和1000组随机镜像FK误差均在1e-6m内；新卸货位自碰撞/限位通过。
+- 规划证据：本地Rerun `ros2_ws/data/ik_benchmark/v3_motion_stage_wall_action/loaded_home_to_unloading_130deg_shortcut_symmetric_rrt_verified.rrd`；Shortcut碰撞区间由单臂RRTConnect局部修补，成功路径183帧，经552个0.5deg探针检查无碰撞且全程保持镜像。
+- 留给下个 AI：实体RT-Control仍需按该逻辑零位合同单独验收，禁止在description和驱动两侧重复补偿。

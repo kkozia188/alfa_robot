@@ -122,7 +122,7 @@ class ArmFullPlanner(Node):
 
     def get_end_effector_pose(self, arm="left"):
         """获取末端执行器位姿"""
-        ee_link = "left_joint6" if arm == "left" else "right_joint6"
+        ee_link = "left_link6" if arm == "left" else "right_link6"
 
         try:
             transform = self.tf_buffer.lookup_transform(
@@ -177,7 +177,7 @@ class ArmFullPlanner(Node):
         if arm == "left":
             return {
                 "group_name": "left_arm_with_base",
-                "ee_link": "left_joint6",
+                "ee_link": "left_link6",
                 "controller": "left_arm_with_base_controller",
                 "joints": ["updown", "left_joint1", "left_joint2", "left_joint3",
                           "left_joint4", "left_joint5", "left_joint6"]
@@ -185,7 +185,7 @@ class ArmFullPlanner(Node):
         else:
             return {
                 "group_name": "right_arm_with_base",
-                "ee_link": "right_joint6",
+                "ee_link": "right_link6",
                 "controller": "right_arm_with_base_controller",
                 "joints": ["updown", "right_joint1", "right_joint2", "right_joint3",
                           "right_joint4", "right_joint5", "right_joint6"]

@@ -908,9 +908,9 @@ private:
     // Preserve only those pairs while recombining; cross-arm and environment
     // collisions remain checked.
     scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxLeftId, "left_tool0", true);
-    scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxLeftId, "left_joint7", true);
+    scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxLeftId, "left_link7", true);
     scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxRightId, "right_tool0", true);
-    scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxRightId, "right_joint7", true);
+    scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxRightId, "right_link7", true);
     auto loaded = planning_scene::PlanningScene::clone(scene);
     loaded->getWorldNonConst()->removeObject(kCarriedBoxLeftId);
     loaded->getWorldNonConst()->removeObject(kCarriedBoxRightId);
@@ -1839,7 +1839,7 @@ private:
     auto contact_scene = planning_scene::PlanningScene::clone(scene);
     if (distance_demo_) {
       contact_scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxId, tool_link_, true);
-      contact_scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxId, side_ + "_joint7", true);
+      contact_scene->getAllowedCollisionMatrixNonConst().setEntry(kCarriedBoxId, side_ + "_link7", true);
     }
     const auto loaded = loadedScene(scene);
     const size_t approach_steps = std::max<size_t>(

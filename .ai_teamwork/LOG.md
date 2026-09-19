@@ -2107,3 +2107,9 @@
 - 验证结果：干净无Conda环境Release构建通过；`alfa_robot_description`、`alfa_robot_analytic_ik`、`robot_motion_scene_service`、`alfa_robot_moveit_config`共61项测试全部通过。全零位和1000组随机镜像FK误差均在1e-6m内；新卸货位自碰撞/限位通过。
 - 规划证据：本地Rerun `ros2_ws/data/ik_benchmark/v3_motion_stage_wall_action/loaded_home_to_unloading_130deg_shortcut_symmetric_rrt_verified.rrd`；Shortcut碰撞区间由单臂RRTConnect局部修补，成功路径183帧，经552个0.5deg探针检查无碰撞且全程保持镜像。
 - 留给下个 AI：实体RT-Control仍需按该逻辑零位合同单独验收，禁止在description和驱动两侧重复补偿。
+
+## 2026-09-19 Description / Codex / MOTION-204 原始零位合同纠正
+- 做了什么：确认 V3.1.1 机械原始零位已镜像，撤销右 J1/J5 多余的180度逻辑重标；四套搬运关键帧统一采用 `right_jointN=-left_jointN`。
+- 改了哪里：同步 `robot_description@f2454a6` 快照，更新解析 IK 固定变换、MoveIt/ros2_control 初始位、SRDF 命名姿态及 `*_linkN` 碰撞链接消费者。
+- 验证结果：description 38项测试通过；消费侧 description 合同17项通过；V3.1.1 随机解析 FK/IK 回代、四套关键帧限位与自碰撞、MoveIt 合同3项通过。
+- 留给下个 AI：description PR #11 应先于消费仓 PR 合并；关节名仍为 `*_jointN`，实体链接名从本次上游版本起为 `*_linkN`，禁止混用。

@@ -5,6 +5,7 @@ metadata:
   end_effector: gripper
   status: design_description_requires_hardware_validation
   source: robot_v3.1.1 arms/updown with Kkozia modular robot
+  fixed_names_source: robot_fixed_names.urdf
   gripper_source: robot_dual_gripper.urdf
   chassis_source: robot.urdf (active-suspension full-robot export)
   head_source: robot.urdf (camera STEP export)
@@ -32,32 +33,55 @@ joints:
     type: revolute
     lower_position_rad: -1.57
     upper_position_rad: 1.57
-  left_joint1: &joint_180
+  left_joint1: &arm_joint1
     type: revolute
     lower_position_rad: -3.14159265
     upper_position_rad: 3.14159265
-  left_joint2: &joint_105
+    max_effort: 647
+    max_velocity_rad_s: 1.309
+  left_joint2: &arm_joint2
     type: revolute
     lower_position_rad: -1.8325957145940461
     upper_position_rad: 1.8325957145940461
-  left_joint3: *joint_180
-  left_joint4: &joint_145
+    max_effort: 647
+    max_velocity_rad_s: 1.309
+  left_joint3: &arm_joint3
+    type: revolute
+    lower_position_rad: -3.14159265
+    upper_position_rad: 3.14159265
+    max_effort: 484
+    max_velocity_rad_s: 1.309
+  left_joint4: &arm_joint4
     type: revolute
     lower_position_rad: -2.53072742
     upper_position_rad: 2.53072742
-  left_joint5: *joint_180
-  left_joint6: &joint_110
+    max_effort: 459
+    max_velocity_rad_s: 1.749
+  left_joint5: &arm_joint5
+    type: revolute
+    lower_position_rad: -3.14159265
+    upper_position_rad: 3.14159265
+    max_effort: 217
+    max_velocity_rad_s: 2.618
+  left_joint6: &arm_joint6
     type: revolute
     lower_position_rad: -1.91986218
     upper_position_rad: 1.91986218
-  left_joint7: *joint_180
-  right_joint1: *joint_180
-  right_joint2: *joint_105
-  right_joint3: *joint_180
-  right_joint4: *joint_145
-  right_joint5: *joint_180
-  right_joint6: *joint_110
-  right_joint7: *joint_180
+    max_effort: 107
+    max_velocity_rad_s: 3.142
+  left_joint7: &arm_joint7
+    type: revolute
+    lower_position_rad: -3.14159265
+    upper_position_rad: 3.14159265
+    max_effort: 36
+    max_velocity_rad_s: 3.142
+  right_joint1: *arm_joint1
+  right_joint2: *arm_joint2
+  right_joint3: *arm_joint3
+  right_joint4: *arm_joint4
+  right_joint5: *arm_joint5
+  right_joint6: *arm_joint6
+  right_joint7: *arm_joint7
   left_moving_jaw_joint: &moving_jaw
     type: prismatic
     lower_position_m: 0.0

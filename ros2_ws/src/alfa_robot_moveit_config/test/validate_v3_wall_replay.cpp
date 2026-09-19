@@ -71,7 +71,7 @@ void validateCycle(const Json& task, const moveit::core::RobotModelPtr& model)
           scene.getWorldNonConst()->removeObject("target");
           EigenSTL::vector_Isometry3d poses{offset};
           state.attachBody("target", Eigen::Isometry3d::Identity(), {shapes::ShapeConstPtr(new shapes::Box(size.x(),size.y(),size.z()))},
-            poses, std::set<std::string>{tool, side + "_joint7"}, tool);
+            poses, std::set<std::string>{tool, side + "_link7"}, tool);
           ++attachments;
         } else {
           require(release && stage == "release_box" && f && frames[f-1].at("stage") == "rear_placement", "unexpected release");
@@ -100,7 +100,7 @@ void validateCycle(const Json& task, const moveit::core::RobotModelPtr& model)
         auto acm = scene.getAllowedCollisionMatrix();
         // Only the true suction contact may touch the target; never exempt neighbors/environment.
         if (!attached && (state.getGlobalLinkTransform(tool) * offset).translation().isApprox(center, 1e-6)) {
-          acm.setEntry("target", tool, true); acm.setEntry("target", side + "_joint7", true);
+          acm.setEntry("target", tool, true); acm.setEntry("target", side + "_link7", true);
         }
         scene.checkCollision(request, result, state, acm); ++checks;
         if (result.collision) {

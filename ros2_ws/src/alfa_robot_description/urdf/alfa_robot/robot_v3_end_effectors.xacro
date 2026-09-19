@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <robot xmlns:xacro="http://wiki.ros.org/xacro" name="robot_v3_end_effectors">
   <xacro:macro name="v3_gripper" params="side">
-    <link name="${side}_joint7">
+    <link name="${side}_link7">
       <inertial>
         <origin xyz="-0.007153 0.051039 0.078079" rpy="0 0 0" />
         <mass value="4.750" />
@@ -47,7 +47,7 @@
     </link>
     <joint name="${side}_moving_jaw_joint" type="prismatic">
       <origin xyz="0 0 0" rpy="0 0 0" />
-      <parent link="${side}_joint7" />
+      <parent link="${side}_link7" />
       <child link="${side}_moving_jaw" />
       <axis xyz="1 0 0" />
       <limit lower="0" upper="0.080" effort="500" velocity="0.10" />
@@ -56,7 +56,7 @@
   </xacro:macro>
 
   <xacro:macro name="v3_suction" params="side">
-    <link name="${side}_joint7">
+    <link name="${side}_link7">
       <inertial>
         <origin xyz="-0.000330 -0.000125 0.070303" rpy="0 0 0" />
         <mass value="2.618" />

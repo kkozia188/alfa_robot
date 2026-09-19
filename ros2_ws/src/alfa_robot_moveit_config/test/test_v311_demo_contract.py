@@ -28,7 +28,7 @@ def main():
     lock = json.loads((DESCRIPTION_ROOT / "config/upstream_description.lock.json").read_text())
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
-    assert lock["upstream_commit"] == "510694697e543a30030c8432c878fcc461da9088"
+    assert lock["upstream_commit"] == "f2454a679c23b84a774cc8a43c5b294cbbd340a3"
 
     initial = yaml.safe_load((MOVEIT_ROOT / "config/initial_positions.yaml").read_text())["initial_positions"]
     named = yaml.safe_load((DESCRIPTION_ROOT / "config/named_poses.yaml").read_text())["named_poses"]
@@ -71,7 +71,7 @@ def main():
         f"{side}_joint{index}"
         for side in ("left", "right") for index in range(1, 8)
     }
-    for pose_name in ("home", "unloading"):
+    for pose_name in ("home", "second_home", "unloading", "second_unloading"):
         pose = named[pose_name]
         expected_arm = {name: pose[name] for name in arm_names}
         assert states[("dual_arm", pose_name)] == expected_arm
@@ -84,6 +84,8 @@ def main():
             "head_pitch_joint": 0.0,
             **expected_arm,
         }
+        for index in range(1, 8):
+            assert pose[f"right_joint{index}"] == -pose[f"left_joint{index}"]
     passive = {joint.get("name") for joint in srdf.findall("passive_joint")}
     assert passive == {
         "active_suspension_joint",

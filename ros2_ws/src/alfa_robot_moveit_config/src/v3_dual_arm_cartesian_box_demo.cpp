@@ -590,8 +590,8 @@ private:
     EigenSTL::vector_Isometry3d shape_poses;
     shape_poses.push_back(left_tool_to_box_);
     const std::vector<std::string> touch_links = {
-      left_tool_link_, "left_joint7", "left_joint6",
-      right_tool_link_, "right_joint7", "right_joint6",
+      left_tool_link_, "left_link7", "left_link6",
+      right_tool_link_, "right_link7", "right_link6",
     };
     state.attachBody(
       kHeldBoxId,

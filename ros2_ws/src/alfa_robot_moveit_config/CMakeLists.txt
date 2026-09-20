@@ -28,7 +28,11 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(robot_motion_scene_service REQUIRED)
+find_package(motion_internal_interfaces REQUIRED)
 find_package(robot_motion_interfaces REQUIRED)
+find_package(robot_system_interfaces REQUIRED)
+find_package(robot_rt_control_interfaces REQUIRED)
+find_package(robot_interfaces_qos REQUIRED)
 find_package(robot_motion_core REQUIRED)
 find_package(alfa_robot_analytic_ik REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -37,7 +41,7 @@ find_package(ompl REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ConfigureExtractMonitor.srv"
   "srv/PlanWallBoxDemo.srv"
-  DEPENDENCIES geometry_msgs robot_motion_interfaces
+  DEPENDENCIES geometry_msgs motion_internal_interfaces
 )
 ament_export_dependencies(rosidl_default_runtime)
 
@@ -162,7 +166,11 @@ ament_target_dependencies(dual_arm_planner_node
   tf2_geometry_msgs
   tf2_eigen
   alfa_robot_analytic_ik
+  motion_internal_interfaces
   robot_motion_interfaces
+  robot_system_interfaces
+  robot_rt_control_interfaces
+  robot_interfaces_qos
   robot_motion_core
 )
 
@@ -186,7 +194,7 @@ ament_target_dependencies(analytic_arm_ik_service_node
   geometry_msgs
   sensor_msgs
   std_msgs
-  robot_motion_interfaces
+  motion_internal_interfaces
   alfa_robot_analytic_ik
 )
 
@@ -214,7 +222,7 @@ ament_target_dependencies(motion_collision_service_node
   moveit_core
   moveit_ros_planning
   moveit_msgs
-  robot_motion_interfaces
+  motion_internal_interfaces
 )
 
 add_executable(v3_continuous_reachability
@@ -278,6 +286,7 @@ target_link_libraries(v3_single_arm_box_extract_demo
 
 ament_target_dependencies(v3_single_arm_box_extract_demo
   alfa_robot_analytic_ik
+  control_msgs
   geometry_msgs
   interactive_markers
   moveit_core
@@ -286,16 +295,31 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   nlohmann_json
   pluginlib
   rclcpp
+  rclcpp_action
+  robot_motion_interfaces
+  robot_system_interfaces
+  robot_interfaces_qos
+  robot_rt_control_interfaces
   sensor_msgs
   shape_msgs
   std_msgs
   std_srvs
+  trajectory_msgs
   visualization_msgs
 )
 
 add_executable(v3_dual_arm_cartesian_box_demo
   src/v3_dual_arm_cartesian_box_demo.cpp
 )
+
+add_executable(v3_wrist_orientation_probe src/v3_wrist_orientation_probe.cpp)
+target_compile_features(v3_wrist_orientation_probe PUBLIC cxx_std_17)
+target_include_directories(v3_wrist_orientation_probe PRIVATE include)
+target_link_libraries(v3_wrist_orientation_probe
+  alfa_robot_analytic_ik::alfa_robot_analytic_ik ompl::ompl)
+ament_target_dependencies(v3_wrist_orientation_probe
+  alfa_robot_analytic_ik geometry_msgs moveit_core moveit_msgs moveit_ros_planning
+  nlohmann_json rclcpp shape_msgs)
 
 target_compile_features(v3_dual_arm_cartesian_box_demo PUBLIC cxx_std_17)
 
@@ -332,6 +356,7 @@ install(TARGETS
   v3_redundant_ik_interactive_demo
   v3_single_arm_box_extract_demo
   v3_dual_arm_cartesian_box_demo
+  v3_wrist_orientation_probe
   EXPORT export_alfa_robot_motion_core
   DESTINATION lib/${PROJECT_NAME}
   ARCHIVE DESTINATION lib
@@ -361,7 +386,9 @@ ament_export_dependencies(
   trajectory_msgs
   shape_msgs
   robot_motion_scene_service
+  motion_internal_interfaces
   robot_motion_interfaces
+  robot_system_interfaces
   srdfdom
   urdf
 )
@@ -452,6 +479,9 @@ if(BUILD_TESTING)
   add_executable(validate_v3_wall_replay test/validate_v3_wall_replay.cpp)
   ament_target_dependencies(validate_v3_wall_replay moveit_core moveit_msgs moveit_ros_planning nlohmann_json srdfdom urdf)
 
+  add_executable(validate_v3_loaded_home_replay test/validate_v3_loaded_home_replay.cpp)
+  ament_target_dependencies(validate_v3_loaded_home_replay moveit_core moveit_msgs moveit_ros_planning nlohmann_json srdfdom urdf)
+
   add_executable(test_demo_failure test/test_demo_failure.cpp)
   target_link_libraries(test_demo_failure alfa_robot_motion_scene_adapter)
   ament_target_dependencies(test_demo_failure visualization_msgs)
@@ -463,6 +493,12 @@ if(BUILD_TESTING)
   target_include_directories(test_wall_sequence PRIVATE include ${EIGEN3_INCLUDE_DIRS})
   target_compile_options(test_wall_sequence PRIVATE -UNDEBUG)
   add_test(NAME test_wall_sequence COMMAND test_wall_sequence)
+
+  add_executable(test_shortcut_local_repair test/test_shortcut_local_repair.cpp)
+  target_compile_features(test_shortcut_local_repair PRIVATE cxx_std_17)
+  target_include_directories(test_shortcut_local_repair PRIVATE include)
+  target_compile_options(test_shortcut_local_repair PRIVATE -UNDEBUG)
+  add_test(NAME test_shortcut_local_repair COMMAND test_shortcut_local_repair)
 
   add_executable(test_comfort_height test/test_comfort_height.cpp)
   target_compile_features(test_comfort_height PRIVATE cxx_std_17)
@@ -500,6 +536,10 @@ if(BUILD_TESTING)
   add_test(
     NAME test_v311_demo_contract
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v311_demo_contract.py
+  )
+  add_test(
+    NAME test_v3_stage_wall_cache
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_stage_wall_cache.py
   )
 endif()
 

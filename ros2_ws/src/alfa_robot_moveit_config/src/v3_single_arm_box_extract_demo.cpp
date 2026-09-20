@@ -4,9 +4,12 @@
 #include <alfa_robot_moveit_config/natural_joint_motion.hpp>
 #include <alfa_robot_moveit_config/comfort_height.hpp>
 #include <alfa_robot_moveit_config/wall_sequence.hpp>
+#include <alfa_robot_moveit_config/shortcut_local_repair.hpp>
 #include <ompl/util/RandomNumbers.h>
 #include <alfa_robot_moveit_config/srv/plan_wall_box_demo.hpp>
 
+#include <control_msgs/action/follow_joint_trajectory.hpp>
+#include <builtin_interfaces/msg/duration.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometric_shapes/shapes.h>
@@ -21,11 +24,19 @@
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <nlohmann/json.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
+#include <robot_motion_interfaces/action/execute_motion_stage.hpp>
+#include <robot_interfaces_qos/profiles.hpp>
+#include <robot_system_interfaces/msg/domain_readiness.hpp>
+#include <robot_system_interfaces/msg/error_code.hpp>
+#include <robot_system_interfaces/msg/error_info.hpp>
+#include <robot_rt_control_interfaces/msg/safety_state.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
 #include <std_msgs/msg/color_rgba.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 #include <visualization_msgs/msg/interactive_marker_control.hpp>
 #include <visualization_msgs/msg/interactive_marker_feedback.hpp>
@@ -41,9 +52,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <future>
+#include <fstream>
 #include <iomanip>
 #include <limits>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -62,6 +77,10 @@ using alfa_robot::analytic_ik::V3RedundantArmModel;
 using alfa_robot::analytic_ik::V3RedundantIkRequest;
 using alfa_robot::analytic_ik::V3RedundantIkSolution;
 using WallRequest = alfa_robot_moveit_config::srv::PlanWallBoxDemo;
+using StageAction = robot_motion_interfaces::action::ExecuteMotionStage;
+using StageGoalHandle = rclcpp_action::ServerGoalHandle<StageAction>;
+using FollowJointTrajectory = control_msgs::action::FollowJointTrajectory;
+using FollowJointTrajectoryGoalHandle = rclcpp_action::ClientGoalHandle<FollowJointTrajectory>;
 using Feedback = visualization_msgs::msg::InteractiveMarkerFeedback;
 using InteractiveMarker = visualization_msgs::msg::InteractiveMarker;
 using InteractiveMarkerControl = visualization_msgs::msg::InteractiveMarkerControl;
@@ -90,11 +109,12 @@ double normalizedAngle(double value)
 
 double maximumJointDelta(
   const std::array<double, 7>& from,
-  const std::array<double, 7>& to)
+  const std::array<double, 7>& to, bool bounded = false)
 {
   double maximum = 0.0;
   for (size_t index = 0; index < from.size(); ++index) {
-    maximum = std::max(maximum, std::abs(normalizedAngle(to[index] - from[index])));
+    const double delta = to[index] - from[index];
+    maximum = std::max(maximum, std::abs(bounded ? delta : normalizedAngle(delta)));
   }
   return maximum;
 }
@@ -173,9 +193,16 @@ struct PlanningMetrics
   double ik_ms = 0.0;
   uint64_t collision_checks = 0;
   double collision_ms = 0.0;
+  std::vector<double> collision_sample_ms;
   double analytic_path_ms = 0.0;
   double rrt_approach_ms = 0.0;
   double rrt_return_ms = 0.0;
+  uint64_t shortcut_connections = 0;
+  uint64_t shortcut_direct_successes = 0;
+  uint64_t shortcut_blocked_edges = 0;
+  uint64_t local_rrt_calls = 0;
+  uint64_t local_rrt_failures = 0;
+  double local_rrt_wall_ms = 0.0;
 
   void add(const PlanningMetrics& other)
   {
@@ -183,9 +210,17 @@ struct PlanningMetrics
     ik_ms += other.ik_ms;
     collision_checks += other.collision_checks;
     collision_ms += other.collision_ms;
+    collision_sample_ms.insert(collision_sample_ms.end(),
+      other.collision_sample_ms.begin(), other.collision_sample_ms.end());
     analytic_path_ms += other.analytic_path_ms;
     rrt_approach_ms += other.rrt_approach_ms;
     rrt_return_ms += other.rrt_return_ms;
+    shortcut_connections += other.shortcut_connections;
+    shortcut_direct_successes += other.shortcut_direct_successes;
+    shortcut_blocked_edges += other.shortcut_blocked_edges;
+    local_rrt_calls += other.local_rrt_calls;
+    local_rrt_failures += other.local_rrt_failures;
+    local_rrt_wall_ms += other.local_rrt_wall_ms;
   }
 };
 
@@ -202,6 +237,40 @@ struct TaskResult
   nlohmann::json diagnostic = nlohmann::json::object();
 };
 
+enum class PublicFlowState
+{
+  Idle,
+  PregraspComplete,
+  ApproachComplete,
+  PlaceComplete,
+};
+
+struct ResolvedWallTarget
+{
+  bool active = false;
+  bool top = false;
+  std::string side;
+  int box_id = -1;
+  double wall_distance = 0.0;
+  Eigen::Vector3d center = Eigen::Vector3d::Zero();
+};
+
+struct CachedPublicFlow
+{
+  uint64_t generation = 0;
+  TaskResult plan;
+  std::vector<ReplayFrame> pregrasp;
+  std::vector<ReplayFrame> approach;
+  std::vector<ReplayFrame> place;
+  std::vector<ReplayFrame> home;
+  std::vector<int> box_ids;
+  std::string single_side;
+  Eigen::Vector3d display_center = Eigen::Vector3d::Zero();
+  bool dual = false;
+  bool top = false;
+  double wall_distance = 0.0;
+};
+
 class V3SingleArmBoxExtractDemo : public rclcpp::Node
 {
 public:
@@ -212,6 +281,12 @@ public:
   void init()
   {
     distance_demo_ = getParameter<bool>("distance_demo", false);
+    direct_attach_ = getParameter<bool>("direct_attach", false);
+    if (direct_attach_ && !distance_demo_)
+      throw std::invalid_argument("direct_attach requires distance_demo");
+    direct_placement_pose_ = getParameter<std::string>("direct_placement_pose", "unloading");
+    if (direct_placement_pose_ != "unloading" && direct_placement_pose_ != "second_unloading")
+      throw std::invalid_argument("direct_placement_pose must be unloading or second_unloading");
     post_extract_policy_ = getParameter<std::string>(
       "post_extract_policy", "rear_release");
     if (post_extract_policy_ != "rear_release" &&
@@ -219,9 +294,18 @@ public:
       throw std::invalid_argument(
               "post_extract_policy must be rear_release or loaded_home");
     }
+    rear_placement_strategy_ = getParameter<std::string>(
+      "rear_placement_strategy", "geometric");
+    if (rear_placement_strategy_ != "geometric" &&
+        rear_placement_strategy_ != "named_unloading") {
+      throw std::invalid_argument(
+              "rear_placement_strategy must be geometric or named_unloading");
+    }
     initial_pose_ = getParameter<std::string>("initial_pose", "home");
-    if (initial_pose_ != "home" && (initial_pose_ != "arms_down" || !distance_demo_))
-      throw std::invalid_argument("initial_pose must be home, or arms_down for wall simulation");
+    if (initial_pose_ != "home" && initial_pose_ != "second_home" &&
+        (initial_pose_ != "arms_down" || !distance_demo_))
+      throw std::invalid_argument(
+              "initial_pose must be home, second_home, or arms_down for wall simulation");
     side_ = getParameter<std::string>("side", "left");
     world_frame_ = getParameter<std::string>("world_frame", "world");
     arm_base_link_ = getParameter<std::string>("arm_base_link", "arm_carriage");
@@ -285,9 +369,52 @@ public:
       1, getParameter<int>("precontact_candidate_limit", 8)));
     rrt_planning_time_ = std::max(0.05, getParameter<double>("rrt_planning_time", 1.0));
     rrt_planning_attempts_ = std::max(1, getParameter<int>("rrt_planning_attempts", 1));
+    local_rrt_planning_time_ = getParameter<double>("local_rrt_planning_time", 8.0);
+    if (!std::isfinite(local_rrt_planning_time_) || local_rrt_planning_time_ <= 0.0)
+      throw std::invalid_argument("local_rrt_planning_time must be finite and positive");
+    connection_planner_ = getParameter<std::string>("connection_planner",
+      "rrt_connect");
+    if (connection_planner_ != "shortcut_local_rrt" && connection_planner_ != "rrt_connect")
+      throw std::invalid_argument("connection_planner must be shortcut_local_rrt or rrt_connect");
+    shortcut_padding_points_ = static_cast<size_t>(std::max(0,
+      getParameter<int>("shortcut_padding_points", 5)));
+    shortcut_step_ = degToRad(getParameter<double>("shortcut_step_deg", 5.0));
+    shortcut_updown_step_ = getParameter<double>("shortcut_updown_step_m", 0.01);
+    if (!std::isfinite(shortcut_step_) || shortcut_step_ <= 0.0 ||
+        !std::isfinite(shortcut_updown_step_) || shortcut_updown_step_ <= 0.0)
+      throw std::invalid_argument("shortcut sampling steps must be finite and positive");
     auto_run_once_ = getParameter<bool>("auto_run_once", false);
     sequence_mode_ = getParameter<bool>("sequence_mode", false);
+    playback_enabled_ = getParameter<bool>("playback_enabled", true);
+    enable_stage_action_ = getParameter<bool>("enable_stage_action", false);
+    execution_backend_ = getParameter<std::string>("execution_backend", "replay");
+    follow_joint_trajectory_action_ = getParameter<std::string>(
+      "follow_joint_trajectory_action", "/whole_body_jtc/follow_joint_trajectory");
+    trajectory_cache_file_ = getParameter<std::string>("trajectory_cache_file", "");
+    target_match_tolerance_ = getParameter<double>("target_match_tolerance", 0.06);
+    target_orientation_tolerance_ = getParameter<double>(
+      "target_orientation_tolerance", degToRad(5.0));
+    maximum_rotary_velocity_ = getParameter<double>("maximum_rotary_velocity", degToRad(20.0));
+    maximum_updown_velocity_ = getParameter<double>("maximum_updown_velocity", 0.15);
+    minimum_trajectory_step_s_ = getParameter<double>("minimum_trajectory_step_s", 0.05);
+    display_rate_hz_ = getParameter<double>("display_rate_hz", 20.0);
     if (sequence_mode_ && !distance_demo_) throw std::invalid_argument("sequence_mode requires distance_demo");
+    if (enable_stage_action_ && !distance_demo_)
+      throw std::invalid_argument("enable_stage_action requires distance_demo");
+    if (enable_stage_action_ && (auto_run_once_ || sequence_mode_))
+      throw std::invalid_argument("stage Action mode cannot run the legacy automatic sequence");
+    if (execution_backend_ != "replay" && execution_backend_ != "fjt")
+      throw std::invalid_argument("execution_backend must be replay or fjt");
+    if (direct_attach_ && (sequence_mode_ || enable_stage_action_ ||
+        execution_backend_ != "replay" || wall_context_ != "target_only" ||
+        connection_planner_ != "shortcut_local_rrt"))
+      throw std::invalid_argument(
+        "direct_attach is a target_only replay experiment, not a wall sequence or hardware command");
+    for (const double value : {target_match_tolerance_, target_orientation_tolerance_,
+         maximum_rotary_velocity_,
+         maximum_updown_velocity_, minimum_trajectory_step_s_, display_rate_hz_})
+      if (!std::isfinite(value) || value <= 0.0)
+        throw std::invalid_argument("stage action tolerances and trajectory limits must be finite/positive");
 
     if (side_ != "left" && side_ != "right") {
       throw std::invalid_argument("side must be left or right");
@@ -329,7 +456,7 @@ public:
       throw std::runtime_error("missing tool or arm base link");
     }
 
-    all_joint_names_.reserve(16);
+    all_joint_names_.reserve(17);
     for (const std::string arm_side : {std::string("left"), std::string("right")}) {
       for (int index = 1; index <= 7; ++index) {
         all_joint_names_.push_back(arm_side + "_joint" + std::to_string(index));
@@ -339,6 +466,7 @@ public:
     // Keep the original 14 arm entries in order; publish the shared axes for complete TF.
     all_joint_names_.push_back("updown");
     all_joint_names_.push_back("head_joint");
+    all_joint_names_.push_back("head_pitch_joint");
 
     initial_state_ = std::make_shared<moveit::core::RobotState>(robot_model_);
     initial_state_->setToDefaultValues();
@@ -347,14 +475,24 @@ public:
         initial_state_->setVariablePosition(name, 0.0);
       }
     }
+    const std::string named_initial_pose = initial_pose_ == "second_home" ? "second_home" : "home";
     if (distance_demo_ && !initial_state_->setToDefaultValues(
-        robot_model_->getJointModelGroup("whole_body"), "home")) {
-      throw std::runtime_error("distance demo requires SRDF whole_body/home");
+        robot_model_->getJointModelGroup("whole_body"), named_initial_pose)) {
+      throw std::runtime_error("distance demo requires SRDF whole_body/" + named_initial_pose);
     }
     initial_state_->update(true);
     home_state_ = std::make_shared<moveit::core::RobotState>(*initial_state_);
     resetInitialState();
     display_state_ = std::make_shared<moveit::core::RobotState>(*initial_state_);
+    if (!trajectory_cache_file_.empty()) {
+      std::ifstream cache_file(trajectory_cache_file_);
+      if (!cache_file) throw std::runtime_error("cannot read trajectory_cache_file");
+      trajectory_cache_ = nlohmann::json::parse(cache_file);
+      if (trajectory_cache_.value("kind", "") != "v3_fixed_wall_motion_stage_cache" ||
+          trajectory_cache_.value("schema_version", 0) != 1 ||
+          trajectory_cache_.at("joint_names").get<std::vector<std::string>>() != all_joint_names_)
+        throw std::runtime_error("trajectory cache does not match V3 stage contract");
+    }
     if (distance_demo_) {
       // Keep rounded STL faces strictly behind the box plane without relaxing collisions.
       // This is a simulation numerical gap, not calibrated suction compliance.
@@ -435,12 +573,53 @@ public:
     // the authoritative full snapshot for late subscribers/reconnects.
     segment_publisher_ = create_publisher<std_msgs::msg::String>(
       "~/task_json_segments", rclcpp::QoS(32).reliable().transient_local());
-    joint_state_publisher_ = create_publisher<sensor_msgs::msg::JointState>("~/joint_states", 10);
+    wall_target_catalog_publisher_ = create_publisher<std_msgs::msg::String>(
+      "~/wall_target_catalog", rclcpp::QoS(1).reliable().transient_local());
+    if (execution_backend_ == "replay") {
+      joint_state_publisher_ = create_publisher<sensor_msgs::msg::JointState>("~/joint_states", 10);
+    }
     scene_marker_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
       "~/scene_markers", rclcpp::QoS(1).reliable().transient_local());
     status_marker_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
       "~/status_markers", rclcpp::QoS(1).reliable().transient_local());
-    run_service_ = create_service<std_srvs::srv::Trigger>(
+    if (enable_stage_action_) {
+      readiness_publisher_ = create_publisher<robot_system_interfaces::msg::DomainReadiness>(
+        "/motion/readiness", robot_interfaces_qos::latched());
+      stage_action_server_ = rclcpp_action::create_server<StageAction>(
+        shared_from_this(), "/motion/execute_stage",
+        std::bind(&V3SingleArmBoxExtractDemo::handleStageGoal, this,
+          std::placeholders::_1, std::placeholders::_2),
+        std::bind(&V3SingleArmBoxExtractDemo::handleStageCancel, this, std::placeholders::_1),
+        std::bind(&V3SingleArmBoxExtractDemo::handleStageAccepted, this, std::placeholders::_1));
+      if (execution_backend_ == "fjt") {
+        fjt_client_ = rclcpp_action::create_client<FollowJointTrajectory>(
+          shared_from_this(), follow_joint_trajectory_action_);
+        feedback_subscription_ = create_subscription<sensor_msgs::msg::JointState>(
+          "/joint_states", robot_interfaces_qos::fast_state(),
+          [this](const sensor_msgs::msg::JointState::SharedPtr message) {
+            if (message->name.size() != message->position.size()) return;
+            std::map<std::string, double> sample;
+            for (size_t index = 0; index < message->name.size(); ++index) {
+              if (!std::isfinite(message->position[index]) ||
+                  !sample.emplace(message->name[index], message->position[index]).second) return;
+            }
+            std::lock_guard<std::mutex> lock(feedback_mutex_);
+            latest_feedback_ = std::move(sample);
+            feedback_received_at_ = std::chrono::steady_clock::now();
+          });
+        safety_subscription_ = create_subscription<robot_rt_control_interfaces::msg::SafetyState>(
+          "/control/safety_state", robot_interfaces_qos::state(),
+          [this](const robot_rt_control_interfaces::msg::SafetyState::SharedPtr message) {
+            std::lock_guard<std::mutex> lock(feedback_mutex_);
+            latest_safety_ready_ = message->safe_to_start_motion;
+            safety_received_at_ = std::chrono::steady_clock::now();
+          });
+      }
+      readiness_timer_ = create_wall_timer(
+        std::chrono::seconds(1), [this]() {publishReadiness();});
+      publishReadiness();
+    }
+    if (!enable_stage_action_) run_service_ = create_service<std_srvs::srv::Trigger>(
       "~/run_current_box",
       [this](
         const std::shared_ptr<std_srvs::srv::Trigger::Request>,
@@ -450,7 +629,7 @@ public:
           "planning request accepted" : "planner is already running";
       });
 
-    if (distance_demo_) {
+    if (distance_demo_ && !enable_stage_action_ && !direct_attach_) {
       sequence_service_ = create_service<std_srvs::srv::Trigger>("~/plan_wall_sequence",
         [this](const std::shared_ptr<std_srvs::srv::Trigger::Request>,
                std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
@@ -518,11 +697,14 @@ public:
 
     worker_timer_ = create_wall_timer(
       std::chrono::milliseconds(25), [this]() {onWorkerTimer();});
-    display_timer_ = create_wall_timer(
-      std::chrono::milliseconds(50), [this]() {publishDisplayState();});
+    const auto display_period = std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::duration<double>(1.0 / display_rate_hz_));
+    display_timer_ = create_wall_timer(display_period, [this]() {publishDisplayState();});
     if (distance_demo_) selectArm(requested_arm_ == "auto" ? "left" : requested_arm_);
-    publishPreview(distance_demo_ ? "用 plan_wall_box 服务选择距离和箱号" :
+    publishPreview(direct_attach_ ? "第二初始姿态直接吸附双箱，Shortcut+局部RRT到命名放置位" :
+      distance_demo_ ? "用 plan_wall_box 服务选择距离和箱号" :
       "拖动箱体XYZ；右键箱体并选择“确认并计算当前箱位”");
+    if (distance_demo_ && !direct_attach_) publishWallTargetCatalog();
     publishSceneMarkers();
     publishStatus("READY", true);
 
@@ -553,6 +735,908 @@ private:
       declare_parameter<T>(name, default_value);
     }
     return get_parameter(name).get_value<T>();
+  }
+
+  static const char* publicStageName(uint8_t stage)
+  {
+    switch (stage) {
+      case StageAction::Goal::EXECUTION_STAGE_PREGRASP: return "PREGRASP";
+      case StageAction::Goal::EXECUTION_STAGE_APPROACH: return "APPROACH";
+      case StageAction::Goal::EXECUTION_STAGE_PLACE: return "PLACE";
+      case StageAction::Goal::EXECUTION_STAGE_HOME: return "HOME";
+      case StageAction::Goal::EXECUTION_STAGE_CAMERA_VIEW: return "CAMERA_VIEW";
+      case StageAction::Goal::EXECUTION_STAGE_TURN: return "TURN";
+      case StageAction::Goal::EXECUTION_STAGE_NAMED_JOINT_POSE: return "NAMED_JOINT_POSE";
+      default: return "UNSPECIFIED";
+    }
+  }
+
+  bool publicStageAllowed(uint8_t stage) const
+  {
+    switch (stage) {
+      case StageAction::Goal::EXECUTION_STAGE_PREGRASP:
+        return public_flow_state_.load() == PublicFlowState::Idle;
+      case StageAction::Goal::EXECUTION_STAGE_APPROACH:
+        return public_flow_state_.load() == PublicFlowState::PregraspComplete;
+      case StageAction::Goal::EXECUTION_STAGE_PLACE:
+        return public_flow_state_.load() == PublicFlowState::ApproachComplete;
+      case StageAction::Goal::EXECUTION_STAGE_HOME:
+        return public_flow_state_.load() == PublicFlowState::PlaceComplete;
+      default:
+        return false;
+    }
+  }
+
+  rclcpp_action::GoalResponse handleStageGoal(
+    const rclcpp_action::GoalUUID&,
+    std::shared_ptr<const StageAction::Goal> goal)
+  {
+    std::lock_guard<std::mutex> lock(public_flow_mutex_);
+    if (!enable_stage_action_ || !goal || public_goal_active_ ||
+        planning_active_ || planning_requested_ || sequence_running_) {
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+    if (goal->execution_stage != StageAction::Goal::EXECUTION_STAGE_PREGRASP &&
+        goal->execution_stage != StageAction::Goal::EXECUTION_STAGE_APPROACH &&
+        goal->execution_stage != StageAction::Goal::EXECUTION_STAGE_PLACE &&
+        goal->execution_stage != StageAction::Goal::EXECUTION_STAGE_HOME)
+      return rclcpp_action::GoalResponse::REJECT;
+    public_goal_active_ = true;
+    public_cancel_requested_ = false;
+    return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+  }
+
+  rclcpp_action::CancelResponse handleStageCancel(
+    const std::shared_ptr<StageGoalHandle>)
+  {
+    public_cancel_requested_ = true;
+    std::lock_guard<std::mutex> lock(fjt_goal_mutex_);
+    if (fjt_goal_handle_ && fjt_client_) {
+      fjt_client_->async_cancel_goal(fjt_goal_handle_);
+    }
+    return rclcpp_action::CancelResponse::ACCEPT;
+  }
+
+  void handleStageAccepted(const std::shared_ptr<StageGoalHandle> goal_handle)
+  {
+    auto self = std::static_pointer_cast<V3SingleArmBoxExtractDemo>(shared_from_this());
+    std::thread([self, goal_handle]() {self->executeStageGoal(goal_handle);}).detach();
+  }
+
+  robot_system_interfaces::msg::ErrorInfo makeError(
+    uint32_t code, const std::string& message, const std::string& detail = "") const
+  {
+    robot_system_interfaces::msg::ErrorInfo error;
+    error.code = code;
+    error.message = message;
+    error.retryable = code >= 3100U && code < 3200U;
+    error.severity = code == robot_system_interfaces::msg::ErrorCode::SUCCESS ?
+      robot_system_interfaces::msg::ErrorInfo::OK : robot_system_interfaces::msg::ErrorInfo::FAULT;
+    error.source = get_name();
+    error.detail = detail;
+    return error;
+  }
+
+  static bool finitePose(const geometry_msgs::msg::Pose& pose)
+  {
+    const std::array<double, 7> values = {pose.position.x, pose.position.y, pose.position.z,
+      pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w};
+    if (!std::all_of(values.begin(), values.end(), [](double value) {return std::isfinite(value);}))
+      return false;
+    const double norm = std::sqrt(
+      pose.orientation.x * pose.orientation.x + pose.orientation.y * pose.orientation.y +
+      pose.orientation.z * pose.orientation.z + pose.orientation.w * pose.orientation.w);
+    return norm > 1e-6;
+  }
+
+  static Eigen::Isometry3d poseToEigen(const geometry_msgs::msg::Pose& pose)
+  {
+    Eigen::Quaterniond quaternion(
+      pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+    quaternion.normalize();
+    Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
+    transform.linear() = quaternion.toRotationMatrix();
+    transform.translation() = Eigen::Vector3d(
+      pose.position.x, pose.position.y, pose.position.z);
+    return transform;
+  }
+
+  static nlohmann::json poseJson(const Eigen::Isometry3d& pose)
+  {
+    const Eigen::Quaterniond quaternion(pose.linear());
+    return {{"position", {pose.translation().x(), pose.translation().y(), pose.translation().z()}},
+      {"orientation", {quaternion.x(), quaternion.y(), quaternion.z(), quaternion.w()}}};
+  }
+
+  std::optional<ResolvedWallTarget> resolveWallTarget(
+    const std::string& side, uint8_t grasp_mode, const geometry_msgs::msg::Pose& pose,
+    std::string* reason) const
+  {
+    ResolvedWallTarget output;
+    output.side = side;
+    if (grasp_mode == robot_motion_interfaces::msg::DualArmPoseTargets::GRASP_MODE_NO_MOVE) {
+      return output;
+    }
+    if (grasp_mode != robot_motion_interfaces::msg::DualArmPoseTargets::GRASP_MODE_SIDE_SUCTION &&
+        grasp_mode != robot_motion_interfaces::msg::DualArmPoseTargets::GRASP_MODE_TOP_SUCTION) {
+      if (reason) *reason = side + " grasp_mode must be SIDE_SUCTION, TOP_SUCTION, or NO_MOVE";
+      return std::nullopt;
+    }
+    if (!finitePose(pose)) {
+      if (reason) *reason = side + " pose contains invalid position or quaternion";
+      return std::nullopt;
+    }
+    const auto* base_link = robot_model_->getLinkModel("base_link");
+    if (!base_link) {
+      if (reason) *reason = "robot model has no base_link";
+      return std::nullopt;
+    }
+    const Eigen::Isometry3d world_pose =
+      initial_state_->getGlobalLinkTransform(base_link) * poseToEigen(pose);
+    output.active = true;
+    output.top = grasp_mode ==
+      robot_motion_interfaces::msg::DualArmPoseTargets::GRASP_MODE_TOP_SUCTION;
+    output.center = world_pose.translation();
+    if (output.top) {
+      output.center.z() -= box_height_ / 2.0 + contact_numerical_gap_;
+      output.wall_distance = output.center.x() - chassis_front_x_ - box_depth_ / 2.0;
+    } else {
+      output.center.x() += box_depth_ / 2.0 + contact_numerical_gap_;
+      output.wall_distance = world_pose.translation().x() - chassis_front_x_;
+    }
+    if (!std::isfinite(output.wall_distance) || output.wall_distance <= 0.0) {
+      if (reason) *reason = side + " target resolves to a non-positive chassis-to-wall distance";
+      return std::nullopt;
+    }
+    const double column_value =
+      (output.center.y() - wall_center_y_) / (box_width_ + wall_gap_) + 2.0;
+    const double row_value =
+      (output.center.z() - wall_bottom_z_ - box_height_ / 2.0) /
+      (box_height_ + wall_gap_);
+    const int column = static_cast<int>(std::llround(column_value));
+    const int row = static_cast<int>(std::llround(row_value));
+    if (column < 0 || column >= 5 || row < 0 || row >= 5) {
+      if (reason) *reason = side + " target is outside the fixed 5x5 wall fixture";
+      return std::nullopt;
+    }
+    const int box_id = row * 5 + column;
+    const Eigen::Vector3d expected = wallBoxCenter(output.wall_distance, box_id);
+    if (std::abs(expected.y() - output.center.y()) > target_match_tolerance_ ||
+        std::abs(expected.z() - output.center.z()) > target_match_tolerance_) {
+      if (reason) {
+        *reason = side + " target does not match a wall cell within " +
+          std::to_string(target_match_tolerance_) + "m";
+      }
+      return std::nullopt;
+    }
+    const Eigen::Isometry3d expected_pose = contactPose(expected, side, output.top);
+    const double orientation_error = Eigen::AngleAxisd(
+      expected_pose.linear().transpose() * world_pose.linear()).angle();
+    if (orientation_error > target_orientation_tolerance_) {
+      if (reason) {
+        *reason = side + " target orientation differs from the fixed-wall grasp by " +
+          std::to_string(radToDeg(orientation_error)) + "deg";
+      }
+      return std::nullopt;
+    }
+    if (removed_boxes_.count(box_id)) {
+      if (reason) *reason = side + " target box " + std::to_string(box_id) + " was already removed";
+      return std::nullopt;
+    }
+    output.box_id = box_id;
+    output.center = expected;
+    return output;
+  }
+
+  static int publicFramePhase(const ReplayFrame& frame)
+  {
+    constexpr char prefix[] = "dual_";
+    if (frame.stage.rfind(prefix, 0) == 0) {
+      try {
+        return std::stoi(frame.stage.substr(sizeof(prefix) - 1));
+      } catch (const std::exception&) {
+        return -1;
+      }
+    }
+    if (frame.stage == "rrt_to_precontact") return 1;
+    return transferPhase(frame.stage);
+  }
+
+  static void prependBoundary(
+    std::vector<ReplayFrame>* segment, const std::vector<ReplayFrame>& previous,
+    const std::string& stage)
+  {
+    if (!segment || previous.empty()) return;
+    ReplayFrame boundary = previous.back();
+    boundary.stage = stage + "_boundary";
+    segment->insert(segment->begin(), std::move(boundary));
+  }
+
+  bool partitionPublicFlow(CachedPublicFlow* flow, std::string* reason) const
+  {
+    if (!flow) return false;
+    std::optional<ReplayFrame> released;
+    for (const auto& frame : flow->plan.frames) {
+      const int phase = publicFramePhase(frame);
+      if (phase <= 1) flow->pregrasp.push_back(frame);
+      else if (phase == 2) flow->approach.push_back(frame);
+      else if (phase >= 4 && phase <= 6) flow->place.push_back(frame);
+      else if (phase == 7) released = frame;
+      else if (phase >= 8) flow->home.push_back(frame);
+    }
+    prependBoundary(&flow->approach, flow->pregrasp, "APPROACH");
+    prependBoundary(&flow->place, flow->approach, "PLACE");
+    if (released && !flow->place.empty() && released->joints == flow->place.back().joints &&
+        !released->box_attached && !released->box_visible) {
+      released->stage = "HOME_release_boundary";
+      if (!flow->dual && released->carried_boxes.empty()) {
+        released->carried_boxes.push_back(carriedBoxJson(
+          flow->box_ids.front(), flow->display_center, flow->single_side,
+          flow->top, false, false));
+      }
+      flow->home.insert(flow->home.begin(), *released);
+    }
+    if (flow->pregrasp.empty() || flow->approach.size() < 2U ||
+        flow->place.size() < 2U || flow->home.size() < 2U) {
+      if (reason) {
+        *reason = "planned flow cannot be partitioned into PREGRASP/APPROACH/PLACE/HOME";
+      }
+      return false;
+    }
+    return true;
+  }
+
+  bool loadCachedPublicFlow(CachedPublicFlow* flow, std::string* reason) const
+  {
+    if (!flow || trajectory_cache_.is_null()) return false;
+    const nlohmann::json* selected = nullptr;
+    for (const auto& entry : trajectory_cache_.at("entries")) {
+      if (entry.value("success", false) &&
+          entry.at("left").get<int>() == flow->box_ids.at(0) &&
+          entry.at("right").get<int>() == flow->box_ids.at(1)) {
+        selected = &entry;
+        break;
+      }
+    }
+    if (!selected) {
+      if (reason) *reason = "no complete cached trajectory for this dual target";
+      return false;
+    }
+    const auto convert = [&](const nlohmann::json& input, const std::string& stage,
+      bool attached, bool visible) {
+      std::vector<ReplayFrame> output;
+      for (const auto& item : input) {
+        ReplayFrame frame;
+        frame.stage = stage;
+        frame.joints = item.at("joints").get<std::vector<double>>();
+        if (frame.joints.size() != all_joint_names_.size())
+          throw std::runtime_error("cached frame does not contain 17 joints");
+        frame.box_attached = attached;
+        frame.box_visible = visible;
+        if (attached) {
+          frame.carried_boxes.push_back(carriedBoxJson(
+            flow->box_ids[0], wallBoxCenter(flow->wall_distance, flow->box_ids[0]),
+            "left", false, true, true));
+          frame.carried_boxes.push_back(carriedBoxJson(
+            flow->box_ids[1], wallBoxCenter(flow->wall_distance, flow->box_ids[1]),
+            "right", false, true, true));
+        }
+        output.push_back(std::move(frame));
+      }
+      return output;
+    };
+    flow->pregrasp = convert(selected->at("pregrasp"), "PREGRASP", false, true);
+    flow->approach = convert(selected->at("approach"), "APPROACH", false, true);
+    flow->place = convert(selected->at("place"), "PLACE", true, true);
+    flow->home = convert(selected->at("home"), "HOME", false, false);
+    if (flow->pregrasp.empty() || flow->approach.empty() ||
+        flow->place.empty() || flow->home.empty()) {
+      if (reason) *reason = "cached trajectory has an empty stage";
+      return false;
+    }
+    const auto current = allJoints(*initial_state_);
+    for (size_t index = 0; index < current.size(); ++index) {
+      const double tolerance = all_joint_names_[index] == "updown" ? 0.015 : degToRad(0.75);
+      if (std::abs(current[index] - flow->pregrasp.front().joints[index]) > tolerance) {
+        if (reason) *reason = "cached trajectory start differs from current state at " +
+          all_joint_names_[index];
+        return false;
+      }
+    }
+    flow->plan.success = true;
+    flow->plan.total_ms = selected->value("planning_ms", 0.0);
+    for (const auto* segment : {&flow->pregrasp, &flow->approach, &flow->place, &flow->home})
+      flow->plan.frames.insert(flow->plan.frames.end(), segment->begin(), segment->end());
+    return true;
+  }
+
+  bool planPublicFlow(
+    const robot_motion_interfaces::msg::DualArmPoseTargets& targets,
+    CachedPublicFlow* flow, std::string* reason)
+  {
+    if (!flow) return false;
+    auto left = resolveWallTarget("left", targets.left_grasp_mode, targets.left_pose, reason);
+    if (!left) return false;
+    auto right = resolveWallTarget("right", targets.right_grasp_mode, targets.right_pose, reason);
+    if (!right) return false;
+    if (!left->active && !right->active) {
+      if (reason) *reason = "both arms are NO_MOVE";
+      return false;
+    }
+    if (left->active && right->active && left->top != right->top) {
+      if (reason) *reason = "first simulation demo requires equal dual-arm grasp modes";
+      return false;
+    }
+    if (left->active && right->active &&
+        std::abs(left->wall_distance - right->wall_distance) > target_match_tolerance_) {
+      if (reason) *reason = "left/right targets resolve to different wall distances";
+      return false;
+    }
+
+    flow->generation = ++generation_;
+    flow->dual = left->active && right->active;
+    flow->top = left->active ? left->top : right->top;
+    flow->wall_distance = flow->dual ?
+      0.5 * (left->wall_distance + right->wall_distance) :
+      (left->active ? left->wall_distance : right->wall_distance);
+    flow->display_center = flow->dual ? left->center :
+      (left->active ? left->center : right->center);
+    attempts_ = nlohmann::json::array();
+    requested_suction_mode_ = flow->top ? "top" : "auto";
+
+    if (flow->dual) {
+      flow->box_ids = {left->box_id, right->box_id};
+      updateWallTarget(flow->wall_distance, left->box_id);
+      selectArm("left");
+      top_suction_ = flow->top;
+      publishPlanningStarted(flow->generation, flow->display_center);
+      if (!flow->top && !trajectory_cache_.is_null())
+        return loadCachedPublicFlow(flow, reason);
+      flow->plan = planDualPair(left->box_id, right->box_id, flow->top, flow->wall_distance);
+    } else {
+      const auto& target = left->active ? *left : *right;
+      flow->box_ids = {target.box_id};
+      flow->single_side = target.side;
+      if (!trajectory_cache_.is_null()) {
+        if (reason) *reason = "no complete cached trajectory for this single-arm target";
+        return false;
+      }
+      requested_arm_ = target.side;
+      selectArm(target.side);
+      top_suction_ = target.top;
+      updateWallTarget(target.wall_distance, target.box_id);
+      publishPlanningStarted(flow->generation, target.center);
+      flow->plan = planTask(target.center);
+    }
+    if (!flow->plan.success) {
+      ensureFailurePlayback(flow->plan, flow->display_center);
+      if (reason) *reason = flow->plan.failure_stage + ": " + flow->plan.failure_reason;
+      return false;
+    }
+    return partitionPublicFlow(flow, reason);
+  }
+
+  static builtin_interfaces::msg::Duration durationFromSeconds(double seconds)
+  {
+    builtin_interfaces::msg::Duration duration;
+    duration.sec = static_cast<int32_t>(std::floor(seconds));
+    duration.nanosec = static_cast<uint32_t>(std::llround(
+      (seconds - static_cast<double>(duration.sec)) * 1e9));
+    if (duration.nanosec >= 1000000000U) {
+      ++duration.sec;
+      duration.nanosec -= 1000000000U;
+    }
+    return duration;
+  }
+
+  bool readFjtState(std::map<std::string, double>* positions, std::string* reason) const
+  {
+    std::lock_guard<std::mutex> lock(feedback_mutex_);
+    if (feedback_received_at_ == std::chrono::steady_clock::time_point{} ||
+        std::chrono::steady_clock::now() - feedback_received_at_ > std::chrono::milliseconds(500)) {
+      if (reason) *reason = "authoritative /joint_states is missing or older than 500ms";
+      return false;
+    }
+    for (const auto& name : robot_model_->getVariableNames()) {
+      if (!latest_feedback_.count(name)) {
+        if (reason) *reason = "authoritative /joint_states is missing model axis " + name;
+        return false;
+      }
+    }
+    if (positions) *positions = latest_feedback_;
+    return true;
+  }
+
+  bool readSafetyState(std::string* reason) const
+  {
+    std::lock_guard<std::mutex> lock(feedback_mutex_);
+    if (safety_received_at_ == std::chrono::steady_clock::time_point{} ||
+        std::chrono::steady_clock::now() - safety_received_at_ > std::chrono::milliseconds(500)) {
+      if (reason) *reason = "safety state is missing or older than 500ms";
+      return false;
+    }
+    if (!latest_safety_ready_) {
+      if (reason) *reason = "safety state does not allow motion";
+      return false;
+    }
+    return true;
+  }
+
+  bool feedbackMatches(
+    const std::map<std::string, double>& feedback, const std::vector<double>& expected,
+    std::string* reason) const
+  {
+    if (expected.size() != all_joint_names_.size()) {
+      if (reason) *reason = "trajectory frame does not contain all 17 controlled joints";
+      return false;
+    }
+    for (size_t index = 0; index < all_joint_names_.size(); ++index) {
+      const auto& name = all_joint_names_[index];
+      const double tolerance = name == "updown" ? 0.015 : degToRad(0.75);
+      if (std::abs(feedback.at(name) - expected[index]) > tolerance) {
+        if (reason) *reason = name + " differs from planned boundary by " +
+          std::to_string(std::abs(feedback.at(name) - expected[index]));
+        return false;
+      }
+    }
+    return true;
+  }
+
+  FollowJointTrajectory::Goal trajectoryGoal(const std::vector<ReplayFrame>& frames) const
+  {
+    FollowJointTrajectory::Goal goal;
+    goal.trajectory.joint_names = all_joint_names_;
+    if (frames.empty()) return goal;
+    std::vector<double> times(frames.size(), 0.001);
+    for (size_t index = 1; index < frames.size(); ++index) {
+      double required = minimum_trajectory_step_s_;
+      for (size_t joint = 0; joint < all_joint_names_.size(); ++joint) {
+        const double velocity = all_joint_names_[joint] == "updown" ?
+          maximum_updown_velocity_ : maximum_rotary_velocity_;
+        required = std::max(required,
+          std::abs(frames[index].joints.at(joint) - frames[index - 1].joints.at(joint)) /
+          velocity);
+      }
+      times[index] = times[index - 1] + required;
+    }
+    goal.trajectory.points.resize(frames.size());
+    for (size_t index = 0; index < frames.size(); ++index) {
+      auto& point = goal.trajectory.points[index];
+      point.positions = frames[index].joints;
+      point.velocities.assign(all_joint_names_.size(), 0.0);
+      point.accelerations.assign(all_joint_names_.size(), 0.0);
+      point.time_from_start = durationFromSeconds(times[index]);
+    }
+    for (size_t index = 1; index + 1 < frames.size(); ++index) {
+      const double dt = times[index + 1] - times[index - 1];
+      for (size_t joint = 0; joint < all_joint_names_.size(); ++joint) {
+        goal.trajectory.points[index].velocities[joint] =
+          (frames[index + 1].joints[joint] - frames[index - 1].joints[joint]) / dt;
+      }
+    }
+    return goal;
+  }
+
+  bool executeReplay(
+    const std::vector<ReplayFrame>& frames, bool* canceled, std::string* reason)
+  {
+    if (frames.empty()) {
+      if (reason) *reason = "stage contains no trajectory frames";
+      return false;
+    }
+    {
+      std::lock_guard<std::mutex> lock(display_mutex_);
+      playback_frames_ = frames;
+      playback_index_ = 0;
+      sequence_playback_ = true;
+      display_diagnostic_ = nlohmann::json::object();
+      display_failure_frozen_ = false;
+    }
+    while (rclcpp::ok()) {
+      if (public_cancel_requested_) {
+        if (canceled) *canceled = true;
+        std::lock_guard<std::mutex> lock(display_mutex_);
+        sequence_playback_ = false;
+        return false;
+      }
+      {
+        std::lock_guard<std::mutex> lock(display_mutex_);
+        if (!sequence_playback_) return true;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (reason) *reason = "ROS shutdown during replay";
+    return false;
+  }
+
+  bool executeFjt(
+    const std::vector<ReplayFrame>& frames, bool* canceled, std::string* reason)
+  {
+    if (frames.empty()) {
+      if (reason) *reason = "stage contains no trajectory frames";
+      return false;
+    }
+    std::map<std::string, double> feedback;
+    if (!readFjtState(&feedback, reason) ||
+        !feedbackMatches(feedback, frames.front().joints, reason)) return false;
+    if (public_cancel_requested_) {
+      if (canceled) *canceled = true;
+      return false;
+    }
+    if (!fjt_client_ || !fjt_client_->wait_for_action_server(std::chrono::seconds(3))) {
+      if (reason) *reason = "FollowJointTrajectory server unavailable: " + follow_joint_trajectory_action_;
+      return false;
+    }
+    auto goal_future = fjt_client_->async_send_goal(trajectoryGoal(frames));
+    if (goal_future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+      if (reason) *reason = "FollowJointTrajectory acceptance timed out; goal state is unknown";
+      fjt_outcome_unknown_ = true;
+      return false;
+    }
+    auto goal_handle = goal_future.get();
+    if (!goal_handle) {
+      if (reason) *reason = "FollowJointTrajectory goal rejected";
+      return false;
+    }
+    {
+      std::lock_guard<std::mutex> lock(fjt_goal_mutex_);
+      fjt_goal_handle_ = goal_handle;
+    }
+    auto result_future = fjt_client_->async_get_result(goal_handle);
+    const auto planned_time = trajectoryGoal(frames).trajectory.points.back().time_from_start;
+    const auto deadline = std::chrono::steady_clock::now() +
+      std::chrono::seconds(20 + planned_time.sec);
+    bool cancel_sent = false;
+    while (result_future.wait_for(std::chrono::milliseconds(50)) != std::future_status::ready) {
+      if (public_cancel_requested_ && !cancel_sent) {
+        fjt_client_->async_cancel_goal(goal_handle);
+        cancel_sent = true;
+      }
+      if (!rclcpp::ok() || std::chrono::steady_clock::now() > deadline) {
+        if (!cancel_sent) fjt_client_->async_cancel_goal(goal_handle);
+        if (reason) *reason = "FollowJointTrajectory result not confirmed; controller state is unknown";
+        fjt_outcome_unknown_ = true;
+        return false;
+      }
+    }
+    const auto wrapped = result_future.get();
+    {
+      std::lock_guard<std::mutex> lock(fjt_goal_mutex_);
+      fjt_goal_handle_.reset();
+    }
+    if (wrapped.code != rclcpp_action::ResultCode::SUCCEEDED || !wrapped.result ||
+        wrapped.result->error_code != FollowJointTrajectory::Result::SUCCESSFUL) {
+      fjt_outcome_unknown_ = true;
+      if (cancel_sent && wrapped.code == rclcpp_action::ResultCode::CANCELED) {
+        if (canceled) *canceled = true;
+        return false;
+      }
+      if (reason) {
+        *reason = "FollowJointTrajectory failed code=" +
+          std::to_string(wrapped.result ? wrapped.result->error_code : -1);
+      }
+      return false;
+    }
+    if (cancel_sent) {
+      if (reason) *reason = "controller reported success after cancel; inspect actual state";
+      fjt_outcome_unknown_ = true;
+      return false;
+    }
+    const auto settle_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    do {
+      if (readFjtState(&feedback, reason) &&
+          feedbackMatches(feedback, frames.back().joints, nullptr)) return true;
+      std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    } while (rclcpp::ok() && std::chrono::steady_clock::now() < settle_deadline);
+    if (reason) *reason = "FJT reported success but authoritative joint state did not reach the final point";
+    fjt_outcome_unknown_ = true;
+    return false;
+  }
+
+  bool executePublicFrames(
+    const std::vector<ReplayFrame>& frames, bool* canceled, std::string* reason)
+  {
+    return execution_backend_ == "fjt" ?
+      executeFjt(frames, canceled, reason) : executeReplay(frames, canceled, reason);
+  }
+
+  void publishPublicStageSnapshot(
+    const CachedPublicFlow& flow, uint8_t stage, const std::vector<ReplayFrame>& frames,
+    bool success, const std::string& failure_reason = "")
+  {
+    TaskResult stage_result;
+    stage_result.success = success;
+    stage_result.failure_stage = success ? "" : publicStageName(stage);
+    stage_result.failure_reason = failure_reason;
+    stage_result.total_ms = stage == StageAction::Goal::EXECUTION_STAGE_PREGRASP ?
+      flow.plan.total_ms : 0.0;
+    stage_result.metrics = flow.plan.metrics;
+    if (success) {
+      stage_result.frames = frames;
+    } else {
+      stage_result.diagnostic_frames = frames;
+      stage_result.diagnostic = {
+        {"diagnostic_only", true}, {"freeze_at_end", true},
+        {"stage", publicStageName(stage)}, {"reason", failure_reason}};
+    }
+    if (!flow.box_ids.empty()) {
+      updateWallTarget(flow.wall_distance, flow.box_ids.front());
+      selectArm(flow.dual ? "left" : flow.single_side);
+      top_suction_ = flow.top;
+    }
+    publishTaskResult(flow.generation, flow.display_center, stage_result, false);
+    if (flow.dual) {
+      const Eigen::Vector3d right_center = wallBoxCenter(flow.wall_distance, flow.box_ids[1]);
+      auto& neighbors = last_result_["neighbor_centers"];
+      neighbors.erase(std::remove_if(neighbors.begin(), neighbors.end(),
+        [&right_center](const nlohmann::json& center) {
+          return std::abs(center[0].get<double>() - right_center.x()) < 1e-8 &&
+            std::abs(center[1].get<double>() - right_center.y()) < 1e-8 &&
+            std::abs(center[2].get<double>() - right_center.z()) < 1e-8;
+        }), neighbors.end());
+    }
+    last_result_["public_action"] = "/motion/execute_stage";
+    last_result_["public_stage"] = publicStageName(stage);
+    last_result_["box_ids"] = flow.box_ids;
+    last_result_["dual"] = flow.dual;
+    last_result_["execution_backend"] = execution_backend_;
+    publishJson(last_result_);
+  }
+
+  void finishPublicGoal()
+  {
+    std::lock_guard<std::mutex> lock(public_flow_mutex_);
+    public_goal_active_ = false;
+    public_cancel_requested_ = false;
+  }
+
+  void executeStageGoal(const std::shared_ptr<StageGoalHandle>& goal_handle)
+  {
+    const auto goal = goal_handle->get_goal();
+    auto result = std::make_shared<StageAction::Result>();
+    auto publish_feedback = [&goal_handle](uint8_t state) {
+      auto feedback = std::make_shared<StageAction::Feedback>();
+      feedback->motion_state = state;
+      goal_handle->publish_feedback(feedback);
+    };
+    auto abort = [&](uint32_t code, const std::string& message, const std::string& detail) {
+      result->ok = false;
+      result->error = makeError(code, message, detail);
+      result->diagnostic = detail;
+      goal_handle->abort(result);
+      std::lock_guard<std::mutex> lock(public_flow_mutex_);
+      if (goal->execution_stage == StageAction::Goal::EXECUTION_STAGE_PREGRASP)
+        public_flow_state_ = PublicFlowState::Idle;
+      public_goal_active_ = false;
+      public_cancel_requested_ = false;
+    };
+
+    try {
+      if (session_requires_reset_) {
+        abort(robot_system_interfaces::msg::ErrorCode::MOTION_STATE_UNAVAILABLE,
+          "motion stage session requires reset", "a previous execution did not complete");
+        return;
+      }
+      if (!publicStageAllowed(goal->execution_stage)) {
+        abort(robot_system_interfaces::msg::ErrorCode::MOTION_STAGE_SEQUENCE_INVALID,
+          "motion stage sequence is invalid", publicStageName(goal->execution_stage));
+        return;
+      }
+      if (goal->execution_stage == StageAction::Goal::EXECUTION_STAGE_PREGRASP) {
+        publish_feedback(StageAction::Feedback::MOTION_STATE_PLANNING);
+        if (execution_backend_ == "fjt") {
+          std::map<std::string, double> feedback;
+          std::string state_reason;
+          if (fjt_outcome_unknown_ || !readFjtState(&feedback, &state_reason) ||
+              !readSafetyState(&state_reason)) {
+            abort(robot_system_interfaces::msg::ErrorCode::MOTION_STATE_UNAVAILABLE,
+              "authoritative robot state unavailable", fjt_outcome_unknown_ ?
+                "previous FJT goal ended without a confirmed controller state" : state_reason);
+            return;
+          }
+          for (const auto& name : robot_model_->getVariableNames())
+            initial_state_->setVariablePosition(name, feedback.at(name));
+          initial_state_->update(true);
+        }
+        CachedPublicFlow planned;
+        std::string planning_reason;
+        if (!planPublicFlow(goal->targets, &planned, &planning_reason)) {
+          if (public_cancel_requested_) {
+            result->ok = false;
+            result->error = makeError(robot_system_interfaces::msg::ErrorCode::CANCELED,
+              "PREGRASP canceled during planning");
+            goal_handle->canceled(result);
+            finishPublicGoal();
+            return;
+          }
+          if (!planned.plan.frames.empty() || !planned.plan.diagnostic_frames.empty()) {
+            publishPublicStageSnapshot(
+              planned, goal->execution_stage, planned.plan.diagnostic_frames, false, planning_reason);
+          }
+          abort(planned.generation == 0 ?
+            robot_system_interfaces::msg::ErrorCode::INVALID_GOAL :
+            robot_system_interfaces::msg::ErrorCode::MOTION_PLANNING_FAILED,
+            "PREGRASP planning failed", planning_reason);
+          return;
+        }
+        if (public_cancel_requested_) {
+          result->ok = false;
+          result->error = makeError(robot_system_interfaces::msg::ErrorCode::CANCELED,
+            "PREGRASP canceled after planning");
+          goal_handle->canceled(result);
+          finishPublicGoal();
+          return;
+        }
+        {
+          std::lock_guard<std::mutex> lock(public_flow_mutex_);
+          cached_public_flow_ = std::move(planned);
+        }
+      }
+
+      std::vector<ReplayFrame> frames;
+      CachedPublicFlow snapshot;
+      bool missing_flow = false;
+      {
+        std::lock_guard<std::mutex> lock(public_flow_mutex_);
+        if (!cached_public_flow_) {
+          missing_flow = true;
+        } else {
+          snapshot = *cached_public_flow_;
+          switch (goal->execution_stage) {
+            case StageAction::Goal::EXECUTION_STAGE_PREGRASP: frames = snapshot.pregrasp; break;
+            case StageAction::Goal::EXECUTION_STAGE_APPROACH: frames = snapshot.approach; break;
+            case StageAction::Goal::EXECUTION_STAGE_PLACE: frames = snapshot.place; break;
+            case StageAction::Goal::EXECUTION_STAGE_HOME: frames = snapshot.home; break;
+            default: break;
+          }
+        }
+      }
+      if (missing_flow) {
+        abort(robot_system_interfaces::msg::ErrorCode::MOTION_STAGE_SEQUENCE_INVALID,
+          "no active planned flow", publicStageName(goal->execution_stage));
+        return;
+      }
+
+      publish_feedback(StageAction::Feedback::MOTION_STATE_EXECUTING);
+      bool canceled = false;
+      std::string execution_reason;
+      if (!executePublicFrames(frames, &canceled, &execution_reason)) {
+        result->ok = false;
+        result->error = makeError(
+          canceled ? robot_system_interfaces::msg::ErrorCode::CANCELED :
+          robot_system_interfaces::msg::ErrorCode::MOTION_EXECUTION_FAILED,
+          canceled ? "motion stage canceled" : "motion stage execution failed",
+          execution_reason);
+        result->diagnostic = execution_reason;
+        if (canceled) goal_handle->canceled(result);
+        else goal_handle->abort(result);
+        std::lock_guard<std::mutex> lock(public_flow_mutex_);
+        session_requires_reset_ = true;
+        cached_public_flow_.reset();
+        public_flow_state_ = PublicFlowState::Idle;
+        public_goal_active_ = false;
+        public_cancel_requested_ = false;
+        return;
+      }
+
+      publish_feedback(StageAction::Feedback::MOTION_STATE_SETTLING);
+      publishPublicStageSnapshot(snapshot, goal->execution_stage, frames, true);
+      {
+        std::lock_guard<std::mutex> lock(public_flow_mutex_);
+        switch (goal->execution_stage) {
+          case StageAction::Goal::EXECUTION_STAGE_PREGRASP:
+            public_flow_state_ = PublicFlowState::PregraspComplete;
+            break;
+          case StageAction::Goal::EXECUTION_STAGE_APPROACH:
+            public_flow_state_ = PublicFlowState::ApproachComplete;
+            break;
+          case StageAction::Goal::EXECUTION_STAGE_PLACE:
+            public_flow_state_ = PublicFlowState::PlaceComplete;
+            break;
+          case StageAction::Goal::EXECUTION_STAGE_HOME:
+            if (!frames.empty()) {
+              moveit::core::RobotState release_state(*initial_state_);
+              for (size_t index = 0; index < all_joint_names_.size(); ++index)
+                release_state.setVariablePosition(
+                  all_joint_names_[index], snapshot.place.back().joints.at(index));
+              release_state.update(true);
+              if (trajectory_cache_.is_null() && snapshot.dual) {
+                placed_boxes_[snapshot.box_ids[0]] =
+                  release_state.getGlobalLinkTransform("left_tool0") * toolToBox("left", snapshot.top);
+                placed_boxes_[snapshot.box_ids[1]] =
+                  release_state.getGlobalLinkTransform("right_tool0") * toolToBox("right", snapshot.top);
+              } else if (trajectory_cache_.is_null()) {
+                placed_boxes_[snapshot.box_ids.front()] =
+                  release_state.getGlobalLinkTransform(snapshot.single_side + "_tool0") *
+                  toolToBox(snapshot.single_side, snapshot.top);
+              }
+              if (execution_backend_ == "fjt") {
+                std::map<std::string, double> feedback;
+                std::string state_reason;
+                if (!readFjtState(&feedback, &state_reason))
+                  throw std::runtime_error(state_reason);
+                for (const auto& name : robot_model_->getVariableNames())
+                  initial_state_->setVariablePosition(name, feedback.at(name));
+              } else {
+                for (size_t index = 0; index < all_joint_names_.size(); ++index)
+                  initial_state_->setVariablePosition(all_joint_names_[index], frames.back().joints.at(index));
+              }
+              initial_state_->clearAttachedBodies();
+              initial_state_->update(true);
+              removed_boxes_.insert(snapshot.box_ids.begin(), snapshot.box_ids.end());
+            }
+            cached_public_flow_.reset();
+            public_flow_state_ = PublicFlowState::Idle;
+            publishWallTargetCatalog();
+            break;
+          default:
+            break;
+        }
+      }
+      result->ok = true;
+      result->error = makeError(robot_system_interfaces::msg::ErrorCode::SUCCESS, "success");
+      result->diagnostic = nlohmann::json({
+        {"stage", publicStageName(goal->execution_stage)},
+        {"box_ids", snapshot.box_ids},
+        {"frames", frames.size()},
+        {"backend", execution_backend_}}).dump();
+      goal_handle->succeed(result);
+      finishPublicGoal();
+    } catch (const std::exception& error) {
+      abort(robot_system_interfaces::msg::ErrorCode::MOTION_INTERNAL_ERROR,
+        "motion stage internal error", error.what());
+    }
+  }
+
+  void publishReadiness()
+  {
+    if (!readiness_publisher_) return;
+    robot_system_interfaces::msg::DomainReadiness message;
+    message.header.stamp = now();
+    message.domain = "motion";
+    message.readiness_name = "execute_stage";
+    std::string blocker;
+    if (fjt_outcome_unknown_) blocker = "FJT_OUTCOME_UNKNOWN";
+    else if (session_requires_reset_) blocker = "INCOMPLETE_STAGE_REQUIRES_RESET";
+    else if (execution_backend_ == "fjt" && !readFjtState(nullptr, nullptr))
+      blocker = "FULL_JOINT_STATE_UNAVAILABLE";
+    else if (execution_backend_ == "fjt" && !readSafetyState(nullptr))
+      blocker = "SAFETY_STATE_UNAVAILABLE";
+    else if (execution_backend_ == "fjt" &&
+        (!fjt_client_ || !fjt_client_->action_server_is_ready()))
+      blocker = "FJT_SERVER_UNAVAILABLE";
+    message.ready = blocker.empty();
+    message.status = message.ready ?
+      robot_system_interfaces::msg::DomainReadiness::STATUS_HEALTHY :
+      robot_system_interfaces::msg::DomainReadiness::STATUS_UNAVAILABLE;
+    if (!message.ready) message.blockers.push_back(blocker);
+    message.operational_state = public_goal_active_ ? "BUSY" : "IDLE";
+    message.producer_instance_id = publisher_id_;
+    readiness_publisher_->publish(message);
+  }
+
+  void publishWallTargetCatalog()
+  {
+    if (!wall_target_catalog_publisher_ || !distance_demo_ ||
+        !robot_model_->hasLinkModel("base_link")) return;
+    const Eigen::Isometry3d base_from_world =
+      initial_state_->getGlobalLinkTransform("base_link").inverse();
+    nlohmann::json catalog = {{"frame_id", "base_link"}, {"rows", 5}, {"columns", 5},
+      {"wall_distance", wall_distance_}, {"removed_box_ids", removed_boxes_},
+      {"boxes", nlohmann::json::array()}};
+    for (int box_id = 0; box_id < 25; ++box_id) {
+      const Eigen::Vector3d center = wallBoxCenter(wall_distance_, box_id);
+      catalog["boxes"].push_back({
+        {"box_id", box_id},
+        {"left_side", poseJson(base_from_world * contactPose(center, "left", false))},
+        {"right_side", poseJson(base_from_world * contactPose(center, "right", false))},
+        {"left_top", poseJson(base_from_world * contactPose(center, "left", true))},
+        {"right_top", poseJson(base_from_world * contactPose(center, "right", true))},
+      });
+    }
+    std_msgs::msg::String message;
+    message.data = catalog.dump();
+    wall_target_catalog_publisher_->publish(message);
   }
 
   void loadEnvironment()
@@ -681,6 +1765,7 @@ private:
     wall_target_column_ = box_id % 5;
     box_center_ = center;
     loadEnvironment();
+    if (wall_target_catalog_publisher_) publishWallTargetCatalog();
   }
 
   void selectArm(const std::string& side)
@@ -772,7 +1857,8 @@ private:
 
   bool busy() const
   {
-    return planning_active_.load() || planning_requested_.load() || sequence_playback_;
+    return planning_active_.load() || planning_requested_.load() || sequence_playback_ ||
+      public_goal_active_.load() || public_flow_state_.load() != PublicFlowState::Idle;
   }
 
   TaskResult planWithFallback(const Eigen::Vector3d& center, bool allow_opposite_arm = false)
@@ -831,6 +1917,7 @@ private:
     if (stage == "updown_return" || stage == "loaded_home") return 6;
     if (stage == "rear_placement") return 6;
     if (stage == "release_box") return 7;
+    if (stage == "home_return" || stage == "home_updown") return 8;
     if (stage == "rrt_approach") return 1;
     return 0;
   }
@@ -870,6 +1957,29 @@ private:
     return output;
   }
 
+  void addPlacedBox(
+    const planning_scene::PlanningScenePtr& scene, int box_id,
+    const Eigen::Isometry3d& pose, const std::string& touching_side = "") const
+  {
+    moveit_msgs::msg::CollisionObject object;
+    object.header.frame_id = world_frame_;
+    object.id = "placed_wall_box_" + std::to_string(box_id);
+    object.operation = moveit_msgs::msg::CollisionObject::ADD;
+    shape_msgs::msg::SolidPrimitive primitive;
+    primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
+    primitive.dimensions = {box_depth_, box_width_, box_height_};
+    object.primitives.push_back(primitive);
+    object.primitive_poses.push_back(eigenToPose(pose));
+    if (!scene->processCollisionObjectMsg(object))
+      throw std::runtime_error("failed to add " + object.id + " to planning scene");
+    if (!touching_side.empty()) {
+      scene->getAllowedCollisionMatrixNonConst().setEntry(
+        object.id, touching_side + "_tool0", true);
+      scene->getAllowedCollisionMatrixNonConst().setEntry(
+        object.id, touching_side + "_link7", true);
+    }
+  }
+
   planning_scene::PlanningScenePtr makeDualScene(int left_id, int right_id) const
   {
     auto scene = std::make_shared<planning_scene::PlanningScene>(robot_model_);
@@ -896,6 +2006,8 @@ private:
       if (!scene->processCollisionObjectMsg(object))
         throw std::runtime_error("failed to add " + object.id + " to dual planning scene");
     }
+    for (const auto& placed : placed_boxes_)
+      addPlacedBox(scene, placed.first, placed.second);
     return scene;
   }
 
@@ -914,21 +2026,33 @@ private:
     auto loaded = planning_scene::PlanningScene::clone(scene);
     loaded->getWorldNonConst()->removeObject(kCarriedBoxLeftId);
     loaded->getWorldNonConst()->removeObject(kCarriedBoxRightId);
+    auto released = planning_scene::PlanningScene::clone(loaded);
+    bool placed_current_boxes = false;
     moveit::core::RobotStatePtr previous;
     bool previous_attached = false;
+    bool previous_visible = true;
     for (const auto& frame : frames) {
       moveit::core::RobotState state(*initial_state_);
       for (size_t i = 0; i < all_joint_names_.size(); ++i)
         state.setVariablePosition(all_joint_names_[i], frame.joints.at(i));
       const bool attached = std::any_of(frame.carried_boxes.begin(), frame.carried_boxes.end(),
         [](const nlohmann::json& box) {return box.value("attached", false);});
+      if (enable_stage_action_ && !attached && !frame.box_visible && !placed_current_boxes) {
+        state.update(true);
+        addPlacedBox(released, left_id,
+          state.getGlobalLinkTransform("left_tool0") * toolToBox("left", top), "left");
+        addPlacedBox(released, right_id,
+          state.getGlobalLinkTransform("right_tool0") * toolToBox("right", top), "right");
+        placed_current_boxes = true;
+      }
       if (attached) {
         attachCarriedBox(state, kCarriedBoxLeftId, "left", top);
         attachCarriedBox(state, kCarriedBoxRightId, "right", top);
       }
       state.update(true);
       if (!state.satisfiesBounds()) { if (reason) *reason = "dual_joint_bounds"; return false; }
-      const std::string collision = collisionReason(attached ? loaded : scene, state, metrics);
+      const auto active_scene = attached ? loaded : (frame.box_visible ? scene : released);
+      const std::string collision = collisionReason(active_scene, state, metrics);
       if (!collision.empty()) {
         if (reason) *reason = "dual_" + frame.stage + "_" + collision;
         return false;
@@ -956,7 +2080,9 @@ private:
               attachCarriedBox(probe, kCarriedBoxRightId, "right", top);
             }
             probe.update(true);
-            const std::string edge_collision = collisionReason(attached ? loaded : scene, probe, metrics);
+            const auto edge_scene = attached ? loaded :
+              ((frame.box_visible || previous_visible) ? scene : released);
+            const std::string edge_collision = collisionReason(edge_scene, probe, metrics);
             if (!probe.satisfiesBounds() || !edge_collision.empty()) {
               if (reason) *reason = "dual_edge_to_" + frame.stage + "_" +
                 (edge_collision.empty() ? std::string("bounds") : edge_collision);
@@ -967,6 +2093,7 @@ private:
       }
       previous = std::make_shared<moveit::core::RobotState>(state);
       previous_attached = attached;
+      previous_visible = frame.box_visible;
     }
     return true;
   }
@@ -978,31 +2105,89 @@ private:
     const auto common_joints = allJoints(*initial_state_);
     updateWallTarget(x, left_id);
     const auto left_center = box_center_;
-    selectArm("left"); top_suction_ = top;
-    height_clearance_ = {{"checked", false}};
-    const double left_updown = heightAlignment(left_center).at("target_updown").get<double>();
     updateWallTarget(x, right_id);
     const auto right_center = box_center_;
-    selectArm("right"); top_suction_ = top;
-    height_clearance_ = {{"checked", false}};
-    const double right_updown = heightAlignment(right_center).at("target_updown").get<double>();
     const auto& updown_bounds = robot_model_->getVariableBounds("updown");
-    synchronized_updown_ = alfa_robot::motion::chooseSharedUpdown(
-      left_updown, right_updown, updown_bounds.min_position_, updown_bounds.max_position_);
-    RCLCPP_INFO(get_logger(),
-      "dual shared height: boxes=%d,%d left=%.6fm right=%.6fm selected=%.6fm",
-      left_id, right_id, left_updown, right_updown, *synchronized_updown_);
-    updateWallTarget(x, left_id);
-    selectArm("left"); top_suction_ = top;
-    TaskResult left = planTask(left_center);
-    updateWallTarget(x, right_id);
-    selectArm("right"); top_suction_ = top;
-    TaskResult right = planTask(right_center);
+    std::vector<std::pair<double, double>> shared_heights;
+    if (enable_stage_action_ && !top) {
+      const auto scene = makeDualScene(left_id, right_id);
+      for (int height_index = 0; height_index <= 25; ++height_index) {
+        const double height = std::min(updown_bounds.max_position_,
+          updown_bounds.min_position_ + 0.04 * height_index);
+        moveit::core::RobotState lifted(*initial_state_);
+        const double initial_height = lifted.getVariablePosition("updown");
+        const size_t lift_steps = std::max<size_t>(1,
+          std::ceil(std::abs(height - initial_height) / 0.005));
+        bool lift_clear = true;
+        for (size_t step = 1; step <= lift_steps; ++step) {
+          lifted.setVariablePosition("updown", initial_height +
+            (height - initial_height) * step / lift_steps);
+          lifted.update(true);
+          if (!lifted.satisfiesBounds() || !collisionReason(scene, lifted, &result.metrics).empty()) {
+            lift_clear = false;
+            break;
+          }
+        }
+        if (!lift_clear) continue;
+        std::array<std::vector<AnalyticCandidate>, 2> candidates;
+        for (size_t side_index = 0; side_index < 2; ++side_index) {
+          const std::string side = side_index == 0 ? "left" : "right";
+          const auto& center = side_index == 0 ? left_center : right_center;
+          selectArm(side);
+          top_suction_ = false;
+          candidates[side_index] = solvePoseCandidates(
+            precontactPose(center), lifted, false, scene, &result.metrics, false, nullptr);
+        }
+        if (candidates[0].empty() || candidates[1].empty()) continue;
+        double best_cost = std::numeric_limits<double>::infinity();
+        for (size_t left_index = 0; left_index < std::min<size_t>(4, candidates[0].size()); ++left_index)
+          for (size_t right_index = 0; right_index < std::min<size_t>(4, candidates[1].size()); ++right_index) {
+            moveit::core::RobotState paired(*candidates[0][left_index].state);
+            for (int joint = 1; joint <= 7; ++joint) {
+              const std::string name = "right_joint" + std::to_string(joint);
+              paired.setVariablePosition(name,
+                candidates[1][right_index].state->getVariablePosition(name));
+            }
+            paired.update(true);
+            if (!paired.satisfiesBounds() ||
+                !collisionReason(scene, paired, &result.metrics).empty()) continue;
+            best_cost = std::min(best_cost, candidates[0][left_index].score +
+              candidates[1][right_index].score);
+          }
+        if (std::isfinite(best_cost)) shared_heights.emplace_back(best_cost, height);
+      }
+      std::sort(shared_heights.begin(), shared_heights.end());
+    } else {
+      selectArm("left"); top_suction_ = top;
+      height_clearance_ = {{"checked", false}};
+      const double left_updown = heightAlignment(left_center).at("target_updown").get<double>();
+      selectArm("right"); top_suction_ = top;
+      height_clearance_ = {{"checked", false}};
+      const double right_updown = heightAlignment(right_center).at("target_updown").get<double>();
+      shared_heights.emplace_back(0.0, alfa_robot::motion::chooseSharedUpdown(
+        left_updown, right_updown, updown_bounds.min_position_, updown_bounds.max_position_));
+    }
+    TaskResult left, right;
+    for (const auto& [cost, height] : shared_heights) {
+      synchronized_updown_ = height;
+      RCLCPP_INFO(get_logger(), "dual shared height: boxes=%d,%d height=%.3fm score=%.3f",
+        left_id, right_id, height, cost);
+      updateWallTarget(x, left_id);
+      selectArm("left"); top_suction_ = top;
+      left = planTask(left_center);
+      updateWallTarget(x, right_id);
+      selectArm("right"); top_suction_ = top;
+      right = planTask(right_center);
+      result.metrics.add(left.metrics);
+      result.metrics.add(right.metrics);
+      if (left.success && right.success) break;
+      if (!enable_stage_action_) break;
+    }
     synchronized_updown_.reset();
-    result.metrics.add(left.metrics); result.metrics.add(right.metrics);
     if (!left.success || !right.success) {
-      result.failure_stage = "dual_independent_plan";
-      result.failure_reason = "left=" + (left.success ? std::string("ok") : left.failure_stage + ":" + left.failure_reason) +
+      result.failure_stage = shared_heights.empty() ? "shared_height_ik" : "dual_independent_plan";
+      result.failure_reason = (shared_heights.empty() ? "no collision-free paired precontact IK; " : "") +
+        std::string("left=") + (left.success ? std::string("ok") : left.failure_stage + ":" + left.failure_reason) +
         " right=" + (right.success ? std::string("ok") : right.failure_stage + ":" + right.failure_reason);
       result.total_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
@@ -1011,7 +2196,7 @@ private:
 
     std::vector<double> left_hold = common_joints, right_hold = common_joints;
     bool left_attached = false, right_attached = false, left_visible = true, right_visible = true;
-    for (int phase = 0; phase <= 7; ++phase) {
+    for (int phase = 0; phase <= 8; ++phase) {
       std::vector<const ReplayFrame*> left_phase, right_phase;
       for (const auto& frame : left.frames) if (transferPhase(frame.stage) == phase) left_phase.push_back(&frame);
       for (const auto& frame : right.frames) if (transferPhase(frame.stage) == phase) right_phase.push_back(&frame);
@@ -1044,14 +2229,17 @@ private:
           if (name.rfind("left_", 0) == 0) merged.joints[j] = left_hold[j];
           else if (name.rfind("right_", 0) == 0) merged.joints[j] = right_hold[j];
           else if (name == "updown") {
-            if (phase > 0 && std::abs(left_hold[j] - right_hold[j]) > 1e-4) {
+            const bool loaded_return = post_extract_policy_ == "loaded_home" &&
+              (phase == 5 || phase == 6);
+            if (phase > 0 && phase < 8 && !loaded_return &&
+                std::abs(left_hold[j] - right_hold[j]) > 1e-4) {
               result.failure_stage = "dual_height_sync";
               result.failure_reason = "left/right updown goals differ after alignment";
               result.frames.clear();
               return result;
             }
-            // The lift is shared. During phase 0 independently sampled lift frames are
-            // resynchronized to one midpoint trajectory, then both arms keep one height.
+            // The lift is shared. Independently sampled phase 0 alignment and phase 8
+            // HOME return are resynchronized by common progress, then revalidated.
             merged.joints[j] = 0.5 * (left_hold[j] + right_hold[j]);
           } else merged.joints[j] = left_hold[j];
         }
@@ -1069,7 +2257,18 @@ private:
       result.failure_stage = "dual_combined_validation";
       result.failure_reason = validation_reason;
       result.frames.clear();
-    } else result.success = true;
+    } else {
+      result.success = true;
+      if (post_extract_policy_ == "loaded_home")
+        for (size_t joint = 0; joint < common_joints.size(); ++joint)
+          if (std::abs(result.frames.back().joints[joint] - common_joints[joint]) > 1e-8) {
+            result.success = false;
+            result.failure_stage = "loaded_home_endpoint";
+            result.failure_reason = all_joint_names_[joint] + " did not return to its initial value";
+            result.frames.clear();
+            break;
+          }
+    }
     result.total_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - started).count();
     return result;
@@ -1104,6 +2303,7 @@ private:
     const auto started = std::chrono::steady_clock::now();
     const uint64_t generation = ++generation_;
     removed_boxes_.clear();
+    placed_boxes_.clear();
     resetInitialState();
     display_diagnostic_ = nlohmann::json::object();
     display_failure_frozen_ = false;
@@ -1195,6 +2395,7 @@ private:
             {"success", dual_result.success}, {"failure_stage", dual_result.failure_stage},
             {"failure_reason", dual_result.failure_reason}});
           if (dual_result.success) break;
+          total.metrics.add(dual_result.metrics);
           dual_failure = dual_result.failure_stage + ": " + dual_result.failure_reason;
           RCLCPP_WARN(get_logger(), "DUAL_ATTEMPT boxes=%d,%d suction=%s failed: %s",
             round.left_box, round.right_box, top ? "top" : "front", dual_failure.c_str());
@@ -1257,11 +2458,13 @@ private:
     last_result_["final_joints"] = allJoints(*initial_state_);
     publishJson(last_result_);
     display_diagnostic_ = total.success ? nlohmann::json::object() : total.diagnostic;
-    playback_frames_ = total.success || total.diagnostic_frames.empty() ?
-      std::move(total.frames) : std::move(total.diagnostic_frames);
-    playback_index_ = 0;
-    sequence_playback_ = true;
-    display_scene_ = playback_scenes_.front();
+    if (playback_enabled_) {
+      playback_frames_ = total.success || total.diagnostic_frames.empty() ?
+        std::move(total.frames) : std::move(total.diagnostic_frames);
+      playback_index_ = 0;
+      sequence_playback_ = true;
+      display_scene_ = playback_scenes_.front();
+    }
     publishStatus("SEQUENCE " + std::string(total.success ? "SUCCESS" : "STOPPED") +
       " completed=" + std::to_string(removed_boxes_.size()) + "/25 dual=" +
       std::to_string(dual_success_count) + "/10 fallback=" + std::to_string(fallback_count), total.success);
@@ -1308,6 +2511,7 @@ private:
       return;
     }
     removed_boxes_.clear();
+    placed_boxes_.clear();
     if (wall_context_ == "sequence_prefix") {
       for (int id : alfa_robot::motion::wallSequenceOrder()) {
         if (id == wall_target_row_ * 5 + wall_target_column_) break;
@@ -1325,6 +2529,11 @@ private:
       std::lock_guard<std::mutex> lock(box_mutex_);
       box_center = box_center_;
     }
+    if (direct_attach_) {
+      box_center = (initial_state_->getGlobalLinkTransform(tool_link_) * toolToBox()).translation();
+      std::lock_guard<std::mutex> lock(box_mutex_);
+      box_center_ = box_center;
+    }
     const uint64_t generation = ++generation_;
     publishPlanningStarted(generation, box_center);
     publishStatus("CALCULATING", true);
@@ -1333,7 +2542,7 @@ private:
       "[%llu] calculation started: box_center=[%.3f, %.3f, %.3f]",
       static_cast<unsigned long long>(generation),
       box_center.x(), box_center.y(), box_center.z());
-    if (distance_demo_) {
+    if (distance_demo_ && !direct_attach_) {
       const auto alignment = heightAlignment(box_center);
       RCLCPP_INFO(get_logger(),
         "height proposal (clearance unchecked): strategy=%s enabled=%s descent=%.6fm target_updown=%.6fm",
@@ -1353,7 +2562,7 @@ private:
     TaskResult result;
     const auto request_started = std::chrono::steady_clock::now();
     try {
-      result = planWithFallback(box_center);
+      result = direct_attach_ ? planDirectAttachedPlacement() : planWithFallback(box_center);
     } catch (const std::exception& error) {
       result.success = false;
       result.failure_stage = "exception";
@@ -1361,12 +2570,12 @@ private:
     }
     if (distance_demo_) result.total_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - request_started).count();
-    if (distance_demo_ && !result.success)
+    if (distance_demo_ && !direct_attach_ && !result.success)
       result.frames = {ReplayFrame{"planning_failed", allJoints(*initial_state_), false}};
     ensureFailurePlayback(result, box_center);
     display_scene_ = sceneJson(box_center);
     publishTaskResult(generation, box_center, result);
-    if (!result.frames.empty() || !result.diagnostic_frames.empty()) {
+    if (playback_enabled_ && (!result.frames.empty() || !result.diagnostic_frames.empty())) {
       std::lock_guard<std::mutex> lock(display_mutex_);
       playback_frames_ = result.success || result.diagnostic_frames.empty() ? result.frames : result.diagnostic_frames;
       display_diagnostic_ = result.success ? nlohmann::json::object() : result.diagnostic;
@@ -1407,6 +2616,10 @@ private:
   Eigen::Isometry3d contactPose(
     const Eigen::Vector3d& box_center, const std::string& side, bool top) const
   {
+    if (distance_demo_)
+      return alfa_robot::motion::wallContactPose(
+        box_center, boxSize(), contact_numerical_gap_, top,
+        home_state_->getGlobalLinkTransform(side + "_tool0").linear());
     auto pose = alfa_robot::motion::wallContactPose(box_center, boxSize(), contact_numerical_gap_, top);
     if (top)
       pose.linear() = Eigen::AngleAxisd(side == "left" ? kPi / 2.0 : -kPi / 2.0,
@@ -1443,6 +2656,7 @@ private:
 
   std::vector<Eigen::Vector3d> neighborCenters(const Eigen::Vector3d& center) const
   {
+    if (direct_attach_) return {};
     if (scene_layout_ == "wall_5x5") {
       if (wall_context_ == "target_only") {
         return {};
@@ -1504,6 +2718,8 @@ private:
         throw std::runtime_error("failed to add " + object.id + " to planning scene");
       }
     }
+    for (const auto& placed : placed_boxes_)
+      addPlacedBox(scene, placed.first, placed.second);
     return scene;
   }
 
@@ -1527,14 +2743,132 @@ private:
     const std::string tool = side + "_tool0";
     const std::string prefix = side + "_";
     state.attachBody(object_id, Eigen::Isometry3d::Identity(), shapes, shape_poses,
-      distance_demo_ ? std::vector<std::string>{tool, prefix + "joint7"} :
-        std::vector<std::string>{tool, prefix + "joint7", prefix + "joint6"}, tool);
+      distance_demo_ ? std::vector<std::string>{tool, prefix + "link7"} :
+        std::vector<std::string>{tool, prefix + "link7", prefix + "link6"}, tool);
     state.update(true);
   }
 
   void attachCarriedBox(moveit::core::RobotState& state) const
   {
     attachCarriedBox(state, kCarriedBoxId, side_, top_suction_);
+  }
+
+  nlohmann::json directAttachedBoxes(const moveit::core::RobotState& state) const
+  {
+    auto boxes = nlohmann::json::array();
+    for (const std::string side : {"left", "right"}) {
+      const Eigen::Isometry3d pose = state.getGlobalLinkTransform(side + "_tool0") *
+        toolToBox(side, false);
+      auto box = carriedBoxJson(side == "left" ? 0 : 1,
+        pose.translation(), side, false, true, true);
+      box["box_rotation"] = nlohmann::json::array();
+      for (int row = 0; row < 3; ++row)
+        box["box_rotation"].push_back({pose.linear()(row, 0),
+          pose.linear()(row, 1), pose.linear()(row, 2)});
+      boxes.push_back(std::move(box));
+    }
+    return boxes;
+  }
+
+  moveit::core::RobotState directPlacementGoal(const moveit::core::RobotState& start) const
+  {
+    moveit::core::RobotState goal(start);
+    if (!goal.setToDefaultValues(robot_model_->getJointModelGroup("dual_arm"), direct_placement_pose_))
+      throw std::runtime_error("dual_arm/" + direct_placement_pose_ + " named pose is unavailable");
+    goal.update(true);
+    return goal;
+  }
+
+  TaskResult planDirectAttachedPlacement()
+  {
+    TaskResult result;
+    const auto started = std::chrono::steady_clock::now();
+    const auto scene = makeScene(box_center_);
+    scene->getWorldNonConst()->removeObject(kCarriedBoxId);
+    moveit::core::RobotState start(*initial_state_);
+    attachCarriedBox(start, kCarriedBoxLeftId, "left", false);
+    attachCarriedBox(start, kCarriedBoxRightId, "right", false);
+    const auto append_frame = [&](const moveit::core::RobotState& state,
+                                  const std::string& stage) {
+      ReplayFrame frame{stage, allJoints(state), true};
+      frame.carried_boxes = directAttachedBoxes(state);
+      result.frames.push_back(std::move(frame));
+    };
+    append_frame(start, "direct_attach");
+    const auto finish = [&]() {
+      if (!result.success) {
+        if (result.diagnostic_frames.empty()) {
+          result.diagnostic_frames = result.frames;
+          result.diagnostic_frames.back().stage = "FAILED_HOLD: " + result.failure_stage;
+        }
+        result.diagnostic = {{"diagnostic_only", true}, {"freeze_at_end", true},
+          {"stage", result.failure_stage}, {"reason", result.failure_reason},
+          {"snapshot", result.diagnostic_frames.back().stage == "REJECTED_SHORTCUT_PREVIEW_NOT_EXECUTED" ?
+            "rejected_shortcut_preview_not_executed" : "last_connected_loaded_state"}};
+        if (result.rejected_state) {
+          result.diagnostic["rejected_joints"] = allJoints(*result.rejected_state);
+          collision_detection::CollisionRequest request;
+          collision_detection::CollisionResult contacts;
+          request.contacts = true;
+          request.max_contacts = 20;
+          request.max_contacts_per_pair = 1;
+          scene->checkCollision(request, contacts, *result.rejected_state);
+          for (const auto& pair : contacts.contacts)
+            for (const auto& contact : pair.second)
+              result.diagnostic["contacts"].push_back({
+                {"bodies", {pair.first.first, pair.first.second}},
+                {"position", {contact.pos.x(), contact.pos.y(), contact.pos.z()}}});
+        }
+      }
+      result.total_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return result;
+    };
+    const std::string start_collision = collisionReason(scene, start, &result.metrics);
+    if (!start.satisfiesBounds() || !start_collision.empty()) {
+      result.failure_stage = "direct_attach";
+      result.failure_reason = start_collision.empty() ? "joint_bounds" : start_collision;
+      result.rejected_state = std::make_shared<moveit::core::RobotState>(start);
+      return finish();
+    }
+    const auto goal = directPlacementGoal(start);
+    const auto* group = robot_model_->getJointModelGroup("dual_arm");
+    if (!group || group->getVariableCount() != 14)
+      throw std::runtime_error("direct placement requires the 14-axis dual_arm group");
+    const auto path = planRrt(scene, start, goal, false, &result.metrics, group);
+    result.metrics.rrt_return_ms = path.wall_ms;
+    for (size_t index = 1; index < path.states.size(); ++index) {
+      const auto segment = directArmPath(*path.states[index - 1], *path.states[index],
+        false, 0.0, 0.005, group);
+      for (size_t sample = 1; sample < segment.size(); ++sample)
+        append_frame(*segment[sample], "loaded_transfer");
+    }
+    if (!path.success) {
+      result.failure_stage = "loaded_transfer";
+      result.failure_reason = path.reason;
+      result.rejected_state = path.rejected_state;
+      if (!path.states.empty()) {
+        std::string blocked_reason;
+        moveit::core::RobotStatePtr blocked;
+        edgeClear(scene, *path.states.back(), goal, false, nullptr,
+          &blocked_reason, &blocked, false, group);
+        if (blocked) {
+          result.diagnostic_frames = result.frames;
+          const auto probes = directArmPath(*path.states.back(), *blocked,
+            false, 0.0, 0.005, group);
+          for (size_t sample = 1; sample < probes.size(); ++sample) {
+            ReplayFrame frame{"REJECTED_SHORTCUT_PREVIEW_NOT_EXECUTED", allJoints(*probes[sample]), true};
+            frame.carried_boxes = directAttachedBoxes(*probes[sample]);
+            result.diagnostic_frames.push_back(std::move(frame));
+          }
+          result.rejected_state = blocked;
+        }
+      }
+      return finish();
+    }
+    append_frame(goal, direct_placement_pose_);
+    result.success = true;
+    return finish();
   }
 
   std::array<double, 7> armJoints(const moveit::core::RobotState& state) const
@@ -1569,8 +2903,10 @@ private:
       scene, state, distance_demo_ ? nullptr : planning_group_);
     if (metrics) {
       ++metrics->collision_checks;
-      metrics->collision_ms += std::chrono::duration<double, std::milli>(
+      const double elapsed_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
+      metrics->collision_ms += elapsed_ms;
+      if (direct_attach_) metrics->collision_sample_ms.push_back(elapsed_ms);
     }
     return reason;
   }
@@ -1582,35 +2918,44 @@ private:
     bool attached,
     PlanningMetrics* metrics,
     std::string* reason,
-    moveit::core::RobotStatePtr* rejected = nullptr) const
+    moveit::core::RobotStatePtr* rejected = nullptr,
+    bool plan_updown = false,
+    const moveit::core::JointModelGroup* motion_group = nullptr) const
   {
-    const auto from_joints = armJoints(from);
-    const auto to_joints = armJoints(to);
-    double maximum_delta = maximumJointDelta(from_joints, to_joints);
-    if (distance_demo_) {
-      maximum_delta = 0.0;
-      for (size_t i = 0; i < from_joints.size(); ++i)
-        maximum_delta = std::max(maximum_delta, std::abs(to_joints[i] - from_joints[i]));
-    }
-    const size_t steps = std::max<size_t>(
+    const auto* group = motion_group ? motion_group : planning_group_;
+    std::vector<double> from_joints, to_joints;
+    from.copyJointGroupPositions(group, from_joints);
+    to.copyJointGroupPositions(group, to_joints);
+    double maximum_delta = 0.0;
+    for (size_t index = 0; index < from_joints.size(); ++index)
+      maximum_delta = std::max(maximum_delta, std::abs(distance_demo_ ?
+        to_joints[index] - from_joints[index] :
+        normalizedAngle(to_joints[index] - from_joints[index])));
+    size_t steps = std::max<size_t>(
       1, static_cast<size_t>(std::ceil(maximum_delta / edge_joint_resolution_)));
+    if (plan_updown)
+      steps = std::max(steps, static_cast<size_t>(std::ceil(std::abs(
+        to.getVariablePosition("updown") - from.getVariablePosition("updown")) / 0.005)));
     for (size_t step = 1; step <= steps; ++step) {
       const double ratio = static_cast<double>(step) / static_cast<double>(steps);
-      std::array<double, 7> interpolated{};
+      std::vector<double> interpolated(from_joints.size());
       for (size_t index = 0; index < interpolated.size(); ++index) {
         interpolated[index] = from_joints[index] +
           (distance_demo_ ? to_joints[index] - from_joints[index] :
            normalizedAngle(to_joints[index] - from_joints[index])) * ratio;
       }
       moveit::core::RobotState probe(from);
-      probe.setJointGroupPositions(planning_group_, interpolated.data());
+      probe.setJointGroupPositions(group, interpolated.data());
+      if (plan_updown)
+        probe.setVariablePosition("updown", from.getVariablePosition("updown") +
+          (to.getVariablePosition("updown") - from.getVariablePosition("updown")) * ratio);
       if (attached && !probe.hasAttachedBody(kCarriedBoxId)) {
         attachCarriedBox(probe);
       } else if (!attached && probe.hasAttachedBody(kCarriedBoxId)) {
         probe.clearAttachedBody(kCarriedBoxId);
       }
       probe.update(true);
-      if (!probe.satisfiesBounds(planning_group_)) {
+      if (!(plan_updown ? probe.satisfiesBounds() : probe.satisfiesBounds(group))) {
         if (reason) *reason = "joint_bounds";
         if (rejected) *rejected = std::make_shared<moveit::core::RobotState>(probe);
         return false;
@@ -1668,29 +3013,44 @@ private:
   }
 
   std::vector<moveit::core::RobotStatePtr> directArmPath(
-    const moveit::core::RobotState& from, const moveit::core::RobotState& to) const
+    const moveit::core::RobotState& from, const moveit::core::RobotState& to,
+    bool plan_updown = false, double angular_step = 0.0, double updown_step = 0.005,
+    const moveit::core::JointModelGroup* motion_group = nullptr) const
   {
-    const auto from_joints = armJoints(from);
-    const auto to_joints = armJoints(to);
-    std::array<double, 7> deltas{};
+    const auto* group = motion_group ? motion_group : planning_group_;
+    std::vector<double> from_joints, to_joints;
+    from.copyJointGroupPositions(group, from_joints);
+    to.copyJointGroupPositions(group, to_joints);
+    std::vector<double> deltas(from_joints.size());
     double maximum_delta = 0.0;
     for (size_t i = 0; i < deltas.size(); ++i) {
       deltas[i] = distance_demo_ ? to_joints[i] - from_joints[i] :
         normalizedAngle(to_joints[i] - from_joints[i]);
       maximum_delta = std::max(maximum_delta, std::abs(deltas[i]));
     }
-    const size_t steps = std::max<size_t>(1, std::ceil(maximum_delta / edge_joint_resolution_));
+    if (angular_step <= 0.0) angular_step = edge_joint_resolution_;
+    size_t steps = std::max<size_t>(1, std::ceil(maximum_delta / angular_step));
+    if (plan_updown)
+      steps = std::max(steps, static_cast<size_t>(std::ceil(std::abs(
+        to.getVariablePosition("updown") - from.getVariablePosition("updown")) / updown_step)));
     std::vector<moveit::core::RobotStatePtr> states;
     states.reserve(steps + 1);
     for (size_t step = 0; step <= steps; ++step) {
       const double ratio = static_cast<double>(step) / steps;
-      std::array<double, 7> joints{};
+      std::vector<double> joints(from_joints.size());
       for (size_t i = 0; i < joints.size(); ++i)
         joints[i] = from_joints[i] + deltas[i] * ratio;
       auto state = std::make_shared<moveit::core::RobotState>(from);
-      state->setJointGroupPositions(planning_group_, joints.data());
+      state->setJointGroupPositions(group, joints.data());
+      if (plan_updown)
+        state->setVariablePosition("updown", from.getVariablePosition("updown") +
+          (to.getVariablePosition("updown") - from.getVariablePosition("updown")) * ratio);
       state->update(true);
       states.push_back(std::move(state));
+    }
+    if (distance_demo_) {
+      states.front() = std::make_shared<moveit::core::RobotState>(from);
+      states.back() = std::make_shared<moveit::core::RobotState>(to);
     }
     return states;
   }
@@ -1731,7 +3091,8 @@ private:
       }
       for (const auto& solution : solutions) {
         if (enforce_step &&
-            (maximumJointDelta(seed_joints, solution.joints) > maximum_cartesian_joint_step_ ||
+            (maximumJointDelta(seed_joints, solution.joints,
+               connection_planner_ == "shortcut_local_rrt") > maximum_cartesian_joint_step_ ||
              !alfa_robot::motion::sameShoulderElbowBranch(seed_joints, solution.joints))) {
           ++jump_rejects;
           continue;
@@ -1757,8 +3118,9 @@ private:
         }
         const bool duplicate = std::any_of(
           candidates.begin(), candidates.end(),
-          [&solution](const AnalyticCandidate& existing) {
-            return maximumJointDelta(existing.solution.joints, solution.joints) < 1e-5;
+          [this, &solution](const AnalyticCandidate& existing) {
+            return maximumJointDelta(existing.solution.joints, solution.joints,
+              connection_planner_ == "shortcut_local_rrt") < 1e-5;
           });
         if (duplicate) {
           continue;
@@ -1768,7 +3130,8 @@ private:
         output.solution = solution;
         const double margin_penalty = 0.02 /
           std::max(0.01, solution.minimum_joint_limit_margin);
-        output.score = alfa_robot::motion::naturalJointDistanceSquared(seed_joints, solution.joints) + margin_penalty;
+        output.score = alfa_robot::motion::naturalJointDistanceSquared(seed_joints, solution.joints,
+          connection_planner_ == "shortcut_local_rrt") + margin_penalty;
         candidates.push_back(std::move(output));
       }
     }
@@ -1913,15 +3276,20 @@ private:
     return true;
   }
 
-  RrtPlanResult planRrt(
+  RrtPlanResult planRrtConnect(
     const planning_scene::PlanningSceneConstPtr& base_scene,
     const moveit::core::RobotState& start_state,
-    const moveit::core::RobotState& goal_state) const
+    const moveit::core::RobotState& goal_state,
+    bool plan_updown = false, bool local_patch = false,
+    const moveit::core::JointModelGroup* motion_group = nullptr) const
   {
     RrtPlanResult result;
     const auto wall_started = std::chrono::steady_clock::now();
     auto scene = planning_scene::PlanningScene::clone(base_scene);
     scene->setCurrentState(start_state);
+    const auto* search_group = motion_group ? motion_group : (plan_updown ?
+      robot_model_->getJointModelGroup(side_ + "_arm_with_updown") : planning_group_);
+    if (!search_group) throw std::runtime_error("arm/lift planning group unavailable");
     const std::string start_collision = alfa_robot::motion::scene_collision_reason(
       scene, start_state, distance_demo_ ? nullptr : planning_group_);
     if (!start_collision.empty()) {
@@ -1938,15 +3306,15 @@ private:
     }
 
     planning_interface::MotionPlanRequest request;
-    request.group_name = planning_group_name_;
-    request.planner_id = "RRTConnectkConfigDefault";
-    request.allowed_planning_time = rrt_planning_time_;
+    request.group_name = search_group->getName();
+    request.planner_id = local_patch ? "RRTConnectLocalPatchkConfigDefault" : "RRTConnectkConfigDefault";
+    request.allowed_planning_time = local_patch ? local_rrt_planning_time_ : rrt_planning_time_;
     request.num_planning_attempts = rrt_planning_attempts_;
     request.max_velocity_scaling_factor = 1.0;
     request.max_acceleration_scaling_factor = 1.0;
     moveit::core::robotStateToRobotStateMsg(start_state, request.start_state, true);
     request.goal_constraints.push_back(
-      kinematic_constraints::constructGoalConstraints(goal_state, planning_group_, 1e-3));
+      kinematic_constraints::constructGoalConstraints(goal_state, search_group, 1e-3));
 
     planning_interface::MotionPlanResponse response;
     const bool generated = planning_pipeline_->generatePlan(scene, request, response);
@@ -1957,7 +3325,7 @@ private:
         !response.trajectory_) {
       result.reason = "RRTConnect code=" + std::to_string(response.error_code_.val) + " " +
         alfa_robot::motion::direct_pipeline_failure_diagnostic(
-          scene, start_state, goal_state, planning_group_);
+          scene, start_state, goal_state, search_group);
       return result;
     }
     for (size_t index = 0; index < response.trajectory_->getWayPointCount(); ++index) {
@@ -1983,9 +3351,16 @@ private:
           }
           return result;
         }
+        for (const auto* payload_id : {kCarriedBoxLeftId, kCarriedBoxRightId}) {
+          if (state->hasAttachedBody(payload_id) != start_state.hasAttachedBody(payload_id)) {
+            result.rejected_state = state;
+            result.reason = "rrt_changed_payload_attachment:" + std::string(payload_id);
+            return result;
+          }
+        }
         for (const auto& name : all_joint_names_) {
-          if (std::find(planning_group_->getVariableNames().begin(),
-              planning_group_->getVariableNames().end(), name) == planning_group_->getVariableNames().end() &&
+          if (std::find(search_group->getVariableNames().begin(),
+              search_group->getVariableNames().end(), name) == search_group->getVariableNames().end() &&
               std::abs(state->getVariablePosition(name) - start_state.getVariablePosition(name)) > 1e-8) {
             result.rejected_state = state;
             result.reason = "rrt_changed_fixed_joint";
@@ -1998,7 +3373,8 @@ private:
       result.states.push_back(std::make_shared<moveit::core::RobotState>(goal_state));
       for (size_t i = 1; i < result.states.size(); ++i) {
         if (!edgeClear(scene, *result.states[i-1], *result.states[i],
-                       start_state.hasAttachedBody(kCarriedBoxId), nullptr, &result.reason, &result.rejected_state)) {
+                       start_state.hasAttachedBody(kCarriedBoxId), nullptr, &result.reason,
+                       &result.rejected_state, plan_updown, motion_group)) {
           result.reason = "rrt_edge_" + result.reason;
           return result;
         }
@@ -2007,13 +3383,107 @@ private:
     std::vector<std::array<double, 7>> natural_path;
     natural_path.reserve(result.states.size());
     for (const auto& state : result.states) natural_path.push_back(armJoints(*state));
-    if (!alfa_robot::motion::naturalJointPath(natural_path, 8.0, 3.0)) {
+    if (!(direct_attach_ && motion_group) &&
+        !alfa_robot::motion::naturalJointPath(natural_path, 8.0, 3.0, local_patch)) {
       result.reason = "rrt_unnatural_branch_flip_or_detour";
       result.success = false;
       return result;
     }
     result.success = true;
     return result;
+  }
+
+  RrtPlanResult planRrt(
+    const planning_scene::PlanningSceneConstPtr& scene,
+    const moveit::core::RobotState& start,
+    const moveit::core::RobotState& goal,
+    bool plan_updown = false, PlanningMetrics* metrics = nullptr,
+    const moveit::core::JointModelGroup* motion_group = nullptr) const
+  {
+    if (connection_planner_ == "rrt_connect")
+      return planRrtConnect(scene, start, goal, plan_updown, false, motion_group);
+    const auto started = std::chrono::steady_clock::now();
+    RrtPlanResult result;
+    if (metrics) ++metrics->shortcut_connections;
+    const auto finish = [&]() {
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return result;
+    };
+    const auto* search_group = motion_group ? motion_group : (plan_updown ?
+      robot_model_->getJointModelGroup(side_ + "_arm_with_updown") : planning_group_);
+    if (!search_group) throw std::runtime_error("arm/lift planning group unavailable");
+    for (const auto& name : all_joint_names_)
+      if (std::find(search_group->getVariableNames().begin(), search_group->getVariableNames().end(),
+          name) == search_group->getVariableNames().end() &&
+          std::abs(goal.getVariablePosition(name) - start.getVariablePosition(name)) > 1e-8) {
+        result.reason = "shortcut_changed_fixed_joint:" + name;
+        result.rejected_state = std::make_shared<moveit::core::RobotState>(goal);
+        return finish();
+      }
+    auto shortcut = directArmPath(start, goal, plan_updown, shortcut_step_,
+      shortcut_updown_step_, motion_group);
+    std::vector<bool> nodes_valid(shortcut.size(), true), edges_valid(shortcut.size() - 1, true);
+    for (size_t index = 0; index < shortcut.size(); ++index) {
+      const std::string collision = collisionReason(scene, *shortcut[index], metrics);
+      nodes_valid[index] = shortcut[index]->satisfiesBounds() && collision.empty();
+      if (!nodes_valid[index] && (index == 0 || index + 1 == shortcut.size())) {
+        result.rejected_state = shortcut[index];
+        result.reason = (index == 0 ? "shortcut_start_" : "shortcut_goal_") +
+          (collision.empty() ? std::string("joint_bounds") : collision);
+        return finish();
+      }
+    }
+    for (size_t edge = 0; edge < edges_valid.size(); ++edge) {
+      std::string reason;
+      edges_valid[edge] = nodes_valid[edge] && nodes_valid[edge + 1] &&
+        edgeClear(scene, *shortcut[edge], *shortcut[edge + 1],
+          start.hasAttachedBody(kCarriedBoxId), metrics, &reason, nullptr,
+          plan_updown, motion_group);
+      if (!edges_valid[edge] && metrics) ++metrics->shortcut_blocked_edges;
+    }
+    const auto windows = alfa_robot::motion::shortcutRepairWindows(
+      nodes_valid, edges_valid, shortcut_padding_points_);
+    if (windows.empty() && metrics) ++metrics->shortcut_direct_successes;
+    result.states.push_back(shortcut.front());
+    size_t cursor = 0;
+    const auto append_straight = [&](size_t end) {
+      for (; cursor < end; ++cursor) {
+        const auto states = directArmPath(*shortcut[cursor], *shortcut[cursor + 1],
+          plan_updown, 0.0, 0.005, motion_group);
+        result.states.insert(result.states.end(), states.begin() + 1, states.end());
+      }
+    };
+    for (const auto& window : windows) {
+      append_straight(window.begin);
+      if (metrics) ++metrics->local_rrt_calls;
+      const auto patch_started = std::chrono::steady_clock::now();
+      const auto patch = planRrtConnect(scene, *shortcut[window.begin], *shortcut[window.end],
+        plan_updown, true, motion_group);
+      const double patch_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - patch_started).count();
+      if (metrics) metrics->local_rrt_wall_ms += patch_ms;
+      result.planner_ms += patch.planner_ms;
+      if (!patch.success) {
+        if (metrics) ++metrics->local_rrt_failures;
+        result.reason = "shortcut_local_rrt[" + std::to_string(window.begin) + "," +
+          std::to_string(window.end) + "]_" + patch.reason;
+        result.rejected_state = patch.rejected_state;
+        return finish();
+      }
+      result.states.insert(result.states.end(), patch.states.begin() + 1, patch.states.end());
+      cursor = window.end;
+    }
+    append_straight(shortcut.size() - 1);
+    std::vector<std::array<double, 7>> natural_path;
+    for (const auto& state : result.states) natural_path.push_back(armJoints(*state));
+    if (!(direct_attach_ && motion_group) &&
+        !alfa_robot::motion::naturalJointPath(natural_path, 8.0, 3.0, true)) {
+      result.reason = "shortcut_repaired_unnatural_branch_flip_or_detour";
+      return finish();
+    }
+    result.success = true;
+    return finish();
   }
 
   void appendStates(
@@ -2233,6 +3703,7 @@ private:
             result.failure_stage == "height_alignment_collision" ||
             result.failure_stage == "cartesian_approach" || result.failure_stage == "cartesian_retreat" ||
             result.failure_stage == "cartesian_lift" ||
+            result.failure_stage == "updown_return" ||
             result.failure_stage == "attach_box";
           result.diagnostic["rejected_joints"] = allJoints(state);
           result.diagnostic["rejected_box_attached"] = state.hasAttachedBody(kCarriedBoxId);
@@ -2244,7 +3715,8 @@ private:
             previous.update(true);
             moveit::core::RobotStatePtr first_rejected;
             std::string ignored;
-            if (result.failure_stage != "height_alignment_collision") edgeClear(state.hasAttachedBody(kCarriedBoxId) ? loaded : scene, previous, state,
+            if (result.failure_stage != "height_alignment_collision" &&
+                result.failure_stage != "updown_return") edgeClear(state.hasAttachedBody(kCarriedBoxId) ? loaded : scene, previous, state,
               state.hasAttachedBody(kCarriedBoxId), nullptr, &ignored, &first_rejected);
             if (first_rejected) result.rejected_state = first_rejected;
             result.diagnostic_frames.push_back({"FAILED_SAMPLE: " + result.failure_stage,
@@ -2318,7 +3790,7 @@ private:
           folded.setJointGroupPositions(planning_group_, armJoints(*home_state_).data());
           folded.setVariablePosition(side + "_joint4", foldedElbowPosition(side));
           folded.update(true);
-          const auto path = planRrt(scene, grasp_start, folded);
+          const auto path = planRrt(scene, grasp_start, folded, false, &result.metrics);
           result.metrics.rrt_approach_ms += path.wall_ms;
           if (!path.success) {
             result.failure_stage = "prepare_top_suction";
@@ -2382,44 +3854,45 @@ private:
       result.diagnostic = nlohmann::json::object();
       result.diagnostic_frames.clear();
       best_partial = lift_prefix;
-      const auto approach_rrt = planRrt(
-        scene, grasp_start, *precontact_candidates[candidate_index].state);
-      result.metrics.rrt_approach_ms += approach_rrt.wall_ms;
-      if (!approach_rrt.success) {
-        result.rejected_state = approach_rrt.rejected_state;
-        const auto target = precontactPose(box_center).translation().eval();
-        result.diagnostic["target"] = {target.x(), target.y(), target.z()};
-        last_failure_stage = "rrt_to_precontact";
-        last_failure_reason = "candidate " + std::to_string(candidate_index) + " " +
-          approach_rrt.reason;
-        continue;
-      }
-
       std::vector<ReplayFrame> executable_prefix = lift_prefix;
-      appendStates(approach_rrt.states, "rrt_to_precontact", false, false, &executable_prefix);
-      const auto analytic_started = std::chrono::steady_clock::now();
-      std::vector<moveit::core::RobotStatePtr> approach_states;
       std::vector<moveit::core::RobotStatePtr> retreat_states;
       std::string analytic_failure_stage;
       std::string analytic_failure_reason;
-      const bool analytic_ok = traceCartesianPath(
-        box_center, *precontact_candidates[candidate_index].state, scene,
-        &result.metrics, &approach_states, &retreat_states,
-        &analytic_failure_stage, &analytic_failure_reason, &result);
-      result.metrics.analytic_path_ms += std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - analytic_started).count();
-      appendStates(approach_states, "cartesian_approach", false, true, &executable_prefix);
-      if (!retreat_states.empty()) {
-        executable_prefix.push_back(
-          ReplayFrame{"attach_box", allJoints(*retreat_states.front()), true});
-      }
-      const size_t retreat_begin = executable_prefix.size();
-      appendStates(retreat_states, "cartesian_retreat", true, true, &executable_prefix);
-      if (top_suction_) {
-        const size_t lift_frames = std::max<size_t>(1, std::ceil(approach_distance_ / cartesian_step_));
-        for (size_t i = retreat_begin; i < std::min(executable_prefix.size(), retreat_begin + lift_frames); ++i)
-          executable_prefix[i].stage = "cartesian_lift";
-      }
+      bool analytic_ok = true;
+        const auto approach_rrt = planRrt(
+          scene, grasp_start, *precontact_candidates[candidate_index].state, false, &result.metrics);
+        result.metrics.rrt_approach_ms += approach_rrt.wall_ms;
+        if (!approach_rrt.success) {
+          result.rejected_state = approach_rrt.rejected_state;
+          const auto target = precontactPose(box_center).translation().eval();
+          result.diagnostic["target"] = {target.x(), target.y(), target.z()};
+          last_failure_stage = "rrt_to_precontact";
+          last_failure_reason = "candidate " + std::to_string(candidate_index) + " " +
+            approach_rrt.reason;
+          continue;
+        }
+        appendStates(approach_rrt.states, "rrt_to_precontact", false, false, &executable_prefix);
+        const auto analytic_started = std::chrono::steady_clock::now();
+        std::vector<moveit::core::RobotStatePtr> approach_states;
+        const bool traced = traceCartesianPath(
+          box_center, *precontact_candidates[candidate_index].state, scene,
+          &result.metrics, &approach_states, &retreat_states,
+          &analytic_failure_stage, &analytic_failure_reason, &result);
+        analytic_ok = traced;
+        result.metrics.analytic_path_ms += std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - analytic_started).count();
+        appendStates(approach_states, "cartesian_approach", false, true, &executable_prefix);
+        if (!retreat_states.empty()) {
+          executable_prefix.push_back(
+            ReplayFrame{"attach_box", allJoints(*retreat_states.front()), true});
+        }
+        const size_t retreat_begin = executable_prefix.size();
+        appendStates(retreat_states, "cartesian_retreat", true, true, &executable_prefix);
+        if (top_suction_) {
+          const size_t lift_frames = std::max<size_t>(1, std::ceil(approach_distance_ / cartesian_step_));
+          for (size_t i = retreat_begin; i < std::min(executable_prefix.size(), retreat_begin + lift_frames); ++i)
+            executable_prefix[i].stage = "cartesian_lift";
+        }
       best_partial = executable_prefix;
       if (!analytic_ok) {
         last_failure_stage = analytic_failure_stage;
@@ -2429,37 +3902,66 @@ private:
 
       last_failure_stage.clear();
       moveit::core::RobotState return_goal(grasp_start);
+      if (post_extract_policy_ == "loaded_home") {
+        const auto initial_arm = armJoints(*initial_state_);
+        return_goal.setJointGroupPositions(planning_group_, initial_arm.data());
+        return_goal.setVariablePosition("updown", initial_state_->getVariablePosition("updown"));
+      }
       attachCarriedBox(return_goal);
       if (distance_demo_ && post_extract_policy_ == "rear_release") {
-        // Position the entire rotated payload behind the chassis, not just the TCP.
-        // A folded top-suction payload can extend forward of its TCP.
-        moveit::core::RobotState rear_reference(*home_state_);
-        rear_reference.setVariablePosition("updown", grasp_start.getVariablePosition("updown"));
-        if (top_suction_)
-          rear_reference.setVariablePosition(side_ + "_joint4", foldedElbowPosition(side_));
-        rear_reference.update(true);
-        const auto rear = alfa_robot::motion::wallRearPlacementPose(
-          rear_reference.getGlobalLinkTransform(tool_link_), toolToBox(), boxSize(),
-          chassis_rear_x_, rear_clearance_, wall_bottom_z_ + contact_numerical_gap_);
-        std::string reason;
-        auto candidates = solvePoseCandidates(rear, grasp_start, true, loaded, &result.metrics, false, &reason, &result.rejected_state);
-        result.diagnostic["target"] = {rear.translation().x(), rear.translation().y(), rear.translation().z()};
-        bool found = false;
-        for (size_t i = 0; i < std::min(candidates.size(), precontact_candidate_limit_); ++i) {
-          const auto& goal = *candidates[i].state;
-          if (!alfa_robot::motion::boxBehindChassis(
-              goal.getGlobalLinkTransform(tool_link_) * toolToBox(), boxSize(), chassis_rear_x_)) {
-            reason = "rear target does not put the entire box at least 1cm behind chassis";
+        if (rear_placement_strategy_ == "named_unloading") {
+          moveit::core::RobotState unloading(*home_state_);
+          if (!unloading.setToDefaultValues(
+              robot_model_->getJointModelGroup("whole_body"), "unloading")) {
+            last_failure_stage = "rear_placement";
+            last_failure_reason = "whole_body/unloading named pose is unavailable";
             continue;
           }
-          return_goal = goal;
-          found = true;
-          break;
-        }
-        if (!found) {
-          last_failure_stage = "rear_placement";
-          last_failure_reason = reason;
-          continue;
+          const auto unloading_joints = armJoints(unloading);
+          return_goal.setJointGroupPositions(planning_group_, unloading_joints.data());
+          return_goal.update(true);
+          const std::string unloading_collision = collisionReason(loaded, return_goal, &result.metrics);
+          if (!return_goal.satisfiesBounds(planning_group_) || !unloading_collision.empty()) {
+            result.rejected_state = std::make_shared<moveit::core::RobotState>(return_goal);
+            last_failure_stage = "rear_placement";
+            last_failure_reason = unloading_collision.empty() ?
+              "named unloading pose violates joint bounds" : unloading_collision;
+            continue;
+          }
+        } else {
+          // Position the entire rotated payload behind the chassis, not just the TCP.
+          // A folded top-suction payload can extend forward of its TCP.
+          moveit::core::RobotState rear_reference(*home_state_);
+          rear_reference.setVariablePosition("updown", grasp_start.getVariablePosition("updown"));
+          if (top_suction_)
+            rear_reference.setVariablePosition(side_ + "_joint4", foldedElbowPosition(side_));
+          rear_reference.update(true);
+          const auto rear = alfa_robot::motion::wallRearPlacementPose(
+            rear_reference.getGlobalLinkTransform(tool_link_), toolToBox(), boxSize(),
+            chassis_rear_x_, rear_clearance_, wall_bottom_z_ + contact_numerical_gap_);
+          std::string reason;
+          auto candidates = solvePoseCandidates(
+            rear, grasp_start, true, loaded, &result.metrics, false, &reason,
+            &result.rejected_state);
+          result.diagnostic["target"] = {
+            rear.translation().x(), rear.translation().y(), rear.translation().z()};
+          bool found = false;
+          for (size_t i = 0; i < std::min(candidates.size(), precontact_candidate_limit_); ++i) {
+            const auto& goal = *candidates[i].state;
+            if (!alfa_robot::motion::boxBehindChassis(
+                goal.getGlobalLinkTransform(tool_link_) * toolToBox(), boxSize(), chassis_rear_x_)) {
+              reason = "rear target does not put the entire box at least 1cm behind chassis";
+              continue;
+            }
+            return_goal = goal;
+            found = true;
+            break;
+          }
+          if (!found) {
+            last_failure_stage = "rear_placement";
+            last_failure_reason = reason;
+            continue;
+          }
         }
       } else {
         const auto reason = collisionReason(loaded, return_goal, &result.metrics);
@@ -2473,14 +3975,19 @@ private:
 
       RrtPlanResult return_plan;
       std::string direct_reason;
-      if (edgeClear(loaded, *retreat_states.back(), return_goal, true, &result.metrics,
-          &direct_reason, &return_plan.rejected_state) &&
+      const bool return_with_updown = post_extract_policy_ == "loaded_home";
+      if (connection_planner_ == "shortcut_local_rrt") {
+        return_plan = planRrt(loaded, *retreat_states.back(), return_goal,
+          return_with_updown, &result.metrics);
+        result.metrics.rrt_return_ms += return_plan.wall_ms;
+      } else if (edgeClear(loaded, *retreat_states.back(), return_goal, true, &result.metrics,
+          &direct_reason, &return_plan.rejected_state, return_with_updown) &&
           alfa_robot::motion::sameShoulderElbowBranch(
             armJoints(*retreat_states.back()), armJoints(return_goal))) {
         return_plan.success = true;
-        return_plan.states = directArmPath(*retreat_states.back(), return_goal);
+        return_plan.states = directArmPath(*retreat_states.back(), return_goal, return_with_updown);
       } else {
-        return_plan = planRrt(loaded, *retreat_states.back(), return_goal);
+        return_plan = planRrt(loaded, *retreat_states.back(), return_goal, return_with_updown);
         result.metrics.rrt_return_ms += return_plan.wall_ms;
       }
       if (!return_plan.success) {
@@ -2496,10 +4003,45 @@ private:
       result.frames = std::move(executable_prefix);
       appendStates(return_plan.states, "rrt_return", true, true, &result.frames);
       if (post_extract_policy_ == "loaded_home") {
+        auto loaded_return = return_plan.states.back();
+        best_partial = result.frames;
+        if (!synchronized_updown_) {
+          const std::string carrying_side = side_;
+          selectArm(carrying_side == "left" ? "right" : "left");
+          moveit::core::RobotState idle_goal(*loaded_return);
+          const auto initial_idle = armJoints(*initial_state_);
+          idle_goal.setJointGroupPositions(planning_group_, initial_idle.data());
+          idle_goal.update(true);
+          RrtPlanResult idle_return;
+          std::string idle_reason;
+          if (connection_planner_ == "shortcut_local_rrt") {
+            idle_return = planRrt(loaded, *loaded_return, idle_goal, false, &result.metrics);
+            result.metrics.rrt_return_ms += idle_return.wall_ms;
+          } else if (edgeClear(loaded, *loaded_return, idle_goal, true, &result.metrics,
+              &idle_reason, &idle_return.rejected_state)) {
+            idle_return.success = true;
+            idle_return.states = directArmPath(*loaded_return, idle_goal);
+          } else {
+            idle_return = planRrt(loaded, *loaded_return, idle_goal);
+            result.metrics.rrt_return_ms += idle_return.wall_ms;
+          }
+          selectArm(carrying_side);
+          if (!idle_return.success) {
+            result.rejected_state = idle_return.rejected_state;
+            last_failure_stage = "loaded_home_idle_return";
+            last_failure_reason = idle_return.reason.empty() ? idle_reason : idle_return.reason;
+            continue;
+          }
+          appendStates(idle_return.states, "loaded_home_idle_return", true, true, &result.frames);
+          loaded_return = idle_return.states.back();
+          best_partial = result.frames;
+        }
         const auto updown_return = moveUpdown(
-          loaded, *return_plan.states.back(),
-          home_state_->getVariablePosition("updown"), true, &result.metrics);
+          loaded, *loaded_return,
+          initial_state_->getVariablePosition("updown"), true, &result.metrics);
         if (!updown_return.success) {
+          appendStates(updown_return.states, "updown_return", true, true, &result.frames);
+          best_partial = result.frames;
           result.rejected_state = updown_return.rejected_state;
           last_failure_stage = "updown_return";
           last_failure_reason = updown_return.reason;
@@ -2513,6 +4055,59 @@ private:
         // a separate frame with identical joints, never an obstacle workaround.
         result.frames.push_back(ReplayFrame{"rear_placement", allJoints(return_goal), true});
         result.frames.push_back(ReplayFrame{"release_box", allJoints(return_goal), false, false});
+
+        if (enable_stage_action_) {
+          auto released_scene = planning_scene::PlanningScene::clone(loaded);
+          addPlacedBox(released_scene, wall_target_row_ * 5 + wall_target_column_,
+            return_goal.getGlobalLinkTransform(tool_link_) * toolToBox(), side_);
+          moveit::core::RobotState released(return_goal);
+          released.clearAttachedBody(kCarriedBoxId);
+          released.update(true);
+          moveit::core::RobotState arm_home(released);
+          const auto home_joints = armJoints(*home_state_);
+          arm_home.setJointGroupPositions(planning_group_, home_joints.data());
+          arm_home.update(true);
+
+          RrtPlanResult home_plan;
+          std::string home_direct_reason;
+          if (connection_planner_ == "shortcut_local_rrt") {
+            home_plan = planRrt(released_scene, released, arm_home, false, &result.metrics);
+            result.metrics.rrt_return_ms += home_plan.wall_ms;
+          } else if (edgeClear(released_scene, released, arm_home, false, &result.metrics,
+              &home_direct_reason, &home_plan.rejected_state) &&
+              alfa_robot::motion::sameShoulderElbowBranch(
+                armJoints(released), armJoints(arm_home))) {
+            home_plan.success = true;
+            home_plan.states = directArmPath(released, arm_home);
+          } else {
+            home_plan = planRrt(released_scene, released, arm_home);
+            result.metrics.rrt_return_ms += home_plan.wall_ms;
+          }
+          if (!home_plan.success) {
+            result.rejected_state = home_plan.rejected_state;
+            last_failure_stage = "home_return";
+            last_failure_reason = home_plan.reason.empty() ? home_direct_reason : home_plan.reason;
+            continue;
+          }
+          const size_t home_begin = result.frames.size();
+          appendStates(home_plan.states, "home_return", false, true, &result.frames);
+          for (size_t index = home_begin; index < result.frames.size(); ++index)
+            result.frames[index].box_visible = false;
+
+          const auto home_updown = moveUpdown(
+            released_scene, *home_plan.states.back(), home_state_->getVariablePosition("updown"),
+            false, &result.metrics);
+          if (!home_updown.success) {
+            result.rejected_state = home_updown.rejected_state;
+            last_failure_stage = "home_updown";
+            last_failure_reason = home_updown.reason;
+            continue;
+          }
+          const size_t updown_begin = result.frames.size();
+          appendStates(home_updown.states, "home_updown", false, true, &result.frames);
+          for (size_t index = updown_begin; index < result.frames.size(); ++index)
+            result.frames[index].box_visible = false;
+        }
       }
       result.success = true;
       return finish();
@@ -2540,14 +4135,23 @@ private:
     if (distance_demo_) {
       output["distance_demo"] = true;
       output["post_extract_policy"] = post_extract_policy_;
-      output["release_after_transfer"] = post_extract_policy_ == "rear_release";
+      output["connection_planner"] = connection_planner_;
+      output["shortcut_padding_points"] = shortcut_padding_points_;
+      output["shortcut_step_deg"] = radToDeg(shortcut_step_);
+      output["shortcut_updown_step_m"] = shortcut_updown_step_;
+      output["local_rrt_planning_time_s"] = local_rrt_planning_time_;
+      output["bounded_joint_distance"] = connection_planner_ == "shortcut_local_rrt";
+      output["rear_placement_strategy"] = direct_attach_ ? "named_unloading" : rear_placement_strategy_;
+      output["release_after_transfer"] = !direct_attach_ && post_extract_policy_ == "rear_release";
       output["initial_pose"] = initial_pose_;
+      output["direct_attach"] = direct_attach_;
       output["planning_seed"] = planning_seed_;
       output["edge_collision_resolution_deg"] = edge_joint_resolution_ * 180.0 / kPi;
       output["lift_after_attach_m"] = top_suction_ ? approach_distance_ : 0.0;
       output["lift_backoff_m"] = top_suction_ ? std::min(0.02, retreat_distance_) : 0.0;
       output["environment"] = environment_json_;
-      output["height_alignment"] = heightAlignment(box_center);
+      output["height_alignment"] = direct_attach_ ?
+        nlohmann::json{{"enabled", false}, {"strategy", "direct_attach"}} : heightAlignment(box_center);
       output["contact_numerical_gap"] = contact_numerical_gap_;
       output["requested_arm"] = requested_arm_;
       output["requested_suction_mode"] = requested_suction_mode_;
@@ -2570,15 +4174,25 @@ private:
     for (const auto& center : neighbors) {
       output["neighbor_centers"].push_back({center.x(), center.y(), center.z()});
     }
-    const auto precontact = precontactPose(box_center);
-    const auto contact = contactPose(box_center);
-    const auto retreat = retreatPose(box_center);
-    output["precontact"] = {
-      precontact.translation().x(), precontact.translation().y(), precontact.translation().z()};
-    output["contact"] = {
-      contact.translation().x(), contact.translation().y(), contact.translation().z()};
-    output["retreat"] = {
-      retreat.translation().x(), retreat.translation().y(), retreat.translation().z()};
+    if (!direct_attach_) {
+      const auto precontact = precontactPose(box_center);
+      const auto contact = contactPose(box_center);
+      const auto retreat = retreatPose(box_center);
+      output["precontact"] = {
+        precontact.translation().x(), precontact.translation().y(), precontact.translation().z()};
+      output["contact"] = {
+        contact.translation().x(), contact.translation().y(), contact.translation().z()};
+      output["retreat"] = {
+        retreat.translation().x(), retreat.translation().y(), retreat.translation().z()};
+    } else {
+      output["direct_attached_boxes"] = directAttachedBoxes(*initial_state_);
+      output["direct_placement_pose"] = direct_placement_pose_;
+      output["side"] = "dual";
+      output["distance_reference"] = "synthetic boxes at current tools; no fixed-wall grasp target";
+      output["scope"] = "simulation-only dual-arm direct attach to SRDF dual_arm/" + direct_placement_pose_;
+      const auto unloading = directPlacementGoal(*initial_state_);
+      output["goal_joints"] = allJoints(unloading);
+    }
     const auto offset = toolToBoxCenter();
     output["tool_to_box_center"] = {offset.x(), offset.y(), offset.z()};
     output["tool_to_box_rotation"] = nlohmann::json::array();
@@ -2611,7 +4225,7 @@ private:
     }
     nlohmann::json payload = sceneJson(center);
     payload["kind"] = "preview";
-    payload["side"] = side_;
+    payload["side"] = direct_attach_ ? "dual" : side_;
     payload["status"] = status;
     publishJson(payload);
   }
@@ -2621,7 +4235,7 @@ private:
     nlohmann::json payload = sceneJson(box_center);
     payload["kind"] = "planning";
     payload["generation"] = generation;
-    payload["side"] = side_;
+    payload["side"] = direct_attach_ ? "dual" : side_;
     payload["status"] = "计算开始";
     publishJson(payload);
   }
@@ -2635,7 +4249,7 @@ private:
     auto& payload = last_result_;
     payload["kind"] = "result";
     payload["generation"] = generation;
-    payload["side"] = side_;
+    payload["side"] = direct_attach_ ? "dual" : side_;
     payload["tool_link"] = tool_link_;
     payload["success"] = result.success;
     payload["failure_stage"] = result.failure_stage;
@@ -2649,7 +4263,23 @@ private:
       {"analytic_path_ms", result.metrics.analytic_path_ms},
       {"rrt_approach_ms", result.metrics.rrt_approach_ms},
       {"rrt_return_ms", result.metrics.rrt_return_ms},
+      {"shortcut_connections", result.metrics.shortcut_connections},
+      {"shortcut_direct_successes", result.metrics.shortcut_direct_successes},
+      {"shortcut_blocked_edges", result.metrics.shortcut_blocked_edges},
+      {"local_rrt_calls", result.metrics.local_rrt_calls},
+      {"local_rrt_failures", result.metrics.local_rrt_failures},
+      {"local_rrt_wall_ms", result.metrics.local_rrt_wall_ms},
     };
+    if (!result.metrics.collision_sample_ms.empty()) {
+      auto samples = result.metrics.collision_sample_ms;
+      std::sort(samples.begin(), samples.end());
+      payload["metrics"]["collision_latency_ms"] = {
+        {"samples", samples.size()}, {"min", samples.front()},
+        {"median", samples[samples.size() / 2]},
+        {"p95", samples[static_cast<size_t>(0.95 * (samples.size() - 1))]},
+        {"max", samples.back()},
+      };
+    }
     payload["joint_names"] = all_joint_names_;
     payload["attempts"] = attempts_;
     payload["verdict"] = result.success ? "path_found" : "no_path_found";
@@ -2750,6 +4380,29 @@ private:
       obstacle.scale.z = size[2];
       obstacle.color = color(0.45F, 0.55F, 0.65F, 0.20F);
       markers.markers.push_back(obstacle);
+    }
+    if (direct_attach_) {
+      int marker_id = 0;
+      for (const std::string side : {"left", "right"}) {
+        Marker payload;
+        payload.header.frame_id = world_frame_;
+        payload.header.stamp = now();
+        payload.ns = "direct_attached_boxes";
+        payload.id = marker_id++;
+        payload.type = Marker::CUBE;
+        payload.action = Marker::ADD;
+        payload.pose = eigenToPose(display_state_->getGlobalLinkTransform(side + "_tool0") *
+          toolToBox(side, false));
+        payload.scale.x = box_depth_;
+        payload.scale.y = box_width_;
+        payload.scale.z = box_height_;
+        payload.color = color(0.20F, 0.85F, 0.25F, 0.72F);
+        markers.markers.push_back(payload);
+      }
+      alfa_robot::motion::appendDemoFailureMarkers(
+        markers, display_diagnostic_, display_failure_frozen_, world_frame_, now());
+      scene_marker_publisher_->publish(markers);
+      return;
     }
     Marker target;
     target.header.frame_id = world_frame_;
@@ -2875,6 +4528,17 @@ private:
 
   void publishDisplayState()
   {
+    if (execution_backend_ == "fjt") {
+      std::map<std::string, double> feedback;
+      if (readFjtState(&feedback, nullptr)) {
+        std::lock_guard<std::mutex> lock(display_mutex_);
+        for (const auto& name : robot_model_->getVariableNames())
+          display_state_->setVariablePosition(name, feedback.at(name));
+        display_state_->update(true);
+      }
+      publishSceneMarkers();
+      return;
+    }
     std::lock_guard<std::mutex> lock(display_mutex_);
     if (!playback_frames_.empty()) {
       display_failure_frozen_ = !display_diagnostic_.empty() && playback_index_ + 1U == playback_frames_.size();
@@ -2906,6 +4570,18 @@ private:
   std::string wall_context_ = "full";
   bool top_suction_ = false;
   bool sequence_mode_ = false;
+  bool playback_enabled_ = true;
+  bool enable_stage_action_ = false;
+  std::string execution_backend_ = "replay";
+  std::string follow_joint_trajectory_action_ = "/whole_body_jtc/follow_joint_trajectory";
+  std::string trajectory_cache_file_;
+  nlohmann::json trajectory_cache_;
+  double target_match_tolerance_ = 0.06;
+  double target_orientation_tolerance_ = degToRad(5.0);
+  double maximum_rotary_velocity_ = degToRad(20.0);
+  double maximum_updown_velocity_ = 0.15;
+  double minimum_trajectory_step_s_ = 0.05;
+  double display_rate_hz_ = 20.0;
   std::string initial_pose_ = "home";
   double top_shoulder_above_wrist_ = 0.10;  // Offline-calibrated top policy, independent of front comfort ratio.
   bool sequence_running_ = false;
@@ -2915,6 +4591,14 @@ private:
   double chassis_rear_x_ = 0.0;
   double rear_clearance_ = 0.02;
   std::set<int> removed_boxes_;
+  std::map<int, Eigen::Isometry3d> placed_boxes_;
+  mutable std::mutex feedback_mutex_;
+  std::map<std::string, double> latest_feedback_;
+  std::chrono::steady_clock::time_point feedback_received_at_;
+  std::chrono::steady_clock::time_point safety_received_at_;
+  bool latest_safety_ready_ = false;
+  std::atomic<bool> fjt_outcome_unknown_{false};
+  std::atomic<bool> session_requires_reset_{false};
   moveit::core::RobotStatePtr home_state_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr sequence_service_;
   std::vector<nlohmann::json> playback_scenes_;
@@ -2923,7 +4607,10 @@ private:
   std::vector<moveit_msgs::msg::CollisionObject> environment_objects_;
   nlohmann::json environment_json_;
   bool distance_demo_ = false;
+  bool direct_attach_ = false;
+  std::string direct_placement_pose_ = "unloading";
   std::string post_extract_policy_ = "rear_release";
+  std::string rear_placement_strategy_ = "geometric";
   bool align_height_ = false;
   std::string height_strategy_ = "fixed_offset";
   nlohmann::json height_clearance_ = {{"checked", false}};
@@ -2969,6 +4656,11 @@ private:
   size_t precontact_candidate_limit_ = 8;
   double rrt_planning_time_ = 1.0;
   int rrt_planning_attempts_ = 1;
+  std::string connection_planner_ = "rrt_connect";
+  size_t shortcut_padding_points_ = 5;
+  double shortcut_step_ = degToRad(5.0);
+  double shortcut_updown_step_ = 0.01;
+  double local_rrt_planning_time_ = 8.0;
   bool auto_run_once_ = false;
 
   std::shared_ptr<robot_model_loader::RobotModelLoader> robot_model_loader_;
@@ -2988,20 +4680,34 @@ private:
     std::chrono::system_clock::now().time_since_epoch().count());
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr segment_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr task_publisher_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr wall_target_catalog_publisher_;
+  rclcpp::Publisher<robot_system_interfaces::msg::DomainReadiness>::SharedPtr readiness_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_publisher_;
+  rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr feedback_subscription_;
+  rclcpp::Subscription<robot_rt_control_interfaces::msg::SafetyState>::SharedPtr safety_subscription_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr scene_marker_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr status_marker_publisher_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr run_service_;
   rclcpp::TimerBase::SharedPtr worker_timer_;
   rclcpp::TimerBase::SharedPtr display_timer_;
   rclcpp::TimerBase::SharedPtr auto_run_timer_;
+  rclcpp::TimerBase::SharedPtr readiness_timer_;
+  rclcpp_action::Server<StageAction>::SharedPtr stage_action_server_;
+  rclcpp_action::Client<FollowJointTrajectory>::SharedPtr fjt_client_;
+  FollowJointTrajectoryGoalHandle::SharedPtr fjt_goal_handle_;
 
   std::mutex box_mutex_;
   std::mutex display_mutex_;
+  mutable std::mutex public_flow_mutex_;
+  std::mutex fjt_goal_mutex_;
+  std::optional<CachedPublicFlow> cached_public_flow_;
+  std::atomic<PublicFlowState> public_flow_state_{PublicFlowState::Idle};
   std::vector<ReplayFrame> playback_frames_;
   size_t playback_index_ = 0;
   std::atomic<bool> planning_requested_{false};
   std::atomic<bool> planning_active_{false};
+  std::atomic<bool> public_goal_active_{false};
+  std::atomic<bool> public_cancel_requested_{false};
   uint64_t generation_ = 0;
 };
 

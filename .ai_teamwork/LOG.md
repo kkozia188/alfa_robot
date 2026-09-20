@@ -2113,3 +2113,8 @@
 - 改了哪里：同步 `robot_description@f2454a6` 快照，更新解析 IK 固定变换、MoveIt/ros2_control 初始位、SRDF 命名姿态及 `*_linkN` 碰撞链接消费者。
 - 验证结果：description 38项测试通过；消费侧 description 合同17项通过；V3.1.1 随机解析 FK/IK 回代、四套关键帧限位与自碰撞、MoveIt 合同3项通过。
 - 留给下个 AI：description PR #11 应先于消费仓 PR 合并；关节名仍为 `*_jointN`，实体链接名从本次上游版本起为 `*_linkN`，禁止混用。
+## 2026-09-21 运控 / Codex / MOTION-222 V3 Stage 仿真预览交付
+- 做了什么：将固定 5x5 箱墙的已验证双臂联合轨迹接入 `/motion/execute_stage` 四阶段 Action；支持 replay 与完整17轴FJT后端、26轴反馈/安全状态准入、失败轮运动前跳过；放置确认后从Motion场景删除箱子。
+- 改了哪里：解析腕部补偿、阶段Action与客户端、域内/中央接口分层、固定墙轨迹缓存、缓存生成/验证工具、仿真交付脚本与文档。
+- 验证结果：最新V3吸盘description下4/15轮完整周期通过，成功轮为0/1/3/4；所有阶段和任务边界关节差为0，旋转轴单帧不超过0.5度、Updown不超过5mm；12/13包构建与4包54项测试通过；Action replay实跑4轮成功、11轮PREGRASP前失败并跳过；RRD验证通过。
+- 留给下个AI：这是preview，不是25箱全成功或仿真FJT验收。外部仿真必须先满足26轴`/joint_states`、17轴FJT和`/control/safety_state`；其余11轮需继续优化候选/场景，不能回退为断裂轨迹或放宽碰撞。

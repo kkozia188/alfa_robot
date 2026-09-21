@@ -13,7 +13,9 @@ def test_verified_cache_is_continuous_and_bounded():
     assert data["kind"] == "v3_fixed_wall_motion_stage_cache"
     assert len(data["joint_names"]) == 17
     successful = [entry for entry in data["entries"] if entry["success"]]
-    assert [entry["round"] for entry in successful] == [1, 2, 4, 5]
+    assert [entry["round"] for entry in successful] == list(range(1, 12))
+    assert [(entry["round"], entry["right"]) for entry in successful if entry["right"] < 0] == [
+        (3, -1), (6, -1), (9, -1)]
     prior = None
     for entry in successful:
         combined = []

@@ -26,7 +26,8 @@ cd alfa_robot
 ./tools/v3_sim_release/run_wall_test.sh
 ```
 
-当前固定墙缓存完整通过 4/15 轮；其余轮次在 PREGRASP 前失败并跳过，不会移动机器人。
+当前固定墙缓存完整通过前 11 轮侧吸任务，包含 8 轮双臂与 3 轮单臂
+`NO_MOVE`。测试客户端默认只发送这 11 轮。
 放置确认后箱子从 Motion 地图删除。成功轮的阶段/任务边界完全连续，缓存内部旋转轴
 单帧变化不超过 0.5 度，Updown 单帧变化不超过 5 mm。
 默认将回放写入 `/tmp/v3_motion_stage_wall.rrd`，可使用
@@ -45,3 +46,6 @@ cd alfa_robot
 `PREGRASP -> APPROACH -> PLACE -> HOME` 之间的吸取和释放由上层调用仿真吸盘接口。
 本程序不会自动控制真空。缺轴、状态过期、轨迹起点不一致、Action 不可用或末态不收敛时
 均拒绝继续执行。
+
+本 Release 已完成 Replay Action 验收，未声称外部仿真 FJT 已完成验收。仿真方接入时先运行
+`replay` 核对 11 轮请求与阶段边界，再切换 `fjt` 验证真实 26 轴反馈、SafetyState 和17轴执行。

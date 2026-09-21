@@ -1,6 +1,6 @@
 {
   "name": "v3-motion-stage-sim-preview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "status": "preview",
   "base_branch": "alfa_v3_dev",
   "robot_profile": "V3 suction",
@@ -9,12 +9,13 @@
   "public_action": "/motion/execute_stage",
   "downstream_action": "/whole_body_jtc/follow_joint_trajectory",
   "central_interfaces_commit": "92d6ff2ed0b45684d7da2170d96703ca8be569f4",
-  "fixed_wall_rounds": 15,
-  "verified_complete_rounds": [0, 1, 3, 4],
-  "failed_round_policy": "fail before motion and continue when the test client uses --allow-failure",
+  "fixed_wall_rounds": 11,
+  "verified_complete_rounds": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "failed_round_policy": "release scope stops after the first 11 verified side-suction rounds",
   "placed_box_policy": "remove from Motion collision scene after HOME confirms release",
   "maximum_cached_rotary_step_deg": 0.5,
   "maximum_cached_updown_step_m": 0.005,
   "hardware_execution_validated": false,
+  "simulation_replay_validated": true,
   "simulation_fjt_validated": false
 }

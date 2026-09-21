@@ -990,16 +990,17 @@ private:
   {
     if (!flow || trajectory_cache_.is_null()) return false;
     const nlohmann::json* selected = nullptr;
+    const int expected_right = flow->dual ? flow->box_ids.at(1) : -1;
     for (const auto& entry : trajectory_cache_.at("entries")) {
       if (entry.value("success", false) &&
           entry.at("left").get<int>() == flow->box_ids.at(0) &&
-          entry.at("right").get<int>() == flow->box_ids.at(1)) {
+          entry.value("right", -1) == expected_right) {
         selected = &entry;
         break;
       }
     }
     if (!selected) {
-      if (reason) *reason = "no complete cached trajectory for this dual target";
+      if (reason) *reason = "no complete cached trajectory for this target";
       return false;
     }
     const auto convert = [&](const nlohmann::json& input, const std::string& stage,
@@ -1014,12 +1015,18 @@ private:
         frame.box_attached = attached;
         frame.box_visible = visible;
         if (attached) {
-          frame.carried_boxes.push_back(carriedBoxJson(
-            flow->box_ids[0], wallBoxCenter(flow->wall_distance, flow->box_ids[0]),
-            "left", false, true, true));
-          frame.carried_boxes.push_back(carriedBoxJson(
-            flow->box_ids[1], wallBoxCenter(flow->wall_distance, flow->box_ids[1]),
-            "right", false, true, true));
+          if (flow->dual) {
+            frame.carried_boxes.push_back(carriedBoxJson(
+              flow->box_ids[0], wallBoxCenter(flow->wall_distance, flow->box_ids[0]),
+              "left", false, true, true));
+            frame.carried_boxes.push_back(carriedBoxJson(
+              flow->box_ids[1], wallBoxCenter(flow->wall_distance, flow->box_ids[1]),
+              "right", false, true, true));
+          } else {
+            frame.carried_boxes.push_back(carriedBoxJson(
+              flow->box_ids.front(), wallBoxCenter(flow->wall_distance, flow->box_ids.front()),
+              flow->single_side, false, true, true));
+          }
         }
         output.push_back(std::move(frame));
       }
@@ -1097,10 +1104,8 @@ private:
       const auto& target = left->active ? *left : *right;
       flow->box_ids = {target.box_id};
       flow->single_side = target.side;
-      if (!trajectory_cache_.is_null()) {
-        if (reason) *reason = "no complete cached trajectory for this single-arm target";
-        return false;
-      }
+      if (!trajectory_cache_.is_null())
+        return loadCachedPublicFlow(flow, reason);
       requested_arm_ = target.side;
       selectArm(target.side);
       top_suction_ = target.top;

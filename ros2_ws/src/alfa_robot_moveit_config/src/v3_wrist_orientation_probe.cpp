@@ -24,11 +24,14 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <queue>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -437,6 +440,9 @@ public:
   Json inspectSharedHeightFaceIk(const Json& request)
   {
     const auto started = std::chrono::steady_clock::now();
+    const std::string grasp_mode = request.value("grasp_mode", "side");
+    if (grasp_mode != "side" && grasp_mode != "top")
+      throw std::invalid_argument("grasp_mode must be side or top");
     const auto face_world = [&](const Json& pose) {
       Eigen::Isometry3d local = Eigen::Isometry3d::Identity();
       local.translation() = Eigen::Vector3d(
@@ -453,6 +459,7 @@ public:
     Json output = {{"kind", "v3_front_face_shared_height_ik_probe"},
       {"success", false}, {"left_pose_in_base_link", request.at("left")},
       {"right_pose_in_base_link", has_right ? request.at("right") : Json(nullptr)},
+      {"grasp_mode", grasp_mode},
       {"height_step_m", .04}, {"psi_step_deg", 10.0}, {"initials", Json::array()}};
     const auto* whole = model_->getJointModelGroup("whole_body");
     const auto& updown_bounds = model_->getVariableBounds("updown");
@@ -477,18 +484,24 @@ public:
           const std::string side = side_index == 0 ? "left" : "right";
           const auto& solver = side_index == 0 ? left_ : right_;
           const Eigen::Isometry3d& face = side_index == 0 ? left_face : right_face;
-          Eigen::Isometry3d contact = alfa_robot::motion::toolPoseFromFrontFace(
-            face, named.getGlobalLinkTransform(side + "_tool0").linear());
-          contact.translation() -= 1e-6 * face.linear().col(2);
+          Eigen::Isometry3d contact;
+          if (grasp_mode == "top") {
+            const Eigen::Vector3d center = face.translation() + .15 * face.linear().col(2);
+            contact = alfa_robot::motion::wallContactPose(center, {.30, .40, .40}, 1e-6, true,
+              named.getGlobalLinkTransform(side + "_tool0").linear());
+          } else {
+            contact = alfa_robot::motion::toolPoseFromFrontFace(
+              face, named.getGlobalLinkTransform(side + "_tool0").linear());
+          }
+          contact.translation() -= 1e-6 * contact.linear().col(2);
           Eigen::Isometry3d pregrasp = contact;
-          pregrasp.translation() -= .05 * face.linear().col(2);
+          pregrasp.translation() -= .05 * contact.linear().col(2);
           const Eigen::Isometry3d arm_inverse =
             height_state.getGlobalLinkTransform("arm_carriage").inverse();
           std::array<double, 7> seed{};
           for (int joint = 0; joint < 7; ++joint)
             seed[joint] = named.getVariablePosition(side + "_joint" + std::to_string(joint + 1));
-          double best_cost = std::numeric_limits<double>::infinity();
-          Json best = nullptr;
+          std::map<std::tuple<int, int, int, int>, Json> option_map;
           int local_contacts = 0;
           for (int psi_index = 0; psi_index < 36; ++psi_index) {
             alfa_robot::analytic_ik::V3RedundantIkRequest query;
@@ -515,17 +528,29 @@ public:
                   cost += std::pow(before.joints[joint] - seed[joint], 2);
                   joints.push_back(before.joints[joint]);
                 }
-                if (cost < best_cost) {
-                  best_cost = cost;
-                  best = {{"psi_deg", query.swivel_angle * 180.0 / kPi},
-                    {"cost", cost}, {"pregrasp_joints", joints}};
-                }
+                Json contact_joints = Json::array();
+                for (const double value : after.joints) contact_joints.push_back(value);
+                const auto key = std::make_tuple(
+                  psi_index, before.shoulder_branch, before.elbow_branch, before.wrist_branch);
+                const auto existing = option_map.find(key);
+                if (existing == option_map.end() || cost < existing->second.at("cost").get<double>())
+                  option_map[key] = {{"psi_deg", query.swivel_angle * 180.0 / kPi},
+                    {"shoulder_branch", before.shoulder_branch},
+                    {"elbow_branch", before.elbow_branch}, {"wrist_branch", before.wrist_branch},
+                    {"cost", cost}, {"pregrasp_joints", joints},
+                    {"contact_joints", contact_joints}};
               }
           }
           variant[side + "_contact_solutions"] =
             variant[side + "_contact_solutions"].get<int>() + local_contacts;
-          if (best.is_null()) pair_has_ik = false;
-          else best_pair[side] = best;
+          Json options = Json::array();
+          for (auto& [key, option] : option_map) options.push_back(std::move(option));
+          std::sort(options.begin(), options.end(), [](const Json& lhs, const Json& rhs) {
+            return lhs.at("cost").get<double>() < rhs.at("cost").get<double>();
+          });
+          best_pair[side + "_options"] = options;
+          if (options.empty()) pair_has_ik = false;
+          else best_pair[side] = options.front();
         }
         if (pair_has_ik) {
           best_pair["cost"] = best_pair["left"]["cost"].get<double>() +
@@ -572,7 +597,10 @@ public:
     initial.update(true);
     moveit::core::RobotState target(initial);
     target.setVariablePosition("updown", best->at("height_m").get<double>());
-    for (const std::string side : {"left", "right"})
+    const bool has_right = candidates.contains("right_pose_in_base_link") &&
+      !candidates.at("right_pose_in_base_link").is_null();
+    for (const std::string side : has_right ?
+        std::vector<std::string>{"left", "right"} : std::vector<std::string>{"left"})
       for (int joint = 1; joint <= 7; ++joint)
         target.setVariablePosition(side + "_joint" + std::to_string(joint),
           best->at(side).at("pregrasp_joints").at(joint - 1).get<double>());
@@ -705,21 +733,25 @@ public:
         Eigen::AngleAxisd(pose.at("roll").get<double>(), Eigen::Vector3d::UnitX())).toRotationMatrix();
       return home_.getGlobalLinkTransform("base_link") * local;
     };
+    const bool has_right = !candidates.at("right_pose_in_base_link").is_null();
     std::array<Eigen::Isometry3d, 2> face{
-      face_world(candidates.at("left_pose_in_base_link")),
-      face_world(candidates.at("right_pose_in_base_link"))};
+      face_world(candidates.at("left_pose_in_base_link")), Eigen::Isometry3d::Identity()};
+    if (has_right) face[1] = face_world(candidates.at("right_pose_in_base_link"));
     moveit::core::RobotState named(home_);
     if (!named.setToDefaultValues(model_->getJointModelGroup("whole_body"),
         best->at("home").get<std::string>()))
       throw std::runtime_error("unknown initial pose for tool orientation");
     named.update(true);
-    const std::array<Eigen::Isometry3d, 2> contact_tools{
+    std::array<Eigen::Isometry3d, 2> contact_tools{
       alfa_robot::motion::toolPoseFromFrontFace(
         face[0], named.getGlobalLinkTransform("left_tool0").linear()),
-      alfa_robot::motion::toolPoseFromFrontFace(
-        face[1], named.getGlobalLinkTransform("right_tool0").linear())};
+      named.getGlobalLinkTransform("right_tool0")};
+    if (has_right)
+      contact_tools[1] = alfa_robot::motion::toolPoseFromFrontFace(
+        face[1], named.getGlobalLinkTransform("right_tool0").linear());
     auto contact_scene = planning_scene::PlanningScene::clone(scene_);
-    for (size_t side_index = 0; side_index < 2; ++side_index) {
+    const size_t active_count = has_right ? 2 : 1;
+    for (size_t side_index = 0; side_index < active_count; ++side_index) {
       const std::string side = side_index == 0 ? "left" : "right";
       const Eigen::Vector3d target_center = face[side_index].translation() +
         .15 * face[side_index].linear().col(2);
@@ -756,7 +788,7 @@ public:
       if (step > 0) {
         const double distance = .05 - .01 * step;
         std::array<std::vector<alfa_robot::analytic_ik::V3RedundantIkSolution>, 2> solutions;
-        for (size_t side_index = 0; side_index < 2; ++side_index) {
+        for (size_t side_index = 0; side_index < active_count; ++side_index) {
           const std::string side = side_index == 0 ? "left" : "right";
           auto target = contact_tools[side_index];
           target.translation() -= (distance + 1e-6) * target.linear().col(2);
@@ -769,16 +801,18 @@ public:
           solutions[side_index] = (side_index == 0 ? left_ : right_).solveInArmBase(request);
         }
         bool found = false;
-        std::string reason = solutions[0].empty() || solutions[1].empty() ?
+        std::string reason = solutions[0].empty() || (has_right && solutions[1].empty()) ?
           "analytic_ik_no_solution" : "joint_jump_or_collision";
         double minimum_cost = std::numeric_limits<double>::infinity();
         moveit::core::RobotState selected(state);
+        const std::vector<alfa_robot::analytic_ik::V3RedundantIkSolution> inactive(1);
+        const auto& right_solutions = has_right ? solutions[1] : inactive;
         for (const auto& left : solutions[0])
-          for (const auto& right : solutions[1]) {
+          for (const auto& right : right_solutions) {
             moveit::core::RobotState candidate(state);
             bool jump = false;
             double cost = 0.0;
-            for (size_t side_index = 0; side_index < 2; ++side_index) {
+            for (size_t side_index = 0; side_index < active_count; ++side_index) {
               const std::string side = side_index == 0 ? "left" : "right";
               const auto& joint_solution = side_index == 0 ? left.joints : right.joints;
               for (int joint = 0; joint < 7; ++joint) {
@@ -800,6 +834,30 @@ public:
               reason = collision;
               continue;
             }
+            double edge_steps = 1.0;
+            for (size_t side_index = 0; side_index < active_count; ++side_index) {
+              const std::string side = side_index == 0 ? "left" : "right";
+              for (int joint = 1; joint <= 7; ++joint) {
+                const std::string name = side + "_joint" + std::to_string(joint);
+                edge_steps = std::max(edge_steps,
+                  std::abs(candidate.getVariablePosition(name) - state.getVariablePosition(name)) /
+                  (.5 * kPi / 180.0));
+              }
+            }
+            bool edge_clear = true;
+            for (int edge_step = 1; edge_step < static_cast<int>(std::ceil(edge_steps)); ++edge_step) {
+              moveit::core::RobotState sample(state);
+              state.interpolate(candidate,
+                static_cast<double>(edge_step) / std::ceil(edge_steps), sample);
+              sample.update(true);
+              const std::string edge_collision = collisionReason(contact_scene, sample);
+              if (!sample.satisfiesBounds() || !edge_collision.empty()) {
+                reason = edge_collision.empty() ? "joint_limit" : edge_collision;
+                edge_clear = false;
+                break;
+              }
+            }
+            if (!edge_clear) continue;
             minimum_cost = cost;
             selected = std::move(candidate);
             found = true;
@@ -823,7 +881,9 @@ public:
 
   Json retreatAttachedSharedHeightPair(const Json& candidates, const Json& pregrasp_plan,
     const Json& approach, const std::string& placement_reference_path = "",
-    int unloaded_retract_steps = 5)
+    int unloaded_retract_steps = 5, bool side_up_back_wrist_rrt = false,
+    bool side_up_back_fixed_orientation = false, bool stop_after_extraction = false,
+    bool loaded_joint_return = false)
   {
     if (unloaded_retract_steps < 1 || unloaded_retract_steps > 20)
       throw std::invalid_argument("unloaded retract must be 1..20 centimetres");
@@ -845,6 +905,8 @@ public:
     for (size_t axis = 0; axis < names_.size(); ++axis)
       state.setVariablePosition(names_[axis], contact_joints.at(axis).get<double>());
     state.update(true);
+    const bool has_right = !candidates.at("right_pose_in_base_link").is_null();
+    const size_t active_count = has_right ? 2 : 1;
     std::array<Eigen::Isometry3d, 2> contact_tools{
       state.getGlobalLinkTransform("left_tool0"),
       state.getGlobalLinkTransform("right_tool0")};
@@ -857,13 +919,17 @@ public:
         Eigen::AngleAxisd(pose.at("roll").get<double>(), Eigen::Vector3d::UnitX())).toRotationMatrix();
       return home_.getGlobalLinkTransform("base_link") * local;
     };
-    const std::array<Eigen::Isometry3d, 2> faces{
-      face_world(candidates.at("left_pose_in_base_link")),
-      face_world(candidates.at("right_pose_in_base_link"))};
+    std::array<Eigen::Isometry3d, 2> faces{
+      face_world(candidates.at("left_pose_in_base_link")), Eigen::Isometry3d::Identity()};
+    if (has_right) faces[1] = face_world(candidates.at("right_pose_in_base_link"));
     std::array<Eigen::Isometry3d, 2> attachment_offsets;
-    Json result = {{"kind", "v3_two_front_faces_attached_cartesian_retreat"},
+    const bool side_up_back = side_up_back_wrist_rrt || side_up_back_fixed_orientation;
+    Json result = {{"kind", side_up_back_fixed_orientation ?
+        "v3_side_up_back_15cm_then_fixed_orientation_return" :
+      side_up_back_wrist_rrt ? "v3_side_up_back_15cm_then_wrist_rrt_return" :
+        "v3_two_front_faces_attached_cartesian_retreat"},
       {"success", false}, {"stage", "retreat_35cm"}, {"frames", Json::array()}};
-    for (size_t side_index = 0; side_index < 2; ++side_index) {
+    for (size_t side_index = 0; side_index < active_count; ++side_index) {
       const std::string side = side_index == 0 ? "left" : "right";
       const Eigen::Vector3d center = faces[side_index].translation() +
         .15 * faces[side_index].linear().col(2);
@@ -900,13 +966,17 @@ public:
       result["failure_reason"] = initial_collision;
       return result;
     }
-    for (int step = 0; step <= 35; ++step) {
+    const int retreat_steps = side_up_back ? 15 : 35;
+    result["stage"] = side_up_back ? "retreat_up_back_15cm" : "retreat_35cm";
+    for (int step = 0; step <= retreat_steps; ++step) {
       if (step > 0) {
         std::array<std::vector<alfa_robot::analytic_ik::V3RedundantIkSolution>, 2> solutions;
-        for (size_t side_index = 0; side_index < 2; ++side_index) {
+        for (size_t side_index = 0; side_index < active_count; ++side_index) {
           const std::string side = side_index == 0 ? "left" : "right";
           Eigen::Isometry3d target = contact_tools[side_index];
           target.translation() -= .01 * step * faces[side_index].linear().col(2);
+          if (side_up_back)
+            target.translation().z() += .01 * step;
           alfa_robot::analytic_ik::V3RedundantIkRequest request;
           request.target_in_arm_base =
             state.getGlobalLinkTransform("arm_carriage").inverse() * target;
@@ -916,16 +986,21 @@ public:
           solutions[side_index] = (side_index == 0 ? left_ : right_).solveInArmBase(request);
         }
         bool found = false;
-        std::string reason = solutions[0].empty() || solutions[1].empty() ?
+        std::string reason = solutions[0].empty() || (has_right && solutions[1].empty()) ?
           "analytic_ik_no_solution" : "joint_jump_or_collision";
+        size_t jump_rejections = 0;
+        size_t bounds_rejections = 0;
+        Json collision_rejections = Json::object();
         double minimum_cost = std::numeric_limits<double>::infinity();
         moveit::core::RobotState selected(state);
+        const std::vector<alfa_robot::analytic_ik::V3RedundantIkSolution> inactive(1);
+        const auto& right_solutions = has_right ? solutions[1] : inactive;
         for (const auto& left : solutions[0])
-          for (const auto& right : solutions[1]) {
+          for (const auto& right : right_solutions) {
             moveit::core::RobotState candidate(state);
             bool jump = false;
             double cost = 0.0;
-            for (size_t side_index = 0; side_index < 2; ++side_index) {
+            for (size_t side_index = 0; side_index < active_count; ++side_index) {
               const std::string side = side_index == 0 ? "left" : "right";
               const auto& joints = side_index == 0 ? left.joints : right.joints;
               for (int joint = 0; joint < 7; ++joint) {
@@ -936,17 +1011,50 @@ public:
                 candidate.setVariablePosition(name, joints[joint]);
               }
             }
-            if (jump || cost >= minimum_cost) continue;
+            if (jump) {
+              ++jump_rejections;
+              continue;
+            }
+            if (cost >= minimum_cost) continue;
             candidate.update(true);
             if (!candidate.satisfiesBounds()) {
+              ++bounds_rejections;
               reason = "joint_limit";
               continue;
             }
             const std::string collision = collisionReason(loaded_scene, candidate);
             if (!collision.empty()) {
+              collision_rejections[collision] = collision_rejections.value(collision, 0) + 1;
               reason = collision;
               continue;
             }
+            double edge_steps = 1.0;
+            for (size_t side_index = 0; side_index < active_count; ++side_index) {
+              const std::string side = side_index == 0 ? "left" : "right";
+              for (int joint = 1; joint <= 7; ++joint) {
+                const std::string name = side + "_joint" + std::to_string(joint);
+                edge_steps = std::max(edge_steps,
+                  std::abs(candidate.getVariablePosition(name) - state.getVariablePosition(name)) /
+                  (.5 * kPi / 180.0));
+              }
+            }
+            bool edge_clear = true;
+            for (int edge_step = 1; edge_step < static_cast<int>(std::ceil(edge_steps)); ++edge_step) {
+              moveit::core::RobotState sample(state);
+              state.interpolate(candidate,
+                static_cast<double>(edge_step) / std::ceil(edge_steps), sample);
+              sample.update(true);
+              const std::string edge_collision = collisionReason(loaded_scene, sample);
+              if (!sample.satisfiesBounds() || !edge_collision.empty()) {
+                collision_rejections[edge_collision.empty() ? "joint_limit" : edge_collision] =
+                  collision_rejections.value(
+                    edge_collision.empty() ? "joint_limit" : edge_collision, 0) + 1;
+                reason = edge_collision.empty() ? "joint_limit" : edge_collision;
+                edge_clear = false;
+                break;
+              }
+            }
+            if (!edge_clear) continue;
             minimum_cost = cost;
             selected = std::move(candidate);
             found = true;
@@ -955,6 +1063,12 @@ public:
           result["failure_stage"] = "loaded_cartesian_retreat";
           result["failure_step"] = step;
           result["failure_reason"] = reason;
+          result["failure_diagnostics"] = {
+            {"left_ik_solutions", solutions[0].size()},
+            {"right_ik_solutions", has_right ? solutions[1].size() : 0},
+            {"jump_rejections", jump_rejections},
+            {"bounds_rejections", bounds_rejections},
+            {"collision_rejections", collision_rejections}};
           break;
         }
         state = std::move(selected);
@@ -964,12 +1078,41 @@ public:
       result["frames"].push_back({{"stage", "retreat_35cm"},
         {"retreat_m", .01 * step}, {"joints", joints}});
     }
-    result["success"] = result["frames"].size() == 36;
+    result["success"] = result["frames"].size() == static_cast<size_t>(retreat_steps + 1);
+    if (result["success"].get<bool>() && loaded_joint_return) {
+      result["loaded_return"] = planLoadedJointSpaceReturn(
+        loaded_scene, state, best->at("home").get<std::string>(), active_count, 2.0);
+      result["placement_entry_bridge"] = {
+        {"kind", "not_required_exact_named_goal_in_loaded_joint_return"},
+        {"success", result["loaded_return"].at("success")},
+        {"frames", Json::array()}};
+      return result;
+    }
+    if (stop_after_extraction || !result["success"].get<bool>())
+      return result;
+    if (result["success"].get<bool>() && side_up_back_fixed_orientation) {
+      result["loaded_return"] = planFixedOrientationOnFrontFourShortcut(
+        loaded_scene, state, best->at("home").get<std::string>(), active_count);
+      result["placement_entry_bridge"] = {
+        {"kind", "not_required_fixed_orientation_endpoint"},
+        {"success", result["loaded_return"].at("success")},
+        {"frames", Json::array()}};
+      return result;
+    }
+    if (result["success"].get<bool>() && side_up_back_wrist_rrt) {
+      result["loaded_return"] = planWristRrtOnFrontFourShortcut(
+        loaded_scene, state, best->at("home").get<std::string>(), active_count);
+      result["placement_entry_bridge"] = {
+        {"kind", "not_required_exact_named_goal_in_wrist_rrt"},
+        {"success", result["loaded_return"].at("success")},
+        {"frames", Json::array()}};
+      return result;
+    }
     if (result["success"].get<bool>()) {
       moveit::core::RobotState named(home_);
       if (!named.setToDefaultValues(model_->getJointModelGroup("whole_body"),
-          "second_home"))
-        throw std::runtime_error("missing named second_home");
+          best->at("home").get<std::string>()))
+        throw std::runtime_error("missing selected named home");
       named.update(true);
       const std::array<Eigen::Isometry3d, 2> desired{
         named.getGlobalLinkTransform("left_tool0"),
@@ -983,7 +1126,7 @@ public:
         moveit::core::RobotState combined(height_state);
         Json row = {{"height_m", height}};
         bool both_solved = true;
-        for (size_t side_index = 0; side_index < 2; ++side_index) {
+        for (size_t side_index = 0; side_index < active_count; ++side_index) {
           const std::string side = side_index == 0 ? "left" : "right";
           Eigen::Isometry3d target = desired[side_index];
           target.linear() = contact_tools[side_index].linear();
@@ -1025,7 +1168,7 @@ public:
         }
         combined.update(true);
         row["joint_cost"] = row["left_joint_cost"].get<double>() +
-          row["right_joint_cost"].get<double>();
+          (has_right ? row["right_joint_cost"].get<double>() : 0.0);
         row["within_bounds"] = combined.satisfiesBounds();
         row["collision"] = collisionReason(loaded_scene, combined);
         if (row["within_bounds"].get<bool>() && row["collision"].get<std::string>().empty()) {
@@ -1057,12 +1200,14 @@ public:
         const std::array<Eigen::Matrix3d, 2> tool_rotations{
           carriage_rotation.transpose() * state.getGlobalLinkTransform("left_tool0").linear(),
           carriage_rotation.transpose() * state.getGlobalLinkTransform("right_tool0").linear()};
-        std::array<std::string, 8> axes;
-        for (size_t index = 0; index < 8; ++index)
-          axes[index] = std::string(index < 4 ? "left_joint" : "right_joint") +
-            std::to_string(index % 4 + 1);
-        auto space = std::make_shared<ob::RealVectorStateSpace>(8);
-        ob::RealVectorBounds bounds(8);
+        std::vector<std::string> axes;
+        axes.reserve(active_count * 4);
+        for (size_t side_index = 0; side_index < active_count; ++side_index)
+          for (size_t joint = 0; joint < 4; ++joint)
+            axes.push_back(std::string(side_index == 0 ? "left_joint" : "right_joint") +
+              std::to_string(joint + 1));
+        auto space = std::make_shared<ob::RealVectorStateSpace>(axes.size());
+        ob::RealVectorBounds bounds(axes.size());
         for (size_t axis = 0; axis < axes.size(); ++axis) {
           const auto& limit = model_->getVariableBounds(axes[axis]);
           bounds.setLow(axis, limit.min_position_);
@@ -1086,7 +1231,7 @@ public:
         const auto lift = [&](const ob::State* value) -> std::shared_ptr<moveit::core::RobotState> {
           const auto* q = value->as<ob::RealVectorStateSpace::StateType>()->values;
           Key key{};
-          for (size_t axis = 0; axis < key.size(); ++axis)
+          for (size_t axis = 0; axis < axes.size(); ++axis)
             key[axis] = std::llround(q[axis] * 1e9);
           const auto cached = cache.find(key);
           if (cached != cache.end()) return cached->second;
@@ -1097,7 +1242,7 @@ public:
           if (!robot->satisfiesBounds())
             return cache.emplace(key, nullptr).first->second;
           std::array<std::vector<alfa_robot::analytic_ik::V3WristOrientationSolution>, 2> wrist;
-          for (size_t side_index = 0; side_index < 2; ++side_index) {
+          for (size_t side_index = 0; side_index < active_count; ++side_index) {
             const std::string side = side_index == 0 ? "left" : "right";
             std::array<double, 4> prefix{};
             std::array<double, 3> seed{};
@@ -1118,17 +1263,19 @@ public:
             wrist[side_index] = (side_index == 0 ? left_ : right_).solveWristOrientation(
               prefix, tool_rotations[side_index], seed);
           }
-          if (wrist[0].empty() || wrist[1].empty()) {
+          if (wrist[0].empty() || (has_right && wrist[1].empty())) {
             ++wrist_rejections;
             return cache.emplace(key, nullptr).first->second;
           }
           double best_cost = std::numeric_limits<double>::infinity();
           std::shared_ptr<moveit::core::RobotState> selected;
+          const std::vector<alfa_robot::analytic_ik::V3WristOrientationSolution> inactive_wrist(1);
+          const auto& right_wrists = has_right ? wrist[1] : inactive_wrist;
           for (const auto& left_wrist : wrist[0])
-            for (const auto& right_wrist : wrist[1]) {
+            for (const auto& right_wrist : right_wrists) {
               auto candidate = std::make_shared<moveit::core::RobotState>(*robot);
               double cost = 0.0;
-              for (size_t side_index = 0; side_index < 2; ++side_index) {
+              for (size_t side_index = 0; side_index < active_count; ++side_index) {
                 const std::string side = side_index == 0 ? "left" : "right";
                 const auto& solution = side_index == 0 ? left_wrist : right_wrist;
                 for (int joint = 0; joint < 3; ++joint) {
@@ -1230,7 +1377,7 @@ public:
         transfer["jump_rejections"] = jump_rejections;
       }
       result["loaded_return"] = std::move(transfer);
-      Json bridge = {{"kind", "v3_loaded_return_to_named_second_home_bridge"},
+        Json bridge = {{"kind", "v3_loaded_return_to_selected_named_home_bridge"},
         {"success", false}, {"frames", Json::array()}};
       if (result["loaded_return"].at("success").get<bool>()) {
         moveit::core::RobotState from(state);
@@ -1239,8 +1386,9 @@ public:
           from.setVariablePosition(names_[axis], last.at(axis).get<double>());
         from.update(true);
         moveit::core::RobotState to(from);
-        if (!to.setToDefaultValues(model_->getJointModelGroup("whole_body"), "second_home"))
-          throw std::runtime_error("missing named second_home for loaded bridge");
+        if (!to.setToDefaultValues(model_->getJointModelGroup("whole_body"),
+            best->at("home").get<std::string>()))
+          throw std::runtime_error("missing selected named home for loaded bridge");
         to.update(true);
         bridge["goal_collision"] = collisionReason(loaded_scene, to);
         double max_steps = 0.0;
@@ -1269,11 +1417,14 @@ public:
           bridge["frames"].push_back({{"stage", "loaded_bridge"}, {"joints", joints}});
         }
         bridge["success"] = bridge["frames"].size() == static_cast<size_t>(steps + 1);
-        bridge["maximum_orientation_change_deg"] = std::max(
+        double maximum_orientation_change =
           Eigen::AngleAxisd(from.getGlobalLinkTransform("left_tool0").linear().transpose() *
-            to.getGlobalLinkTransform("left_tool0").linear()).angle(),
-          Eigen::AngleAxisd(from.getGlobalLinkTransform("right_tool0").linear().transpose() *
-            to.getGlobalLinkTransform("right_tool0").linear()).angle()) * 180.0 / kPi;
+            to.getGlobalLinkTransform("left_tool0").linear()).angle();
+        if (has_right)
+          maximum_orientation_change = std::max(maximum_orientation_change,
+            Eigen::AngleAxisd(from.getGlobalLinkTransform("right_tool0").linear().transpose() *
+              to.getGlobalLinkTransform("right_tool0").linear()).angle());
+        bridge["maximum_orientation_change_deg"] = maximum_orientation_change * 180.0 / kPi;
       }
       result["placement_entry_bridge"] = std::move(bridge);
       if (result["placement_entry_bridge"].at("success").get<bool>()) {
@@ -1599,6 +1750,443 @@ public:
         }
       }
     }
+    return result;
+  }
+
+  Json planLoadedJointSpaceReturn(const planning_scene::PlanningScenePtr& loaded_scene,
+    const moveit::core::RobotState& extracted, const std::string& named_home,
+    size_t active_count, double budget_s)
+  {
+    moveit::core::RobotState goal(extracted);
+    moveit::core::RobotState named(home_);
+    if (!named.setToDefaultValues(model_->getJointModelGroup("whole_body"), named_home))
+      throw std::runtime_error("missing selected named home for loaded joint return");
+    named.update(true);
+    std::vector<std::string> axes;
+    axes.reserve(active_count * 7 + 1);
+    for (size_t side_index = 0; side_index < active_count; ++side_index) {
+      const std::string side = side_index == 0 ? "left" : "right";
+      for (size_t joint = 1; joint <= 7; ++joint)
+        axes.push_back(side + "_joint" + std::to_string(joint));
+    }
+    axes.push_back("updown");
+    for (const auto& axis : axes)
+      goal.setVariablePosition(axis, named.getVariablePosition(axis));
+    goal.update(true);
+    Json result = {{"kind", "v3_loaded_joint_space_shortcut_rrt_return"},
+      {"success", false}, {"frames", Json::array()}, {"budget_s", budget_s},
+      {"active_arms", active_count}, {"searched_dimensions", axes.size()},
+      {"start_collision", collisionReason(loaded_scene, extracted)},
+      {"goal_collision", collisionReason(loaded_scene, goal)}};
+    if (!extracted.satisfiesBounds() || !goal.satisfiesBounds() ||
+        !result["start_collision"].get<std::string>().empty() ||
+        !result["goal_collision"].get<std::string>().empty()) {
+      result["failure_stage"] = "invalid_endpoint";
+      return result;
+    }
+    auto space = std::make_shared<ob::RealVectorStateSpace>(axes.size());
+    ob::RealVectorBounds bounds(axes.size());
+    for (size_t axis = 0; axis < axes.size(); ++axis) {
+      const auto& limit = model_->getVariableBounds(axes[axis]);
+      bounds.setLow(axis, limit.min_position_);
+      bounds.setHigh(axis, limit.max_position_);
+    }
+    space->setBounds(bounds);
+    og::SimpleSetup setup(space);
+    size_t collision_checks = 0;
+    const auto to_robot = [&](const ob::State* value) {
+      moveit::core::RobotState robot(extracted);
+      const auto* joints = value->as<ob::RealVectorStateSpace::StateType>()->values;
+      for (size_t axis = 0; axis < axes.size(); ++axis)
+        robot.setVariablePosition(axes[axis], joints[axis]);
+      robot.update(true);
+      return robot;
+    };
+    setup.setStateValidityChecker([&](const ob::State* value) {
+      auto robot = to_robot(value);
+      ++collision_checks;
+      return robot.satisfiesBounds() && !loaded_scene->isStateColliding(robot);
+    });
+    setup.getSpaceInformation()->setStateValidityCheckingResolution(.0002);
+    ob::ScopedState<> from(space), to(space);
+    for (size_t axis = 0; axis < axes.size(); ++axis) {
+      from[axis] = extracted.getVariablePosition(axes[axis]);
+      to[axis] = goal.getVariablePosition(axes[axis]);
+    }
+    setup.setStartAndGoalStates(from, to, 1e-9);
+    setup.setup();
+    const auto started = std::chrono::steady_clock::now();
+    result["shortcut_valid"] = setup.getSpaceInformation()->checkMotion(from.get(), to.get());
+    result["shortcut_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    if (!result["shortcut_valid"].get<bool>()) {
+      ompl::RNG::setSeed(20260921U);
+      auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
+      planner->setRange(.25);
+      setup.setPlanner(planner);
+      const auto deadline = started + std::chrono::duration<double>(budget_s);
+      const ob::PlannerTerminationCondition stop([&]() {
+        return std::chrono::steady_clock::now() >= deadline;
+      });
+      const auto rrt_started = std::chrono::steady_clock::now();
+      result["rrt_exact"] = setup.solve(stop) == ob::PlannerStatus::EXACT_SOLUTION;
+      result["rrt_ms"] = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - rrt_started).count();
+    } else {
+      result["rrt_exact"] = true;
+      result["rrt_ms"] = 0.0;
+    }
+    if (!result["rrt_exact"].get<bool>()) {
+      result["failure_stage"] = "rrt_timeout_or_no_path";
+      result["collision_checks"] = collision_checks;
+      result["wall_ms"] = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return result;
+    }
+    const auto* path = result["shortcut_valid"].get<bool>() ? nullptr : &setup.getSolutionPath();
+    const size_t segments = path ? path->getStateCount() - 1 : 1;
+    bool valid = true;
+    for (size_t segment = 0; segment < segments && valid; ++segment) {
+      const auto* first = path ? path->getState(segment) : from.get();
+      const auto* last = path ? path->getState(segment + 1) : to.get();
+      const auto* qa = first->as<ob::RealVectorStateSpace::StateType>()->values;
+      const auto* qb = last->as<ob::RealVectorStateSpace::StateType>()->values;
+      double maximum_steps = 0.0;
+      for (size_t axis = 0; axis < axes.size(); ++axis)
+        maximum_steps = std::max(maximum_steps, std::abs(qb[axis] - qa[axis]) /
+          (axes[axis] == "updown" ? .005 : .5 * kPi / 180.0));
+      const int steps = std::max(1, static_cast<int>(std::ceil(maximum_steps)));
+      auto* sample = space->allocState();
+      for (int step = segment == 0 ? 0 : 1; step <= steps; ++step) {
+        space->interpolate(first, last, static_cast<double>(step) / steps, sample);
+        auto robot = to_robot(sample);
+        ++collision_checks;
+        const std::string collision = collisionReason(loaded_scene, robot);
+        if (!robot.satisfiesBounds() || !collision.empty()) {
+          valid = false;
+          result["failure_stage"] = "post_validation";
+          result["failure_reason"] = collision.empty() ? "joint_limit" : collision;
+          break;
+        }
+        Json joints = Json::array();
+        for (const auto& name : names_) joints.push_back(robot.getVariablePosition(name));
+        result["frames"].push_back({{"stage", "loaded_joint_return"}, {"joints", joints}});
+      }
+      space->freeState(sample);
+    }
+    result["success"] = valid;
+    result["collision_checks"] = collision_checks;
+    result["wall_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    return result;
+  }
+
+  Json planFixedOrientationOnFrontFourShortcut(
+    const planning_scene::PlanningScenePtr& loaded_scene,
+    const moveit::core::RobotState& extracted, const std::string& named_home,
+    size_t active_count)
+  {
+    moveit::core::RobotState named(extracted);
+    if (!named.setToDefaultValues(model_->getJointModelGroup("whole_body"), named_home))
+      throw std::runtime_error("missing selected named home for fixed-orientation return");
+    named.update(true);
+    const Eigen::Matrix3d carriage_rotation =
+      extracted.getGlobalLinkTransform("arm_carriage").linear();
+    std::array<Eigen::Matrix3d, 2> target_rotations{
+      carriage_rotation.transpose() * extracted.getGlobalLinkTransform("left_tool0").linear(),
+      carriage_rotation.transpose() * extracted.getGlobalLinkTransform("right_tool0").linear()};
+    double maximum_steps = std::abs(named.getVariablePosition("updown") -
+      extracted.getVariablePosition("updown")) / .005;
+    for (size_t side_index = 0; side_index < active_count; ++side_index) {
+      const std::string side = side_index == 0 ? "left" : "right";
+      for (size_t joint = 0; joint < 4; ++joint) {
+        const std::string name = side + "_joint" + std::to_string(joint + 1);
+        maximum_steps = std::max(maximum_steps,
+          std::abs(named.getVariablePosition(name) - extracted.getVariablePosition(name)) /
+          (.5 * kPi / 180.0));
+      }
+    }
+    const int steps = std::max(1, static_cast<int>(std::ceil(maximum_steps)));
+    moveit::core::RobotState previous(extracted);
+    Json result = {{"kind", "v3_front4_shortcut_fixed_tool_orientation"},
+      {"success", false}, {"frames", Json::array()}, {"steps", steps},
+      {"active_arms", active_count}};
+    const auto started = std::chrono::steady_clock::now();
+    size_t collision_checks = 0;
+    for (int step = 0; step <= steps; ++step) {
+      const double progress = static_cast<double>(step) / steps;
+      moveit::core::RobotState prefix(previous);
+      prefix.setVariablePosition("updown",
+        extracted.getVariablePosition("updown") * (1.0 - progress) +
+        named.getVariablePosition("updown") * progress);
+      std::array<std::vector<alfa_robot::analytic_ik::V3WristOrientationSolution>, 2> wrists;
+      for (size_t side_index = 0; side_index < active_count; ++side_index) {
+        const std::string side = side_index == 0 ? "left" : "right";
+        std::array<double, 4> first_four{};
+        std::array<double, 3> seed{};
+        for (size_t joint = 0; joint < 4; ++joint) {
+          const std::string name = side + "_joint" + std::to_string(joint + 1);
+          first_four[joint] = extracted.getVariablePosition(name) * (1.0 - progress) +
+            named.getVariablePosition(name) * progress;
+          prefix.setVariablePosition(name, first_four[joint]);
+        }
+        for (size_t joint = 0; joint < 3; ++joint)
+          seed[joint] = previous.getVariablePosition(
+            side + "_joint" + std::to_string(joint + 5));
+        wrists[side_index] = (side_index == 0 ? left_ : right_).solveWristOrientation(
+          first_four, target_rotations[side_index], seed);
+      }
+      if (wrists[0].empty() || (active_count == 2 && wrists[1].empty())) {
+        result["failure_stage"] = "wrist_orientation_no_solution";
+        result["failure_step"] = step;
+        break;
+      }
+      const std::vector<alfa_robot::analytic_ik::V3WristOrientationSolution> inactive(1);
+      const auto& right_wrists = active_count == 2 ? wrists[1] : inactive;
+      double best_cost = std::numeric_limits<double>::infinity();
+      std::string failure_reason = "joint_jump_or_collision";
+      moveit::core::RobotState selected(previous);
+      bool found = false;
+      for (const auto& left_wrist : wrists[0])
+        for (const auto& right_wrist : right_wrists) {
+          moveit::core::RobotState candidate(prefix);
+          bool jump = false;
+          double cost = 0.0;
+          for (size_t side_index = 0; side_index < active_count; ++side_index) {
+            const std::string side = side_index == 0 ? "left" : "right";
+            const auto& solution = side_index == 0 ? left_wrist : right_wrist;
+            for (size_t joint = 0; joint < 3; ++joint) {
+              const std::string name = side + "_joint" + std::to_string(joint + 5);
+              const double delta = solution.wrist[joint] - previous.getVariablePosition(name);
+              jump |= std::abs(delta) > 10.0 * kPi / 180.0;
+              cost += delta * delta;
+              candidate.setVariablePosition(name, solution.wrist[joint]);
+            }
+          }
+          if (jump || cost >= best_cost) continue;
+          candidate.update(true);
+          if (!candidate.satisfiesBounds()) {
+            failure_reason = "joint_limit";
+            continue;
+          }
+          ++collision_checks;
+          const std::string collision = collisionReason(loaded_scene, candidate);
+          if (!collision.empty()) {
+            failure_reason = collision;
+            continue;
+          }
+          best_cost = cost;
+          selected = std::move(candidate);
+          found = true;
+        }
+      if (!found) {
+        result["failure_stage"] = "fixed_orientation_path";
+        result["failure_step"] = step;
+        result["failure_reason"] = failure_reason;
+        break;
+      }
+      previous = std::move(selected);
+      Json joints = Json::array();
+      for (const auto& name : names_) joints.push_back(previous.getVariablePosition(name));
+      result["frames"].push_back({{"stage", "front4_shortcut_fixed_orientation"},
+        {"progress", progress}, {"joints", joints}});
+    }
+    result["success"] = result["frames"].size() == static_cast<size_t>(steps + 1);
+    result["collision_checks"] = collision_checks;
+    result["wall_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    return result;
+  }
+
+  Json planWristRrtOnFrontFourShortcut(const planning_scene::PlanningScenePtr& loaded_scene,
+    const moveit::core::RobotState& extracted, const std::string& named_home,
+    size_t active_count)
+  {
+    struct Node
+    {
+      double progress{0.0};
+      std::array<double, 6> wrist{};
+      size_t parent{0};
+    };
+    moveit::core::RobotState goal(extracted);
+    if (!goal.setToDefaultValues(model_->getJointModelGroup("whole_body"), named_home))
+      throw std::runtime_error("missing selected named home for wrist RRT");
+    goal.update(true);
+    const size_t wrist_dimensions = active_count * 3;
+    Node start;
+    Node target;
+    target.progress = 1.0;
+    for (size_t side_index = 0; side_index < active_count; ++side_index) {
+      const std::string side = side_index == 0 ? "left" : "right";
+      for (size_t joint = 0; joint < 3; ++joint) {
+        const std::string name = side + "_joint" + std::to_string(joint + 5);
+        start.wrist[side_index * 3 + joint] = extracted.getVariablePosition(name);
+        target.wrist[side_index * 3 + joint] = goal.getVariablePosition(name);
+      }
+    }
+    size_t collision_checks = 0;
+    size_t edge_checks = 0;
+    const auto lift = [&](const Node& node) {
+      auto state = std::make_shared<moveit::core::RobotState>(extracted);
+      for (size_t side_index = 0; side_index < active_count; ++side_index) {
+        const std::string side = side_index == 0 ? "left" : "right";
+        for (size_t joint = 0; joint < 4; ++joint) {
+          const std::string name = side + "_joint" + std::to_string(joint + 1);
+          state->setVariablePosition(name,
+            extracted.getVariablePosition(name) * (1.0 - node.progress) +
+            goal.getVariablePosition(name) * node.progress);
+        }
+        for (size_t joint = 0; joint < 3; ++joint)
+          state->setVariablePosition(side + "_joint" + std::to_string(joint + 5),
+            node.wrist[side_index * 3 + joint]);
+      }
+      state->setVariablePosition("updown",
+        extracted.getVariablePosition("updown") * (1.0 - node.progress) +
+        goal.getVariablePosition("updown") * node.progress);
+      state->update(true);
+      ++collision_checks;
+      if (!state->satisfiesBounds() || loaded_scene->isStateColliding(*state))
+        return std::shared_ptr<moveit::core::RobotState>{};
+      return state;
+    };
+    const auto edge_valid = [&](const Node& from, const Node& to) {
+      ++edge_checks;
+      double steps = std::abs(to.progress - from.progress) / .01;
+      for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+        steps = std::max(steps, std::abs(to.wrist[axis] - from.wrist[axis]) /
+          (.5 * kPi / 180.0));
+      const int count = std::max(1, static_cast<int>(std::ceil(steps)));
+      for (int step = 1; step <= count; ++step) {
+        const double fraction = static_cast<double>(step) / count;
+        Node sample;
+        sample.progress = from.progress * (1.0 - fraction) + to.progress * fraction;
+        for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+          sample.wrist[axis] = from.wrist[axis] * (1.0 - fraction) +
+            to.wrist[axis] * fraction;
+        if (!lift(sample)) return false;
+      }
+      return true;
+    };
+    Json result = {{"kind", "v3_front4_shortcut_dynamic_wrist_rrt"},
+      {"success", false}, {"frames", Json::array()}, {"budget_s", 2.0},
+      {"active_arms", active_count}};
+    const auto start_state = lift(start);
+    const auto goal_state = lift(target);
+    result["start_valid"] = static_cast<bool>(start_state);
+    result["goal_valid"] = static_cast<bool>(goal_state);
+    if (!start_state || !goal_state) {
+      result["failure_stage"] = "invalid_endpoint";
+      return result;
+    }
+    std::vector<Node> nodes{start};
+    size_t goal_index = std::numeric_limits<size_t>::max();
+    const auto started = std::chrono::steady_clock::now();
+    if (edge_valid(start, target)) {
+      target.parent = 0;
+      nodes.push_back(target);
+      goal_index = 1;
+      result["shortcut_valid"] = true;
+    } else {
+      result["shortcut_valid"] = false;
+      std::mt19937 generator(20260921U + static_cast<unsigned>(active_count));
+      std::uniform_real_distribution<double> unit(0.0, 1.0);
+      std::array<std::uniform_real_distribution<double>, 6> wrist_distribution;
+      for (size_t side_index = 0; side_index < active_count; ++side_index)
+        for (size_t joint = 0; joint < 3; ++joint) {
+          const std::string side = side_index == 0 ? "left" : "right";
+          const auto& limit = model_->getVariableBounds(
+            side + "_joint" + std::to_string(joint + 5));
+          wrist_distribution[side_index * 3 + joint] =
+            std::uniform_real_distribution<double>(limit.min_position_, limit.max_position_);
+        }
+      size_t iterations = 0;
+      while (std::chrono::steady_clock::now() - started < std::chrono::seconds(2)) {
+        ++iterations;
+        Node sample;
+        const bool goal_bias = unit(generator) < .25;
+        sample.progress = goal_bias ? 1.0 : unit(generator);
+        for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+          sample.wrist[axis] = goal_bias ? target.wrist[axis] : wrist_distribution[axis](generator);
+        size_t nearest = std::numeric_limits<size_t>::max();
+        double nearest_distance = std::numeric_limits<double>::infinity();
+        for (size_t index = 0; index < nodes.size(); ++index) {
+          if (nodes[index].progress >= sample.progress - 1e-6) continue;
+          double distance = 9.0 * std::pow(sample.progress - nodes[index].progress, 2);
+          for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+            distance += std::pow(sample.wrist[axis] - nodes[index].wrist[axis], 2);
+          if (distance < nearest_distance) {
+            nearest_distance = distance;
+            nearest = index;
+          }
+        }
+        if (nearest == std::numeric_limits<size_t>::max()) continue;
+        Node next = nodes[nearest];
+        const double progress_step = std::min(.05, sample.progress - next.progress);
+        if (progress_step <= 1e-6) continue;
+        const double ratio = progress_step / (sample.progress - next.progress);
+        next.progress += progress_step;
+        double maximum_wrist_delta = 0.0;
+        for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+          maximum_wrist_delta = std::max(maximum_wrist_delta,
+            std::abs(sample.wrist[axis] - nodes[nearest].wrist[axis]) * ratio);
+        const double wrist_scale = maximum_wrist_delta > 8.0 * kPi / 180.0 ?
+          8.0 * kPi / 180.0 / maximum_wrist_delta : 1.0;
+        for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+          next.wrist[axis] = nodes[nearest].wrist[axis] +
+            (sample.wrist[axis] - nodes[nearest].wrist[axis]) * ratio * wrist_scale;
+        next.parent = nearest;
+        if (!edge_valid(nodes[nearest], next)) continue;
+        nodes.push_back(next);
+        const size_t new_index = nodes.size() - 1;
+        if (next.progress >= .80 && edge_valid(next, target)) {
+          target.parent = new_index;
+          nodes.push_back(target);
+          goal_index = nodes.size() - 1;
+          break;
+        }
+      }
+      result["iterations"] = iterations;
+    }
+    if (goal_index == std::numeric_limits<size_t>::max()) {
+      result["failure_stage"] = "wrist_rrt_timeout_or_no_path";
+    } else {
+      std::vector<Node> path;
+      for (size_t index = goal_index;; index = nodes[index].parent) {
+        path.push_back(nodes[index]);
+        if (index == 0) break;
+      }
+      std::reverse(path.begin(), path.end());
+      for (size_t segment = 0; segment + 1 < path.size(); ++segment) {
+        const Node& from = path[segment];
+        const Node& to = path[segment + 1];
+        double steps = std::abs(to.progress - from.progress) / .005;
+        for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+          steps = std::max(steps, std::abs(to.wrist[axis] - from.wrist[axis]) /
+            (.5 * kPi / 180.0));
+        const int count = std::max(1, static_cast<int>(std::ceil(steps)));
+        for (int step = segment == 0 ? 0 : 1; step <= count; ++step) {
+          const double fraction = static_cast<double>(step) / count;
+          Node sample;
+          sample.progress = from.progress * (1.0 - fraction) + to.progress * fraction;
+          for (size_t axis = 0; axis < wrist_dimensions; ++axis)
+            sample.wrist[axis] = from.wrist[axis] * (1.0 - fraction) +
+              to.wrist[axis] * fraction;
+          const auto state = lift(sample);
+          if (!state) throw std::runtime_error("validated wrist RRT path changed");
+          Json joints = Json::array();
+          for (const auto& name : names_) joints.push_back(state->getVariablePosition(name));
+          result["frames"].push_back({{"stage", "front4_shortcut_wrist_rrt"},
+            {"progress", sample.progress}, {"joints", joints}});
+        }
+      }
+      result["success"] = true;
+      result["raw_nodes"] = path.size();
+    }
+    result["tree_nodes"] = nodes.size();
+    result["collision_checks"] = collision_checks;
+    result["edge_checks"] = edge_checks;
+    result["wall_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
     return result;
   }
 
@@ -2416,7 +3004,8 @@ public:
     setup.getSpaceInformation()->setMotionValidator(
       std::make_shared<WristEdgeValidator>(setup.getSpaceInformation(), lift, scene_,
         checked_edges, jump_rejections, bridge_checks, bridge_successes,
-        coarse_rejections, near_refinements, bridge_collision_ms, clearance_ms));
+        coarse_rejections, near_refinements, bridge_collision_ms, clearance_ms,
+        .01, !plan_updown));
     ob::ScopedState<> start(space);
     ob::ScopedState<> goal(space);
     for (size_t axis = 0; axis < 4; ++axis) {
@@ -2546,6 +3135,7 @@ public:
       const size_t segments = path ? path->getStateCount() - 1 : 1;
       size_t before_validation = fcl_checks;
       bool valid = true;
+      double previous_phase = 0.0;
       for (size_t segment = 0; segment < segments && valid; ++segment) {
         const auto* from = path ? path->getState(segment) : start.get();
         const auto* to = path ? path->getState(segment + 1) : goal.get();
@@ -2568,6 +3158,13 @@ public:
             result["failure_stage"] = "post_validation_invalid_state";
             break;
           }
+          const double phase = plan_updown ?
+            probe->as<ob::RealVectorStateSpace::StateType>()->values[4] : 0.0;
+          if (plan_updown && phase < previous_phase - 1e-6) {
+            valid = false;
+            result["failure_stage"] = "orientation_progress_reversed";
+            break;
+          }
           if (!result["frames"].empty()) {
             const Json previous = result["frames"].back()["joints"];
             bool wrist_jump = false;
@@ -2577,6 +3174,11 @@ public:
                 wrist_jump = true;
               }
             if (wrist_jump) {
+              if (plan_updown) {
+                valid = false;
+                result["failure_stage"] = "wrist_branch_jump";
+                break;
+              }
               moveit::core::RobotState from(*state);
               for (size_t index = 0; index < 14; ++index)
                 from.setVariablePosition(names_[index], previous[index].get<double>());
@@ -2613,9 +3215,11 @@ public:
           std::vector<double> joints;
           for (const auto& name : names_) joints.push_back(state->getVariablePosition(name));
           result["frames"].push_back({{"joints", joints},
+            {"orientation_progress", phase},
             {"left_tcp_position", {state->getGlobalLinkTransform("left_tool0").translation().x(),
               state->getGlobalLinkTransform("left_tool0").translation().y(),
               state->getGlobalLinkTransform("left_tool0").translation().z()}}});
+          previous_phase = phase;
         }
         space->freeState(probe);
       }
@@ -2923,6 +3527,462 @@ public:
     return result;
   }
 
+  Json planMonotoneHomeTransition()
+  {
+    constexpr int resolution = 5;
+    constexpr int side = resolution + 1;
+    constexpr int node_count = side * side * side * side;
+    const std::array<int, 4> moving_joints{1, 2, 5, 6};
+    const auto* whole = model_->getJointModelGroup("whole_body");
+    moveit::core::RobotState start(home_), goal(home_);
+    if (!whole || !start.setToDefaultValues(whole, "home") ||
+        !goal.setToDefaultValues(whole, "second_home"))
+      throw std::runtime_error("missing V3 home or second_home");
+    start.update(true);
+    goal.update(true);
+    const auto encode = [](const std::array<int, 4>& progress) {
+      return ((progress[0] * side + progress[1]) * side + progress[2]) * side + progress[3];
+    };
+    const auto decode = [](int index) {
+      std::array<int, 4> progress{};
+      for (int axis = 3; axis >= 0; --axis) {
+        progress[axis] = index % side;
+        index /= side;
+      }
+      return progress;
+    };
+    const auto stateAt = [&](const std::array<double, 4>& progress) {
+      moveit::core::RobotState state(start);
+      double lift_progress = 1.0;
+      for (size_t axis = 0; axis < moving_joints.size(); ++axis) {
+        const std::string left = "left_joint" + std::to_string(moving_joints[axis]);
+        const std::string right = "right_joint" + std::to_string(moving_joints[axis]);
+        const double value = start.getVariablePosition(left) + progress[axis] *
+          (goal.getVariablePosition(left) - start.getVariablePosition(left));
+        state.setVariablePosition(left, value);
+        state.setVariablePosition(right, -value);
+        lift_progress = std::min(lift_progress, progress[axis]);
+      }
+      const double smooth = lift_progress * lift_progress * (3.0 - 2.0 * lift_progress);
+      state.setVariablePosition("updown", start.getVariablePosition("updown") +
+        smooth * (goal.getVariablePosition("updown") - start.getVariablePosition("updown")));
+      state.update(true);
+      return state;
+    };
+    const auto continuous = [&](const std::array<int, 4>& lattice) {
+      std::array<double, 4> progress{};
+      for (size_t axis = 0; axis < progress.size(); ++axis)
+        progress[axis] = static_cast<double>(lattice[axis]) / resolution;
+      return progress;
+    };
+    const auto started = std::chrono::steady_clock::now();
+    Json output = {{"kind", "v3_home_transition_monotone_j1256"},
+      {"success", false}, {"frames", Json::array()},
+      {"search_joints", {"left_joint1", "left_joint2", "left_joint5", "left_joint6"}},
+      {"fixed_joints", {"left_joint3", "left_joint4", "left_joint7",
+        "right_joint3", "right_joint4", "right_joint7"}},
+      {"progress_bins_per_joint", resolution}, {"search_edge_step_deg", 3.0},
+      {"post_validation_step_deg", 0.5}, {"updown_edge_step_m", 0.005},
+      {"visited_nodes", 0}, {"collision_checks", 0},
+      {"start_collision", collisionReason(scene_, start)},
+      {"goal_collision", collisionReason(scene_, goal)}};
+    if (!start.satisfiesBounds() || !goal.satisfiesBounds() ||
+        !output["start_collision"].get<std::string>().empty() ||
+        !output["goal_collision"].get<std::string>().empty()) {
+      output["failure_stage"] = "invalid_endpoint";
+      return output;
+    }
+    size_t checks = 0;
+    const auto validState = [&](const moveit::core::RobotState& state) {
+      ++checks;
+      return state.satisfiesBounds() && !scene_->isStateColliding(state);
+    };
+    const auto edgeClear = [&](const std::array<double, 4>& first,
+        const std::array<double, 4>& last, double angular_step_deg) {
+      const auto from = stateAt(first);
+      const auto to = stateAt(last);
+      double steps_required = std::abs(to.getVariablePosition("updown") -
+        from.getVariablePosition("updown")) / .005;
+      for (const int joint : moving_joints) {
+        const std::string name = "left_joint" + std::to_string(joint);
+        steps_required = std::max(steps_required,
+          std::abs(to.getVariablePosition(name) - from.getVariablePosition(name)) /
+          (angular_step_deg * kPi / 180.0));
+      }
+      const int steps = std::max(1, static_cast<int>(std::ceil(steps_required)));
+      for (int sample = 1; sample <= steps; ++sample) {
+        const double fraction = static_cast<double>(sample) / steps;
+        std::array<double, 4> progress{};
+        for (size_t axis = 0; axis < progress.size(); ++axis)
+          progress[axis] = first[axis] * (1.0 - fraction) + last[axis] * fraction;
+        if (!validState(stateAt(progress))) return false;
+      }
+      return true;
+    };
+    std::vector<int> parent(node_count, -1);
+    std::vector<int8_t> node_validity(node_count, -1);
+    using QueueItem = std::tuple<int, int, int>;
+    std::priority_queue<QueueItem, std::vector<QueueItem>, std::greater<>> frontier;
+    parent[0] = 0;
+    frontier.emplace(4 * resolution, 0, 0);
+    int visited = 0;
+    int best_progress = 0;
+    while (!frontier.empty() && parent[node_count - 1] == -1) {
+      if (std::chrono::steady_clock::now() - started > std::chrono::seconds(30)) {
+        output["failure_stage"] = "search_timeout";
+        break;
+      }
+      const int current = std::get<2>(frontier.top());
+      frontier.pop();
+      ++visited;
+      const auto progress = decode(current);
+      const int depth = progress[0] + progress[1] + progress[2] + progress[3];
+      best_progress = std::max(best_progress, depth);
+      for (size_t axis = 0; axis < moving_joints.size(); ++axis) {
+        if (progress[axis] == resolution) continue;
+        auto next = progress;
+        ++next[axis];
+        const int next_index = encode(next);
+        if (parent[next_index] != -1) continue;
+        if (node_validity[next_index] == -1)
+          node_validity[next_index] = validState(stateAt(continuous(next))) ? 1 : 0;
+        if (node_validity[next_index] == 0 ||
+            !edgeClear(continuous(progress), continuous(next), 3.0)) continue;
+        parent[next_index] = current;
+        const int remaining = 4 * resolution - depth - 1;
+        frontier.emplace(depth + 1 + remaining, -(depth + 1), next_index);
+      }
+    }
+    output["visited_nodes"] = visited;
+    output["best_progress"] = best_progress;
+    if (parent[node_count - 1] == -1) {
+      auto space = std::make_shared<ob::RealVectorStateSpace>(4);
+      ob::RealVectorBounds bounds(4);
+      bounds.setLow(0.0);
+      bounds.setHigh(1.0);
+      space->setBounds(bounds);
+      og::SimpleSetup setup(space);
+      setup.setStateValidityChecker([&](const ob::State* value) {
+        const auto* raw = value->as<ob::RealVectorStateSpace::StateType>()->values;
+        return validState(stateAt({raw[0], raw[1], raw[2], raw[3]}));
+      });
+      setup.getSpaceInformation()->setStateValidityCheckingResolution(.0075);
+      ob::ScopedState<> from(space), to(space);
+      for (size_t axis = 0; axis < 4; ++axis) {
+        from[axis] = 0.0;
+        to[axis] = 1.0;
+      }
+      setup.setStartAndGoalStates(from, to, 1e-9);
+      ompl::RNG::setSeed(1);
+      auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
+      planner->setRange(.20);
+      setup.setPlanner(planner);
+      setup.setup();
+      output.erase("failure_stage");
+      output["fallback"] = "four_dimensional_rrt_connect";
+      output["rrt_exact"] = setup.solve(30.0) == ob::PlannerStatus::EXACT_SOLUTION;
+      if (output["rrt_exact"].get<bool>()) {
+        setup.simplifySolution(5.0);
+        const auto& path = setup.getSolutionPath();
+        bool valid = true;
+        for (size_t segment = 0; segment + 1 < path.getStateCount() && valid; ++segment) {
+          const auto* first = path.getState(segment)->as<ob::RealVectorStateSpace::StateType>()->values;
+          const auto* last = path.getState(segment + 1)->as<ob::RealVectorStateSpace::StateType>()->values;
+          std::array<double, 4> start_progress{first[0], first[1], first[2], first[3]};
+          std::array<double, 4> goal_progress{last[0], last[1], last[2], last[3]};
+          if (!edgeClear(start_progress, goal_progress, .5)) {
+            valid = false;
+            output["failure_stage"] = "rrt_post_validation_collision";
+            break;
+          }
+          const auto first_state = stateAt(start_progress);
+          const auto last_state = stateAt(goal_progress);
+          double required = std::abs(last_state.getVariablePosition("updown") -
+            first_state.getVariablePosition("updown")) / .005;
+          for (const int joint : moving_joints) {
+            const std::string name = "left_joint" + std::to_string(joint);
+            required = std::max(required,
+              std::abs(last_state.getVariablePosition(name) - first_state.getVariablePosition(name)) /
+              (.5 * kPi / 180.0));
+          }
+          const int steps = std::max(1, static_cast<int>(std::ceil(required)));
+          for (int sample = segment == 0 ? 0 : 1; sample <= steps; ++sample) {
+            const double fraction = static_cast<double>(sample) / steps;
+            std::array<double, 4> progress{};
+            for (size_t axis = 0; axis < progress.size(); ++axis)
+              progress[axis] = start_progress[axis] * (1.0 - fraction) +
+                goal_progress[axis] * fraction;
+            const auto state = stateAt(progress);
+            Json joints = Json::array();
+            for (const auto& name : names_) joints.push_back(state.getVariablePosition(name));
+            output["frames"].push_back({{"stage", "rrt_home_transition"},
+              {"progress", progress}, {"joints", joints}});
+          }
+        }
+        output["success"] = valid;
+        output["rrt_waypoint_count"] = path.getStateCount();
+      } else {
+        output["failure_stage"] = "rrt_timeout_or_no_path";
+      }
+      output["collision_checks"] = checks;
+      output["wall_ms"] = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return output;
+    }
+    std::vector<int> lattice{node_count - 1};
+    while (lattice.back() != 0) lattice.push_back(parent[lattice.back()]);
+    std::reverse(lattice.begin(), lattice.end());
+    std::vector<int> waypoints{lattice.front()};
+    for (size_t index = 0; index + 1 < lattice.size();) {
+      size_t farthest = index + 1;
+      for (size_t candidate = lattice.size() - 1; candidate > index + 1; --candidate) {
+        if (edgeClear(continuous(decode(lattice[index])),
+            continuous(decode(lattice[candidate])), 0.5)) {
+          farthest = candidate;
+          break;
+        }
+      }
+      waypoints.push_back(lattice[farthest]);
+      index = farthest;
+    }
+    output["waypoint_count"] = waypoints.size();
+    output["lattice_steps"] = lattice.size() - 1;
+    const auto emit = [&](const std::array<double, 4>& progress) {
+      const auto state = stateAt(progress);
+      Json joints = Json::array();
+      for (const auto& name : names_) joints.push_back(state.getVariablePosition(name));
+      output["frames"].push_back({{"stage", "monotone_home_transition"},
+        {"progress", progress}, {"joints", joints}});
+    };
+    emit(continuous(decode(waypoints.front())));
+    for (size_t segment = 1; segment < waypoints.size(); ++segment) {
+      const auto first = continuous(decode(waypoints[segment - 1]));
+      const auto last = continuous(decode(waypoints[segment]));
+      const auto from = stateAt(first);
+      const auto to = stateAt(last);
+      double steps_required = std::abs(to.getVariablePosition("updown") -
+        from.getVariablePosition("updown")) / .005;
+      for (const int joint : moving_joints) {
+        const std::string name = "left_joint" + std::to_string(joint);
+        steps_required = std::max(steps_required,
+          std::abs(to.getVariablePosition(name) - from.getVariablePosition(name)) /
+          (.5 * kPi / 180.0));
+      }
+      const int steps = std::max(1, static_cast<int>(std::ceil(steps_required)));
+      for (int sample = 1; sample <= steps; ++sample) {
+        const double fraction = static_cast<double>(sample) / steps;
+        std::array<double, 4> progress{};
+        for (size_t axis = 0; axis < progress.size(); ++axis)
+          progress[axis] = first[axis] * (1.0 - fraction) + last[axis] * fraction;
+        const auto state = stateAt(progress);
+        if (!validState(state)) {
+          output["failure_stage"] = "post_validation_collision";
+          output["collision_checks"] = checks;
+          return output;
+        }
+        emit(progress);
+      }
+    }
+    output["success"] = true;
+    output["collision_checks"] = checks;
+    output["wall_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    return output;
+  }
+
+  Json evaluateManualHomeProgress(const Json& request)
+  {
+    const auto progress_percent = request.at("progress_percent").get<std::vector<double>>();
+    if (progress_percent.size() != 4 ||
+        std::any_of(progress_percent.begin(), progress_percent.end(), [](double value) {
+          return !std::isfinite(value) || value < 0.0 || value > 100.0;
+        }))
+      throw std::invalid_argument("J1/J2/J5/J6 require four progress values in [0,100]");
+    const auto* whole = model_->getJointModelGroup("whole_body");
+    moveit::core::RobotState start(home_), goal(home_);
+    if (!whole || !start.setToDefaultValues(whole, "home") ||
+        !goal.setToDefaultValues(whole, "second_home"))
+      throw std::runtime_error("missing V3 home or second_home");
+    const std::array<int, 4> moving_joints{1, 2, 5, 6};
+    moveit::core::RobotState state(start);
+    double mean = 0.0;
+    for (size_t axis = 0; axis < moving_joints.size(); ++axis) {
+      const double progress = progress_percent[axis] / 100.0;
+      const std::string left = "left_joint" + std::to_string(moving_joints[axis]);
+      const std::string right = "right_joint" + std::to_string(moving_joints[axis]);
+      const double value = start.getVariablePosition(left) + progress *
+        (goal.getVariablePosition(left) - start.getVariablePosition(left));
+      state.setVariablePosition(left, value);
+      state.setVariablePosition(right, -value);
+      mean += progress / moving_joints.size();
+    }
+    const double smooth = mean * mean * (3.0 - 2.0 * mean);
+    state.setVariablePosition("updown", start.getVariablePosition("updown") + smooth *
+      (goal.getVariablePosition("updown") - start.getVariablePosition("updown")));
+    state.update(true);
+    const auto started = std::chrono::steady_clock::now();
+    const bool bounded = state.satisfiesBounds();
+    const std::string collision = collisionReason(scene_, state);
+    Json joints = Json::array();
+    for (const auto& name : names_) joints.push_back(state.getVariablePosition(name));
+    return {{"kind", "v3_manual_home_progress"}, {"progress_percent", progress_percent},
+      {"joint_names", names_}, {"joints", joints}, {"updown", state.getVariablePosition("updown")},
+      {"within_joint_limits", bounded}, {"collision_pairs", collision},
+      {"status", bounded && collision.empty() ? "ok" : bounded ? "collision" : "joint_limit"},
+      {"wall_ms", std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count()}};
+  }
+
+  Json projectSmoothWristTransition(const Json& source)
+  {
+    if (!source.value("success", false) || source.at("frames").size() < 2)
+      throw std::invalid_argument("requires successful first-four path");
+    const auto* whole = model_->getJointModelGroup("whole_body");
+    moveit::core::RobotState start(home_), goal(home_);
+    if (!whole || !start.setToDefaultValues(whole, "home") ||
+        !goal.setToDefaultValues(whole, "second_home"))
+      throw std::runtime_error("missing V3 home or second_home");
+    const auto& frames = source.at("frames");
+    std::vector<double> arc(frames.size(), 0.0);
+    for (size_t index = 1; index < frames.size(); ++index) {
+      double squared = 0.0;
+      for (size_t joint = 0; joint < 4; ++joint) {
+        const double delta = frames.at(index).at("joints").at(joint).get<double>() -
+          frames.at(index - 1).at("joints").at(joint).get<double>();
+        squared += delta * delta;
+      }
+      arc[index] = arc[index - 1] + std::sqrt(squared);
+    }
+    if (arc.back() <= 1e-12) throw std::invalid_argument("first-four path has zero arc length");
+    Json output = {{"kind", "v3_front4_rrt_smooth_wrist_projection"},
+      {"success", false}, {"frames", Json::array()}, {"collision_checks", 0},
+      {"source_frames", frames.size()}, {"source_arc_rad", arc.back()},
+      {"wrist_profile", "smoothstep over first-four cumulative arc"}};
+    size_t checks = 0;
+    for (size_t index = 0; index < frames.size(); ++index) {
+      const double progress = arc[index] / arc.back();
+      const double smooth = progress * progress * (3.0 - 2.0 * progress);
+      moveit::core::RobotState state(start);
+      const auto& joints = frames.at(index).at("joints");
+      for (size_t joint = 0; joint < 4; ++joint) {
+        state.setVariablePosition("left_joint" + std::to_string(joint + 1),
+          joints.at(joint).get<double>());
+        state.setVariablePosition("right_joint" + std::to_string(joint + 1),
+          joints.at(joint + 7).get<double>());
+      }
+      for (size_t side_index = 0; side_index < 2; ++side_index) {
+        const std::string side = side_index == 0 ? "left" : "right";
+        for (int joint = 5; joint <= 7; ++joint) {
+          const std::string name = side + "_joint" + std::to_string(joint);
+          state.setVariablePosition(name, start.getVariablePosition(name) * (1.0 - smooth) +
+            goal.getVariablePosition(name) * smooth);
+        }
+      }
+      state.setVariablePosition("updown", start.getVariablePosition("updown") * (1.0 - smooth) +
+        goal.getVariablePosition("updown") * smooth);
+      state.update(true);
+      ++checks;
+      const std::string collision = collisionReason(scene_, state);
+      if (!state.satisfiesBounds() || !collision.empty()) {
+        output["failure_stage"] = "smooth_wrist_collision";
+        output["failure_index"] = index;
+        output["failure_progress"] = progress;
+        output["failure_reason"] = collision.empty() ? "joint_limit" : collision;
+        break;
+      }
+      Json values = Json::array();
+      for (const auto& name : names_) values.push_back(state.getVariablePosition(name));
+      output["frames"].push_back({{"stage", "front4_rrt_smooth_wrist"},
+        {"progress", progress}, {"joints", values}});
+    }
+    output["collision_checks"] = checks;
+    output["success"] = output["frames"].size() == frames.size();
+    return output;
+  }
+
+  Json shortcutFullJointPath(const Json& original)
+  {
+    if (!original.value("success", false) || original.at("frames").size() < 2)
+      throw std::invalid_argument("requires a successful full-joint path");
+    const auto& source = original.at("frames");
+    const auto started = std::chrono::steady_clock::now();
+    size_t checks = 0, tested_edges = 0;
+    const auto interpolate = [&](size_t from, size_t to, double amount) {
+      moveit::core::RobotState state(home_);
+      const auto& first = source.at(from).at("joints");
+      const auto& last = source.at(to).at("joints");
+      for (size_t joint = 0; joint < names_.size(); ++joint)
+        state.setVariablePosition(names_[joint], first.at(joint).get<double>() * (1.0 - amount) +
+          last.at(joint).get<double>() * amount);
+      state.update(true);
+      return state;
+    };
+    const auto sampleCount = [&](size_t from, size_t to, double angular_step_deg) {
+      double required = std::abs(source.at(to).at("joints").at(14).get<double>() -
+        source.at(from).at("joints").at(14).get<double>()) / .005;
+      for (size_t joint = 0; joint < 14; ++joint)
+        required = std::max(required, std::abs(
+          source.at(to).at("joints").at(joint).get<double>() -
+          source.at(from).at("joints").at(joint).get<double>()) /
+          (angular_step_deg * kPi / 180.0));
+      return std::max(1, static_cast<int>(std::ceil(required)));
+    };
+    const auto clear = [&](size_t from, size_t to, double angular_step_deg) {
+      const int samples = sampleCount(from, to, angular_step_deg);
+      for (int sample = 1; sample <= samples; ++sample) {
+        const auto state = interpolate(from, to, static_cast<double>(sample) / samples);
+        ++checks;
+        if (!state.satisfiesBounds() || scene_->isStateColliding(state)) return false;
+      }
+      return true;
+    };
+    Json output = {{"kind", "v3_full_joint_farthest_shortcut"}, {"success", false},
+      {"source_frames", source.size()}, {"waypoints", Json::array()},
+      {"frames", Json::array()}, {"coarse_step_deg", 3.0},
+      {"fine_step_deg", .5}, {"updown_step_m", .005}};
+    std::vector<size_t> waypoints{0};
+    size_t current = 0;
+    while (current + 1 < source.size()) {
+      size_t farthest = current;
+      for (size_t candidate = source.size() - 1; candidate > current; --candidate) {
+        ++tested_edges;
+        if (clear(current, candidate, 3.0) && clear(current, candidate, .5)) {
+          farthest = candidate;
+          break;
+        }
+      }
+      if (farthest == current) {
+        output["failure_stage"] = "no_collision_free_next_frame";
+        break;
+      }
+      waypoints.push_back(farthest);
+      current = farthest;
+    }
+    if (current == source.size() - 1) {
+      for (size_t segment = 1; segment < waypoints.size(); ++segment) {
+        const size_t from = waypoints[segment - 1];
+        const size_t to = waypoints[segment];
+        output["waypoints"].push_back({from, to});
+        const int samples = sampleCount(from, to, .5);
+        for (int sample = segment == 1 ? 0 : 1; sample <= samples; ++sample) {
+          const double amount = static_cast<double>(sample) / samples;
+          const auto state = interpolate(from, to, amount);
+          Json joints = Json::array();
+          for (const auto& name : names_) joints.push_back(state.getVariablePosition(name));
+          output["frames"].push_back({{"stage", "full_joint_shortcut"},
+            {"source_from", from}, {"source_to", to}, {"joints", joints}});
+        }
+      }
+      output["success"] = true;
+    }
+    output["waypoint_count"] = waypoints.size();
+    output["tested_edges"] = tested_edges;
+    output["collision_checks"] = checks;
+    output["wall_ms"] = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    return output;
+  }
+
   Json checkNamedShortcut(const std::string& from_name, const std::string& to_name,
     bool attach_boxes)
   {
@@ -2980,21 +4040,35 @@ public:
     result["success"] = result["collision_frames"].get<int>() == 0 &&
       result["out_of_bounds_frames"].get<int>() == 0;
     result["direct_success"] = result["success"];
-    if (!result["success"].get<bool>() && !attach_boxes) {
-      auto space = std::make_shared<ob::RealVectorStateSpace>(15);
-      ob::RealVectorBounds bounds(15);
-      for (size_t axis = 0; axis < 15; ++axis) {
-        const auto& limit = model_->getVariableBounds(names_[axis]);
+    if (!result["success"].get<bool>()) {
+      auto space = std::make_shared<ob::RealVectorStateSpace>(8);
+      ob::RealVectorBounds bounds(8);
+      for (size_t axis = 0; axis < 7; ++axis) {
+        const auto& limit = model_->getVariableBounds("left_joint" + std::to_string(axis + 1));
         bounds.setLow(axis, limit.min_position_);
         bounds.setHigh(axis, limit.max_position_);
       }
+      const auto& updown_limit = model_->getVariableBounds("updown");
+      bounds.setLow(7, updown_limit.min_position_);
+      bounds.setHigh(7, updown_limit.max_position_);
       space->setBounds(bounds);
       og::SimpleSetup setup(space);
       const auto convert = [&](const ob::State* value) {
         moveit::core::RobotState state(start);
         const auto* joints = value->as<ob::RealVectorStateSpace::StateType>()->values;
-        for (size_t axis = 0; axis < 15; ++axis)
-          state.setVariablePosition(names_[axis], joints[axis]);
+        for (size_t axis = 0; axis < 7; ++axis) {
+          state.setVariablePosition("left_joint" + std::to_string(axis + 1), joints[axis]);
+          state.setVariablePosition("right_joint" + std::to_string(axis + 1), -joints[axis]);
+        }
+        state.setVariablePosition("updown", joints[7]);
+        if (attach_boxes)
+          for (const std::string side : {"left", "right"}) {
+            const std::string tool = side + "_tool0";
+            const std::vector<std::string> touch_links{
+              tool, side + "_joint7", side + "_joint6"};
+            state.attachBody("carried_" + side, Eigen::Isometry3d::Identity(), shapes,
+              poses, touch_links, tool);
+          }
         state.update(true);
         return state;
       };
@@ -3004,18 +4078,24 @@ public:
       });
       setup.getSpaceInformation()->setStateValidityCheckingResolution(.0002);
       ob::ScopedState<> from(space), to(space);
-      for (size_t axis = 0; axis < 15; ++axis) {
-        from[axis] = start.getVariablePosition(names_[axis]);
-        to[axis] = goal.getVariablePosition(names_[axis]);
+      for (size_t axis = 0; axis < 7; ++axis) {
+        from[axis] = start.getVariablePosition("left_joint" + std::to_string(axis + 1));
+        to[axis] = goal.getVariablePosition("left_joint" + std::to_string(axis + 1));
       }
+      from[7] = start.getVariablePosition("updown");
+      to[7] = goal.getVariablePosition("updown");
       setup.setStartAndGoalStates(from, to, 1e-9);
       ompl::RNG::setSeed(1);
       auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
       planner->setRange(.25);
       setup.setPlanner(planner);
       setup.setup();
-      result["rrt_exact"] = setup.solve(8.0) == ob::PlannerStatus::EXACT_SOLUTION;
+      const auto rrt_started = std::chrono::steady_clock::now();
+      result["rrt_exact"] = setup.solve(2.0) == ob::PlannerStatus::EXACT_SOLUTION;
+      result["rrt_ms"] = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - rrt_started).count();
       if (result["rrt_exact"].get<bool>()) {
+        setup.simplifySolution(.5);
         result["frames"] = Json::array();
         const auto& path = setup.getSolutionPath();
         bool valid = true;
@@ -3024,8 +4104,8 @@ public:
           const auto* last = path.getState(segment + 1);
           const auto* a = first->as<ob::RealVectorStateSpace::StateType>()->values;
           const auto* b = last->as<ob::RealVectorStateSpace::StateType>()->values;
-          double maximum = std::abs(b[14] - a[14]) / .005;
-          for (size_t axis = 0; axis < 14; ++axis)
+          double maximum = std::abs(b[7] - a[7]) / .005;
+          for (size_t axis = 0; axis < 7; ++axis)
             maximum = std::max(maximum,
               std::abs(b[axis] - a[axis]) / (.5 * kPi / 180.0));
           const int count = std::max(1, static_cast<int>(std::ceil(maximum)));
@@ -3558,8 +4638,21 @@ int main(int argc, char** argv)
         node->get_parameter("dual_placement_reference_path").as_string() : "";
       const int retract_steps = node->has_parameter("dual_unloaded_retract_steps") ?
         static_cast<int>(node->get_parameter("dual_unloaded_retract_steps").as_int()) : 5;
+      const bool side_up_back_wrist_rrt =
+        node->has_parameter("dual_side_up_back_wrist_rrt") &&
+        node->get_parameter("dual_side_up_back_wrist_rrt").as_bool();
+      const bool side_up_back_fixed_orientation =
+        node->has_parameter("dual_side_up_back_fixed_orientation") &&
+        node->get_parameter("dual_side_up_back_fixed_orientation").as_bool();
+      const bool stop_after_extraction =
+        node->has_parameter("dual_stop_after_extraction") &&
+        node->get_parameter("dual_stop_after_extraction").as_bool();
+      const bool loaded_joint_return =
+        node->has_parameter("dual_loaded_joint_return") &&
+        node->get_parameter("dual_loaded_joint_return").as_bool();
       const Json result = probe.retreatAttachedSharedHeightPair(
-        candidates, planned, approach, reference, retract_steps);
+        candidates, planned, approach, reference, retract_steps, side_up_back_wrist_rrt,
+        side_up_back_fixed_orientation, stop_after_extraction, loaded_joint_return);
       std::ofstream file(node->get_parameter("dual_attached_retreat_output_path").as_string());
       if (!file) throw std::runtime_error("failed to write attached retreat");
       file << result.dump(2) << '\n';
@@ -3657,6 +4750,7 @@ int main(int argc, char** argv)
       return 0;
     }
     const bool manual_loaded = node->has_parameter("manual_loaded_context_json");
+    const bool manual_home = node->has_parameter("manual_home_progress");
     if (manual_loaded)
       probe.configureManualLoaded(Json::parse(node->get_parameter("manual_loaded_context_json").as_string()));
     if (node->has_parameter("loaded_orientation_output_path")) {
@@ -3689,6 +4783,36 @@ int main(int argc, char** argv)
       if (!file) throw std::runtime_error("failed to write collision benchmark");
       file << result.dump(2) << '\n';
       std::cout << "COLLISION_BENCHMARK " << result.dump() << '\n' << std::flush;
+      rclcpp::shutdown();
+      return 0;
+    }
+    if (node->has_parameter("farthest_shortcut_output_path")) {
+      const Json result = probe.shortcutFullJointPath(Json::parse(std::ifstream(
+        node->get_parameter("farthest_shortcut_input_path").as_string())));
+      std::ofstream file(node->get_parameter("farthest_shortcut_output_path").as_string());
+      if (!file) throw std::runtime_error("failed to write farthest shortcut");
+      file << result.dump(2) << '\n';
+      std::cout << "FARTHEST_SHORTCUT_RESULT " << result.at("success") << '\n' << std::flush;
+      rclcpp::shutdown();
+      return 0;
+    }
+    if (node->has_parameter("smooth_wrist_output_path")) {
+      const Json result = probe.projectSmoothWristTransition(Json::parse(std::ifstream(
+        node->get_parameter("smooth_wrist_input_path").as_string())));
+      std::ofstream file(node->get_parameter("smooth_wrist_output_path").as_string());
+      if (!file) throw std::runtime_error("failed to write smooth wrist projection");
+      file << result.dump(2) << '\n';
+      std::cout << "SMOOTH_WRIST_RESULT " << result.at("success") << '\n' << std::flush;
+      rclcpp::shutdown();
+      return 0;
+    }
+    if (node->has_parameter("monotone_home_output_path")) {
+      const std::string output = node->get_parameter("monotone_home_output_path").as_string();
+      const Json result = probe.planMonotoneHomeTransition();
+      std::ofstream file(output);
+      if (!file) throw std::runtime_error("failed to write monotone home transition");
+      file << result.dump(2) << '\n';
+      std::cout << "MONOTONE_HOME_RESULT " << result.at("success") << '\n' << std::flush;
       rclcpp::shutdown();
       return 0;
     }
@@ -3764,8 +4888,10 @@ int main(int argc, char** argv)
     std::string line;
     while (std::getline(std::cin, line)) {
       try {
-        std::cout << "WRIST_RESULT " << (manual_loaded ?
-          probe.evaluateManualLoaded(Json::parse(line)) : probe.evaluate(Json::parse(line))).dump() << '\n'
+        const Json request = Json::parse(line);
+        std::cout << "WRIST_RESULT " << (manual_home ?
+          probe.evaluateManualHomeProgress(request) : manual_loaded ?
+            probe.evaluateManualLoaded(request) : probe.evaluate(request)).dump() << '\n'
                   << std::flush;
       } catch (const std::exception& error) {
         std::cout << "WRIST_ERROR " << error.what() << '\n' << std::flush;

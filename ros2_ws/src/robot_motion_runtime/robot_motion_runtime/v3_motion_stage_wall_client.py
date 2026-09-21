@@ -224,7 +224,7 @@ class V3MotionStageWallClient(Node):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     scope = parser.add_mutually_exclusive_group()
-    scope.add_argument("--wall", action="store_true", help="run all 15 rounds")
+    scope.add_argument("--wall", action="store_true", help="run wall rounds up to --max-rounds")
     scope.add_argument(
         "--round-index", type=int, default=0, help="run one round, 0..14"
     )
@@ -236,6 +236,7 @@ def parse_args() -> argparse.Namespace:
         help="for non-bottom rows, retry PREGRASP with top suction after side failure",
     )
     parser.add_argument("--allow-failure", action="store_true")
+    parser.add_argument("--max-rounds", type=int, default=15)
     parser.add_argument("--summary", type=Path)
     return parser.parse_args()
 
@@ -250,7 +251,10 @@ def main() -> None:
     summary = {"requested_scope": "wall" if args.wall else "single_round", "rounds": []}
     try:
         node.wait_ready()
-        selected = list(enumerate(rounds)) if args.wall else [(args.round_index, rounds[args.round_index])]
+        if not 1 <= args.max_rounds <= len(rounds):
+            raise SystemExit("--max-rounds must be in 1..15")
+        selected = (list(enumerate(rounds))[:args.max_rounds] if args.wall else
+                    [(args.round_index, rounds[args.round_index])])
         for index, pair in selected:
             record = node.run_round(
                 index,

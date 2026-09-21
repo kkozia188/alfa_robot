@@ -25,6 +25,9 @@ def main():
     parser.add_argument("--synchronized-updown-goal", type=float, default=-0.6)
     parser.add_argument("--srdf", type=Path)
     parser.add_argument("--named-shortcut-from")
+    parser.add_argument("--monotone-home", action="store_true")
+    parser.add_argument("--smooth-wrist-input", type=Path)
+    parser.add_argument("--farthest-shortcut-input", type=Path)
     parser.add_argument("--named-shortcut-to")
     parser.add_argument("--named-shortcut-attached", action="store_true")
     parser.add_argument("--collision-benchmark-samples", type=int, default=0)
@@ -40,6 +43,10 @@ def main():
     parser.add_argument("--dual-cartesian-approach", type=Path)
     parser.add_argument("--placement-reference", type=Path)
     parser.add_argument("--unloaded-retract-cm", type=int, default=5)
+    parser.add_argument("--side-up-back-wrist-rrt", action="store_true")
+    parser.add_argument("--side-up-back-fixed-orientation", action="store_true")
+    parser.add_argument("--stop-after-extraction", action="store_true")
+    parser.add_argument("--loaded-joint-return", action="store_true")
     parser.add_argument("--box-id", type=int)
     parser.add_argument("--shortcut-loaded-input", type=Path)
     args = parser.parse_args()
@@ -72,6 +79,10 @@ def main():
         if args.placement_reference:
             settings["dual_placement_reference_path"] = str(args.placement_reference.resolve())
         settings["dual_unloaded_retract_steps"] = args.unloaded_retract_cm
+        settings["dual_side_up_back_wrist_rrt"] = args.side_up_back_wrist_rrt
+        settings["dual_side_up_back_fixed_orientation"] = args.side_up_back_fixed_orientation
+        settings["dual_stop_after_extraction"] = args.stop_after_extraction
+        settings["dual_loaded_joint_return"] = args.loaded_joint_return
     elif args.dual_cartesian_candidates:
         if not args.dual_cartesian_pregrasp_plan:
             parser.error("--dual-cartesian-pregrasp-plan is required")
@@ -113,6 +124,14 @@ def main():
     elif args.collision_benchmark_samples:
         settings["collision_benchmark_samples"] = args.collision_benchmark_samples
         settings["collision_benchmark_output_path"] = str(args.output.resolve())
+    elif args.farthest_shortcut_input:
+        settings["farthest_shortcut_input_path"] = str(args.farthest_shortcut_input.resolve())
+        settings["farthest_shortcut_output_path"] = str(args.output.resolve())
+    elif args.smooth_wrist_input:
+        settings["smooth_wrist_input_path"] = str(args.smooth_wrist_input.resolve())
+        settings["smooth_wrist_output_path"] = str(args.output.resolve())
+    elif args.monotone_home:
+        settings["monotone_home_output_path"] = str(args.output.resolve())
     elif args.named_shortcut_from:
         if not args.named_shortcut_to:
             parser.error("--named-shortcut-to is required")
@@ -141,7 +160,9 @@ def main():
             [str(args.backend.resolve()), "--ros-args", "--params-file", temporary.name],
             capture_output=True, text=True,
             timeout=300 if args.optimize_input or args.synchronized_updown_input
-                    or args.named_shortcut_from or args.scan_chassis_casters or
+                    or args.named_shortcut_from or args.monotone_home or args.smooth_wrist_input or
+                    args.farthest_shortcut_input or
+                    args.scan_chassis_casters or
                     args.loaded_orientation_context or args.manual_four_axis_context or
                     args.shortcut_loaded_input or args.wrist_preview_recorded or
                     args.dual_wrist_preview_segment or args.dual_face_ik_request or

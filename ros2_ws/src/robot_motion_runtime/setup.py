@@ -36,6 +36,7 @@ setup(
             "motion_runtime_dashboard_node = robot_motion_runtime.motion_runtime_dashboard_node:main",
             "kinematic_sim_executor_node = robot_motion_runtime.kinematic_sim_executor_node:main",
             "vehicle_pose_source_node = robot_motion_runtime.vehicle_pose_source_node:main",
+            "v3_motion_stage_wall_client = robot_motion_runtime.v3_motion_stage_wall_client:main",
         ],
     },
 )

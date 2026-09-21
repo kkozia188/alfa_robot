@@ -16,6 +16,11 @@
 #   not consistently available on Humble as a binary. Most users can ignore it
 #   unless they need MoveIt warehouse database features.
 repositories:
+  central_robot_interfaces:
+    type: git
+    url: https://github.com/SevenovaHangzhou/robot_interfaces.git
+    version: 92d6ff2ed0b45684d7da2170d96703ca8be569f4
+
   moveit2:
     type: git
     url: https://github.com/moveit/moveit2.git

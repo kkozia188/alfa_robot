@@ -6,7 +6,7 @@ from pathlib import Path
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, Shutdown
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
@@ -22,15 +22,34 @@ def launch_nodes(context):
     # segment spacing can step over a collision and repeatedly return unusable paths.
     for arm in ("left_arm", "right_arm"):
         config.planning_pipelines["ompl"][arm]["longest_valid_segment_fraction"] = 0.0005
+    if LaunchConfiguration("connection_planner").perform(context) == "shortcut_local_rrt":
+        pipeline = config.planning_pipelines["ompl"]
+        pipeline["planner_configs"]["RRTConnectLocalPatchkConfigDefault"] = {
+            "type": "geometric::RRTConnect", "range": math.radians(10.0)
+        }
+        for group in ("left_arm", "right_arm", "left_arm_with_updown", "right_arm_with_updown", "dual_arm"):
+            pipeline[group]["longest_valid_segment_fraction"] = 0.0001
+            pipeline[group]["planner_configs"].append("RRTConnectLocalPatchkConfigDefault")
     name = "v3_box_wall_grasp_demo"
     params = {"distance_demo": True, "collision_inset": 0.0}
-    for key, kind in (("x", float), ("box_id", int), ("arm", str), ("suction_mode", str), ("wall_context", str), ("initial_pose", str), ("post_extract_policy", str),
+    for key, kind in (("x", float), ("box_id", int), ("arm", str), ("suction_mode", str), ("wall_context", str), ("initial_pose", str), ("direct_attach", bool), ("direct_placement_pose", str), ("post_extract_policy", str), ("rear_placement_strategy", str),
                       ("auto_run_once", bool), ("sequence_mode", bool), ("rear_clearance", float), ("wall_center_y", float),
                       ("wall_bottom_z", float), ("contact_numerical_gap", float),
                       ("align_height", bool), ("shoulder_box_offset", float), ("top_shoulder_above_wrist", float),
                       ("check_environment", bool), ("height_strategy", str), ("comfort_branch", str),
                       ("comfort_ratio_min", float), ("comfort_ratio_preferred", float),
                       ("comfort_ratio_max", float), ("planning_seed", int)):
+        params[key] = ParameterValue(LaunchConfiguration(key), value_type=kind)
+    for key, kind in (("connection_planner", str), ("shortcut_padding_points", int),
+                      ("shortcut_step_deg", float), ("shortcut_updown_step_m", float),
+                      ("local_rrt_planning_time", float),
+                      ("enable_stage_action", bool), ("playback_enabled", bool),
+                      ("execution_backend", str), ("follow_joint_trajectory_action", str),
+                      ("trajectory_cache_file", str),
+                      ("target_match_tolerance", float), ("target_orientation_tolerance", float),
+                      ("maximum_rotary_velocity", float),
+                      ("maximum_updown_velocity", float), ("minimum_trajectory_step_s", float),
+                      ("display_rate_hz", float)):
         params[key] = ParameterValue(LaunchConfiguration(key), value_type=kind)
     # Read once at startup; the C++ boundary validates exact geometry for every consumer.
     if LaunchConfiguration("check_environment").perform(context).lower() == "true":
@@ -43,6 +62,9 @@ def launch_nodes(context):
     return [
         Node(package="robot_state_publisher", executable="robot_state_publisher",
              parameters=[config.robot_description], output="screen",
+             condition=IfCondition(PythonExpression([
+                 "'", LaunchConfiguration("execution_backend"), "' == 'replay'"
+             ])),
              remappings=[("/joint_states", f"/{name}/joint_states")]),
         Node(package="alfa_robot_moveit_config", executable="v3_single_arm_box_extract_demo",
              name=name, parameters=[config.to_dict(), params], output="screen",
@@ -63,8 +85,12 @@ def launch_nodes(context):
 
 def generate_launch_description():
     arguments = [
-        DeclareLaunchArgument("initial_pose", default_value="home", choices=["home", "arms_down"],
-                              description="Explicit simulation start: home (unchanged default), or arms_down with both J4=0; no simulated transition from home"),
+        DeclareLaunchArgument("initial_pose", default_value="home", choices=["home", "second_home", "arms_down"],
+                              description="Explicit simulation start: home, second_home, or arms_down; no simulated transition from the selected pose"),
+        DeclareLaunchArgument("direct_attach", default_value="false", choices=["true", "false"],
+                              description="Replay-only: attach two boxes at the selected initial pose and transfer directly to named unloading; no grasp or retreat phases"),
+        DeclareLaunchArgument("direct_placement_pose", default_value="unloading", choices=["unloading", "second_unloading"],
+                              description="Named dual-arm target for the direct_attach experiment; other axes stay at their initial values"),
         DeclareLaunchArgument("wall_context", default_value="full", choices=["full", "sequence_prefix", "target_only"],
                               description="full: all 25 boxes; sequence_prefix: scene before this box; target_only: explicit local research compatibility without neighbor boxes"),
         DeclareLaunchArgument("suction_mode", default_value="auto", choices=["auto", "top"],
@@ -75,6 +101,12 @@ def generate_launch_description():
     ]
     for name, default, description in (
         ("post_extract_policy", "rear_release", "rear_release places/releases behind chassis; loaded_home preserves the local attached return"),
+        ("connection_planner", "rrt_connect", "Validated baseline; opt into shortcut_local_rrt to repair blocked straight-path intervals"),
+        ("shortcut_padding_points", "5", "Retreat/advance this many coarse shortcut points around blocked intervals"),
+        ("shortcut_step_deg", "5.0", "Coarse shortcut spacing in degrees; edges retain fine collision validation"),
+        ("shortcut_updown_step_m", "0.01", "Coarse shortcut spacing for lift in metres"),
+        ("local_rrt_planning_time", "8.0", "Nominal seconds per fixed local repair window; no whole-path fallback"),
+        ("rear_placement_strategy", "geometric", "geometric legacy target or V3.1.1 named_unloading target"),
         ("height_strategy", "fixed_offset", "fixed_offset or comfort_radius; one height per arm"),
         ("comfort_ratio_min", "0.8", "Minimum normalized shoulder-to-TCP comfort distance"),
         ("comfort_ratio_preferred", "0.8", "Preferred normalized distance; experiment hypothesis"),
@@ -99,6 +131,17 @@ def generate_launch_description():
         ("start_rerun", "true", "Start Rerun observer"),
         ("spawn_viewer", "true", "Open Rerun window; false for headless recording"),
         ("rerun_recording_path", "", "Optional .rrd recording path"),
+        ("enable_stage_action", "false", "Expose the central /motion/execute_stage Action"),
+        ("playback_enabled", "true", "Replay legacy service results inside the planner"),
+        ("execution_backend", "replay", "Stage execution backend: replay or fjt"),
+        ("follow_joint_trajectory_action", "/whole_body_jtc/follow_joint_trajectory", "Downstream FJT Action for execution_backend=fjt"),
+        ("trajectory_cache_file", "", "Optional verified V3 fixed-wall stage trajectory cache"),
+        ("target_match_tolerance", "0.06", "Maximum fixed-wall pose-to-cell mismatch in metres"),
+        ("target_orientation_tolerance", "0.0872664626", "Maximum fixed-wall grasp orientation mismatch in radians"),
+        ("maximum_rotary_velocity", "0.349065850399", "Stage trajectory rotary speed limit in rad/s"),
+        ("maximum_updown_velocity", "0.15", "Stage trajectory updown speed limit in m/s"),
+        ("minimum_trajectory_step_s", "0.05", "Minimum time between generated trajectory points"),
+        ("display_rate_hz", "20.0", "Planner joint-state replay frequency"),
     ):
         arguments.append(DeclareLaunchArgument(name, default_value=default, description=description))
     return LaunchDescription(arguments + [OpaqueFunction(function=launch_nodes)])

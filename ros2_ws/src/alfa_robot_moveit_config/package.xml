@@ -40,7 +40,11 @@
   <depend>sensor_msgs</depend>
   <depend>shape_msgs</depend>
   <depend>robot_motion_scene_service</depend>
+  <depend>motion_internal_interfaces</depend>
   <depend>robot_motion_interfaces</depend>
+  <depend>robot_system_interfaces</depend>
+  <depend>robot_rt_control_interfaces</depend>
+  <depend>robot_interfaces_qos</depend>
   <depend>robot_motion_core</depend>
   <depend>std_srvs</depend>
   <depend>visualization_msgs</depend>

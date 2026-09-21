@@ -922,6 +922,62 @@ Eigen::Isometry3d V3RedundantArmAnalyticIk::forwardInArmBase(
   return transform * toolTransform(model_);
 }
 
+std::vector<V3WristOrientationSolution> V3RedundantArmAnalyticIk::solveWristOrientation(
+  const std::array<double, 4>& first_four,
+  const Eigen::Matrix3d& target_in_arm_base,
+  const std::array<double, 3>& wrist_seed) const
+{
+  std::vector<V3WristOrientationSolution> solutions;
+  if (!target_in_arm_base.allFinite()) return solutions;
+  const Geometry& model = geometry(model_);
+  const JointVector& lower = lowerLimits(model_);
+  const JointVector& upper = upperLimits(model_);
+  for (size_t index = 0; index < first_four.size(); ++index)
+    if (!std::isfinite(first_four[index]) || first_four[index] < lower[index] ||
+        first_four[index] > upper[index]) return solutions;
+  for (const double value : wrist_seed)
+    if (!std::isfinite(value)) return solutions;
+
+  Eigen::Matrix3d rotation_1234 = Eigen::Matrix3d::Identity();
+  for (size_t index = 0; index < first_four.size(); ++index)
+    rotation_1234 *= rotationAroundAxis(model.axes[index], first_four[index]);
+  const Eigen::Matrix3d wrist_rotation =
+    rotation_1234.transpose() * target_in_arm_base * model.zero_tool.linear().transpose();
+  const Eigen::Vector3d wrist_roll_axis = model.axes[4].normalized();
+  const double q6_magnitude = std::acos(std::clamp(
+    wrist_roll_axis.dot(wrist_rotation * wrist_roll_axis), -1.0, 1.0));
+  Eigen::Vector3d wrist_bend_axis =
+    model.axes[5] - wrist_roll_axis * wrist_roll_axis.dot(model.axes[5]);
+  wrist_bend_axis.normalize();
+  for (const double q6 : signedBranches(q6_magnitude)) {
+    const Eigen::Vector3d wrist_before_q5 =
+      rotationAroundAxis(model.axes[5], q6) * wrist_roll_axis;
+    const double q5 = normalizeAngle(orientedAngleAroundAxis(
+      wrist_roll_axis, wrist_before_q5, wrist_rotation * wrist_roll_axis)
+      .value_or(wrist_seed[0]));
+    const Eigen::Matrix3d joint7_rotation =
+      rotationAroundAxis(model.axes[5], -q6) *
+      rotationAroundAxis(wrist_roll_axis, -q5) * wrist_rotation;
+    const double q7 = normalizeAngle(orientedAngleAroundAxis(
+      wrist_roll_axis, wrist_bend_axis, joint7_rotation * wrist_bend_axis)
+      .value_or(wrist_seed[2]));
+    const std::array<double, 3> wrist{q5, normalizeAngle(q6), q7};
+    JointVector joints{first_four[0], first_four[1], first_four[2], first_four[3],
+      wrist[0], wrist[1], wrist[2]};
+    if (!insideLimits(joints, model_)) continue;
+    const double error = orientationError(
+      target_in_arm_base, forwardInArmBase(joints).linear());
+    if (error > 1e-7) continue;
+    double distance = 0.0;
+    for (size_t index = 0; index < wrist.size(); ++index)
+      distance += std::pow(wrist[index] - wrist_seed[index], 2);
+    solutions.push_back({wrist, error, distance});
+  }
+  std::sort(solutions.begin(), solutions.end(),
+    [](const auto& lhs, const auto& rhs) { return lhs.seed_distance < rhs.seed_distance; });
+  return solutions;
+}
+
 Eigen::Vector3d V3RedundantArmAnalyticIk::elbowPositionInArmBase(
   const JointVector& joints) const
 {

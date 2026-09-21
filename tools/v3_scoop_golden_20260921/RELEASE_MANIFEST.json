@@ -1,0 +1,63 @@
+{
+  "schema": "alfa.v3_scoop_golden_release.v1",
+  "name": "2026-09-21-golden-box7-front-box20-fast",
+  "tag": "v3-scoop-golden-2026.09.21",
+  "repository": "kkozia188/alfa_robot",
+  "upstream_branch": "alfa_v3_dev",
+  "upstream_base_commit": "d4b8542ed2efef3ca724a0c55da8d3319bcb3b98",
+  "linear_issue": "MOTION-223",
+  "result_schema": "alfa.v3_scoop_5x5_station_result.v11",
+  "validation": {
+    "completed_boxes": 25,
+    "validated_transitions": 25,
+    "core_planning_at_or_below_5s": 25,
+    "core_planning_average_s": 1.68889597656,
+    "core_planning_median_s": 1.222112472,
+    "core_planning_max_s": 4.899078249,
+    "total_sequence_joint_travel_deg": 41476.712255481616,
+    "carried_box_inverted_frames": 0,
+    "joint_flip_events": 0
+  },
+  "assets": [
+    {
+      "name": "README.md",
+      "size": 1690,
+      "sha256": "b5f78f342a32c8057778e390884df6c65c9bbb5bdc8409c70a90b74276b9f9c2"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 674,
+      "sha256": "f1392253912c0bfeb8bf0bd2a1f0510a636ab77f8fde83b31e156677b8d7d4ed"
+    },
+    {
+      "name": "source-snapshot.tar.gz",
+      "size": 229190,
+      "sha256": "11b5b484dec77249d76904c73ed074cdf3678965699fce93f37d9519825d7d9f"
+    },
+    {
+      "name": "v3-scoop-x075-sequence-metrics.csv",
+      "size": 2901,
+      "sha256": "dfacd3f405940757b0fb1bd2caf4e4c3e7fac5fb6cbf6c0a61ca0786d75a77ff"
+    },
+    {
+      "name": "v3-scoop-x075-sequence-plan-cache.json",
+      "size": 5041611,
+      "sha256": "0ec81fa76d42a888d0e1110e30d878e016802fc5b87a8975b337288bed6d0d9a"
+    },
+    {
+      "name": "v3-scoop-x075-sequence.rrd",
+      "size": 17862276,
+      "sha256": "9f6644b1e29efd627c0b240fe4b7b4205aacfaee07a38099d4e21915246cdf9b"
+    },
+    {
+      "name": "v3-scoop-x075-sequence-search-report.html",
+      "size": 449273,
+      "sha256": "84288dbc21763db6a404af99283ea268bf11bd00fb9186b8add765ad4984b5db"
+    },
+    {
+      "name": "v3-scoop-x075-sequence-summary.json",
+      "size": 1180717,
+      "sha256": "5dba990806b2625f236b269487d359f5e134f0684d869dccb81c8fad9bbb2b2c"
+    }
+  ]
+}

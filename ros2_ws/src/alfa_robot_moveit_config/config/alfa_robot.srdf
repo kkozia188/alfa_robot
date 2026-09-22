@@ -42,15 +42,15 @@
         <joint name="left_joint1" value="2.70526034059121"/>
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
+        <joint name="left_joint4" value="1.57079632679490"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
         <joint name="left_joint6" value="-0.69813170079773"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.70526034059121"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
+        <joint name="right_joint4" value="1.57079632679490"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
         <joint name="right_joint6" value="0.69813170079773"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
@@ -59,15 +59,15 @@
         <joint name="left_joint1" value="2.70526034059121"/>
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
+        <joint name="left_joint4" value="1.57079632679490"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
         <joint name="left_joint6" value="-0.69813170079773"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.70526034059121"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
+        <joint name="right_joint4" value="1.57079632679490"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
         <joint name="right_joint6" value="0.69813170079773"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
@@ -78,68 +78,16 @@
         <joint name="left_joint1" value="2.70526034059121"/>
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
+        <joint name="left_joint4" value="1.57079632679490"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
         <joint name="left_joint6" value="-0.69813170079773"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.70526034059121"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
+        <joint name="right_joint4" value="1.57079632679490"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
         <joint name="right_joint6" value="0.69813170079773"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_home" group="dual_arm">
-        <joint name="left_joint1" value="0.5235987755983"/>
-        <joint name="left_joint2" value="1.39626340159546"/>
-        <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="1.5707963267949"/>
-        <joint name="left_joint6" value="1.0471975511966"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="-0.5235987755983"/>
-        <joint name="right_joint2" value="-1.39626340159546"/>
-        <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="-1.5707963267949"/>
-        <joint name="right_joint6" value="-1.0471975511966"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_home" group="dual_arm_with_updown">
-        <joint name="updown" value="-0.6"/>
-        <joint name="left_joint1" value="0.5235987755983"/>
-        <joint name="left_joint2" value="1.39626340159546"/>
-        <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="1.5707963267949"/>
-        <joint name="left_joint6" value="1.0471975511966"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="-0.5235987755983"/>
-        <joint name="right_joint2" value="-1.39626340159546"/>
-        <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="-1.5707963267949"/>
-        <joint name="right_joint6" value="-1.0471975511966"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_home" group="whole_body">
-        <joint name="updown" value="-0.6"/>
-        <joint name="head_joint" value="0"/>
-        <joint name="head_pitch_joint" value="0"/>
-        <joint name="left_joint1" value="0.5235987755983"/>
-        <joint name="left_joint2" value="1.39626340159546"/>
-        <joint name="left_joint3" value="0.34906585039887"/>
-        <joint name="left_joint4" value="1.5707963267949"/>
-        <joint name="left_joint5" value="1.5707963267949"/>
-        <joint name="left_joint6" value="1.0471975511966"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="-0.5235987755983"/>
-        <joint name="right_joint2" value="-1.39626340159546"/>
-        <joint name="right_joint3" value="-0.34906585039887"/>
-        <joint name="right_joint4" value="-1.5707963267949"/>
-        <joint name="right_joint5" value="-1.5707963267949"/>
-        <joint name="right_joint6" value="-1.0471975511966"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
     <group_state name="unloading" group="dual_arm">
@@ -147,15 +95,15 @@
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="-3.14159265"/>
         <joint name="left_joint4" value="0.34906585039887"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
-        <joint name="left_joint6" value="-0.5235987755983"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
+        <joint name="left_joint6" value="-0.52359877559830"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.26892802759263"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="3.14159265"/>
-        <joint name="right_joint4" value="-0.34906585039887"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
-        <joint name="right_joint6" value="0.5235987755983"/>
+        <joint name="right_joint4" value="0.34906585039887"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
+        <joint name="right_joint6" value="0.52359877559830"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
     <group_state name="unloading" group="dual_arm_with_updown">
@@ -164,15 +112,15 @@
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="-3.14159265"/>
         <joint name="left_joint4" value="0.34906585039887"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
-        <joint name="left_joint6" value="-0.5235987755983"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
+        <joint name="left_joint6" value="-0.52359877559830"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.26892802759263"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="3.14159265"/>
-        <joint name="right_joint4" value="-0.34906585039887"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
-        <joint name="right_joint6" value="0.5235987755983"/>
+        <joint name="right_joint4" value="0.34906585039887"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
+        <joint name="right_joint6" value="0.52359877559830"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
     <group_state name="unloading" group="whole_body">
@@ -183,67 +131,15 @@
         <joint name="left_joint2" value="-1.832595714594046"/>
         <joint name="left_joint3" value="-3.14159265"/>
         <joint name="left_joint4" value="0.34906585039887"/>
-        <joint name="left_joint5" value="-1.5707963267949"/>
-        <joint name="left_joint6" value="-0.5235987755983"/>
+        <joint name="left_joint5" value="-1.57079632679490"/>
+        <joint name="left_joint6" value="-0.52359877559830"/>
         <joint name="left_joint7" value="0"/>
         <joint name="right_joint1" value="-2.26892802759263"/>
-        <joint name="right_joint2" value="1.832595714594046"/>
+        <joint name="right_joint2" value="-1.832595714594046"/>
         <joint name="right_joint3" value="3.14159265"/>
-        <joint name="right_joint4" value="-0.34906585039887"/>
-        <joint name="right_joint5" value="1.5707963267949"/>
-        <joint name="right_joint6" value="0.5235987755983"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_unloading" group="dual_arm">
-        <joint name="left_joint1" value="0"/>
-        <joint name="left_joint2" value="1.74532925199433"/>
-        <joint name="left_joint3" value="0"/>
-        <joint name="left_joint4" value="-0.78539816339745"/>
-        <joint name="left_joint5" value="1.74532925199433"/>
-        <joint name="left_joint6" value="0.78539816339745"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="0"/>
-        <joint name="right_joint2" value="-1.74532925199433"/>
-        <joint name="right_joint3" value="0"/>
-        <joint name="right_joint4" value="0.78539816339745"/>
-        <joint name="right_joint5" value="-1.74532925199433"/>
-        <joint name="right_joint6" value="-0.78539816339745"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_unloading" group="dual_arm_with_updown">
-        <joint name="updown" value="-0.6"/>
-        <joint name="left_joint1" value="0"/>
-        <joint name="left_joint2" value="1.74532925199433"/>
-        <joint name="left_joint3" value="0"/>
-        <joint name="left_joint4" value="-0.78539816339745"/>
-        <joint name="left_joint5" value="1.74532925199433"/>
-        <joint name="left_joint6" value="0.78539816339745"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="0"/>
-        <joint name="right_joint2" value="-1.74532925199433"/>
-        <joint name="right_joint3" value="0"/>
-        <joint name="right_joint4" value="0.78539816339745"/>
-        <joint name="right_joint5" value="-1.74532925199433"/>
-        <joint name="right_joint6" value="-0.78539816339745"/>
-        <joint name="right_joint7" value="0"/>
-    </group_state>
-    <group_state name="second_unloading" group="whole_body">
-        <joint name="updown" value="-0.6"/>
-        <joint name="head_joint" value="0"/>
-        <joint name="head_pitch_joint" value="0"/>
-        <joint name="left_joint1" value="0"/>
-        <joint name="left_joint2" value="1.74532925199433"/>
-        <joint name="left_joint3" value="0"/>
-        <joint name="left_joint4" value="-0.78539816339745"/>
-        <joint name="left_joint5" value="1.74532925199433"/>
-        <joint name="left_joint6" value="0.78539816339745"/>
-        <joint name="left_joint7" value="0"/>
-        <joint name="right_joint1" value="0"/>
-        <joint name="right_joint2" value="-1.74532925199433"/>
-        <joint name="right_joint3" value="0"/>
-        <joint name="right_joint4" value="0.78539816339745"/>
-        <joint name="right_joint5" value="-1.74532925199433"/>
-        <joint name="right_joint6" value="-0.78539816339745"/>
+        <joint name="right_joint4" value="0.34906585039887"/>
+        <joint name="right_joint5" value="1.57079632679490"/>
+        <joint name="right_joint6" value="0.52359877559830"/>
         <joint name="right_joint7" value="0"/>
     </group_state>
     <end_effector name="left_tool" parent_link="left_tool0" group="left_tool_group" parent_group="left_arm"/>
@@ -275,23 +171,23 @@
     <disable_collisions link1="head_yaw" link2="head" reason="Adjacent"/>
     <disable_collisions link1="arm_carriage" link2="head" reason="Adjacent"/>
     <disable_collisions link1="arm_carriage" link2="left_arm_base" reason="Adjacent"/>
-    <disable_collisions link1="arm_carriage" link2="left_link1" reason="Adjacent"/>
-    <disable_collisions link1="left_arm_base" link2="left_link1" reason="Adjacent"/>
-    <disable_collisions link1="left_link1" link2="left_link2" reason="Adjacent"/>
-    <disable_collisions link1="left_link2" link2="left_link3" reason="Adjacent"/>
-    <disable_collisions link1="left_link3" link2="left_link4" reason="Adjacent"/>
-    <disable_collisions link1="left_link4" link2="left_link5" reason="Adjacent"/>
-    <disable_collisions link1="left_link5" link2="left_link6" reason="Adjacent"/>
-    <disable_collisions link1="left_link6" link2="left_link7" reason="Adjacent"/>
-    <disable_collisions link1="left_link7" link2="left_tool0" reason="Adjacent"/>
+    <disable_collisions link1="arm_carriage" link2="left_joint1" reason="Adjacent"/>
+    <disable_collisions link1="left_arm_base" link2="left_joint1" reason="Adjacent"/>
+    <disable_collisions link1="left_joint1" link2="left_joint2" reason="Adjacent"/>
+    <disable_collisions link1="left_joint2" link2="left_joint3" reason="Adjacent"/>
+    <disable_collisions link1="left_joint3" link2="left_joint4" reason="Adjacent"/>
+    <disable_collisions link1="left_joint4" link2="left_joint5" reason="Adjacent"/>
+    <disable_collisions link1="left_joint5" link2="left_joint6" reason="Adjacent"/>
+    <disable_collisions link1="left_joint6" link2="left_joint7" reason="Adjacent"/>
+    <disable_collisions link1="left_joint7" link2="left_tool0" reason="Adjacent"/>
     <disable_collisions link1="arm_carriage" link2="right_arm_base" reason="Adjacent"/>
-    <disable_collisions link1="arm_carriage" link2="right_link1" reason="Adjacent"/>
-    <disable_collisions link1="right_arm_base" link2="right_link1" reason="Adjacent"/>
-    <disable_collisions link1="right_link1" link2="right_link2" reason="Adjacent"/>
-    <disable_collisions link1="right_link2" link2="right_link3" reason="Adjacent"/>
-    <disable_collisions link1="right_link3" link2="right_link4" reason="Adjacent"/>
-    <disable_collisions link1="right_link4" link2="right_link5" reason="Adjacent"/>
-    <disable_collisions link1="right_link5" link2="right_link6" reason="Adjacent"/>
-    <disable_collisions link1="right_link6" link2="right_link7" reason="Adjacent"/>
-    <disable_collisions link1="right_link7" link2="right_tool0" reason="Adjacent"/>
+    <disable_collisions link1="arm_carriage" link2="right_joint1" reason="Adjacent"/>
+    <disable_collisions link1="right_arm_base" link2="right_joint1" reason="Adjacent"/>
+    <disable_collisions link1="right_joint1" link2="right_joint2" reason="Adjacent"/>
+    <disable_collisions link1="right_joint2" link2="right_joint3" reason="Adjacent"/>
+    <disable_collisions link1="right_joint3" link2="right_joint4" reason="Adjacent"/>
+    <disable_collisions link1="right_joint4" link2="right_joint5" reason="Adjacent"/>
+    <disable_collisions link1="right_joint5" link2="right_joint6" reason="Adjacent"/>
+    <disable_collisions link1="right_joint6" link2="right_joint7" reason="Adjacent"/>
+    <disable_collisions link1="right_joint7" link2="right_tool0" reason="Adjacent"/>
 </robot>

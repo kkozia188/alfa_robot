@@ -1,5 +1,60 @@
 # AI 协作日志
 
+## 2026-09-14 运控 / Codex / 仓内5×5命名姿态和固定TCP交接
+- 做了什么：新增 `config/v3_5x5_station.json` 定义折叠开场、左右臂工作待机和各抓取模式的固定6D交接TCP；单臂Demo增加固定TCP带箱交接、释放及空载回待机，并对每个解析候选做MoveIt FK误差校验。连续回放中原来的未校验关节插值改为`whole_body`状态过渡，逐段检查双臂、剩余箱体及仓库碰撞。
+- 验证：新闭环完整25/25成功，25段整机过渡均通过；交接TCP最大位置误差约`4.43e-8m`、姿态误差约`0.006°`；`alfa_robot_moveit_config`18项和`alfa_robot_rerun`2项包级测试全过，策略单测16项全过，RRD完整性及画面检查通过。
+- 产物：`data/ik_benchmark/v3_single_arm_5x5_box_wall/x075_robot_inside_warehouse_238/v3-x075-folded-tcp-handoff-sequence.rrd`及同名前缀`-summary.json`，说明见`docs/运控/IK/V3单臂5x5混合吸取仿真.md`。
+- 边界：交接位是模拟外部工位取走，不是有实体支撑的落箱；模板随升降档移动Z，并非各档共用的世界系固定高度。单箱仍沿用忽略未测试对侧臂的实验口径，箱间过渡改为整机碰撞检查；未改正式URDF/SRDF默认home。
+
+## 2026-09-12 运控 / Codex / 5×5 仓内回放自然运动约束
+- 做了什么：单臂解析IK候选评分加入加权关节位移、冗余角连续、腕部奇异点/中立姿态和关节限位软惩罚；笛卡尔段限制近端/腕部单步12°/8°，RRT回放重采样到最大3°。
+- 稳定性：第一版权重过强导致22/25，已降为轻量软偏好；8/18/23敏感箱复测通过，完整 `full_task_natural.csv` 恢复 `25/25`。
+- RRT修正：连续Rerun入口对 `rrt_to_precontact`、`rrt_return`、timeout/process_exit 进行最多2次同候选重试，并把单次OMPL尝试数提高到3；确定性失败不重试。
+- 验证：同一单命令无界面全量运行 `25/25`，自然约束版 RRD 已重建并完成1440×900画面检查。
+
+## 2026-09-12 运控 / Codex / 机器人与箱墙同处 2.38m 仓内
+- 做了什么：将仓库内部 X 范围调整为 `-1.18～1.20m`，使机器人原点 `X=0m` 与箱墙都位于仓内；为左右臂设置仓内紧凑待机姿态，顶吸点相对箱顶中心向前偏移10cm。
+- 几何边界：箱墙后表面 `X=1.05m`，与后墙保留15cm腕部间隙。完全贴墙时解析候选会因 `joint7<->warehouse_rear_wall` 被拒绝，因此未关闭后墙碰撞来伪造贴墙成功。
+- 验证结果：单臂口径、仓储四面板与地面碰撞开启，完整顺序任务重新达到 `25/25`；最底排全部顶吸。
+- 数据与回放：`data/ik_benchmark/v3_single_arm_5x5_box_wall/x075_robot_inside_warehouse_238/`；连续 RRD 已通过完整性及1440×900画面检查，确认机器人和箱墙均位于仓库线框内部。
+
+## 2026-09-12 运控 / Codex / 最底排全顶吸与 2.38m 仓储环境
+- 做了什么：把最底排21～25号全部改为顶部向下吸取；新增前方开口的仓储碰撞环境，内部长×宽×高=`2.38×2.38×2.35m`，开口位于箱墙接触面 `X=0.75m`，包含左右侧墙、顶板和后墙。
+- 验证结果：地面与四块仓储面板全部参与 MoveIt/FCL；完整顺序任务仍为 `25/25`。18号顶吸选中 `updown=-0.25m`，最底排5箱顶吸均选中 `updown=-0.75m`。
+- 数据与回放：`data/ik_benchmark/v3_single_arm_5x5_box_wall/x075_bottom_row_top_suction_warehouse_238/`，其中 RRD 已通过完整性检查并完成1440×900画面检查。
+- 重要边界：仓储尺寸按内部净尺寸解释，X方向从开口向后延伸；当前仍是运动学/刚体碰撞仿真，不是吸盘和箱体物理仿真。
+
+## 2026-09-12 运控 / Codex / 5×5 全任务单命令 Rerun 连续回放
+- 做了什么：新增 `v3_5x5_grasp_sequence_rerun.py`，一个命令先规划全部25箱，再在同一个 Rerun 时间轴连续播放机器人、升降切换、正面/顶部吸取、带箱返回和逐箱消失；规划失败会尝试同箱其他手臂/升降候选，不用失败轨迹伪造回放。
+- 入口：`ros2 run alfa_robot_moveit_config v3_5x5_grasp_sequence_rerun.py`。
+- 验证结果：无界面全量执行得到 `25/25`，生成约5.7MB的 `data/ik_benchmark/v3_single_arm_5x5_box_wall/x075_mixed_grasp_ground/v3-x075-5x5-sequence.rrd`；Rerun记录含逐箱携带/清除、最终 `Remaining boxes: 0` 和 `SUCCESS`。
+- 启动修正：连续入口不再把实时 SDK sink 与文件 sink 混用；生成录制后通过独立 `rerun --new <rrd>` 打开，避免旧单箱 Rerun 会话存在时出现空窗口。
+- 留给下个 AI：该入口在开始回放前先完成25条规划；升降档之间的连接段用于连续观看，单箱权威碰撞结论仍来自各自固定升降档的 MoveIt/FCL/OMPL 规划。
+
+## 2026-09-12 运控 / Codex / X=0.75m 单臂 5×5 混合吸取与地面碰撞
+- 做了什么：单臂抽箱 Demo 新增正面偏心吸点、顶部向下吸取、顺序移除已抓取箱格、地面 FCL 碰撞体和完整 16 轴可视化状态；新增 `v3_single_arm_5x5_grasp_demo.launch.py` 专用 RViz/Rerun 入口。批处理默认按 1→25 顺序，18/23 号顶吸，其余正面吸取。
+- 改了哪里：`v3_single_arm_box_extract_demo.cpp`、对应 launch/批处理、Rerun viewer、策略测试与 `docs/运控/IK/V3单臂5x5混合吸取仿真.md`。
+- 验证结果：接触面 `X=0.75m`、地面开启、单臂忽略对侧臂的完整任务为 `25/25`；23 个正面吸取、2 个顶吸，共49次候选尝试。18号顶吸 `updown=-0.25m`，23号顶吸 `-0.75m`。明细与摘要位于 `data/ik_benchmark/v3_single_arm_5x5_box_wall/x075_mixed_grasp_ground/`。
+- 重要边界：每箱规划期间升降高度固定；不是全身协调升降。地面仅豁免静止 `model_base` 的正常支撑接触，机械臂、末端和携箱碰地仍判失败。
+
+## 2026-09-12 运控 / Codex / 新对话上下文更新
+- 做了什么：生成面向新对话的最新上下文文本，合并本对话的连续YZ接触面扫描、X=0.65m五档升降覆盖，以及后续GPU/5×5批量测试状态。
+- 入口：`.ai_teamwork/CONTEXT_V3_SINGLE_ARM_2026-09-12.md`。
+- 重要边界：新对话必须区分连续YZ接触可达、25箱格可达和完整抽箱；用户未明确要求时不继续完整抽箱优化。
+
+## 2026-09-11 运控 / Codex / V3 单臂可达性交接文档
+- 做了什么：整理当前接触面可达扫描、X距离数据、升降并集、可视化、完整5×5抽箱实验、代码改动和已知风险，供另一个上下文直接接手。
+- 交接入口：`.ai_teamwork/HANDOFF_V3_SINGLE_ARM_REACHABILITY_2026-09-11.md`。
+- 当前用户方向：暂停5×5完整抽箱优化，优先继续查看不同 `X_contact` 的接触面解析IK可达图。
+
+## 2026-09-11 运控 / Codex / V3 固定底盘单臂 5x5 箱墙验证
+- 做了什么：在 V3 单臂解析抽箱 Demo 中新增显式 `full_box_wall_scene` 模式，按 5列×5层、箱体 `0.30×0.40×0.40m` 建立完整箱墙，目标箱之外的24箱全部进入 PlanningScene/FCL；新增批量脚本逐箱尝试左右臂和升降档。默认交互 Demo 仍保留原四邻箱场景。
+- 场景口径：底盘固定，接触面 `X=0.50m`，箱中心 `X=0.65m`；Y=`+0.8,+0.4,0,-0.4,-0.8m`，Z=`1.8,1.4,1.0,0.6,0.2m`；完整检查到预接触、5cm接触、附着、35cm抽离和带箱返回。
+- 验证结果：粗升降档 `0,-0.25,-0.5,-0.75,-1.0m` 下完整成功20/25，失败恰为中心列箱3/8/13/18/23。2°冗余角、32候选和0.05m升降细扫证明：箱3在 `updown=-0.10m` 存在完整解析抽离链但自由空间返回仍失败；箱8/13可接触但不能完成当前直线带箱抽离；箱18/23所有细档均无预接触解析解。
+- 优化：自由空间段新增严格逐步关节限位/碰撞检查的直线关节路径优先项，直线不合法时仍回退原 RRT；没有放宽碰撞判据。箱3的直线诊断与细分检查存在差异，尚未计为成功。
+- 数据：`data/ik_benchmark/v3_single_arm_5x5_box_wall/x050_full_task.csv`、`x050_center_column_analytic_filter.csv`；可视化为 `v3-5x5-box-wall-result.html`。Release 构建通过；当前构建缓存下 `colcon test` 报告0项测试。
+- 留给下个 AI：当前结论为20/25而非全部解决。下一步优化应针对中心列设计偏心吸附点或非直线抽离策略；不能用单点接触可达图代替完整抽箱成功判据。
+
 这里仅保留当前分支仍需让新 AI 立刻看到的最新交接。长过程和已完成事项已归档。
 
 ## 归档索引
@@ -10,6 +65,18 @@
 - `.ai_teamwork/archive/2026-05-18_v5_dev_collaboration_cleanup/COMPLETED_SUMMARY.md`
 
 默认不要读归档；只有追溯历史原因、验收证据、责任边界或恢复旧方案时再查。
+
+## 2026-09-09 运控 / Codex / V3.0.9 16轴执行合同第一阶段
+- 做了什么：按 V3 后续路线新增独立的 V3.0.9 16 轴执行合同，覆盖关节顺序、默认姿态、`updown=[-1.0,0.0]m`、`head_joint=[-1.57,1.57]rad`；保留旧执行桥默认合同不变。
+- 改了哪里：新增 `ros2_ws/src/alfa_robot_execution_bridge/alfa_robot_execution_bridge/v3_contract.py`、`config/v3_execution_bridge.yaml`、`launch/v3_execution_bridge.launch.py` 和 `test/test_v3_contract.py`；执行桥对完整 V3 关节顺序使用模型单位方向。
+- 验证结果：V3 模型展开确认 16 个可动关节且顺序一致；执行桥包构建通过；执行桥测试 `19 passed`；V3 mock 启动日志确认 `joints=16`、action=`/alfa_execution/v3_execute_joint_trajectory`。
+- 留给下个 AI：下一步应把 `robot_motion_runtime` 的状态/轨迹补全和正式执行服务接到该 V3 合同；真实 V3 硬件方向、零点和 rt-control action 仍未假定，不能直接启用实机。
+
+## 2026-09-09 运控 / Codex / V3 runtime 16轴仿真执行链
+- 做了什么：为 `kinematic_sim_executor_node` 增加 `joint_contract:=v3` 参数化模式；新增 `v3_runtime_execution.launch.py`，让 `ExecuteTrajectory` 服务转发完整 V3 16 轴轨迹到 V3 仿真 action。
+- 改了哪里：`ros2_ws/src/robot_motion_runtime/robot_motion_runtime/kinematic_sim_executor_node.py`、`ros2_ws/src/robot_motion_runtime/launch/v3_runtime_execution.launch.py`。
+- 验证结果：`robot_motion_runtime` 及依赖包构建通过；启动日志确认 V3 16 轴；调用 `/robot_motion/v3_execute_trajectory` 返回 `accepted=True`、`error_code=0`；`/v3_runtime_joint_states` 最终为 `updown=-0.1`、`head_joint=0.1`、`left_joint1=-1.4`，其余关节符合目标。
+- 留给下个 AI：当前只打通 runtime 执行服务到仿真执行器，尚未接入 V3 MoveIt 规划、权威状态源和正式双臂任务编排；真实 rt-control 仍未接入。
 
 ## 2026-05-18 项目经理 / Codex / v5_dev 协作文件归档
 
@@ -1885,236 +1952,148 @@
 - 最终升降合同：用户进一步确认 V3 实际升降总行程为 `1m`，且当前模型 `updown=0` 对应真实高度 `1m`、`updown=-1m` 对应真实零高度；因此最终规划范围改为 `[-1.0, 0.0]m`，运动方向保持不变。
 - 默认初始姿态：用户更正左右臂均为 `J1～J7=[-90,-90,0,-90,0,0,0]°`，共享 `updown=0m`、`head_joint=0°`。已同步 description xacro 默认参数、模型查看器、两套 mock ros2_control、MoveIt initial positions、SRDF `home` 和连续可达性默认 seed。
 
-## 2026-09-10 Codex / V3 Demo Conda 环境隔离修复
-- 做了什么：共享 ROS 环境脚本不再只过滤旧机器 Anaconda 路径，同时清理用户默认 Conda 安装和当前激活环境/安装根目录，覆盖 PATH、动态库、pkg-config 和 Python 搜索路径。
-- 改了哪里：`tools/ros_humble_env.sh`；新增 `tools/test_ros_humble_env.sh` 回归检查。
-- 验证结果：环境检查通过；CMake 选择 `/usr/bin/python3`，`robot_motion_core` 单包构建成功，原 catkin_pkg 报错消失。
-- 留给下个 AI：完整 `build_v3_moveit_demo.sh` 仍被缺失 `moveit_core` 阻塞；本机 apt 显示 `ros-humble-moveit` 和 `ros-humble-moveit-core` 均未安装，本轮未安装系统依赖。
+## 2026-09-09 运控 / Codex / V3 单臂抽箱工作距离扫描
+- 做了什么：新增 `scan_v3_single_arm_extract_radius.py`，按固定 Y/Z 自动改变箱体中心 X，并对每个位置执行完整“接近、吸附、35cm 抽回、带箱返回”任务；V3 单臂 Demo 启动入口新增 `initial_box_x/y/z` 参数。
+- 改了哪里：`ros2_ws/src/alfa_robot_moveit_config/scripts/scan_v3_single_arm_extract_radius.py`、`launch/v3_single_arm_box_extract_demo.launch.py`、对应 CMake 安装清单和 Demo 参数读取。
+- 验证结果：在左臂、箱体中心 `y=-0.20m,z=0.55m`、箱体 `0.30x0.40x0.40m`、抽回 `0.35m` 条件下，粗扫和 1cm 精扫显示最大成功箱体中心 `x=0.99m`，工具接触面约 `x=0.84m`；`x=0.99m` 重复3/3成功，`x=1.00m` 重复3/3在 `cartesian_approach` 失败。结果 CSV 在 `/tmp/v3_single_arm_extract_radius_coarse.csv` 和 `/tmp/v3_single_arm_extract_radius_refined.csv`。
+- 留给下个 AI：该结果是固定 Y/Z 和当前单臂五箱场景的方向性工作距离，不是全空间半径；若要形成正式结论，需要继续扫描 Y/Z 高度和左右臂，并确认箱体/TCP实物尺寸。
 
-## 2026-09-11 Codex / 旧架构单臂 demo 的箱墙前置开发
-- 做了什么：用户已向 mentor 确认允许在本地旧架构单臂 demo 开发完整任务；此前“必须等待新架构视频工作树”的阻塞判断失效。同事负责固定距离，我们先做场景/配置/回归，不代替其测量。
-- 改了哪里：单臂 demo C++/launch，新增默认参数 YAML 与 `test/test_v3_box_wall_preparation.py`；更新 `docs/运控/IK/V3单臂解析抽箱交互Demo.md`。增加显式 wall_origin 的5×5/1cm场景，目标选择不移动墙，完整16轴输出及配置拒绝；保留旧cross模式与既有未提交改动。未提交、推送、安装软件或控制实机。
-- 验证结果：Release 单包构建成功；10项无窗口检查通过（旧单箱四段规划含附着事件、3个固定墙目标、不可达规划拒绝、5个非法配置）；Rerun几何预览RRD生成并通过 `rrd verify`。证据在 `/home/astesia/Sevenova/日志/验收_2026-09-11/old_demo_wall_preparation/`。不是双箱/全墙可达/放置验收。
-- 留给下个 AI：RTK引用文件本机缺失；距离需连同基准面/坐标系/初始姿态交付；demo零臂角与NOW的home冲突。优先补目标箱接触前碰撞与 world/attached/released 生命周期，审计全机器人碰撞后再做双箱/共享轴和后放。正式runtime合同、任务issue/验收人未确认，不擅自绑定历史issue或将demo接入生产启动链。
+## 2026-09-10 运控 / Codex / V3 X=50cm 升降候选复测
+- 做了什么：单臂抽箱 Demo 支持 `initial_updown` 启动参数；X=50cm 的每个 Y-Z 点自动尝试 `updown=0,-0.25,-0.5,-0.75,-1.0m`，再执行完整接近、抓取、抽回和返回任务。
+- 验证结果：粗网格 49 点中成功 14 点，成功 Y 范围 `[-0.90,-0.10]m`、Z 范围 `[0.90,1.50]m`；成功点均由 `updown=0.0m` 完成，候选升降高度未新增成功点。明细 `/tmp/v3_extract_x50_movable_updown.csv`。
+- 重要边界：本轮是先把云台定位到候选高度后执行单臂任务，`updown` 没有在机械臂笛卡尔抽回轨迹中同步变化；真正的全身协调升降仍需后续规划组适配。
+## 2026-09-11 运控 / Codex / V3 单臂 5×5 箱墙 GPU 并行测试入口
+- 做了什么：新增固定 X 可达、固定 X 完整抽箱、随机 X 可达、随机 X 完整抽箱四个入口；默认左右臂分别测试 25 个箱面中心和 `updown={0,-0.25,-0.5,-0.75,-1.0}m`。随机模式固定 seed=309，在接触面 X=`0.60～0.80m` 内生成8个整墙距离；不可达的“箱格、手臂”会跳过抽箱。
+- 改了哪里：单臂抽箱 Demo 新增 `contact_reachability/full_extract` 模式、忽略对侧臂和原子 JSON 结果；新增 cuRobo v0.7.8 GPU 批量环境 IK 预筛、V3.0.9 碰撞球配置、4-worker 隔离 ROS Domain 的 CPU 权威复核、断点续跑、CSV/JSON 输出、锁版本安装脚本及使用文档 `docs/运控/IK/V3单臂5x5箱墙GPU并行测试.md`。
+- 验证结果：Release 构建通过，`alfa_robot_moveit_config` 18/18 测试通过。单点接触可达模式确认加载完整24障碍箱并输出 JSON；旧基准1号箱右臂 `updown=0` 完整抽箱回归成功，约964.6ms。RTX 4070 与 Isaac Sim Torch CUDA 当前可用；cuRobo v0.7.8 稀疏源码已下载，但系统只有 CUDA runtime、没有编译扩展必需的 CUDA 12.8 toolkit/nvcc，因此未完成真实 GPU API/模型烟测，未运行完整25格或8组随机任务。
+- 留给下个 AI：安装含 `bin/nvcc` 的 CUDA 12.8 toolkit 或设置 `ALFA_CUDA_HOME`，再运行 `setup_v3_curobo_env.sh`，随后用 `--box-ids 1,13 --sides left --updown-values 0,-0.25` 做真实 GPU 小批量烟测。GPU 仅排序候选，最终可达/抽箱结论始终由解析 IK、MoveIt/FCL、OMPL 给出；不得把 GPU 阴性直接记作不可达。
 
-## 2026-09-11 Codex / 距离输入单箱抓取 demo
-- 做了什么：按用户新请求在旧单臂抽箱可执行程序上新增 `distance_demo` 模式与独立 `v3_box_wall_grasp_demo.launch.py`，通过 demo-local `PlanWallBoxDemo.srv` 接收 `x/box_id/arm`，每次恢复完整5×5墙后独立规划，支持左右臂/auto。未接硬件、未新增包/外部依赖、未提交或推送。
-- 改了哪里：`alfa_robot_moveit_config` 的单臂demo C++、CMake、新srv/launch/test；`.gitignore` 仅为新srv添加例外（原规则忽略所有srv）；复用的Rerun viewer补请求显示/换请求清理；新增 `docs/运控/IK/V3距离输入单箱抓取Demo.md` 并在原文档加入口。保留本轮前已有脏改动。
-- 关键实现：车头默认是 model_base 碰撞网格 world 最大X（本模型约0.310000006814m），可显式 `chassis_front_x` 标定；默认墙居中、底面Z=0。目标箱接触前纳入world，最后接触段仅放行tool/joint7；吸附后从world移除并参与负重检测。显式检查整机/有界关节插值/RRT真实起终点连接及固定轴。新模式只需几何轨迹，去掉TOTG重采样，不可下发控制器。RViz携箱随FK运动且停末帧、墙格编号可见；Rerun消费相同结果帧。
-- 验证结果：Release两包构建通过；新测试覆盖25箱号固定墙、25个远距离失败、7类非法请求、左右/auto、成功完整路径、16轴固定约束、RViz最终携箱位置与Rerun FK一致、车头标定覆盖。0.30m全墙本次有限搜索找到完整路径的ID为 `[5,6,10,11,15,20,21]`，其余只代表本次未找到，不能证明不可抓取。原10项回归通过；RViz/Rerun实际GUI启动，0.30m/6号完整成功轨迹RRD通过verify且包含最终携箱返回帧。证据 `/home/astesia/Sevenova/日志/验收_2026-09-11/wall_grasp_demo/`。
-- 留给下个AI：`success`只代表该模型/固定初态/离散检测/有限预算内完整几何路径，不是全墙都能抓或实机安全证明。新服务同步串行、并发可能排队、无取消；失败 `selected_arm` 为空，JSON side为最后诊断臂，auto失败要查看全部attempts。仍缺实测车头基准/墙摆放/初终态合同，RTK引用文件仍缺；旧零臂角与NOW home不一致，本次刻意保留旧基线。共享轴不搜索，地面和额外环境障碍、动力学/吸附反馈、放置释放、连续拆墙均未实现，正式集成由runtime管理，不把此demo当生产接口。
+### GPU 环境与四入口烟测补充
+- 环境：用户安装 CUDA Toolkit 12.8.2，`nvcc=12.8.93`；cuRobo v0.7.8 已针对 RTX 4070 `sm_89` 编译安装。安装器改用排除示例资产的 sparse checkout，并在无 Git 构建副本中固定 SCM 版本，避免安装时补拉无关网格。
+- 固定 X：接触面 `X=0.50m`、1号箱、右臂、`updown=0`。GPU 接触位 batch-env IK 成功，位置误差约 `1.32e-6m`；CPU 可达复核成功。GPU 预接触/接触/抽离末态均成功，CPU 完整抽箱约 `1026.0ms` 成功。
+- 随机 X：seed=309 的2次烟测生成 `0.612689567m/0.600085187m`，1号箱右臂 GPU 两环境并行预筛、CPU 两 ROS Domain 并行复核，可达和完整抽箱均2/2成功。
+- 跳过逻辑：23号箱左臂 `updown=0` 的 GPU 阴性仍进入 CPU 补查，CPU 以 `contact_ik` 无解确认不可达；抽箱结果为 `skipped_unreachable` 且尝试数0。烟测数据位于 `/tmp/v3_gpu_fixed_reach_smoke`、`/tmp/v3_gpu_random_reach_smoke`、`/tmp/v3_gpu_unreachable_skip_smoke`，未运行完整25格或默认8组随机任务。
 
-## 2026-09-11 运控 / Codex / 单箱 demo 关闭终端后 waiting 故障修复
-- 做了什么：从用户实际进程 PID339321 命令行确认 `arm:=auto~` 拼写错误；规划节点 PID339324 的 FATAL 为 `arm must be left/right/auto`，但旧 launch 仍保留 RSP/RViz/Rerun。调用端 PID340093 与服务端同为 domain187/localhost1/正确 overlay，本次不是 source/domain 故障。
-- 改了哪里：仅新距离 demo launch 增加原生 arm choices 和规划节点 on_exit→Shutdown；不更改 C++、旧单臂 launch、抓取算法或实机接口。新增 `test/test_v3_box_wall_startup.py`；同步 `docs/运控/IK/V3距离输入单箱抓取Demo.md` 和本地 HTML 操作指南。
-- 验证结果：config 包构建通过；domain188 隔离回归通过非法 arm 启动前拒绝、非法 x 初始化失败联动停止、三次全新启动真实请求6号箱（均 success、generation1、left、87帧五阶段），并覆盖 SIGINT、规划节点 SIGTERM、终端关闭 SIGHUP 后进程清理与服务下线。突然退出后的 DDS 发现缓存会延迟消失，测试等待上限60秒，不能用缓存 service list 作为存活证据。原生 Shutdown 在 x 初始化失败时外层 launch 可返回0，诊断应看 FATAL/节点退出，不仅看 shell 返回码。
-- 实际恢复：仅停止原故障 launch 及其 ROS 子进程；在可见 gnome-terminal「单箱抓取 Demo · 服务端 · Domain 187」以 `x:=0.30 box_id:=6 arm:=auto` 重新启动。原先等待的客户端退出，对应第2轮 SUCCESS；独立新请求第3轮同样 success/left/87帧，验证 RViz 最终箱体 marker 与 Rerun FK 一致，Rerun 日志收到 generation3 SUCCESS。目前有意保留该可视化仿真服务运行，用户在服务端终端 Ctrl+C 即停止，不是后台常驻服务。
-- 证据：`/home/astesia/Sevenova/日志/验收_2026-09-11/wall_grasp_startup/` 下 original_processes.txt、original_failure.log、build.log、test.log、startup_summary.json、各 restart 日志/轨迹、restored_visual_launch.log、restored_service_summary.json / restored_service_task.json。独立 Rerun 查看窗口可能保留旧录制，不应宣称关闭所有窗口才算退出；本次未触实机、未提交 Git。RTK 入口 `/home/li/.codex/RTK.md` 本机仍缺失，不影响此次已定位的 launch 修复。
+## 2026-09-11 运控 / Codex / V3 单臂随机 X=65～95cm 完整区间样本测试
+- 做了什么：使用已构建四入口中的随机 X 可达/抽箱脚本，seed=309 在接触面距离 `[0.65,0.95]m` 内采8个整墙位置；每个位置完整测试25箱、左右臂和五档 `updown`，抽箱只处理CPU确认可达的手臂/升降候选。
+- 验证结果：8个X的任一臂可达均为25/25。按X升序，任一臂完整抽箱为：0.650128/0.669034/0.709192/0.711055m 均21/25，0.798859/0.868427m 均23/25，0.879359m为24/25，0.918691m为25/25；总体179/200。所有2000次可达尝试和334次抽箱尝试均完成，无超时/进程异常。
+- 质量结论：GPU可达预筛2000候选约7.664s，GPU抽箱预筛830候选约4.819s。可达阶段存在64个GPU假阴性和20个GPU假阳性，均由CPU全量补查纠正，证明GPU只能用于排序。最终42个失败手臂组中29个为 `cartesian_retreat`、13个为 `precontact_ik`。
+- 数据：`data/ik_benchmark/v3_single_arm_5x5_box_wall/gpu_parallel_random_x065_095_seed309/`；摘要见其中 `RESULT_SUMMARY.md`。本结果是区间内8个固定随机样本，不是连续X穷举或精确阈值扫描。
 
-## 2026-09-11 运控 / Codex / 10号可抓而14号失败的逐臂定位与修复
-- 做了什么：在隔离domain188以x=0.30逐一复测10/14的auto、left、right。10由left完成；14的auto确实尝试left（precontact_ik无候选）和right（最后接触step5/5，right_joint7与下方neighbor_box_9碰撞）。不是漏算左臂，也未修改auto先left后right的顺序。
-- 根因与修复：当前STL变换到tool0后，左右末端前沿分别超出名义TCP面约0.039µm/0.101µm；严格零间隙贴面叠加浮点误差触发邻箱接触判定。仅新距离demo新增默认1µm的contact_numerical_gap（有限0..0.0001m；旧demo保持0），用同一toolToBoxCenter()统一接触目标、附着碰撞体、JSON/Rerun及RViz位置，避免吸附时箱体跳变；没有缩网格/箱体、改ACM、关闭邻箱碰撞或增加搜索预算。这只是仿真数值间隙，不是吸盘压缩/TCP标定/安全距离；实机这些合同仍缺失。
-- 改了哪里：v3_single_arm_box_extract_demo.cpp、新距离launch、既有test_v3_box_wall_grasp_demo.py与test_v3_box_wall_startup.py、距离demo技术文档及本地HTML指南。额外逐臂打印arm=... SUCCESS/FAILED stage/reason，RViz成功状态加arm。Rerun已经消费tool_to_box_center，无需再修改viewer。
-- 验证结果：构建通过；新回归含10-left/14-right显式及auto、非活动臂/共享轴固定、五阶段、吸附无跳变和双臂RViz最终marker/FK一致；把gap设回0可重复得到14右臂同一邻箱碰撞（严格反例）。原10项旧demo回归通过；启动回归8项通过（含负/过大gap拒绝及三次重启真实6号请求）。本轮0.30m有限全墙扫描成功IDs=[5,6,8,9,10,11,13,14,15,19,20,21,23,24]，不是物理可达证明/永久成功清单；8号此前的右臂接触失败已被修复，历史说明已更新。
-- 实际恢复：仅停止旧domain187 demo launch PID352008；在可见终端「单箱抓取 Demo · 已修复14号 · Domain 187」启动新版x=0.30/box14/auto并保留运行。真实桌面新服务请求10->left成功、14->right成功（各79帧完整五阶段），验证RViz FK/arm状态和Rerun generation3 SUCCESS；最后场景是14号。未触实机、未提交Git。
-- 留给下个AI：证据在 `/home/astesia/Sevenova/日志/验收_2026-09-11/wall_grasp_arm_symmetry/`：before_summary/逐臂JSON、wrist_mesh_bounds.json、build.log、regression.log及zero_contact_gap.json反例、legacy.log、startup.log、visual_summary.json/visual_10_task.json/visual_14_task.json/visual_launch.log；before_demo.cpp可查看本轮相对已有未提交修改的精确增量。不要把1µm改成真实硬件间距，也不要通过放开邻箱ACM处理更大真实碰撞。
+## 2026-09-11 运控 / Codex / V3 单臂 X=85～99cm 每厘米可达性测试
+- 做了什么：新增确定性 X 网格可达入口 `v3_x_grid_reachability.py` 和 GPU 分块参数；按接触面 X=`0.85～0.99m`、步长1cm运行15组，每组完整测试25箱、左右臂和五档 `updown`，共3750候选。本轮不测试完整抽箱。
+- 验证结果：15个X均为左臂15/25、右臂15/25、任一臂25/25；左右臂可达箱格集合在15组中完全不变。CPU成功升降候选从0.85m的108/250逐步降至0.99m的96/250，说明箱格覆盖不变但远距离升降冗余减少。
+- 质量：GPU分4批约13.523s，命中1522/3750；CPU确认1540/3750。GPU假阴性24、假阳性6，均由CPU纠正。3750次复核全部完成，无超时或进程异常；Release构建和包内18项测试通过。
+- 数据：`data/ik_benchmark/v3_single_arm_5x5_box_wall/gpu_parallel_grid_x085_099_step001/`，摘要见 `RESULT_SUMMARY.md`。
 
-## 2026-09-11 Git / Codex / 单箱抓取版本冻结准备
-- 做了什么：用户认可当前版本并要求按仓库 PR 规范冻结；从 alfa_v3_dev 的 1e6c58f 建立 feature/wall-box-grasp，保留旧架构目标，不直接提交基线或发布正式 tag。
-- 范围：箱墙前置、距离服务、启动联动退出、双臂数值接触修复、回归和技术/HTML指南；纳入编译前置 Conda 环境隔离及测试。不纳入独立冗余 IK 启动修复、本机安装交接和无关历史日志。
-- 验证：复核已有构建/仿真证据；冻结时检查环境脚本、Python AST、HTML锚点和暂存diff。未停止桌面仿真、未操作硬件。
-- 留给下个AI：六项PR材料见 docs/运控/IK/V3距离输入单箱抓取Demo_PR.md。作者姓名/邮箱未配置，本任务Issue未确认；禁止冒用历史作者或MOTION-94/154。尚未commit/push/创建PR，远端读取未及时返回；确认身份及Issue后完善关联再提交，核心review/CI通过前不合并、不打正式tag。工作区仍保留未归属修改，勿git add .。
+## 2026-09-14 运控 / Codex / 独立铲式 5×5 抓取任务
+- 做了什么：从 `SevenovaHangzhou/robot_description:robot_v3_suction_chassis@17f5bdc` 导入双侧铲式吸盘视觉/碰撞网格，建立显式 `scoop` 末端变体；新增独立站位配置、一键规划/Rerun入口、结果schema和数据目录，原单臂吸盘入口继续默认 `legacy_suction`。
+- 改了哪里：`alfa_robot_description` 新增 `robot_v3_scoop` 网格与末端宏；`alfa_robot_moveit_config` 新增 `v3_scoop_5x5_station.json`、`v3_scoop_5x5_grasp_sequence_rerun.py`，公共启动/扫描仅增加默认不启用的末端选择参数；说明见 `docs/运控/IK/V3铲式5x5抓取仿真.md`。
+- 验证结果：默认/铲式 URDF 均为23 links、22 joints、16个可动关节，除左右 `joint7` 外其余XML一致，TCP仍为135.85mm；Release构建成功，20项包测试通过。铲式完整任务25/25、箱间整机过渡25/25，交接TCP最大位置误差约 `4.997e-8m`、姿态误差约 `0.005864°`；Rerun `rrd verify` 通过。
+- 数据：`data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd` 及同名 `-summary.json`；原吸盘录制和站位文件未覆盖。
+- 留给下个 AI：上游把该总成命名为 suction，本项目任务名为“铲式吸盘”；当前仍是运动学/刚体碰撞仿真，未模拟真空和受力。上游也未认证吸附面TCP，实机使用前必须测量标定。
 
-## 2026-09-11 Git / Codex / 复用 VS Code 登录与 Issue 核对
-- 用户授权：优先复用 VS Code 的 GitHub 登录；只有能确定对应本任务时才关联 Issue，否则允许留空。
-- 核对结果：GitHub 仓库 state=all 列表返回18项且均为PR，无独立Issue；本地NOW/TASKS未提供本任务编号，MOTION-154是不同的双臂动作任务。没有Linear在线访问能力，未声称查遍Linear；本次关联留空。
-- 身份/网络：VS Code认证日志确认16:28登录成功；但当前命令环境未继承凭据助手。通过正常VS Code Git askpass请求在Username阶段超时，没有读取到可核验的账号身份或凭据，未读取/导出编辑器秘密存储。GitHub API公开读取成功，github.com HTTPS连接仍超时，不能把登录成功等同于可推送。
-- 交接：PR材料已取消Issue阻塞；源码与先前冻结快照一致。仍未commit/push/创建PR；需用户检查VS Code是否有待确认的Git账号授权提示，并恢复github.com连通性。暂存范围和未归属工作区修改保持隔离，未操作实机或演示进程。
+## 2026-09-14 运控 / Codex / 铲式 5×5 抽回运动连续性
+- 根因：旧抽回每1cm在固定5°冗余角网格中贪心选解，虽然单帧受限，13号J3/J6和21号多关节仍会周期性切换相邻解析分支；基线13号最大单步4.49°、明显反向27次，21号5.32°、67次。
+- 调整：仅铲式配置启用上一帧冗余角 `0/±1/±2°` 邻域采样、关节二阶代价10.0、近端/腕部3°硬单步限制，并把已碰撞验证的笛卡尔边按1°关节步幅重采样。结果摘要新增逐箱 `retreat_motion` 和明确验收合同；原吸盘默认参数保持关闭/为零。
+- 验证结果：铲式完整任务及25个箱间过渡仍为25/25；最终最坏抽回帧步幅0.9996°、相邻帧变化1.3379°、单箱明显反向8次。2/22/24号FK抽查的TCP直线最大侧向偏差0.081mm、姿态偏差0.0204°。旧吸盘完整任务另存 `/tmp/v3-legacy-suction-after-scoop-smoothing.rrd` 回归25/25。
+- 数据：已覆盖更新 `data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd` 和同名摘要；说明同步更新 `docs/运控/IK/V3铲式5x5抓取仿真.md`。
 
-## 2026-09-11 Git / Codex / 账号核验与 fork 提交
-- 用户确认授权后，VS Code正常Git凭据助手已可使用；GitHub /user 核验账号bestastesia（ID136950813）。仅本仓库设置作者bestastesia / 136950813+bestastesia@users.noreply.github.com，避免公开私人邮箱；凭据不写入仓库或日志。
-- 上游权限只有pull，没有push；已创建bestastesia/alfa_robot公共fork，采用fork的feature/wall-box-grasp向kkozia188/alfa_robot的alfa_v3_dev提PR，不推送或合并上游基线。上游alfa_v3_dev经API核验仍为1e6c58f。
-- Issue按用户授权留空；源码与先前冻结树一致，只更新PR/交接文档。保留未归属冗余IK修改和历史日志，不扩大暂存范围。
-- GitHub API可用但github.com Git传输仍超时，改用GitHub Git数据库API发布同一Git对象；必须校验远端tree/commit SHA与本地完全相同后才创建新分支，不强制更新已有分支。实际提交/PR结果记录到仓库外冻结清单；未经核心review/CI和合并，不发布正式tag。
+## 2026-09-14 运控 / Codex / 底部两排全顶吸与负载回旋约束
+- 调整：铲式任务改为1～15正面抓取、16～25全部顶吸；右臂固定负责16/17/18和21/22/23共6箱，左臂固定负责19/20和24/25。顶吸交接位按箱列对齐到世界x=0.70m、Z为箱中心上方0.55m并保持吸盘朝下。
+- 回旋修复：`planRrt`增加可选direct-only口径；铲式顶吸负载转运只接受完整场景无碰的直接关节插值，不再把成功但绕行的RRT当结果。摘要新增每箱 `loaded_transfer_motion`，并对负载帧数、总行程、额外绕行、反向次数和单步设置验收门槛；旧吸盘默认关闭。
+- 验证结果：完整抓取25/25、整机箱间过渡25/25；15个正面、10个顶吸，右臂顶吸6个。10个顶吸负载段单箱最多9帧、最大总关节行程58.959°、额外绕行0°、方向反转0次；交接TCP最大位置误差约5.622e-8m、姿态误差0.005864°。旧吸盘入口另存 `/tmp/v3-legacy-suction-after-top-direct-only.rrd` 完整回归25/25。
+- 数据：已更新 `data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd` 与摘要；配置和说明分别见 `v3_scoop_5x5_station.json`、`docs/运控/IK/V3铲式5x5抓取仿真.md`。
 
-## 2026-09-11 Codex / 单箱抓取前按箱高下降共享升降轴
-- 做了什么：在冻结提交 `27ea05e` 上新建 `feature/wall-box-height-alignment`，按用户要求实现 `max(0, 肩部中心Z-(箱中心Z+offset))` 的下降预阶段；offset默认0.25m。冻结分支和原PR未改，本轮未提交/推送。保留原冗余IK未提交工作，不混入本功能。
-- 高度合同：中心取左右肩部前三关节公共轴交点的中点；复用解析IK几何，新增模型级肩中心读取，旧static接口仍保持LegacyV304语义。当前world Z≈1.342432773m；底排下降≈.892432773m、第二排≈.482432773m。updown按模型[-1,0]m限位拒绝越界，至多5mm采样整机碰撞；不做静默clamp、不放松ACM。非正差不抬升。下降后IK基坐标/RRT起态/负重返回目标一致；返回保持升降高度。
-- 改了哪里：解析IK hpp/cpp；单臂demo C++、距离launch（默认box0，新增align_height/shoulder_box_offset）、Rerun摘要/米与弧度回放区分；新增 `test_v3_box_wall_height_alignment.py`；原抓取/startup测试显式关闭高度调整以保持冻结回归；更新距离demo Markdown/HTML。
-- 验证结果：最终3包Release构建成功；新测试23次真实服务请求+3类非法偏置拒绝通过（初始肩中心独立URDF FK、低两排扫描、显式双臂、10/14、高低重置、不抬升、超行程拒绝/-1m边界、16轴/插值/附着无跳变、RViz最终箱位对齐Rerun FK）；冻结抓取回归通过（含10/14及零gap反例），startup 8项、legacy 10项、解析IK CTest 2/2通过。Rerun RRD verify通过，已记录261帧从lower_to_box_height至携箱rrt_return末帧。证据 `/home/astesia/Sevenova/日志/验收_2026-09-11/wall_height_alignment/`（最终新测试在final_acceptance/）。
-- 关键限制：x=.30/offset=.25时低两排只有0、4、5、9在本次搜索成功；1、2、3、6、7、8双臂预接触IK无候选，不能说已覆盖整两排；尤其6号冻结版成功、新高度版失败。未擅自搜索替代高度/改姿态绕过用户公式。场景仍无地板，碰撞离散非连续，未构造下降中途碰撞反例；未做实机动态/载荷/标定验收。每次请求重置零角/升降0/完整墙，不是连续升回与连续搬箱。
-- 留给下个AI：本机新升降版双视图已启动在localhost ROS_DOMAIN_ID=188，默认0号success；原冻结演示仍在187（不要混用服务）。同一install现在是新构建，重启冻结动作要显式 `align_height:=false` 或检出冻结分支重编译。HTML新指南已发起打开。后续若要整两排覆盖，应与用户确认偏置/接触姿态/高度搜索策略，不能宣称25cm已全覆盖。实机肩中心/零位/行程与速度负载合同、放置释放/跨箱接续规范仍缺；RTK引用文件仍不存在。
+## 2026-09-15 运控 / Codex / 前三排正面抓取电机行程与换向优化
+- 做了什么：铲式 5×5 的 1～15 号正面抓取从“首个完整成功即采用”改为质量约束选优。固定交接 TCP 的 IK 排序同时考虑带箱到位和释放后回待机；OMPL 路径在完整 PlanningScene/FCL 复核下求原路径节点间的最小加权关节行程；每箱至少比较3条成功轨迹，不达标时最多扩展到12条。
+- 验收合同：完整单箱七轴累计行程不超过1900°、段内多余行程不超过500°、明显反向不超过15次、任一电机累计活动范围不超过310°、单帧不超过3°；超标不会生成成功录制。交接回程权重仅作用于正面抓取，底部顶吸的direct-only合同和结果保持不变；旧吸盘默认参数仍关闭。
+- 验证结果：Release构建通过，策略测试21项通过；最终完整抓取25/25、箱间整机过渡25/25。前三排平均/最坏累计行程为1436.3°/1874.2°，同口径关闭新策略基线为1806.4°/2791.9°，分别下降20.5%/32.9%；明显反向总数由138降到86（下降37.7%），最终最坏单箱12次。顶吸负载段仍为最多9帧、最大58.959°、0额外绕行、0反向。
+- 数据：重建 `data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd` 和同名摘要；`rerun rrd verify`通过，84个实体路径、42个机器人网格；任务/箱间过渡帧为6064/188。说明同步更新 `docs/运控/IK/V3铲式5x5抓取仿真.md`。
 
-## 2026-09-11 Git / Codex / 升降抓取版独立PR提交准备
-- 用户明确要求将本次高度版提交PR；仅暂存高度版代码/文档/测试和本任务交接，不混入冗余IK修复或既有未归属日志。
-- GitHub API核验账号bestastesia；上游PR #20仍open未合并，目标alfa_v3_dev仍为1e6c58f。新PR沿用该目标，标注依赖#20并要求先合并#20；合并前累计diff包含前序内容，可用27ea05e到本次HEAD单独审阅升降增量。Issue无明确对应，按用户授权留空。
-- PR说明记录默认行为变化、0/4/5/9成功及6号回归差异、离散碰撞/无地板/无实机验收边界和复现命令。只发布待审查分支，不合并、不打正式tag。远端发布结果另存仓库外清单。
+## 2026-09-15 运控 / Codex / 铲式5×5改为后方传送带放箱
+- 用户修正：上一条仅优化了旧交接点的运动质量，但真正问题是放箱位置。权威场景现改为机器人后方有未建模传送带，左/右臂分别把箱体正放到自己的后方槽位；旧固定交接TCP和前方顶吸列对齐交接不再用于铲式任务。
+- 放箱合同：箱底统一为世界Z=0.70m、箱心Z=0.90m；正面吸取左右箱心为`[-0.55,+0.35,0.90]`/`[-0.55,-0.35,0.90]m`，顶吸因后向腕部可达范围使用`[-0.55,+0.15,0.90]`/`[-0.55,-0.15,0.90]m`。传送带不加入视觉或碰撞模型，释放后箱体消失表示被输送走。
+- 实现：按吸附模式、左右工具朝向、面内吸点和13号专用偏置反算放置TCP；抽离后以2cm步长切换到统一`updown=-0.25m`，释放后恢复任务高度。直接升降碰撞时先规划安全携箱姿态再升降，8号使用该回退；新`rrt_to_updown_safe`阶段纳入有界随机重试。顶吸后放由只适合旧前方交接的direct-only改为完整PlanningScene/FCL验证的RRT加最小关节行程后处理。
+- 验证结果：Release构建通过，MoveIt配置18/18测试目标、Rerun 2/2及策略文件21项全部通过。完整抓取25/25、箱间整机过渡25/25；四类箱心目标唯一且最大回代误差`2.95e-8m`。完整单箱最坏七轴行程1992.2°、段内多余行程567.2°、明显换向17次、单轴活动范围298.5°、单步3.0000°；升降累计最多1m、单步2cm。顶吸带箱后放最坏94帧、616.1°、多余246.9°、5次换向。RRD verify通过，84个实体路径、42个机器人网格。
+- 数据：正式结果仍为`data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd`及同名summary；任务/箱间过渡帧为7292/188。上一条的6064帧和前三排1436.3°平均值只对应已废止的旧交接点，不应再作为当前回放验收数据。
 
-## 2026-09-12 Codex / 距离升降单箱Demo加入地面与四周碰撞
-- 做了什么：在7d2defe上新建 `feature/wall-box-environment-collision`；共享makeScene统一加入原生CollisionObject环境盒体，复用现有整机状态/边检查覆盖初态、下降、IK、接触附着、抽出和负重RRT返回。未放松ACM、未缩小碰撞网格，保留原冗余IK未提交修改。本轮未提交/推送/创建PR。
-- 接口：距离launch默认check_environment=true；environment_file JSON启动时读取，配置frame_id/world、description和轴对齐boxes(id/center/size)，ground必填，数值/尺寸/ID/坐标系/不支持旋转校验失败即退出。result_json.environment、RViz及Rerun使用同一份几何；RViz重启不保留旧障碍。false只给历史回归使用，日志明确警告。旧单臂入口不变。
-- 基准与任务风险：独立URDF FK/STL顶点确认model_base最低world Z约-0.4022m，默认地板上表面-0.402201m（1µm仅数值间隔）；示例四周内边界X±3m、Y±2.5m、顶Z2.6m，全部未现场标定。为保留已验收网格，默认墙底仍Z0，比地面高40.22cm，不能称落地场景。允许wall_bottom_z为有限负数；显式落地到-.402201时，0号按25cm偏置需下降约1.2946m，真实超出[-1,0]，返回height_alignment_limits，不clamp/不关闭地板。真实底盘/地面/墙底坐标及障碍尺寸、安全裕度合同仍缺；RTK引用文件仍缺。
-- 改了哪里：单臂C++共享场景、距离launch、新config/v3_box_wall_environment.json、Rerun、test_v3_box_wall_environment.py；原高度和冻结抓取测试显式关闭环境以保留原算法回归；更新距离Markdown/HTML。环境固定于进程，修改自定义文件需重启；只支持有限尺寸静态轴对齐盒体，离散碰撞不是连续或实机安全证明。
-- 验证结果：2包Release构建通过；14真实请求+6类非法环境全部通过，默认0/4/5/9/10/14/20/24成功，ground/base初态、仅闲置右臂障碍、下降中途台板（updown=-.289168）、仅携箱返回目标及抽出侧挡片碰撞全部拦截。负world墙底可输入且底排超行程拒绝正确。高度23+3、冻结全墙/零gap反例、startup8、legacy10、解析IKCTest2/2通过。实际RViz/Rerun启动，RRD verify成功；6环境实体中心/半尺寸与配置一致，完整261帧到携箱rrt_return。抓录脚本整进程组SIGINT导致launch重复转发，Rerun退出atexit出现KeyboardInterrupt；发生于完整回放之后，录制独立验证通过，不隐瞒此测试清理现象。
-- 证据与接手：`/home/astesia/Sevenova/日志/验收_2026-09-12/wall_environment/validation_summary.json`、model_ground_reference.json、final/及visual/；前一轮13请求记录在2026-09-11同名目录third/。测试使用localhost189/190/191/192并只清理自身进程；本轮未留下后台demo，重启时source当前install即可默认启用环境。本功能完成不意味着用户整体新架构接手/仿真复现学习目标已全部完成。
+## 2026-09-16 运控 / Codex / 修正后方传送带左右槽位
+- 用户修正：9月15日配置把左右放回位置写反。模型零位核对确认`left_tool0`在负Y侧、`right_tool0`在正Y侧；权威槽位改为左臂负Y、右臂正Y。
+- 调整：正面箱心左/右改为`[-0.55,-0.35,0.90]`/`[-0.55,+0.35,0.90]m`，顶吸左/右改为`[-0.55,-0.15,0.90]`/`[-0.55,+0.15,0.90]m`。正面工具姿态重新搜索为左`pitch=-90°,yaw=-45°`、右`pitch=-90°,yaw=+45°`，不是简单交换旧四元数；顶吸使用对应镜像姿态。4号为满足原质量门槛自动改用左臂`updown=-0.25m`，其余策略选择保持合法。
+- 验证结果：完整抓取25/25、箱间过渡25/25；四类槽位方向正确且箱心最大回代误差`5.46e-8m`。完整单箱最坏七轴行程2252.5°、段内多余行程648.1°、明显换向17次、单轴活动范围309.6°；顶吸带箱后放最坏100帧、676.0°、多余210.4°、5次换向。MoveIt配置18/18测试目标、Rerun 2/2、策略测试21项及RRD verify全部通过，录制仍含84个实体路径。
+- 数据：已覆盖正式RRD和summary；任务/箱间过渡帧为7754/188。9月15日日志中的左正Y/右负Y坐标与7292帧结果已被本条取代。
 
-## 2026-09-12 Codex / 环境碰撞后补齐两种箱墙25箱覆盖
-- 做了什么：复用环境测试增加可选`--scan-wall`，固定x=.30m、25cm偏置，默认/模型落地各25请求；未改业务算法、环境、预算或ACM。新请求摘要保留箱号/选臂/全部attempts/耗时，对成功携箱回放统一做FK地板高度检查。
-- 验证结果：domain193隔离运行55请求（50扫描+5碰撞反例）及6类非法配置检查通过。默认墙底Z0成功12/25：0,4,5,9,10,14,15,19,20,21,23,24；12个precontact_ik失败、22号cartesian_retreat失败。模型落地墙底-.402201成功8/25：5,9,10,14,15,19,20,24；0～4全超行程，其余12个precontact_ik。失败auto均有左右臂尝试；默认17/落地22是候选机身自碰撞，不能统称数学无解。
-- 改了哪里：现有环境回归脚本及距离Markdown/HTML，个人接手导航同步覆盖结论。无新框架/依赖，无生产代码变化，未提交推送PR。
-- 接手证据：`/home/astesia/Sevenova/日志/验收_2026-09-12/wall_environment/full_wall/`含每请求原JSON、coverage.csv、coverage_summary.json（源码/二进制hash），源码与安装环境配置/launch逐字节一致。测试通过不是全部搬运成功，成功仍附着返回；这是固定测试距离下独立请求覆盖，不是最优距离、连续拆墙、放置释放或实机验收。
+## 2026-09-16 运控 / Codex / 双臂防穿模与朝下外侧放置
+- 用户反馈：Rerun中双臂会互相穿模，且放箱时末端应朝下；左右落点需要离中心更远，并尽量缩短/简化轨迹。
+- 碰撞修正：铲式配置显式`ignore_opposite_arm=false`，不再放行活动臂/携箱与对侧臂碰撞。升降段因会同时移动双臂，改用无规划组过滤的整机PlanningScene/FCL检查；箱间整机过渡继续沿用原完整碰撞检查。summary逐箱记录`ignore_opposite_arm=false`。
+- 放置合同：末端工具Z轴朝下，左臂负Y、右臂正Y。正面吸取箱横放后箱心为左`[-0.45,-0.55,0.85]`/右`[-0.45,+0.55,0.85]m`；顶吸箱心为左`[-0.55,-0.50,0.90]`/右`[-0.55,+0.50,0.90]m`；四类箱底均为Z=0.70m。新增朝下误差0.1°硬门槛，最终最坏仅`5.4e-6°`。
+- 质量与验证：完整抓取25/25、箱间过渡25/25，传送带箱心最大误差`5.21e-8m`。完整运动最坏总行程2282.8°、多余行程624.2°、明显换向16次、单轴范围298.5°；顶吸带箱最坏96帧、696.3°、多余212.7°、5次换向。任务帧由上一版7754降至7718，箱间过渡仍188帧。MoveIt配置18/18测试目标、Rerun 2/2、策略21项和RRD verify全部通过，录制含84个实体路径。
+- 数据：已覆盖`data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd`和同名summary；上一条`|Y|=0.35/0.15m`且末端非统一朝下的结果已被本条取代。
 
-## 2026-09-12 Codex / 碰撞demo改为home起终姿态、零地面和单开口仓库
-- 做了什么：按本轮用户要求，距离demo直接读取SRDF `whole_body/home`：双臂[-90,-90,0,-90,0,0,0]°、updown/head=0。先按原25cm策略下降，携箱RRT返回home臂角后新增`restore_default_height`，携箱按≤5mm采样升回0；预先验证整段负重上升，阻挡返回`return_lift_collision`，不跳过上升伪报成功。旧交互launch仍保持原零姿态/坐标。
-- 坐标/仓库：仅距离launch传`model_ground_offset=.402201`修正base_to_model安装高度，world/base_link仍Z0，箱墙底Z0，地板上表面Z0；独立碰撞STL/FK测得底盘最低Z=.947µm（数值容差，非实机安全裕度）。仓库内尺寸X长4m/Y宽2.38m/Z高2.35m，+X正墙、−X开口，两侧/正墙/地板/顶棚五个有碰撞实体，10cm厚度向外。箱墙Y居中，宽2.04m，两侧各17cm，背面距正墙1µm（复用contact_numerical_gap，避免右臂吸附FK误差误判穿正墙）。没有缩网格、放开ACM或扩大搜索预算。
-- 改了哪里：description增加默认0的落地标定arg；距离launch传同一URDF给规划器/RViz/Rerun；C++初态、负重回升、JSON initial_joints及环境坐标；默认环境配置增加`anchor:box_wall_back`，每次独立距离请求重建仓库相对箱墙的位置（不是底盘行走）。自定义world环境默认不平移，配置仍只从启动文件读一次。Rerun不再插入全零预览，用规划器initial_joints，摘要更新。环境/固定升降/高度/startup回归已迁移新home合同；更新距离Markdown/HTML，未触本轮开始前其他未提交修改。
-- 验证结果：3包Release构建成功（description仍有已有pytest检测warning）；仓库42真实请求+7非法配置通过，含五个仓库实体分别侵入整机、空闲臂/下降中途/仅负载返回/仅负载回升/抽出挡片反例；独立全机器人初态碰撞网格均在仓内。固定x=.90m扫描成功17/25：5,6,8,9,10,11,13,14,15,16,18,19,20,21,22,23,24；0～4超行程（下降需1.294634m），7/12/17接触路径无解。不是连续拆墙或全策略可达性结论。新home导致x=.30初态碰箱墙，x=.75携箱home碰剩余箱体，不能沿用原零姿态距离示例。
-- 其他验证：高度21请求+3非法偏置；固定高度25墙格/7非法输入/20左24右/零gap反例/车头覆盖；startup8项；旧交互demo10项；解析IK CTest2/2；py_compile和diff --check均通过。右臂9号RRD verify通过且完整418帧至restore_default_height，最终joint_states/携箱RViz marker与同一落地URDF独立FK一致，录制进程干净退出。已实际查看RViz/Rerun新版仓库及home携箱终态截图；Rerun中文缺字方框为现有字体问题，本轮未处理。
-- 接手证据/运行：`/home/astesia/Sevenova/日志/验收_2026-09-12/warehouse_home/`含environment/summary.json、home_collision_mesh_bounds.json、各回归日志/JSON、visual/warehouse.rrd及截图、源码/二进制hash。仅SIGINT停止原可视化launch PID94173及其子进程，以可见终端「仓库 Demo · home起终姿态 · Domain 0」重启x=.90/box5/auto，新请求SUCCESS/left/422帧并保留运行；沿用原ROS_DOMAIN_ID=0、ROS_LOCALHOST_ONLY=0，终端Ctrl+C停止。原引用`/home/li/.codex/RTK.md`仍不存在；未接实机、未提交推送。
+## 2026-09-16 运控 / Codex / V3.1.1 模型与命名卸货姿态对齐
+- 做了什么：按 `kkozia188/alfa_robot:alfa_v3_dev@8649d6a` 同步 `robot_v3.1.1-hybrid` 模型、解析IK、`home/unloading`、MoveIt初值/SRDF；保留本地铲式末端。左臂语义为正Y、右臂为负Y，铲式25箱候选与旧V3.0.9选择表分离。每排先两侧后中心，3/8/13号短抽离10cm，7号顶吸，23号在`updown=-0.60m`使用顶面X偏置`-0.13m`，其余底排按验证高度抓取。升降朝命名卸货高度时按当前抓取高度选择先升降或先移到后方，携箱升降逐2cm做整机FCL检查，不跳箱也不忽略对侧臂碰撞。
+- 改了哪里：description受管配置/Xacro/网格及校验脚本、解析IK V311 profile、MoveIt SRDF与搬箱规划/测试、`v3_scoop_5x5_station.json`、Rerun序列和`docs/运控/IK/V3铲式5x5抓取仿真.md`。旧V3.0.9箱号选择表保留为历史基线；模型查看器和ROS2 mock初始姿态已同步。
+- 验证结果：描述快照SHA-256锁校验通过，description 29个pytest用例、解析IK 2个CTest目标和MoveIt 20个CTest目标全部通过；完整铲式抓取25/25、整机过渡25/25，25箱编号唯一。左/右落箱Y分别在`[+0.214,+0.341]m`/`[-0.452,-0.251]m`，释放时卸货七关节误差`0°`；最坏完整行程`2713.5°`、明显反向16次。`rerun rrd verify`通过；正式RRD及summary已覆盖为V3.1.1结果。
+- 留给下个AI：权威`unloading`的末端工具轴近水平朝后，距旧“竖直朝下”约`89.33°`，不能将二者都写为已满足。23号顶吸接触点距箱面边缘仅2cm，硬件前需复核吸附面积/真空与实测TCP；未对旧吸盘5×5站位或V3实机执行桥做新模型验收。工作区无`.git`元数据，本轮未提交。
 
-## 2026-09-12 Git / Codex / 仓库碰撞与home起终姿态PR准备
-- 做了什么：按用户要求提交当前仓库碰撞demo；仅包含环境/home/零地面代码、配置、测试、距离指南和对应交接，不混入冗余IK启动修复、本机MoveIt交接或历史未归属日志。
-- 分支/依赖：`feature/wall-box-environment-collision`，基于`7d2defe`；GitHub核验上游#20/#21仍open，目标`alfa_v3_dev`仍为`1e6c58f`。本PR要求先合并#20再#21，本次增量从`7d2defe`审阅；沿用前序Issue留空约定，不编造或关闭历史Issue。
-- 验证/边界：源码与完整验收的6项实现/二进制SHA256一致，提交前重跑仓库环境与25箱扫描42请求+7非法配置通过，解析IK CTest 2/2、暂存语法/JSON/diff检查通过，无关文件哈希未变；完整历史验收见`/home/astesia/Sevenova/日志/验收_2026-09-12/warehouse_home/`，本次发布核验见其`pr/`子目录。本机证据不是远端附件；PR给出复验命令和17/25覆盖、升降超限、离散碰撞及非实机边界。
-- 发布约束：中文提交/PR及Codex协作署名；只创建待审查PR，不合并、不打tag、不强推。发布后的PR编号、commit/tree一致性和CI/review状态另存发布清单并追加交接。
+## 2026-09-17 运控 / Codex / 连续抓箱与携箱防倒置
+- 做了什么：铲式5×5取消每箱释放后的`rrt_to_ready/updown_to_task`，下一箱从上一释放状态直接做整机空载过渡；下一箱IK以上一释放关节为种子，高度安全时保留对侧臂姿态。箱间先尝试手臂/升降分段直连，再用整机RRT；新增双臂过渡行程、绕行、换向、帧数和单轴范围硬门槛。携箱按实际箱体上方向计算倾角，在OMPL状态有效性和插值复核中限制为95°，候选选优加入平均倾角代价。
+- 改了哪里：`v3_single_arm_box_extract_demo.cpp`及launch参数、扫描/序列/Rerun脚本、`v3_scoop_5x5_station.json`合同升级到v3、策略测试和`docs/运控/IK/V3铲式5x5抓取仿真.md`。旧回home结果保存在同目录`v3-scoop-x075-home-return-baseline.*`。
+- 验证结果：完整抓取25/25、释放到下箱过渡25/25，释放关节误差0°。单箱活动臂行程`56624.1→21851.9°`（-61.4%），任务帧`8357→3758`（-55.0%），全序列含过渡`46013.4°/5483帧`；3420个携箱帧倒置0，最大倾角94.99°。最坏过渡161帧、双臂2749.3°，原19→18的505帧异常路径不再采用；RRD校验通过。
+- 留给下个AI：95°上限由权威`unloading`终点约89～91°决定，若要求箱体始终更接近竖直，必须先修改卸货关节姿态。23号边缘吸点的实机风险仍未消除。工作区无`.git`元数据，本轮未提交。
 
-## 2026-09-12 运控 / Codex / 单次肩心-TCP舒适高度实验收口
-- 做了什么：在 `feature/wall-box-comfort-height` 完成每臂一次几何选高的新实验入口，先调整 updown 再抓取，保持携箱 home + 升降归零；原 launch 的固定0.25m默认不变。仅仿真，未连接硬件。
-- 改了哪里：共享单臂Demo、解析IK模型臂长接口、纯选高头文件/测试、新comfort launch、Rerun诊断、实验/分析脚本；新增 `docs/运控/IK/V3单次舒适高度抓取Demo.md` 和 `V3单次舒适高度实验.json`。
-- 实验结论：9600次训练后冻结候选 `[1.10,1.15]` / preferred1.15，再跑1350次验证。三种子显式臂训练84/450→102/450，独立距离验证48/300→42/300（.95左5/右9稳定退化）；共同成功的限位裕度和行程指标不支持更自然。**未证实优势舒适区间**，不可替换旧默认或将含训练距离的auto总计当独立验证；验证后未回调参数。
-- 验证结果：Release构建通过，CTest18/18；旧环境42请求+7非法、旧高度21请求+3非法、旧/新启动8/12项通过。77轮10954响应独立重验通过（包括预期规划失败，并非全部抓取成功）；左右完整RViz回放及406/397帧RRD核验通过。可选Rerun原生截图panic，不计通过。
-- 留给下个AI：证据 `/home/astesia/Sevenova/日志/验收_2026-09-12/comfort_height/`，含冻结协议/原始任务/最终哈希/复现驱动；早期FK容差失败已保留并整段重跑，不能删掉失败证据。训练后运行时只修正初始预览臂选择，未扩大预算/放宽碰撞/增加换高重试。本轮未commit、未创建PR；保留其他AI的交互IK及交接文件改动。`/home/li/.codex/RTK.md` 不存在，无法读取。
+## 2026-09-17 运控 / Codex / 固定左右列分工与冻结非工作臂
+- 做了什么：按用户规则将每排第1/2列固定左手、第3/4/5列固定右手，中心3/8/13/18/23号全部改为右手；23号右手使用`updown=-0.62m`与顶面X偏置`-0.13m`，左手先进入经完整碰撞验证的低位安全姿态。箱间过渡若两臂都需调整，拆为两条单臂+升降规划顺序执行，每段冻结另一只手；禁止成功轨迹使用`dual_arm/whole_body`同时搜索。
+- 改了哪里：站位合同升级v4并增加`left_arm_columns/right_arm_columns`；序列规划加入顺序过渡、冻结臂零行程验证和实际规划组记录；状态过渡节点自动选择`left_arm_with_updown/right_arm_with_updown`；策略测试、说明文档和正式Rerun同步更新。
+- 验证结果：完整抓取25/25、过渡25/25；10箱左手、15箱右手，列归属错误0。成功规划组只有左右单臂+升降组，同时双臂运动计数0、冻结臂最大行程0°。整条序列行程`46013.4→34473.4°`，再下降25.1%；携箱倒置帧0、最大倾角94.92°；RRD verify通过。
+- 留给下个AI：切换工作臂且低位姿态不安全时，两臂会先后移动，但不会同时移动；Rerun中可通过summary的`transition_motion.planning_groups`核对具体顺序。工作区无`.git`元数据，本轮未提交。
 
-## 2026-09-12 文档 / Codex / Demo 操作入口精简
-- 做了什么：新增 `docs/运控/IK/V3Demo启动速查.md`，集中七个交互Demo的用途、首次启动和二次操作；强调每个终端加载环境、同domain及关闭后重启的区别。
-- 改了哪里：README增加速查入口；历史实验记录保留，不再作为日常操作入口。
-- 验证结果：按launch及服务注册核对命令，双臂三模式共用服务，舒适/固定高度两版共用服务；文档shell语法及入口存在性检查通过，未启动或打断运行中的Demo。
-- 留给下个AI：日常命令只维护速查，不往操作入口堆实验日志；本轮未改代码、未提交。
+## 2026-09-18 运控 / Codex / PR #31 对称零位、笛卡尔引导与镜像吸盘滚转
+- 基线保护：先把用户认可的 PR #31 前 25/25 结果、summary、关键源码快照和 SHA-256 固化到 `data/ik_benchmark/v3_scoop_5x5/baselines/2026-09-18-approved-column-split/`，可独立校验恢复。
+- 模型同步：同步 `kkozia188/alfa_robot:alfa_v3_dev@eb898a95`（PR #31）及其 `robot_description@510694697e` 快照；左右 `home` 改为严格镜像，`unloading` 改为左 `[130,-105,-180,20,-90,-30,0]°`、右 `[-130,-105,180,20,90,30,0]°`。本地 description 主仓公开 `main` 已在 `755b6db`，PR 内锁定快照作为本任务权威模型。
+- 规划调整：长距离路径先按 TCP 直线/四元数 slerp 与连续 swivel 解析 IK 搜索最远可直连 RRT 节点；关节限位、95°箱体倾角和完整 PlanningScene/FCL 逐段复核，失败段才回退关节路径。正式结果执行182个笛卡尔引导段、203个关节兜底段，引导覆盖率47.27%。
+- 末端调整：抓取姿态使用左 `+90°`、右 `-90°` 镜像滚转，使工具 +Z 正对接触面、铲式长轴水平；附着箱碰撞体和 Rerun 使用相同工具到箱体旋转。最大法向误差 `3.91e-6°`、水平误差 `2.50e-6°`，J7实际接触角覆盖约 `[-96.36,112.64]°`。
+- 验证结果：新模型完整抓取25/25、过渡25/25，列归属错误0、双臂同时运动0、携箱倒置帧0、最大倾角94.54°。顶吸转运最坏214帧/1248.43°/723.66°/20次反向；单箱最坏2122.05°，过渡最坏312帧/2216.83°/16次反向。description锁校验通过，description 29个pytest用例、解析IK 2个CTest、场景几何2个CTest、MoveIt 20个CTest全部通过。正式RRD为18MB，SHA-256 `5ab64887a2124bcb8780889d4f3a325d3f53ba9f0ab0d3e2d00505a4a23f25eb`，`rerun rrd verify`通过。
+- 边界：PR #31 的固定 `unloading` 工具轴仍接近水平，最终朝下误差约88.46°；本轮没有宣称同时满足旧“竖直朝下放箱”与新固定卸载关节姿态。工作区根目录无 `.git` 元数据，本轮未提交。
 
-## 2026-09-12 Git / Codex / 舒适高度实验与Demo速查PR准备
-- 做了什么：按用户要求发布 `feature/wall-box-comfort-height`，仅提交单次选高实现、可复现实验/负结论、操作速查及本任务交接；排除独立冗余IK启动修复、本机交接和未归属历史日志。
-- 依赖：已核验上游 #20/#21/#22 均未合并，目标 `alfa_v3_dev` 仍为 `1e6c58f`；需依次合并前序PR，本轮增量从 `cc3aa86` 审阅。沿用前序无对应Issue留空约定，不编造ID或关闭旧Issue。
-- 验证/风险：保留旧默认、完整碰撞和规划预算；独立验证未证明舒适区间优势，PR不得写成成功率或自然度全面提升。发布前核验历史证据与源码哈希、重跑CTest及启动回归；不接实机，不合并、不强推、不打tag。
-- 留给下个AI：发布清单与最终检查在 `/home/astesia/Sevenova/日志/验收_2026-09-12/comfort_height/pr/`；日常操作入口为README链接的速查，不新增冗长PR操作文档。发布后的编号另行追加。
+## 2026-09-18 运控 / Codex / 铲式5x5搜索与回放速度优化
+- 做了什么：RRT最短路后处理限制为64个代表节点，长距离笛卡尔段单次搜索限制128次；正面箱保留解析IK引导，顶吸带箱段改用稳定的关节空间规划。固定手臂/升降高度改为严格合同，失败不再静默换高度；逐箱原子计划缓存支持失败续跑和免搜索重建。
+- 速度：25箱冷启动任务/过渡共62/40次尝试，搜索墙钟334.96s，含录制端到端350.67s；完整缓存重建RRD为14.32s。Rerun默认2.5倍仿真回放，时间轴135.25s，较上一版V3.1.1的219.15s缩短38.28%，较用户认可旧模型基线152.21s缩短11.14%。
+- 质量：完整抓取25/25、过渡25/25，列归属和批准高度错误0，双臂同时运动0，携箱倒置0；最大倾角91.42°。总行程44989.14°，较上一版48230.77°下降6.72%；任务帧5308降至4740，顶吸带箱最坏186帧/1412.76°/622.47°/14次反向。
+- 产物与验证：速度版RRD、summary、计划缓存、README和SHA256SUMS位于`data/ik_benchmark/v3_scoop_5x5/2026-09-18-speed-optimized/`；RRD verify、MoveIt 20项CTest、策略26项pytest通过。回放倍率只属于仿真时间轴，未宣称实机速度验收。
 
-## 2026-09-12 运控 / Codex / 舒适选高加入初态相连的升降碰撞边界
-- 做了什么：按用户要求，不能进入候选舒适区间时取当前姿态可达范围内最近高度；先以≤5mm检查升降首个碰撞边界，再复用一次几何选高。保留整机/负载碰撞、固定偏移默认、home归零及原IK/RRT预算；请求/换臂清理边界，JSON/RViz区分未检查提案和最终选高。
-- 改了哪里：共享单臂Demo、现有选高单测/benchmark/环境回归；速查仅改用途一句，详细说明标明大规模实验是修正前历史结果，未混写冻结参数或实验JSON。
-- 验证结果：Release构建、CTest18/18、新入口启动12项、环境35请求+7非法配置断言通过；6组独立FK/回放对照通过（不表示全抓取成功）。x=.90时6号左/auto完整成功、q=-.682676949；7号两臂q=-.990，绕开-.995的地面碰撞但接近第5/5步仍无IK候选。中途障碍-.280时选-.275，不跨越阻挡。
-- 进一步诊断：7号q=-.990固定接触姿态，离线0.1°冗余角扫描启用限位0解，禁用限位每臂28800解，最接近限位候选仍需|J2|≈105.43°>105°；不是臂长不足，也不能推成改变整机/接触姿态后的全局无解。诊断未改变运行时限位/预算。
-- 留给下个AI：新证据在`/home/astesia/Sevenova/日志/验收_2026-09-12/comfort_height/safe_lift_fix/`（final回归、独立腕心/接触IK诊断、源码哈希）；旧training_frozen哈希保持8e4d9d6f…634d8e。未重启用户domain188可见旧进程，使用新代码须按原命令重启；本轮未提交/推送PR，保留独立交互IK和原有未归属改动。
+## 2026-09-18 运控 / Codex / 首箱 TCP 路径代价优化
+- 问题量化：PR #31版本首箱从对称home到预接触位的TCP端点直线距离约1.185m，但受控复测路径约3.906m、最大直线偏离0.754m、姿态累计541.15°，关节累计968.14°，画面存在明显绕行。
+- 方案：验证纯TCP直线、连续swivel解析IK、TCP路点和任务空间RRT；中段存在解析可达流形断开，纯笛卡尔方案无法稳定贯通。正式使用无碰撞关节RRT提供拓扑，捷径图按TCP平移+姿态累计代价求最短路；首箱最多采样24次、至少比较3条成功轨迹，并以3.6m路径、0.9m偏离、550°姿态累计为硬门槛。未把混合路径宣称为纯笛卡尔。
+- 验证结果：新首箱为3.495m、0.669m偏离、427.73°姿态累计、7次反向、908.24°关节累计、最大单步2.996°；相对受控旧版TCP路程下降10.5%、姿态累计下降21.0%、关节累计下降6.2%。完整序列25/25、过渡25/25，列归属错误0、双臂同时运动0、携箱倒置0、最大倾角94.51°；全序列总行程44692.16°。
+- 产物：已更新`data/ik_benchmark/v3_scoop_5x5/x075_robot_inside_warehouse_238/v3-scoop-x075-sequence.rrd`及summary；优化前PR #31版本归档到`data/ik_benchmark/v3_scoop_5x5/baselines/2026-09-18-pr31-before-first-tcp/`。速度优化版目录未覆盖。
 
-## 2026-09-12 运控 / Codex / 5×5连续吸附后放序列实现与部分验收
-- 做了什么：基于现有comfort版本新增连续25箱入口，默认x=0.90m/auto，按20–24→15–19→10–14→5–9→0–4。非底排正吸失败再顶吸（auto先正吸左右再顶吸左右），底排只顶吸；后方悬空释放消失前保留携箱碰撞，空载回home/升降归零；完整周期成功才提交，失败保留剩余箱并停止。未连接硬件，未提交/推送，未关闭用户已有GUI（PID228870）。
-- 改了哪里：`v3_single_arm_box_extract_demo.cpp`、小型`wall_sequence.hpp`/C++测试、新`v3_box_wall_sequence_demo.launch.py`及原launch参数；Rerun按逐帧scene_index/可见性回放，真实工具-箱体变换支持顶吸与非立方体。新增序列/播放器测试，调整原单箱/高度/环境回归的回退次数及失败不执行契约；说明见`docs/运控/IK/V3箱墙连续搬运测试.md`。原PlanWallBoxDemo请求不变，独立调用仍携箱home；连续入口才后放消失。Trigger返回接受状态，最终JSON在task_json。
-- 验证结果：两包编译通过，CTest19/19，播放器无窗口测试通过；原单箱25ID扫描、左右臂/FK/零间隙回归通过；高度21请求+3非法参数，环境/comfort35请求+7非法配置通过。默认新种子104729连续测试为**17/25**：20–24、15–19、10–14、5、6完成；7号箱正吸后放碰撞，顶吸左预接触IK失败/右后放碰撞；保留0–4、7、8、9，不可宣称25箱成功或底排顶吸已完整执行。后方障碍注入四种尝试均被carried_target_box<->environment_rear_block拒绝，0箱消失/25箱保留。证据根目录`/home/astesia/Sevenova/日志/验收_2026-09-12/wall_sequence/`，默认`final/sequence.json`，障碍`rear_obstacle/sequence.json`及`check.json`，回归`environment_final/`、`height_verified/`、`grasp_verified/`。
-- 留给下个AI：原home实际朝前，不能当后放点；当前后放TCP在实测车尾X−rear_clearance（默认.02m），Y/Z取本次选高后的home、朝向绕Z转180°，整箱至少离车尾1cm。低位后放仍受底盘碰撞/IK限制，下一步应独立评估携箱二次升高或其他后放姿态，再用`test_v3_box_wall_sequence.py --require-complete`验收25箱。普通脚本PASS只证明成功前缀/失败保留契约，不证明全完成。没有放宽默认距离、碰撞或跳箱来提高数字。
+## 2026-09-19 运控 / Codex / Shortcut 局部1～2关节RRT与搜索报告
+- 做了什么：规划先构造状态到目标逆解的7轴shortcut并定位碰撞窗；逐关节探测后只在1轴、必要时2轴相对shortcut偏移上运行RRT，其余关节保持主体插值。碰撞窗前后留6个采样点，并在同一低维空间做最远直连平滑；逐边复核TCP走廊、关节限位、完整碰撞和携箱倾角，失败才进入7轴RRT。
+- 速度与质量：完整抓取/过渡25/25。选中轨迹核心规划平均2.60s、中位1.31s，22/25不超过5s；含ROS进程启动平均3.51s。9号带箱仅发散右J4，局部RRT 171.76ms、选中进程1.39s、完整箱换向6次；8号空载过渡仅发散右J1，局部RRT 7.68ms。大步关节翻转0、携箱倒置0，最大倾角94.84°。
+- 输出：summary逐段记录方法、修补关节、耗时、样本和兜底；Rerun增加TCP分段路径和搜索时间曲线；另输出逐箱CSV与HTML报告。数据位于`data/ik_benchmark/v3_scoop_5x5/2026-09-19-joint-shortcut-rrt/`。
+- 验证：Release构建、MoveIt配置20项CTest、策略27项pytest和`rerun rrd verify`通过。浏览器实例不可用，HTML已完成JavaScript语法、重复ID和内嵌数据结构校验，未完成截图级视觉QA。
 
-## 2026-09-12 运控 / Codex / 7号箱顶吸独立诊断入口
-- 做了什么：核查用户正在运行的x=.80/box7单箱结果，确认顶吸左右臂均在提前检查的携箱home目标`return_goal`碰撞失败，不是此次已验证顶吸接触IK无解；与序列x=.90/已清上层/后放策略不同。保留用户domain188可见进程，未重启、未提交。
-- 改了哪里：共享Demo新增启动参数`suction_mode=auto/top`，默认auto不变，top只尝试顶吸；共用`wallGraspAttempts`增加top_only参数，初始预览与结果JSON同时反映指定方式。原箱墙launch透传，comfort/sequence包装入口复用；新增`test_v3_box_wall_top_suction.py`及小型C++断言，说明追加到`V3箱墙连续搬运测试.md`。
-- 验证结果：构建成功、CTest19/19；独立domain199顶吸启动/服务共5请求通过契约检查，7号在x=.80（auto/left/right）及.90（auto）均为携箱home与邻箱碰撞，0号底排只顶吸规则保持。未删除邻箱或关闭碰撞；失败只有初始帧。证据`/home/astesia/Sevenova/日志/验收_2026-09-12/wall_sequence/box7_top/verified/`，用户旧节点结果在同级`existing_x080.json`。
-- 留给下个AI：复现命令为`ros2 launch alfa_robot_moveit_config v3_box_wall_comfort_grasp_demo.launch.py x:=0.80 box_id:=7 arm:=auto suction_mode:=top`，需重启才加载新参数。单箱任务仍有24个邻箱，不是孤立箱；neighbor_box_N是排除目标后的邻箱数组索引，不可误认为墙box_id。没有解决搬运可行性，勿宣称顶吸已成功。
+## 2026-09-21 运控 / Codex / 首箱取消关节整圈绕行
+- 根因：首箱预接触候选左J1约`-151°`，旧评分用归一化角差把它误判为距`home +155°`仅54°；J1有±180°硬限位，实际不能跨边界，只能绕约306°。
+- 调整：解析IK候选增加可配置的有限位关节跨边界惩罚，首箱权重1.0；首段质量合同新增单轴绕圈余量100°门槛。新逆解分支需要的TCP直线偏离约1.06m，首段门槛从0.90m收敛调整为1.10m，其余TCP路径/姿态/碰撞门槛保留。
+- 验证：左J1改为`+155°→+167.1°`；首段135→78帧、901.22°→755.45°，首箱完整换向13→4，核心规划1.20s。新首箱与旧首箱释放末态误差0，复用后续24箱已验证轨迹后完整抓取/过渡25/25；总行程45602.14°、携箱倒置0。数据位于`data/ik_benchmark/v3_scoop_5x5/2026-09-21-first-grasp-direct/`。
 
-## 2026-09-12 运控 / Codex / Demo失败诊断回放与现场冻结
-- 做了什么：按用户要求将完整可复制命令约定写入AGENTS.md；自研V3单臂/箱墙/舒适高度/序列、双臂平移/旋转/异构入口共用失败诊断回放，RViz/Rerun显示有效前缀及被拒绝状态、红色接触点与碰撞双方，末帧冻结。无IK解保持最后可用状态并标记目标；冗余IK入口明确不做碰撞检查。旧全排orchestrator首次失败停止且不清场；旧pick_place脚本保留现场/失败目标并停止后续轮次。
-- 改了哪里：两个V3动作节点与冗余IK节点、共享demo_failure_markers.hpp、Rerun demo_failure.py及三个viewer；旧orchestrator/pick_place脚本及RViz标记订阅；新增/扩展诊断、顶吸、序列和IK回归。详细合同和覆盖边界见docs/运控/IK/Demo失败诊断回放.md。
-- 安全边界：diagnostic_frames独立于可执行frames/事务提交；预检查目标或未连接搜索候选明确标为快照，不冒充成功连续轨迹，不向控制器下发碰撞姿态、不放宽ACM。自动换臂/正吸转顶吸保持，最终失败才显示最后一次尝试。序列失败箱不移除，逻辑final_joints仍为最后成功周期。上游MoveIt GUI插件不提供失败轨迹时仅保留其原生错误显示，不宣称改造了第三方规划器；旧控制器流程未做实机验证。
-- 验证结果：两包构建通过、CTest20/20；真实viewer解析/冻结及序列viewer测试通过。独立localhost domain197/198无窗口ROS回归：顶吸5请求及实际关节冻结通过；共享7场景（双臂平移/旋转/碰撞/异构/初始IK失败、单臂升降碰撞/IK失败）通过；升降冻结在首个失败采样，红色接触点保留。后方障碍序列0/25与默认序列17/25均完整播放到失败末帧并验证冻结、失败箱场景保留；冗余IK成功启动376解且不可达目标保持原关节通过。
-- 证据：/home/astesia/Sevenova/日志/验收_2026-09-12/failure_replay/，含box7_top、shared、sequence_rear、sequence、ik_family与构建/回归日志。
-- 留给下个AI：此功能没有解决抓取可行性，默认序列仍17/25、7号rear_placement失败。单箱7号x=.80顶吸仍return_goal携箱home碰邻箱，发生于接触IK规划之前，此时展示拒绝目标快照而非成功吸取。用户domain199旧Demo未被停止/重启，必须由用户Ctrl+C并重启才加载新二进制；未提交或推送，保留其他已有改动。
+## 2026-09-21 运控 / Codex / 4号与6号低位放箱去回旋
+- 做了什么：4号抓取IK加入有限位跨边界惩罚，避免带箱后从右J1正角分支绕到固定卸料负角分支；6号保持`updown=-0.30m`和权威卸料TCP不变，允许解析IK选择更近的等价关节终点。shortcut局部1～2轴RRT失败后恢复TCP直连尝试，再进入全7轴兜底。
+- 改了哪里：站位合同升到v10，4/6号增加带箱段硬门槛（140帧、850°总行程、250°额外行程、20次换向、3°单帧）；序列支持按箱切换固定关节/TCP放置目标，TCP目标通过1mm/0.5°末端验收而不再误用named-joint误差。默认RRD改到`2026-09-21-box4-box6-low-transfer/`。
+- 验证结果：4号完整动作`1968.66°/337帧→918.23°/198帧`，带箱段额外行程`959.34°→75.75°`，核心规划4.90s；6号`1459.63°/273帧/13次→728.03°/210帧/6次`，带箱搜索1.11s、核心规划4.23s。完整抓取/过渡25/25，总行程`45602.14°→42689.83°`，携箱倒置0、关节大步翻转0，RRD verify通过。
+- 留给下个 AI：6号释放使用同一卸料TCP的等价关节终点，紧随其后的7号已重算并回到原权威末态，7号末态与旧缓存逐值误差0；因此10号以后轨迹可安全复用。当前是仿真规划结果，未替代实机速度/受力验证。
 
-## 2026-09-14 运控 / Codex / 箱7假附着根因修复与独立回放验收（原距离尚未完成）
-- 做了什么：确认旧单箱实现先检查携箱home，再将未连接的拒绝目标附着状态加入回放，是“降高后箱体瞬移、穿模”的实际代码根因。先规划真实接触/抽离，再检查携箱返回；未连接候选只保留rejected_*诊断，实际机器人停在最长已连接前缀。真实初始碰撞保留原姿态和contacts，升降冻结首个失败采样。此条取代09-12把旧return_goal快照当作顶吸失败证据的结论。
-- 改了哪里：v3_single_arm_box_extract_demo.cpp及箱墙launch：顶吸按腕心选高、碰撞检查地折叠双臂后降高、吸盘长轴横置、携箱折臂返回，保留环境/邻箱碰撞；sequence只在后放释放时消失并空载复位。wallRearPlacementPose按旋转后的整箱前沿计算后放点；完整sequence不使用单箱sequence_prefix预清空夹具。新增独立MoveIt全场景回放验证器和实际ROS/Rerun回放检查，扩展失败/环境/选高/顶吸回归。用户命令约定与两份IK诊断/序列文档同步。
-- 验证结果：最新两包构建、CTest20/20、环境35请求+7非法配置通过（含最新initial_state真实接触点断言）。高度21请求+3非法偏移、共享原7失败用例及新增single_return用例通过。x=.50、明确sequence_prefix（先移除17箱的夹具）左右臂与多种种子真实回放成功；live_auto_final为1593帧/1506不同关节采样/1611箱体标记，最新验证器复核2288次0.5度/2.5mm碰撞和限位采样通过，附着位姿连续，负例瞬移/碰撞被拒绝。有限采样不代表数学连续碰撞证明。
-- 未完成：本轮开始时用户窗口为旧x=.90/full/top；收尾时外部已将其重启为x=.75/full/top（见下条只读检查）。已安装版原距离预接触不可达，不会假吸附。独立URDF几何证据：箱顶任一点腕心水平距离至少1.065525m，大于肩肘腕总长0.979m；升降不能改变水平距离。x=.80只证明顶面中心超界，不能扩大成所有偏心点无解。完整默认sequence仍17/25，在箱7/cartesian_approach失败；不能把较近夹具成功称为原任务解决。
-- 后放附加证据：x=.50/预清空17箱的原生隔离单周期planTask完成2623帧顶吸、后放、释放、空载home，独立验证3629采样通过；不是安装launch完整25箱或该隔离周期实际GUI回放验收。
-- 证据：/home/astesia/Sevenova/日志/验收_2026-09-14/box7_top_fix/，summary.json含最新源码哈希和验收边界；environment_final、live_auto_final、top_final、sequence_final、top_sequence_cycle及最终构建/CTest日志。用户domain199 PID21794/21797未触碰；测试仅使用空闲localhost域。
-- 留给下个AI：目标仍active；不能关闭碰撞、暗中改箱墙距离/删邻箱或修改未经核实的物理模型来声称解决。需要确认用户所说可达对应的真实距离/模型，或另行明确底盘前移的任务范围；x=.80偏心顶吸尚未验证。共享双臂demo仍有REJECTED_SNAPSHOT逻辑，本次单臂修复不能宣称所有demo都消除了未连接快照。未提交/推送，保留大量此前工作区改动。
-- 收尾现场变化：用户自行启动新domain199 PID72593/72596，x=.75/box7/auto/top/full，已加载12:43构建。本Agent仅订阅task_json，未调用服务或改变场景；user_current_x075.json为实时结果：precontact_ik，顶面中心腕心XY=1.134010m > 0.979m，无附着、无碰撞contacts，保持原位。旧PID21794/21797已不存在，不应再让用户重启“旧.90窗口”。该数值仍只针对中心吸点；偏心点/不同物理模型未验收。
+## 2026-09-21 运控 / Codex / 7号正吸与20号确定性快速规划
+- 做了什么：7号从顶吸改为左臂正吸，高度扫描确认仅`updown=0.00m`能完整贴合并抽回；单候选TCP混合尝试上限设为2。20号保留顶吸，从已批准带箱轨迹提取起点指纹和17个密集/转折关节路标，运行时逐边复核限位、完整FCL碰撞和携箱倾角，不匹配的抓取分支立即跳过。
+- 改了哪里：站位合同升到v11；通用搬箱节点增加默认关闭的带箱关节路标参数和验证执行策略，只有20号配置该参数。7号和20号各自使用单箱override，其他箱参数不变；默认结果目录改为`2026-09-21-box7-front-box20-fast/`。
+- 验证结果：7号三轮核心规划`3.22/1.58/1.56s`，正式轨迹`1046.29°/4次换向`，原顶吸为`10.15s/1589.57°/14次`。20号三轮路标段`7.75/7.71/7.40ms`，整箱核心均约`0.72s`，带箱段`739.28°/82.07°额外行程/3次换向`。完整抓取/过渡25/25，选中核心规划25/25不超过5s，平均1.69s、最大4.90s；总行程`41476.71°`，倒置0、关节翻转0。
+- 留给下个 AI：除7/20外的23个任务缓存逐项相同；7/20释放末态与上一版误差0。20号路标只适用于当前固定箱序、几何和抓取起点，场景合同变化会因起点/逐边验证失败而拒绝，不能绕过验证强行复放。
 
-## 2026-09-14 运控 / Codex / 箱7完整场景偏心顶吸遮挡检查
-- 做了什么：在未修改生产规划器/距离/场景的前提下，补查x=.75/full的偏心吸点，避免把中心吸点不可达扩大解释为全部偏心点无解。复制当前模型参数到离线探针，强制摆放吸盘头碰撞网格（不冒充IK、不给ROS回放），全场景FCL检测并核验变换。
-- 验证结果：两侧各31×41位置、24个垂直顶吸yaw，30504采样/侧全部与上方12号箱碰撞；1512采样/侧仅通过水平臂长必要条件，仍全部受遮挡。负对照将离线头网格移远后不再有12号接触，避免陈旧变换假阳性。实际用户.75窗口只读41组关节及41箱标记确认原位冻结且无附着。证据topface_x075_full和user_current_x075_freeze_check.json（既有box7_top_fix根目录），文档追加有限扫描边界。
-- 留给下个AI：仍未证明任意连续吸点/yaw/倾斜或密封范围可行/不可行，不应为了成功自动删上方箱。目标仍active，等待用户确认其确信可达场景的实际测距、模型和上方清空条件。收尾前观察到用户自行把窗口从.75改成x=1.00；已提示x变大会离墙更远。本Agent未重启/终止用户进程。无生产代码修改、无实机操作、无提交推送。
-
-## 2026-09-14 运控 / Codex / 箱7目标阻塞交接
-- 状态：连续三轮目标推进仍缺少同一关键输入——用户确认的实际可达场景（测距基准、是否已搬走上方箱体、模型是否对应实物）。本轮再次检查现有验收证据，原x=.90固定底盘全顶面腕心距离下界仍超模型臂长；.75/full有限偏心扫描仍受12号箱遮挡。既不能以.50/sequence_prefix成功替代原场景，也不能擅自改物理模型、清场、前移底盘或放宽碰撞。标记目标blocked而非complete，等待明确输入后恢复。
-- 已完成保留：单臂假附着回放根因修复、真实失败冻结验证、明确夹具顶吸成功及有限步长独立碰撞检查。完整序列仍17/25，原场景箱7顶吸成功未验收；详见box7_top_fix/summary.json和各原始证据。
-- 当前外部状态：收尾只读进程检查未见运行中的箱墙launch或本Agent测试进程；没有停止用户进程。git diff --check通过。无需在相同条件下重复跑已通过回归来假装推进。
-
-## 2026-09-14 运控 / Codex / 用户确认从失败箱直接开始（解除场景确认阻塞）
-- 用户已明确：直接从失败箱开始，前序箱体视为已经消失，不要求先执行此前搬运。复用wall_context=sequence_prefix，不另写清场实现、不改变完整25箱sequence默认行为。箱7删除10–24及5、6；保留目标7、邻箱0–4/8/9和全部环境碰撞。
-- 改了哪里：test_v3_box7_top_replay.py补验实际RViz DELETEALL、7个邻箱坐标与碰撞场景一致、剩余箱号标签；诊断文档更新用户确认的语义。生产参数功能已存在，无需新增接口或构建生产程序。
-- 验证结果：安装版x=.50/box7/top/auto/sequence_prefix/seed104731真实回放成功，1966帧、1879不同关节状态、1984箱标记；独立2661次碰撞/限位采样通过、附着连续，Rerun及瞬移/碰撞负例通过。证据confirmed_prefix_live。另原样保留x=.75做prefix对照，确认前17箱确实删除后，仍因中心腕心XY1.134010m超过.979m在precontact_ik停止，不再把上方遮挡当作已清场后的失败原因；证据confirmed_prefix_x075。
-- 留给下个AI：此前“等待上方是否清空”的阻塞已由用户解除，目标仍active（上一轮打断前并未调用update_goal blocked）。给用户的可跑通演示命令明确使用.50m，不暗称.75/.90顶吸已通过；.75偏心策略的密封/IK/运动仍未验收，完整序列仍17/25。保留工作区改动，无实机执行、无提交推送。
-
-## 2026-09-14 运控 / Codex / 箱墙连续后放释放与可复制长命令
-- 做了什么：按用户要求将完整可编辑长命令约定写入AGENTS.md（环境、路径、全部续行符齐全，不以短包装脚本替代）。箱墙单箱和序列统一后放→消失，无每箱home/升降复位，下一箱继承真实末态；失败只播放相连前缀，未连接搜索候选不瞬移。
-- 改了哪里：v3_single_arm_box_extract_demo.cpp、箱墙launch、Rerun描述、独立回放检查器和安装版单箱/序列/失败测试、两份箱墙/失败诊断文档。顶吸独立肩高于腕心0.10m策略；当前姿态可安全升降则不强制折臂；先提5cm并后退2cm，再水平抽离。墙任务边检查收紧0.25°，按得分顺序检查实际消费的笛卡尔候选，保留全部障碍和负载碰撞。
-- 验证结果：2包构建安装、CTest20/20、8项安装版失败停帧回归通过。最终x=.50/正吸ratio=.95/top offset=.10/地面间隙1微米/seed104731：完整25/25，54830帧、独立61624次碰撞/限位检查；单箱7/prefix2089帧、独立2537次检查及真实ROS/Rerun标记回放通过。证据 `/home/astesia/Sevenova/日志/验收_2026-09-14/wall_rear_release/summary.json`，最终目录single_backoff/sequence_backoff/failure_final；不要将早期失败或仅规划SUCCESS误作最终证据。
-- 留给下个AI：完整近墙初始home碰撞，命令显式initial_pose=arms_down（只改仿真初始条件，非声称home可无碰撞到达，全局home不变）；单箱prefix仍从home起，不等于完整序列的前序末态。上排箱12、7回退顶吸，底排全顶吸。实测完整规划203.24s，当前20Hz名义播放45.7min，先整段规划再播放；完整GUI未实时间等待45.7min，已独立检查全部帧和插值。单箱规划4.74s、播放104.45s。未承诺其他距离、姿态或实机安全。旧用户窗口未主动关闭；不提交/重置已有大量未提交改动。完整复制命令位于docs/运控/IK/V3箱墙连续搬运测试.md顶部。
-
-## 2026-09-14 运控显示 / Codex / Rerun完整时间轴批量写入
-- 做了什么：仅修改V3单臂/箱墙共用Rerun显示端，移除播放timer及速度/阶段停顿等待；机器人变换每1024帧用send_columns写入，复用同帧FK记录携箱，邻箱只在场景切换更新。全部轨迹/吸附/消失/失败末帧保留；task_frame时间轴默认暂停、关闭循环，交给界面控制。新任务另起时间戳，不能覆盖上一失败末帧。
-- 改了哪里：v3_single_arm_box_extract_viewer.py；两个既有viewer测试适配；新增test_rerun_wall_timeline.py真实RRD回读/计时验收；箱墙文档增加Rerun完整长命令。未改规划器、碰撞精度、RViz timer或launch实现（与上一轮验收SHA256一致）。
-- 验证结果：alfa_robot_rerun构建安装；CTest20/20。完整25箱54830帧，RRD写入22.64s含FK/flush（回调含JSON22.92s）；本机Rerun headless gRPC接收端23.88s（含JSON24.14s，无OS窗口，不等同GUI绘制耗时）。回读完整RRD，23链接所有变换/各帧载荷状态正确；失败958帧0.35s，最后准确为FAILED_HOLD: rear_placement；两份RRD及footer验证通过。命令经过bash -n和无环境新shell --show-args检验。
-- 留给下个AI：证据 `/home/astesia/Sevenova/日志/验收_2026-09-14/rerun_timeline/summary.json`。Rerun仍须等规划完整结果（上轮约203s）；只是取消随后逐帧等候，不能声称解算变快。用start_rerun=true/start_rviz=false的新长命令，用户界面选择task_frame、播放/暂停/FPS/拖动。双臂Rerun显示器没有本轮批量化；RViz完全不变。测试未停止用户正在运行的x=.75箱墙/RViz进程，无硬件操作。
-
-## 2026-09-14 Git / Codex / 箱墙搬运与Rerun全时间轴PR准备
-- 做了什么：新分支`feature/wall-sequence-rerun-timeline`基于`557b53f`，目标`alfa_v3_dev`；GitHub核实#20→#21→#22→#23仍open，需先合并依赖。按六项中文模板与Codex署名提交，沿用已确认Issue留空约定，不冒用历史Linear任务，不合并/打tag/强推。
-- 提交范围：箱墙连续后放/正吸顶吸回退、各Demo失败观察、Rerun完整时间轴及其测试/当前文档/命令偏好。独立冗余IK启动修复只暂存失败标记相关hunk，其余启动修复、启动回归、本机交接、旧短脚本及未归属历史日志留在工作区。
-- 验证结果：实际暂存树独立构建2包通过、该树CTest20/20、既有解析IK2/2、独立安装版本8类失败冻结、两项Rerun观察器回归通过；11项关键源码哈希与最终验收一致。重写54,830帧23.6816s（含FK/flush），全回调23.9639s，实际RRD全部23个link逐帧变换与箱体状态读回通过。初次中文验收目录触发rosidl路径解析失败，换ASCII临时目录构建通过，未因此改实现。
-- 留给下个AI：完整25箱证据沿用本日`wall_rear_release/summary.json`，仅该显式参数组成立；Rerun未缩短约203s规划时间，非实机或GUI渲染耗时证明。本次复验/发布清单在`/home/astesia/Sevenova/日志/验收_2026-09-14/wall_sequence_pr/`，本机证据非远端附件；PR合并仍需规范要求的审查及CI。未停止用户Demo，未操作硬件。
-
-## 2026-09-14 Codex / 箱墙Rerun逐箱增量接收验收
-- 做了什么：在 `c0bf653` 基础上，每箱 `planWithFallback` 与失败诊断补帧完成后一次性发布完整段；不发布中间失败候选。后台继续规划，Rerun复用1024帧批量写入、不等播放；RViz逻辑、规划顺序、末态衔接与0.25°碰撞检查不变。
-- 改了哪里：`v3_single_arm_box_extract_demo.cpp` 新增 `~/task_json_segments`（reliable/transient-local/depth32），原 `~/task_json` depth1仍保留最终完整快照；`sequence_timeline.py` 按publisher/task/segment与半开帧范围校验去重、缓存缺段并用最终结果补齐；`v3_single_arm_box_extract_viewer.py` 按轨迹时间切换场景，不按收包时刻提前删箱。新增分段单测、扩展安装版序列与RRD回读测试；更新 `docs/运控/IK/V3箱墙连续搬运测试.md`。
-- 验证结果：2包构建、CTest20/20、分段/旧场景单测通过。安装版25/25成功、25段51154帧：首箱5.634s、首段写1.017s、规划213.226s、请求至全部写完214.727s；逐段与最终帧/场景完全一致，独立57717次碰撞/限位检查通过。真实17箱后失败及首箱失败均保持准确末帧；最终结果先到补27帧、后到分段去重；乱序漏段补48802帧、RRD全帧23链接和场景切换时间戳回读通过，真实ROS晚订阅完整快照一致。
-- 原生UI：Rerun0.33.1隔离Xvfb/gRPC实测1000FPS追到2352仍Playing等待，收到第二段自动到6044；主动暂停6044后第三段/最终补齐均不恢复播放，速度不变；手动输入1234及重复结果保持定位。未新增UI强制播放/blueprint重置；鼠标拖动寻址未单独验证成功，不混称为自动通过。
-- 留给下个AI：证据 `/home/astesia/Sevenova/日志/验收_2026-09-14/rerun_segments/summary.json`，`live_verified/` 是修复summary段字段后重新跑通版本，早期 `live/` 失败不能算通过。命令见文档（ROS域201，已bash -n及空白shell --show-args）；实时窗口不要设置recording_path，该参数现有实现会切换到文件sink。QoS最终补齐要求发布节点仍在且快照未被后续任务覆盖，不提供跨进程持久化。未改/覆盖本轮前已存在的交互IK及其文档/测试改动，未关闭用户现有Demo/RViz/Rerun。
-
-## 2026-09-14 Git / Codex / Rerun逐箱增量追加PR准备
-- 做了什么：已核验PR #24仍open、head为`c0bf653`，复用原分支追加本轮增量，不新建重复PR；目标`alfa_v3_dev`，依赖#20→#21→#22→#23仍未合并。中文提交与六项PR说明、Codex署名；沿用无明确Issue留空约定。
-- 范围：只提交逐箱发布、分段校验/连续写入、三项测试、箱墙操作文档及本轮交接；其他AI的交互IK文件/文档/测试、短脚本、历史未归属日志保持原样。
-- 验证：6项实现/测试SHA256与实测证据一致；提交前再次运行CTest20/20及分段/场景回归。25箱与失败实跑、RRD全帧/场景读回、原生UI等待数据/主动暂停证据见`rerun_segments/summary.json`；发布核验在其`pr/`目录。只提交待审PR，不合并、不强推、不打tag。
-
-## 2026-09-15 运控 / Codex / V3 双吸盘主动悬挂模型接入
-- 做了什么：从 `SevenovaHangzhou/robot_description` 的 `robot_v3_suction_chassis` 分支导入提交 `17f5bdc46b8f2580ee81aed919da7b404da3bdaf`，将默认整机描述更新为 V3.0.9 双吸盘主动悬挂版本，并保留双夹爪入口及现有 `world` 根链接兼容层。
-- 改了哪里：更新 description 的 URDF/xacro、mesh、初始姿态、关节限位、mock ros2_control、查看 launch 和语义测试；同步 MoveIt SRDF、初始姿态、限位与 controller 配置。复用仓库已有且逐字节相同的 46 个 V3.0.8 机械臂 STL，未重复提交约 20 MB 资产。
-- 验证结果：description pytest 25/25、MoveIt CTest 17/17、`git diff --check` 通过；新模型双臂刚性箱体平移规划成功（pairs=12、collision=24、frames=13）。
-- 留给下个 AI：来源模型 `updown=[-0.5,0.5]m` 仅用于 description/mock/离线规划；真实执行桥仍保持 `[0.0,0.7]m` 安全合同，完成升降零位、方向、行程与吸盘 TCP 标定前不得直接用于实机执行。
-
-## 2026-09-15 运控 / Codex / V3 双臂全搬运
-- 做了什么：将双臂 25 箱全搬运适配 V3.0.9 双吸盘主动悬挂整机，补齐 V309 解析 IK、物理侧分配、共享升降、完整底盘包络、双负载碰撞与镜像折肘。
-- 改了哪里：解析 IK、箱墙序列/规划节点、SRDF、launch、测试及 V3 单箱文档。
-- 验证结果：V3 完整序列 25/25，双臂 10/10，fallback 0；MoveIt 20/20；IK 2/2；description 24 passed。证据 `/home/astesia/Sevenova/日志/验收_2026-09-15/v3_full_wall/`。
-- 留给下个 AI：仅完成离线/仿真几何、运动学和碰撞轨迹验收，不代表实机吸盘动力学安全；实机前仍需升降、TCP、负载、吸附力和速度/加速度标定。
-## 2026-09-15 运控 / Codex / V3.1.1 解析几何与远端流程整合
-- 做了什么：以 `origin/alfa_v3_dev@8ce2e23` 的远端箱墙流程为主编排，接入权威 `robot_v3.1.1-hybrid` 模型；新增 `V311Left/V311Right` 解析模型并切换所有活跃 V3 Demo，`V309Left/V309Right` 仅保留历史回归。完整旧本地方案冻结于 `feat/motion-94-v3-local-extract-preserved@e33146c`。
-- 改了哪里：当前整合分支 `feat/motion-94-v311-remote-integration`；解析几何位于 `alfa_robot_analytic_ik`，MoveIt 随机回代测试位于 `test_v311_analytic_moveit_fk.cpp`。远端主入口仍为 `v3_box_wall_grasp_demo.launch.py`；同一入口新增显式 `target_only + loaded_home` 研究策略，复用原有边插值碰撞、刚体附着和失败诊断，不复制第二套规划器。
-- 验证结果：权威 description 源锁与本地快照均通过；Release 三包共60项测试零失败。左右臂各256组随机 MoveIt FK/解析 IK 回代，最大 FK 位置差约 `8.4e-12m`，最大 IK 回代位置误差约 `6.3e-8m`，平均解析 IK 约 `12.4～14.7us`。`target_only + loaded_home` 连续三次 ROS 启动规划成功，并通过异常退出/服务下线检查。
-- 留给下个 AI：默认仍为远端 `full + rear_release`。旧 V3.0.9 后置落地目标在 V3.1.1 工作区可能无解析 IK，需要单独重新标定任务目标；禁止通过关闭碰撞或移动障碍伪造成功。`target_only` 明确省略其他24箱，只用于保留本地研究流程，不能作为整墙成功率证据。
-## 2026-09-16 运控 / Codex / V3.1.1 初始与卸货命名姿态
-- 做了什么：将用户确认的第一组姿态固化为默认 `home`（updown=-0.3m，左臂[155,-105,20,90,-90,-40,0]deg，右臂[25,-105,-20,90,-90,40,0]deg）；第二组固化为 `unloading`（左臂[-50,90,-50,50,20,-40,-60]deg，右臂[-130,90,50,50,-20,-40,60]deg），未列出的关节全部为0。
-- 改了哪里：权威 description 变更位于 `robot_description` 分支 `feat/motion-94-v311-named-poses@62662f4`、Gitea PR #9；消费仓同名功能分支同步 description 哈希锁，更新 MoveIt SRDF、初始位置、mock ros2_control/Xacro 默认值及文档。
-- 验证结果：两组姿态经运行中 MoveIt `/check_state_validity` 返回 `valid=True, contacts=[]`；description 36项测试通过；消费仓 Release 构建及63项测试通过，新增 `test_v311_named_pose_collision` 使用安装后的URDF/SRDF和FCL校验两组命名姿态无自碰撞、无越界。
-- 留给下个 AI：建议先合并 description PR #9，再合并消费仓 PR；消费仓锁定内容源提交 `62662f4`，同步器允许目标分支 merge/squash 后在所有受管文件哈希完全相同时视为等价。
-## 2026-09-17 Description / Codex / MOTION-204 V3对称零位与装卸姿态合同
-- 做了什么：右J1/J5重标180deg逻辑零位但保持正轴不变；冻结镜像`home`和新`unloading`姿态，更新解析IK固定变换、description消费者锁与2.4m×2.4m集装箱默认场景。
-- 上游：`robot_description@510694697e543a30030c8432c878fcc461da9088`，分支`feat/motion-204-v3-symmetric-zero-named-poses`。
-- 验证结果：干净无Conda环境Release构建通过；`alfa_robot_description`、`alfa_robot_analytic_ik`、`robot_motion_scene_service`、`alfa_robot_moveit_config`共61项测试全部通过。全零位和1000组随机镜像FK误差均在1e-6m内；新卸货位自碰撞/限位通过。
-- 规划证据：本地Rerun `ros2_ws/data/ik_benchmark/v3_motion_stage_wall_action/loaded_home_to_unloading_130deg_shortcut_symmetric_rrt_verified.rrd`；Shortcut碰撞区间由单臂RRTConnect局部修补，成功路径183帧，经552个0.5deg探针检查无碰撞且全程保持镜像。
-- 留给下个 AI：实体RT-Control仍需按该逻辑零位合同单独验收，禁止在description和驱动两侧重复补偿。
-
-## 2026-09-19 Description / Codex / MOTION-204 原始零位合同纠正
-- 做了什么：确认 V3.1.1 机械原始零位已镜像，撤销右 J1/J5 多余的180度逻辑重标；四套搬运关键帧统一采用 `right_jointN=-left_jointN`。
-- 改了哪里：同步 `robot_description@f2454a6` 快照，更新解析 IK 固定变换、MoveIt/ros2_control 初始位、SRDF 命名姿态及 `*_linkN` 碰撞链接消费者。
-- 验证结果：description 38项测试通过；消费侧 description 合同17项通过；V3.1.1 随机解析 FK/IK 回代、四套关键帧限位与自碰撞、MoveIt 合同3项通过。
-- 留给下个 AI：description PR #11 应先于消费仓 PR 合并；关节名仍为 `*_jointN`，实体链接名从本次上游版本起为 `*_linkN`，禁止混用。
-## 2026-09-21 运控 / Codex / MOTION-222 V3 Stage 仿真预览交付
-- 做了什么：将固定 5x5 箱墙的已验证双臂联合轨迹接入 `/motion/execute_stage` 四阶段 Action；支持 replay 与完整17轴FJT后端、26轴反馈/安全状态准入、失败轮运动前跳过；放置确认后从Motion场景删除箱子。
-- 改了哪里：解析腕部补偿、阶段Action与客户端、域内/中央接口分层、固定墙轨迹缓存、缓存生成/验证工具、仿真交付脚本与文档。
-- 验证结果：最新V3吸盘description下4/15轮完整周期通过，成功轮为0/1/3/4；所有阶段和任务边界关节差为0，旋转轴单帧不超过0.5度、Updown不超过5mm；12/13包构建与4包54项测试通过；Action replay实跑4轮成功、11轮PREGRASP前失败并跳过；RRD验证通过。
-- 留给下个AI：这是preview，不是25箱全成功或仿真FJT验收。外部仿真必须先满足26轴`/joint_states`、17轴FJT和`/control/safety_state`；其余11轮需继续优化候选/场景，不能回退为断裂轨迹或放宽碰撞。
+## 2026-09-21 运控 / Codex / 用户认可黄金归档
+- 做了什么：用户确认7号正吸、20号确定性快速规划版本效果良好，按特殊名称`2026-09-21-golden-box7-front-box20-fast`固化为不可覆盖的黄金基线。
+- 改了哪里：归档完整RRD、summary、CSV、HTML搜索报告、25箱计划缓存、README、关键源码/配置/测试/文档快照和SHA256SUMS到`data/ik_benchmark/v3_scoop_5x5/baselines/2026-09-21-golden-box7-front-box20-fast/`。
+- 验证结果：归档前完整抓取/过渡25/25、核心规划25/25不超过5s、总行程41476.71°；归档文件SHA-256与RRD完整性校验通过。
+- 留给下个 AI：任何后续路径或速度实验必须写入新目录，不得覆盖此黄金基线；需要回退时先执行归档内README给出的`sha256sum -c`命令。

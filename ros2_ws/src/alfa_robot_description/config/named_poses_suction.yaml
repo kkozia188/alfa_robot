@@ -18,38 +18,11 @@ named_poses:
     left_joint6: -0.69813170079773
     left_joint7: 0.0
     right_joint1: -2.70526034059121
-    right_joint2: 1.832595714594046
+    right_joint2: -1.832595714594046
     right_joint3: -0.34906585039887
-    right_joint4: -1.57079632679490
+    right_joint4: 1.57079632679490
     right_joint5: 1.57079632679490
     right_joint6: 0.69813170079773
-    right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0
-  second_home:
-    updown: -0.6
-    head_joint: 0.0
-    head_pitch_joint: 0.0
-    left_joint1: 0.52359877559830
-    left_joint2: 1.39626340159546
-    left_joint3: 0.34906585039887
-    left_joint4: 1.57079632679490
-    left_joint5: 1.57079632679490
-    left_joint6: 1.04719755119660
-    left_joint7: 0.0
-    right_joint1: -0.52359877559830
-    right_joint2: -1.39626340159546
-    right_joint3: -0.34906585039887
-    right_joint4: -1.57079632679490
-    right_joint5: -1.57079632679490
-    right_joint6: -1.04719755119660
     right_joint7: 0.0
     active_suspension_joint: 0.0
     caster01_joint: 0.0
@@ -72,38 +45,11 @@ named_poses:
     left_joint6: -0.52359877559830
     left_joint7: 0.0
     right_joint1: -2.26892802759263
-    right_joint2: 1.832595714594046
+    right_joint2: -1.832595714594046
     right_joint3: 3.14159265
-    right_joint4: -0.34906585039887
+    right_joint4: 0.34906585039887
     right_joint5: 1.57079632679490
     right_joint6: 0.52359877559830
-    right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0
-  second_unloading:
-    updown: -0.6
-    head_joint: 0.0
-    head_pitch_joint: 0.0
-    left_joint1: 0.0
-    left_joint2: 1.74532925199433
-    left_joint3: 0.0
-    left_joint4: -0.78539816339745
-    left_joint5: 1.74532925199433
-    left_joint6: 0.78539816339745
-    left_joint7: 0.0
-    right_joint1: 0.0
-    right_joint2: -1.74532925199433
-    right_joint3: 0.0
-    right_joint4: 0.78539816339745
-    right_joint5: -1.74532925199433
-    right_joint6: -0.78539816339745
     right_joint7: 0.0
     active_suspension_joint: 0.0
     caster01_joint: 0.0

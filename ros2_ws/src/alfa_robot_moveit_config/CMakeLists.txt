@@ -372,6 +372,10 @@ if(BUILD_TESTING)
     NAME check_l6_r8_real_safety
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../../../scripts/safety/check_l6_r8_real_safety.py
   )
+  add_test(
+    NAME test_v3_scoop_identity_independence
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_identity_independence.py
+  )
 
   add_executable(test_execution_trajectory_adapter test/test_execution_trajectory_adapter.cpp)
   target_link_libraries(test_execution_trajectory_adapter alfa_robot_motion_scene_adapter)

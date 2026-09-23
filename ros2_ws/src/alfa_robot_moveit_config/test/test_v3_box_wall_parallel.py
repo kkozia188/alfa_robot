@@ -621,18 +621,8 @@ def test_scoop_5x5_profile_is_independent_from_legacy_suction():
             "natural_joint_wrap_weight": 1.0,
         },
         6: {"natural_joint_wrap_weight": 1.0},
-        7: {"cartesian_transfer_max_search_attempts": "2"},
         8: {
             "front_retreat_distance_m": 0.10,
-        },
-        20: {
-            "conveyor_success_trials": 1.0,
-            "loaded_transfer_waypoint_start_deg": (
-                "-94.318614684,-67.295795782,-169.712051978,-101.995385230,"
-                "128.787173925,101.569630092,-1.758071295"
-            ),
-            "loaded_transfer_joint_waypoints_deg": config["planning"]["box_overrides"]
-            ["20"]["loaded_transfer_joint_waypoints_deg"],
         },
         13: {
             "center_front_suction_z_offset": -0.10,
@@ -646,6 +636,13 @@ def test_scoop_5x5_profile_is_independent_from_legacy_suction():
             ),
         },
     }
+    assert overrides["loaded_transfer_waypoint_start_deg"] == (
+        "-94.318614684,-67.295795782,-169.712051978,-101.995385230,"
+        "128.787173925,101.569630092,-1.758071295"
+    )
+    assert overrides["loaded_transfer_joint_waypoints_deg"] == (
+        config["planning"]["loaded_transfer_joint_waypoints_deg"]
+    )
     assert {
         box_id: SCOOP_MODULE.VERIFIED_SELECTION[box_id]
         for box_id in range(16, 26)

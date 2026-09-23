@@ -313,6 +313,8 @@ def planning_profile(
         "top_loaded_transfer_direct_only",
         "natural_max_proximal_step_deg",
         "natural_max_wrist_step_deg",
+        "loaded_transfer_waypoint_start_deg",
+        "loaded_transfer_joint_waypoints_deg",
         "box_overrides",
     }
     if set(planning) != required:

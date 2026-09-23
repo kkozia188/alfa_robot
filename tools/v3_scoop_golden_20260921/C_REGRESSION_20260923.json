@@ -1,0 +1,57 @@
+{
+  "schema": "alfa.v3_scoop_golden_identity_independent_regression.v1",
+  "completed_boxes": 25,
+  "validated_transitions": 25,
+  "core_planning_s": {
+    "average": 2.21748,
+    "median": 2.139,
+    "p95": 4.637,
+    "maximum": 4.862,
+    "at_or_below_limit": 25,
+    "limit": 5.0
+  },
+  "joint_flip_events": 0,
+  "carried_box_inverted_frames": 0,
+  "strategy_evidence": {
+    "successful": [
+      "joint_rrt_fallback",
+      "joint_shortcut",
+      "shortcut_repair_rrt",
+      "validated_joint_waypoints"
+    ],
+    "shortcut_repair_dimensions": [
+      1,
+      2
+    ],
+    "tcp_shortcut_attempts": 131
+  },
+  "artifacts": {
+    "recording": {
+      "name": "v3-scoop-golden-C-25-attempt3.rrd",
+      "sha256": "deb18fe93c7b2db214cb65dd684e173c33631242d56e225af7bf353c8070c09a",
+      "size": 16425760
+    },
+    "summary": {
+      "name": "v3-scoop-golden-C-25-attempt3-summary.json",
+      "sha256": "c36bea63876118b416894b557020368e40994ba887886dadb95e97b8d9a6c8e0",
+      "size": 1181814
+    },
+    "plan_cache": {
+      "name": "v3-scoop-golden-C-25-attempt3-plan-cache.json",
+      "sha256": "da103feebe52edf5810da23ba8603606267638ca000dc4510bd714396a996de1",
+      "size": 2974764
+    },
+    "metrics": {
+      "name": "v3-scoop-golden-C-25-attempt3-metrics.csv",
+      "sha256": "b1bb836e01d778c554a5ccf6b5645b38b2aab2e2c1e46c7c39589d34de550018",
+      "size": 2909
+    }
+  },
+  "current_l3_claimed": false,
+  "current_l4_claimed": false,
+  "date": "2026-09-23",
+  "b_commit": "71a901e8607856871a3cfc9f6b29c26a553ee02c",
+  "identity_specific_box_overrides": [],
+  "command_file": "C_REGRESSION_COMMAND.txt",
+  "artifact_directory": "/home/astesia/v3-scoop-golden-generalization-C"
+}

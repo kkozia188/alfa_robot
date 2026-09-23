@@ -3000,11 +3000,10 @@ private:
           start_joints[index] - degToRad(loaded_transfer_waypoint_start_deg_[index]))));
       }
       if (maximum_error > degToRad(0.01)) {
-        result.reason = "validated waypoint start mismatch " +
+        auto fallback = planRrt(scene, start_state, goal_state, direct_only, metrics);
+        fallback.reason += "; validated waypoint start mismatch " +
           std::to_string(radToDeg(maximum_error)) + "deg";
-        result.wall_ms = std::chrono::duration<double, std::milli>(
-          std::chrono::steady_clock::now() - started).count();
-        return result;
+        return fallback;
       }
     }
     result.states.push_back(std::make_shared<moveit::core::RobotState>(start_state));

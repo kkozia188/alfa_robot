@@ -41,12 +41,13 @@
     }
   },
   "assets": [
-    {"name": "README.md", "size": 2762, "sha256": "765f63ad0326c8ad1e123ce43102aecd89dac92573e8abb4be5f914b31d47cc9"},
-    {"name": "SHA256SUMS", "size": 1737, "sha256": "e7e46a6304cfdd6f4452c429923cb453019ff9f9adbd1f8a5fb2e764c4259866"},
+    {"name": "README.md", "size": 2838, "sha256": "57196455117521bdc775d90e9e4e814a82abb05a8f0fb908474cfe41fafbc796"},
+    {"name": "SHA256SUMS", "size": 1838, "sha256": "bcb4c632b8e1615f5ed90543319764eb9cd8f2ce8abacb3bf7061364532774e0"},
     {"name": "box-02-box10-optimization-config.json", "size": 2119, "sha256": "44f8ee4ba2a32aacd271b10205505f38043793da1e6923fc0f20075f2677eab8"},
     {"name": "box-25-continuous-entry-config.json", "size": 1028, "sha256": "8cd9ad114fdb2e540c63dd2f3dee99193694d5e613f540d03fdf9f59ab4c278d"},
     {"name": "bridge-box02-box04-whole-body-direct.json", "size": 83016, "sha256": "0359dc06de55aaad17537ecf528b4cd500718fe5b696244a482271f6e3b3dba7"},
     {"name": "bridge-box21-box25-whole-body-direct.json", "size": 165496, "sha256": "31d3abcd8ae43c97a2e089279e9c760e47bfbdb6a4d48029ab2bd8b1dca211f3"},
+    {"name": "dual-arm-5x5-complete-sequence.mp4", "size": 20766899, "sha256": "cc64b1590d1f164344e1478d8d0356b2854a216066f7b256c546a24e09a8480d"},
     {"name": "dual-source-snapshot.tar.gz", "size": 67853, "sha256": "2d591eda3adc0c2785a0471f25ab90bcf145265f045aac620a650457ea1d9a49"},
     {"name": "rerun-all-planning-times.png", "size": 1703384, "sha256": "228e34fa75c62d02d97fa9b74d47b4715e0b96d206df15304ee417670479ec41"},
     {"name": "rerun-box02-continuous-direct.png", "size": 6028252, "sha256": "7d9b1c7525f0c8dad3442a8875bb2e43700a540a4b519554b73d35534fa04eeb"},

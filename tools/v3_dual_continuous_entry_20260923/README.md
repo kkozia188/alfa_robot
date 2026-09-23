@@ -60,6 +60,7 @@ Box 25 continuous entry:
 ## Evidence
 
 - `v3-scoop-x075-dual-row-wise.rrd`: complete interactive Rerun replay.
+- `dual-arm-5x5-complete-sequence.mp4`: complete 25-box page-playable video.
 - `v3-dual-continuous-entry-rerun-demo.rrd`: focused box-2/25 Rerun replay.
 - `v3-dual-continuous-entry-rerun-demo.mp4`: Rerun Viewer screen recording.
 - `rerun-box02-continuous-direct.png`: box-2 continuous-entry visualization.
@@ -76,4 +77,3 @@ rerun --new v3-scoop-x075-dual-row-wise.rrd
 ```
 
 Linear tracking: `MOTION-235`.
-

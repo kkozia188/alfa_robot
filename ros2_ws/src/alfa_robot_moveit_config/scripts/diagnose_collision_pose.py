@@ -43,8 +43,8 @@ def main() -> int:
 
     # 数值分析:右臂各 link 原点两两距离,重点看 right_joint6 与 right_joint1/2/3
     print("=== 右臂 link 原点(base 系, m) ===")
-    right_links = ["right_link1", "right_link2", "right_link3", "right_link4",
-                   "right_link5", "right_link6", "right_tool0"]
+    right_links = ["right_joint1", "right_joint2", "right_joint3", "right_joint4",
+                   "right_joint5", "right_joint6", "right_tool0"]
     origins = {}
     for ln in right_links:
         o = link_origin(fk, ln)
@@ -52,16 +52,16 @@ def main() -> int:
         if o is not None:
             print(f"  {ln:14s} = [{o[0]:+.4f}, {o[1]:+.4f}, {o[2]:+.4f}]")
     print("\n=== right_joint6 与 right_joint1/2/3 原点间距(m) ===")
-    j6 = origins.get("right_link6")
-    for ln in ["right_link1", "right_link2", "right_link3"]:
+    j6 = origins.get("right_joint6")
+    for ln in ["right_joint1", "right_joint2", "right_joint3"]:
         o = origins.get(ln)
         if j6 is not None and o is not None:
             print(f"  |right_joint6 - {ln}| = {np.linalg.norm(j6 - o):.4f}")
 
     # 对称对照:左臂(镜像姿态)同样的间距,看是否一致(判断是否单纯折叠)
     print("\n=== 左臂对照 left_joint6 与 left_joint1/2/3 间距(m) ===")
-    l6 = link_origin(fk, "left_link6")
-    for ln in ["left_link1", "left_link2", "left_link3"]:
+    l6 = link_origin(fk, "left_joint6")
+    for ln in ["left_joint1", "left_joint2", "left_joint3"]:
         o = link_origin(fk, ln)
         if l6 is not None and o is not None:
             print(f"  |left_joint6 - {ln}| = {np.linalg.norm(l6 - o):.4f}")
@@ -74,7 +74,7 @@ def main() -> int:
     vr.log_robot_static_model(robot, "world/robot", log_meshes=True)
     vr.log_robot_state(robot, POSE, "world/robot")
     # 标出被误报的 link 原点
-    for ln in ["right_link1", "right_link2", "right_link3", "right_link6"]:
+    for ln in ["right_joint1", "right_joint2", "right_joint3", "right_joint6"]:
         o = origins.get(ln)
         if o is not None:
             rr.log(f"world/markers/{ln}",

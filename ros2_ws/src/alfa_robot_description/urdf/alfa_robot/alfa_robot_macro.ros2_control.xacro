@@ -18,9 +18,9 @@
                left_joint6_initial:=-0.69813170079773
                left_joint7_initial:=0.0
                right_joint1_initial:=-2.70526034059121
-               right_joint2_initial:=1.832595714594046
+               right_joint2_initial:=-1.832595714594046
                right_joint3_initial:=-0.34906585039887
-               right_joint4_initial:=-1.57079632679490
+               right_joint4_initial:=1.57079632679490
                right_joint5_initial:=1.57079632679490
                right_joint6_initial:=0.69813170079773
                right_joint7_initial:=0.0

@@ -4,8 +4,6 @@ from pathlib import Path
 import subprocess
 import xml.etree.ElementTree as ET
 
-import yaml
-
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,8 +27,8 @@ def test_demo_consumes_pinned_v311_kkozia_profile():
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
     assert lock["upstream_branch"] == "robot_v3_suction_chassis"
-    assert lock["upstream_commit"] == "f2454a679c23b84a774cc8a43c5b294cbbd340a3"
-    assert lock["upstream_ref_used_for_sync"] == "f2454a6"
+    assert lock["upstream_commit"] == "510694697e543a30030c8432c878fcc461da9088"
+    assert lock["upstream_ref_used_for_sync"] == "feat/motion-204-v3-symmetric-zero-named-poses"
     for profile in ("", "_gripper", "_suction"):
         assert f"config/named_poses{profile}.yaml" in lock["managed_destination_files"]
 
@@ -51,25 +49,15 @@ def test_suction_and_gripper_profiles_match_control_inventory():
         movable = {name for name, joint in joints.items() if joint.get("type") != "fixed"}
         control = robot.find("ros2_control")
         control_joints = {joint.get("name") for joint in control.findall("joint")}
-        expected_initial = yaml.safe_load(
-            (PACKAGE_ROOT / f"config/initial_positions_{profile}.yaml").read_text()
-        )["initial_positions"]
         assert len(movable) == expected_count
         assert movable == control_joints
         assert ("left_moving_jaw_joint" in movable) == (profile == "gripper")
-        for joint in control.findall("joint"):
-            position_state = next(
-                state for state in joint.findall("state_interface")
-                if state.get("name") == "position"
-            )
-            initial_value = position_state.find("param[@name='initial_value']")
-            assert float(initial_value.text) == expected_initial[joint.get("name")]
 
         updown = joints["updown"].find("limit")
         assert float(updown.get("lower")) == -1.0
         assert float(updown.get("upper")) == 0.0
-        assert joints["left_tool0_fixed"].find("parent").get("link") == "left_link7"
-        assert joints["right_tool0_fixed"].find("parent").get("link") == "right_link7"
+        assert joints["left_tool0_fixed"].find("parent").get("link") == "left_joint7"
+        assert joints["right_tool0_fixed"].find("parent").get("link") == "right_joint7"
         assert joints["base_footprint_to_base_link"].find("origin").get("xyz") == (
             "0.190000002779484 -0.0000442724271391554 0.40000250599116"
         )

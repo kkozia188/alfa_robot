@@ -13,14 +13,13 @@ inline double shortestAngleDelta(double from, double to)
 }
 
 inline double naturalJointDistanceSquared(
-  const std::array<double, 7>& from, const std::array<double, 7>& to,
-  bool bounded = false)
+  const std::array<double, 7>& from, const std::array<double, 7>& to)
 {
   // Shoulder/elbow motion is useful; distal wrist/swivel motion should earn its cost.
   constexpr std::array<double, 7> weights{1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 5.0};
   double distance = 0.0;
   for (size_t i = 0; i < from.size(); ++i) {
-    const double delta = bounded ? to[i] - from[i] : shortestAngleDelta(from[i], to[i]);
+    const double delta = shortestAngleDelta(from[i], to[i]);
     distance += weights[i] * delta * delta;
   }
   return distance;
@@ -37,23 +36,22 @@ inline bool sameShoulderElbowBranch(
   return true;
 }
 
-inline double naturalJointPathLength(const std::vector<std::array<double, 7>>& path,
-                                    bool bounded = false)
+inline double naturalJointPathLength(const std::vector<std::array<double, 7>>& path)
 {
   double length = 0.0;
   for (size_t i = 1; i < path.size(); ++i)
-    length += std::sqrt(naturalJointDistanceSquared(path[i - 1], path[i], bounded));
+    length += std::sqrt(naturalJointDistanceSquared(path[i - 1], path[i]));
   return length;
 }
 
 inline bool naturalJointPath(
   const std::vector<std::array<double, 7>>& path, double maximum_ratio = 4.0,
-  double minimum_allowance = 1.0, bool bounded = false)
+  double minimum_allowance = 1.0)
 {
   if (path.size() < 2) return true;
   for (size_t i = 1; i < path.size(); ++i)
     if (!sameShoulderElbowBranch(path[i - 1], path[i])) return false;
-  const double direct = std::sqrt(naturalJointDistanceSquared(path.front(), path.back(), bounded));
-  return naturalJointPathLength(path, bounded) <= std::max(minimum_allowance, maximum_ratio * direct);
+  const double direct = std::sqrt(naturalJointDistanceSquared(path.front(), path.back()));
+  return naturalJointPathLength(path) <= std::max(minimum_allowance, maximum_ratio * direct);
 }
 }  // namespace alfa_robot::motion

@@ -82,7 +82,7 @@ int main()
   require(group != nullptr, "missing whole_body planning group");
   planning_scene::PlanningScene scene(model);
 
-  for (const std::string pose : {"home", "second_home", "unloading", "second_unloading"}) {
+  for (const std::string pose : {"home", "unloading"}) {
     moveit::core::RobotState state(model);
     state.setToDefaultValues();
     require(state.setToDefaultValues(group, pose), "missing named pose " + pose);

@@ -40,13 +40,6 @@ struct V3RedundantIkSolution
   double minimum_joint_limit_margin = 0.0;
 };
 
-struct V3WristOrientationSolution
-{
-  std::array<double, 3> wrist{};
-  double orientation_error = 0.0;
-  double seed_distance = 0.0;
-};
-
 struct V3RedundantIkRequest
 {
   Eigen::Isometry3d target_in_arm_base = Eigen::Isometry3d::Identity();
@@ -65,11 +58,6 @@ public:
 
   std::vector<V3RedundantIkSolution> solveInArmBase(
     const V3RedundantIkRequest& request) const;
-
-  std::vector<V3WristOrientationSolution> solveWristOrientation(
-    const std::array<double, 4>& first_four,
-    const Eigen::Matrix3d& target_in_arm_base,
-    const std::array<double, 3>& wrist_seed) const;
 
   Eigen::Isometry3d forwardInArmBase(
     const std::array<double, 7>& joints) const;

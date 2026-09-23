@@ -266,47 +266,6 @@ void checkSingularAndUnreachableTargets()
     "unreachable target returned an analytic branch");
 }
 
-void checkWristOrientationDecomposition()
-{
-  using alfa_robot::analytic_ik::V3RedundantArmAnalyticIk;
-  using alfa_robot::analytic_ik::V3RedundantArmModel;
-  std::mt19937 rng(20260920);
-  for (const auto model : {V3RedundantArmModel::V311Left, V3RedundantArmModel::V311Right}) {
-    V3RedundantArmAnalyticIk solver(model);
-    const auto lower = solver.jointLowerLimits();
-    const auto upper = solver.jointUpperLimits();
-    for (int sample = 0; sample < 1500; ++sample) {
-      std::array<double, 7> joints{};
-      for (size_t index = 0; index < joints.size(); ++index)
-        joints[index] = randomBetween(rng, 0.8 * lower[index], 0.8 * upper[index]);
-      const auto target = solver.forwardInArmBase(joints).linear();
-      const auto solutions = solver.solveWristOrientation(
-        {joints[0], joints[1], joints[2], joints[3]}, target,
-        {joints[4], joints[5], joints[6]});
-      require(!solutions.empty(), "reachable wrist orientation returned no branch");
-      for (const auto& solution : solutions) {
-        const std::array<double, 7> complete{
-          joints[0], joints[1], joints[2], joints[3],
-          solution.wrist[0], solution.wrist[1], solution.wrist[2]};
-        require(orientationError(target, solver.forwardInArmBase(complete).linear()) < 1e-7,
-          "wrist decomposition changed tool orientation");
-      }
-    }
-    const std::array<double, 7> reference{0.2, -0.6, 0.4, 1.0, -0.3, 0.7, 0.2};
-    const auto target = solver.forwardInArmBase(reference).linear();
-    const auto started = std::chrono::steady_clock::now();
-    for (int sample = 0; sample < 10000; ++sample)
-      require(!solver.solveWristOrientation(
-        {reference[0], reference[1], reference[2], reference[3]},
-        target, {reference[4], reference[5], reference[6]}).empty(),
-        "wrist benchmark lost solution");
-    const double average_microseconds = std::chrono::duration<double, std::micro>(
-      std::chrono::steady_clock::now() - started).count() / 10000.0;
-    std::cout << "wrist_model=" << static_cast<int>(model)
-              << " average_wrist_us=" << average_microseconds << '\n';
-  }
-}
-
 }  // namespace
 
 int main()
@@ -316,6 +275,5 @@ int main()
   checkSwivelFamily();
   checkInstalledMirroredModels();
   checkSingularAndUnreachableTargets();
-  checkWristOrientationDecomposition();
   return 0;
 }

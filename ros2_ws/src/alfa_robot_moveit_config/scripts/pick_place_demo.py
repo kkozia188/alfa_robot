@@ -52,8 +52,8 @@ ARM_JOINTS = [
 ]
 ALL_JOINTS = TORSO_JOINTS + ARM_JOINTS
 
-LEFT_TOUCH = ["left_link6", "left_tool0"]
-RIGHT_TOUCH = ["right_link6", "right_tool0"]
+LEFT_TOUCH = ["left_joint6", "left_tool0"]
+RIGHT_TOUCH = ["right_joint6", "right_tool0"]
 
 LEFT_ATTACH_LINK = LEFT_TIP  # left_tool0
 RIGHT_ATTACH_LINK = RIGHT_TIP  # right_tool0

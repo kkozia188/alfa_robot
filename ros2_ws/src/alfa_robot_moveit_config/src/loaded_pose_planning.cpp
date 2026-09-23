@@ -255,15 +255,15 @@ std::vector<std::string> touch_links_for_attached_box(const AttachedBoxSpec& box
 {
   std::vector<std::string> links{box.link_name};
   if (box.link_name.rfind("left_", 0) == 0) {
-    links.push_back("left_link6");
-    links.push_back("left_link5");
-    links.push_back("left_link4");
-    links.push_back("left_link3");
+    links.push_back("left_joint6");
+    links.push_back("left_joint5");
+    links.push_back("left_joint4");
+    links.push_back("left_joint3");
   } else if (box.link_name.rfind("right_", 0) == 0) {
-    links.push_back("right_link6");
-    links.push_back("right_link5");
-    links.push_back("right_link4");
-    links.push_back("right_link3");
+    links.push_back("right_joint6");
+    links.push_back("right_joint5");
+    links.push_back("right_joint4");
+    links.push_back("right_joint3");
   }
   return links;
 }

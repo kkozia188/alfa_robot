@@ -79,27 +79,6 @@ inline Eigen::Isometry3d wallContactPose(
   return pose;
 }
 
-inline Eigen::Isometry3d wallContactPose(
-  const Eigen::Vector3d& center, const Eigen::Vector3d& size, double gap, bool top,
-  const Eigen::Matrix3d& reference_rotation)
-{
-  auto pose = wallContactPose(center, size, gap, top);
-  const Eigen::Quaterniond alignment = Eigen::Quaterniond::FromTwoVectors(
-    reference_rotation.col(2), pose.linear().col(2));
-  pose.linear() = alignment.toRotationMatrix() * reference_rotation;
-  return pose;
-}
-
-inline Eigen::Isometry3d toolPoseFromFrontFace(
-  const Eigen::Isometry3d& face, const Eigen::Matrix3d& reference_rotation)
-{
-  Eigen::Isometry3d tool = face;
-  const Eigen::Quaterniond alignment = Eigen::Quaterniond::FromTwoVectors(
-    reference_rotation.col(2), face.linear().col(2));
-  tool.linear() = alignment.toRotationMatrix() * reference_rotation;
-  return tool;
-}
-
 inline Eigen::Isometry3d wallRearPlacementPose(
   Eigen::Isometry3d tool, const Eigen::Isometry3d& tool_to_box,
   const Eigen::Vector3d& size, double rear_x, double clearance, double minimum_z)

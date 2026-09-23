@@ -316,18 +316,9 @@ class V3SingleArmBoxExtractViewer(Node):
                 ),
             )
         if draw_boxes:
-            direct_boxes = tuple(payload.get("direct_attached_boxes", []))
-            if direct_boxes:
-                joints = dict(zip(payload["joint_names"], payload["initial_joints"]))
-                self.log_boxes(joints, attached=True, carried_boxes=direct_boxes)
-            else:
-                self.log_boxes(None, attached=False)
+            self.log_boxes(None, attached=False)
 
     def log_scene_points(self, payload: dict) -> None:
-        if payload.get("direct_attach"):
-            rr.log("world/task_points", rr.Clear(recursive=True))
-            rr.log("world/cartesian_retreat_axis", rr.Clear(recursive=True))
-            return
         positions = []
         labels = []
         colors = []
@@ -364,8 +355,7 @@ class V3SingleArmBoxExtractViewer(Node):
 
     def log_boxes(
         self, joint_positions: dict[str, float] | None, *, attached: bool, visible: bool = True,
-        transforms: dict[str, np.ndarray] | None = None, carried_boxes: tuple[dict, ...] = (),
-        collision_bodies: set[str] | None = None,
+        transforms: dict[str, np.ndarray] | None = None, carried_boxes: tuple[dict, ...] = ()
     ) -> None:
         if carried_boxes:
             rr.log("world/boxes/target", rr.Clear(recursive=True))
@@ -390,13 +380,11 @@ class V3SingleArmBoxExtractViewer(Node):
                 box_transform = tool_transform.copy()
                 box_transform[:3, :3] = tool_transform[:3, :3] @ rotation
                 box_transform[:3, 3] = tool_transform[:3, 3] + tool_transform[:3, :3] @ offset
-                colliding = f"carried_target_box_{box.get('side', '')}" in (collision_bodies or set())
                 rr.log(f"world/boxes/carried/{box_id}", rr.Boxes3D(
                     centers=[box_transform[:3, 3].tolist()],
                     half_sizes=[(self.box_size * 0.5).tolist()],
                     quaternions=[matrix_to_quaternion(box_transform[:3, :3])],
-                    colors=[[255, 35, 35, 220] if colliding else [45, 225, 100, 190]],
-                    labels=[f"{'COLLISION ' if colliding else ''}carried box {box_id}"]))
+                    colors=[[45, 225, 100, 190]], labels=[f"carried box {box_id}"]))
             return
 
         if not visible:
@@ -424,26 +412,6 @@ class V3SingleArmBoxExtractViewer(Node):
             colors=[[45, 225, 100, 190]], labels=["carried target box"]))
 
     def log_summary(self, status: str, *, planning: bool) -> None:
-        if self.wall_request.get("direct_attach"):
-            body = (
-                "# Dual-arm direct loaded transfer\n\n"
-                f"- Status: {status}\n"
-                f"- Start: `{self.wall_request.get('initial_pose', 'home')}` with two boxes attached\n"
-                f"- Goal: exact SRDF `dual_arm/{self.wall_request.get('direct_placement_pose', 'unloading')}`\n"
-                "- Method: joint shortcut + collision-window local RRTConnect\n"
-                "- No pregrasp, approach, or Cartesian extraction\n"
-                "- Updown fixed; both arms move on one timeline\n"
-                "- Boxes remain attached at the final pose\n"
-                f"- Total planning: {self.total_ms:.2f} ms\n"
-                f"- Local RRT calls: {self.metrics.get('local_rrt_calls', 0)}\n"
-                f"- Failure: {self.failure_stage or '-'} {self.failure_reason}\n"
-                + ("- Rejected shortcut preview is diagnostic only. No transfer was executed.\n"
-                   if self.diagnostic.get("snapshot") == "rejected_shortcut_preview_not_executed" else "")
-                +
-                "- Simulation only; no hardware or PLC commands"
-            )
-            rr.log("summary", rr.TextDocument(body, media_type=rr.MediaType.MARKDOWN))
-            return
         if planning:
             body = (
                 "# V3单臂抽箱Demo\n\n"
@@ -551,34 +519,8 @@ class V3SingleArmBoxExtractViewer(Node):
         if self.scenes and self.scene_index != frame.scene_index:
             self.update_scene(self.scenes[frame.scene_index], draw_boxes=False)
             self.scene_index = frame.scene_index
-        collision_bodies = set()
-        if self.frame_index + 1 == len(self.frames):
-            collision_bodies = {body for contact in self.diagnostic.get("contacts", [])
-                                for body in contact["bodies"]}
         self.log_boxes(joint_positions, attached=frame.box_attached, visible=frame.box_visible,
-                       transforms=transforms, carried_boxes=frame.carried_boxes,
-                       collision_bodies=collision_bodies)
-        if collision_bodies:
-            for box in self.wall_request.get("environment", {}).get("boxes", []):
-                if box["id"] in collision_bodies:
-                    rr.log(f"world/failure/obstacles/{box['id']}", rr.Boxes3D(
-                        centers=[box["center"]], half_sizes=[np.asarray(box["size"]) * 0.5],
-                        colors=[[255, 35, 35, 100]], labels=[f"COLLISION {box['id']}"]))
-        if (self.wall_request.get("public_action") and
-                frame.stage == "HOME_release_boundary"):
-            for box in frame.carried_boxes:
-                tool = transforms.get(str(box.get("tool_link", "")))
-                if tool is None:
-                    continue
-                rotation = np.asarray(box["tool_to_box_rotation"], dtype=float)
-                offset = np.asarray(box["tool_to_box_center"], dtype=float)
-                center = tool[:3, 3] + tool[:3, :3] @ offset
-                orientation = tool[:3, :3] @ rotation
-                box_id = int(box["box_id"])
-                rr.log(f"world/boxes/placed/{box_id}", rr.Boxes3D(
-                    centers=[center.tolist()], half_sizes=[(self.box_size * 0.5).tolist()],
-                    quaternions=[matrix_to_quaternion(orientation)],
-                    colors=[[80, 190, 110, 175]], labels=[f"placed box {box_id}"]))
+                       transforms=transforms, carried_boxes=frame.carried_boxes)
         rr.log(
             "world/current_stage",
             rr.TextLog(

@@ -20,27 +20,11 @@ ARM_POSES = {
         "left_joint6": math.radians(-40.0),
         "left_joint7": 0.0,
         "right_joint1": math.radians(-155.0),
-        "right_joint2": math.radians(105.0),
+        "right_joint2": math.radians(-105.0),
         "right_joint3": math.radians(-20.0),
-        "right_joint4": math.radians(-90.0),
+        "right_joint4": math.radians(90.0),
         "right_joint5": math.radians(90.0),
         "right_joint6": math.radians(40.0),
-        "right_joint7": 0.0,
-    },
-    "second_home": {
-        "left_joint1": math.radians(30.0),
-        "left_joint2": math.radians(80.0),
-        "left_joint3": math.radians(20.0),
-        "left_joint4": math.radians(90.0),
-        "left_joint5": math.radians(90.0),
-        "left_joint6": math.radians(60.0),
-        "left_joint7": 0.0,
-        "right_joint1": math.radians(-30.0),
-        "right_joint2": math.radians(-80.0),
-        "right_joint3": math.radians(-20.0),
-        "right_joint4": math.radians(-90.0),
-        "right_joint5": math.radians(-90.0),
-        "right_joint6": math.radians(-60.0),
         "right_joint7": 0.0,
     },
     "unloading": {
@@ -52,42 +36,19 @@ ARM_POSES = {
         "left_joint6": math.radians(-30.0),
         "left_joint7": 0.0,
         "right_joint1": math.radians(-130.0),
-        "right_joint2": math.radians(105.0),
+        "right_joint2": math.radians(-105.0),
         "right_joint3": 3.14159265,
-        "right_joint4": math.radians(-20.0),
+        "right_joint4": math.radians(20.0),
         "right_joint5": math.radians(90.0),
         "right_joint6": math.radians(30.0),
         "right_joint7": 0.0,
     },
-    "second_unloading": {
-        "left_joint1": 0.0,
-        "left_joint2": math.radians(100.0),
-        "left_joint3": 0.0,
-        "left_joint4": math.radians(-45.0),
-        "left_joint5": math.radians(100.0),
-        "left_joint6": math.radians(45.0),
-        "left_joint7": 0.0,
-        "right_joint1": 0.0,
-        "right_joint2": math.radians(-100.0),
-        "right_joint3": 0.0,
-        "right_joint4": math.radians(45.0),
-        "right_joint5": math.radians(-100.0),
-        "right_joint6": math.radians(-45.0),
-        "right_joint7": 0.0,
-    },
-}
-
-POSE_UPDOWN = {
-    "home": -0.3,
-    "second_home": -0.6,
-    "unloading": -0.3,
-    "second_unloading": -0.6,
 }
 
 
 def expected_pose(name, end_effector):
     pose = {
-        "updown": POSE_UPDOWN[name],
+        "updown": -0.3,
         "head_joint": 0.0,
         "head_pitch_joint": 0.0,
         **ARM_POSES[name],
@@ -176,38 +137,31 @@ def test_v3_side_zero_and_group_semantics(end_effector):
         assert abs(float(limit.attrib["lower"]) + exact_joint2_limit) < 1e-15
         assert abs(float(limit.attrib["upper"]) - exact_joint2_limit) < 1e-15
 
-    expected_dynamics = {
-        1: (647.0, 1.309), 2: (647.0, 1.309), 3: (484.0, 1.309),
-        4: (459.0, 1.749), 5: (217.0, 2.618), 6: (107.0, 3.142),
-        7: (36.0, 3.142),
-    }
-    links = {link.attrib["name"] for link in robot.findall("link")}
-    for side in ("left", "right"):
-        for index, (effort, velocity) in expected_dynamics.items():
-            joint = joints[f"{side}_joint{index}"]
-            expected_parent = f"{side}_arm_base" if index == 1 else f"{side}_link{index-1}"
-            assert joint.find("parent").attrib["link"] == expected_parent
-            assert joint.find("child").attrib["link"] == f"{side}_link{index}"
-            assert f"{side}_link{index}" in links
-            limit = joint.find("limit")
-            assert float(limit.attrib["effort"]) == effort
-            assert float(limit.attrib["velocity"]) == velocity
-            assert f"{side}_joint{index}" not in links
-
     assert joints["left_joint5"].find("origin").attrib == {
         "xyz": "0.22457775 0.060175428 0.068",
         "rpy": "1.5707963 0 1.8325957",
     }
     assert joints["right_joint1"].find("origin").attrib == {
         "xyz": "-0.33054221 -0.181 1.3500054",
-        "rpy": "0 -1.3089969 0",
+        "rpy": "0 1.3089969 3.1415927",
     }
     assert joints["right_joint5"].find("origin").attrib == {
         "xyz": "-0.22457775 0.060175428 0.068",
-        "rpy": "-1.5707963 0 1.3089969",
+        "rpy": "1.5707963 0 -1.8325957",
     }
-    for index in range(1, 8):
-        assert joints[f"right_joint{index}"].find("axis").attrib["xyz"] == "0 0 1"
+    old_zero_rpy = {
+        "right_joint1": (0.0, -1.3089969, 0.0),
+        "right_joint5": (-1.5707963, 0.0, 1.3089969),
+    }
+    local_half_turn = rpy_matrix((0.0, 0.0, math.pi))
+    for name, old_rpy in old_zero_rpy.items():
+        new_rpy = tuple(float(value) for value in joints[name].find("origin").attrib["rpy"].split())
+        old_rotation = rpy_matrix(old_rpy)
+        new_rotation = rpy_matrix(new_rpy)
+        assert_matrix_close(new_rotation, matrix_multiply(old_rotation, local_half_turn), 1e-7)
+        for row in range(3):
+            assert abs(new_rotation[row][2] - old_rotation[row][2]) < 1e-7
+        assert joints[name].find("axis").attrib["xyz"] == "0 0 1"
     assert joints["left_joint7"].find("origin").attrib == {
         "xyz": "0.0993 0 -0.0615",
         "rpy": "0 -1.5707963 3.1415927",
@@ -244,7 +198,7 @@ def test_dual_gripper_attachment_and_travel(side):
 
     # Source gripper names are reversed relative to the ROS physical sides.
     assert jaw.attrib["type"] == "prismatic"
-    assert jaw.find("parent").attrib["link"] == f"{side}_link7"
+    assert jaw.find("parent").attrib["link"] == f"{side}_joint7"
     assert jaw.find("child").attrib["link"] == f"{side}_moving_jaw"
     assert jaw.find("origin").attrib == {"xyz": "0 0 0", "rpy": "0 0 0"}
     assert jaw.find("axis").attrib["xyz"] == "1 0 0"
@@ -254,10 +208,10 @@ def test_dual_gripper_attachment_and_travel(side):
     # Opening the jaw must not move the existing arm planning tip.
     tool = joints[f"{side}_tool0_fixed"]
     assert tool.attrib["type"] == "fixed"
-    assert tool.find("parent").attrib["link"] == f"{side}_link7"
+    assert tool.find("parent").attrib["link"] == f"{side}_joint7"
     assert tool.find("origin").attrib == {"xyz": "0 0 0.13585", "rpy": "0 0 0"}
 
-    fixed_body = links[f"{side}_link7"]
+    fixed_body = links[f"{side}_joint7"]
     moving_jaw = links[f"{side}_moving_jaw"]
     assert float(fixed_body.find("inertial/mass").attrib["value"]) == 4.750
     assert float(moving_jaw.find("inertial/mass").attrib["value"]) == 0.342
@@ -298,9 +252,6 @@ def test_all_movable_joints_have_consistent_configuration(end_effector):
         assert limits[name]["type"] == joint.attrib["type"]
         assert limits[name][f"lower_position_{unit}"] == lower
         assert limits[name][f"upper_position_{unit}"] == upper
-        if name.startswith(("left_joint", "right_joint")):
-            assert limits[name]["max_effort"] == float(joint.find("limit").attrib["effort"])
-            assert limits[name]["max_velocity_rad_s"] == float(joint.find("limit").attrib["velocity"])
         assert lower <= positions[name] <= upper
 
 
@@ -316,7 +267,7 @@ def test_named_poses_cover_all_joints_and_respect_limits(end_effector):
     limits = yaml.safe_load(
         (PACKAGE_ROOT / "config" / f"joint_limits{suffix}.yaml").read_text()
     )["joints"]
-    assert set(named) == {"home", "second_home", "unloading", "second_unloading"}
+    assert set(named) == {"home", "unloading"}
     assert named["home"] == initial
     for pose_name, positions in named.items():
         expected = expected_pose(pose_name, end_effector)
@@ -345,7 +296,7 @@ def test_mesh_resources_resolve_with_millimeter_scale(end_effector):
 def test_suction_replaces_gripper_with_source_mass_and_collision_offset(side):
     robot = ET.fromstring(render_urdf("suction"))
     assert not any("moving_jaw" in e.attrib.get("name", "") for e in robot)
-    link = robot.find(f"link[@name='{side}_link7']")
+    link = robot.find(f"link[@name='{side}_joint7']")
     assert float(link.find("inertial/mass").attrib["value"]) == 2.618
     assert link.find("inertial/origin").attrib == {
         "xyz": "-0.000330 -0.000125 0.070303", "rpy": "0 0 0"
@@ -361,7 +312,7 @@ def test_suction_replaces_gripper_with_source_mass_and_collision_offset(side):
     }
     tool = robot.find(f"joint[@name='{side}_tool0_fixed']")
     assert tool.attrib["type"] == "fixed"
-    assert tool.find("parent").attrib["link"] == f"{side}_link7"
+    assert tool.find("parent").attrib["link"] == f"{side}_joint7"
     assert tool.find("origin").attrib == {"xyz": "0 0 0.13585", "rpy": "0 0 0"}
 
 
@@ -373,7 +324,7 @@ def test_end_effector_switch_preserves_common_robot():
             for element in robot
             if element.tag != "ros2_control"
             and "moving_jaw" not in element.attrib["name"]
-            and not (element.tag == "link" and element.attrib["name"] in ("left_link7", "right_link7"))
+            and not (element.tag == "link" and element.attrib["name"] in ("left_joint7", "right_joint7"))
         }
 
     assert common_elements("suction") == common_elements("gripper")

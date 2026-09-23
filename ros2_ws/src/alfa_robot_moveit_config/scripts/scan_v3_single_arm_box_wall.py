@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the sequential mixed-grasp V3 task on a fixed-base 5x5 box wall."""
+"""Validate the sequential mixed-grasp V3 task on a configurable box wall."""
 
 from __future__ import annotations
 
@@ -22,22 +22,31 @@ FAIL_RE = re.compile(
 DEFAULT_TOP_SUCTION_BOX_IDS = {18, 21, 22, 23, 24, 25}
 
 
-def box_specs(contact_x: float, depth: float, width: float, height: float):
+def box_specs(
+    contact_x: float,
+    depth: float,
+    width: float,
+    height: float,
+    rows: int = 5,
+    columns: int = 5,
+    center_y: float = 0.0,
+    bottom_z: float = 0.0,
+):
     center_x = contact_x + 0.5 * depth
     box_id = 0
-    for row_from_top in range(5):
-        z = (4.5 - row_from_top) * height
-        for column_from_left in range(5):
+    for row_from_top in range(rows):
+        z = bottom_z + (rows - row_from_top - 0.5) * height
+        for column_from_left in range(columns):
             box_id += 1
-            y = (2.0 - column_from_left) * width
+            y = center_y + ((columns - 1) / 2.0 - column_from_left) * width
             yield box_id, row_from_top + 1, column_from_left + 1, center_x, y, z
 
 
 def parse_box_ids(value: str) -> set[int]:
     ids = {int(item.strip()) for item in value.split(",") if item.strip()}
-    invalid = sorted(item for item in ids if item < 1 or item > 25)
+    invalid = sorted(item for item in ids if item < 1)
     if invalid:
-        raise argparse.ArgumentTypeError(f"box ids must be in [1, 25]: {invalid}")
+        raise argparse.ArgumentTypeError(f"box ids must be positive: {invalid}")
     return ids
 
 
@@ -53,15 +62,18 @@ def front_suction_offsets(
     center_y_offset: float,
     center_z_offset: float,
     bottom_z_offset: float,
+    rows: int = 5,
+    columns: int = 5,
+    grid_center_y: float = 0.0,
 ) -> tuple[float, float]:
     if grasp_mode != "front":
         return 0.0, 0.0
     y_offset = 0.0
     z_offset = 0.0
-    if abs(center_y) <= 1.0e-9:
+    if abs(center_y - grid_center_y) <= 1.0e-9:
         y_offset = center_y_offset if side == "left" else -center_y_offset
         z_offset = center_z_offset
-    if box_id > 20:
+    if (box_id - 1) // columns + 1 == rows:
         z_offset = bottom_z_offset
     return y_offset, z_offset
 
@@ -72,6 +84,7 @@ def candidate_order(
     z: float,
     updown_step: float,
     grasp_mode: str,
+    rows: int = 5,
 ) -> list[tuple[str, float]]:
     preferred_side = "left" if y > 1.0e-9 else "right"
     sides = [preferred_side, "right" if preferred_side == "left" else "left"]
@@ -83,11 +96,22 @@ def candidate_order(
     heights = [-index * updown_step for index in range(int(round(1.0 / updown_step)) + 1)]
     ideal = min(0.0, max(-1.0, z - 1.3))
     heights.sort(key=lambda value: (abs(value - ideal), abs(value)))
-    if row_from_top <= 3 and grasp_mode == "front":
+    if row_from_top <= max(0, rows - 2) and grasp_mode == "front":
         heights.remove(0.0)
         heights.insert(0, 0.0)
         return [(side, height_value) for height_value in heights for side in sides]
     return [(side, height_value) for side in sides for height_value in heights]
+
+
+def box_geometry_launch_arguments(args) -> list[str]:
+    values = (float(args.box_depth), float(args.box_width), float(args.box_height))
+    if values == (0.30, 0.40, 0.40):
+        return []
+    return [
+        f"box_depth:={values[0]:.6f}",
+        f"box_width:={values[1]:.6f}",
+        f"box_height:={values[2]:.6f}",
+    ]
 
 
 def run_attempt(
@@ -114,6 +138,9 @@ def run_attempt(
         args.center_front_suction_y_offset,
         args.center_front_suction_z_offset,
         args.bottom_front_suction_z_offset,
+        args.box_grid_rows,
+        args.box_grid_columns,
+        args.box_grid_center_y,
     )
     initial_right_arm_joints_deg = args.initial_right_arm_joints_deg
     if grasp_mode == "top_suction" and side == "right":
@@ -132,8 +159,10 @@ def run_attempt(
         ),
         f"maximum_carried_box_tilt_deg:={getattr(args, 'maximum_carried_box_tilt_deg', 180.0):.6f}",
         "full_box_wall_scene:=true",
-        "box_grid_columns:=5", "box_grid_rows:=5",
-        "box_grid_center_y:=0.0", "box_grid_bottom_z:=0.0",
+        f"box_grid_columns:={args.box_grid_columns}",
+        f"box_grid_rows:={args.box_grid_rows}",
+        f"box_grid_center_y:={args.box_grid_center_y}",
+        f"box_grid_bottom_z:={args.box_grid_bottom_z}",
         f"target_box_id:={box_id}",
         f"grasp_mode:={grasp_mode}",
         f"front_suction_y_offset:={front_y_offset:.6f}",
@@ -213,6 +242,7 @@ def run_attempt(
         f"natural_max_wrist_step_deg:={getattr(args, 'natural_max_wrist_step_deg', 8.0):.6f}",
         f"analytic_path_only:={'true' if args.analytic_path_only else 'false'}",
     ]
+    command.extend(box_geometry_launch_arguments(args))
     place_tcp_pose = getattr(args, "place_tcp_pose", "")
     if place_tcp_pose and not is_transition:
         command.append(f"place_tcp_pose:={place_tcp_pose}")
@@ -336,6 +366,10 @@ def main() -> int:
     parser.add_argument("--box-depth", type=float, default=0.30)
     parser.add_argument("--box-width", type=float, default=0.40)
     parser.add_argument("--box-height", type=float, default=0.40)
+    parser.add_argument("--box-grid-rows", type=int, default=5)
+    parser.add_argument("--box-grid-columns", type=int, default=5)
+    parser.add_argument("--box-grid-center-y", type=float, default=0.0)
+    parser.add_argument("--box-grid-bottom-z", type=float, default=0.0)
     parser.add_argument("--timeout", type=float, default=15.0)
     parser.add_argument(
         "--end-effector",
@@ -446,8 +480,25 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.box_grid_rows < 1 or args.box_grid_columns < 1:
+        parser.error("box grid rows and columns must be positive")
+    box_count = args.box_grid_rows * args.box_grid_columns
+    invalid_ids = sorted(
+        box_id
+        for box_id in args.box_ids | args.top_suction_box_ids | args.initial_removed_box_ids
+        if box_id > box_count
+    )
+    if invalid_ids:
+        parser.error(f"box ids must be in [1, {box_count}]: {invalid_ids}")
     specs = list(box_specs(
-        args.contact_x, args.box_depth, args.box_width, args.box_height
+        args.contact_x,
+        args.box_depth,
+        args.box_width,
+        args.box_height,
+        args.box_grid_rows,
+        args.box_grid_columns,
+        args.box_grid_center_y,
+        args.box_grid_bottom_z,
     ))
     if args.updown_step <= 0.0 or args.updown_step > 1.0:
         parser.error("updown-step must be in (0, 1]")
@@ -457,6 +508,8 @@ def main() -> int:
     if args.limit_boxes > 0:
         specs = specs[: args.limit_boxes]
 
+    if min(args.box_depth, args.box_width, args.box_height) <= 0.0:
+        parser.error("box dimensions must be positive")
     if args.ground_clearance < 0.0:
         parser.error("ground-clearance must be non-negative")
     if not 0.0 <= args.center_front_suction_y_offset < args.box_width * 0.5:
@@ -494,7 +547,9 @@ def main() -> int:
             flush=True,
         )
         selected = None
-        for side, updown in candidate_order(row, y, z, args.updown_step, grasp_mode):
+        for side, updown in candidate_order(
+            row, y, z, args.updown_step, grasp_mode, args.box_grid_rows
+        ):
             attempt = run_attempt(
                 args,
                 box_id,

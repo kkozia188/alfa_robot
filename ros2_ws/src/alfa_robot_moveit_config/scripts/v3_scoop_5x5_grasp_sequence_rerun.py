@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import math
+import random
 import statistics
 import subprocess
 import tempfile
@@ -22,6 +24,17 @@ STATION_SCHEMA = "alfa.v3_scoop_5x5_station.v11"
 RESULT_SCHEMA = "alfa.v3_scoop_5x5_station_result.v11"
 END_EFFECTOR = "scoop"
 PLAN_CACHE_SCHEMA = "alfa.v3_scoop_5x5_plan_cache.v1"
+DEFAULT_LAYOUT = {
+    "rows": 5,
+    "columns": 5,
+    "active_box_ids": list(range(1, 26)),
+    "contact_x_m": 0.75,
+    "center_y_m": 0.0,
+    "bottom_z_m": 0.0,
+    "box_depth_m": 0.30,
+    "box_width_m": 0.40,
+    "box_height_m": 0.40,
+}
 
 # V3.1.1 candidate order is independent from the historical V3.0.9 profile.
 VERIFIED_SELECTION = {
@@ -71,10 +84,13 @@ def load_plan_cache(path: Path, config: dict, limit_boxes: int) -> list[dict]:
         return []
     with path.open(encoding="utf-8") as stream:
         payload = json.load(stream)
-    if (
-        payload.get("schema") != PLAN_CACHE_SCHEMA
-        or payload.get("station_config") != config
-    ):
+    cached_config = payload.get("station_config")
+    compatible_config = cached_config == config
+    if not compatible_config and config.get("layout") == DEFAULT_LAYOUT:
+        legacy_config = dict(config)
+        legacy_config.pop("layout")
+        compatible_config = cached_config == legacy_config
+    if payload.get("schema") != PLAN_CACHE_SCHEMA or not compatible_config:
         raise ValueError(f"incompatible scoop plan cache: {path}")
     tasks = payload.get("tasks")
     if not isinstance(tasks, list) or len(tasks) > limit_boxes:
@@ -264,8 +280,57 @@ def write_metrics_csv(summary: dict, summary_path: Path) -> Path:
     return csv_path
 
 
+
+def layout_profile(config: dict) -> dict:
+    layout = config.get("layout", {})
+    required = {
+        "rows", "columns", "active_box_ids", "contact_x_m", "center_y_m",
+        "bottom_z_m", "box_depth_m", "box_width_m", "box_height_m",
+    }
+    if set(layout) != required:
+        raise ValueError(f"invalid scoop layout profile: {sorted(layout)}")
+    rows = int(layout["rows"])
+    columns = int(layout["columns"])
+    box_count = rows * columns
+    active = [int(value) for value in layout["active_box_ids"]]
+    if rows < 1 or columns < 1:
+        raise ValueError("layout rows and columns must be positive")
+    if len(set(active)) != len(active) or not active or any(
+        value < 1 or value > box_count for value in active
+    ):
+        raise ValueError(f"active_box_ids must be unique ids in [1, {box_count}]")
+    if min(float(layout[name]) for name in (
+        "box_depth_m", "box_width_m", "box_height_m"
+    )) <= 0.0:
+        raise ValueError("box dimensions must be positive")
+    return {**layout, "rows": rows, "columns": columns, "active_box_ids": active}
+
+
+def parse_id_list(value: str) -> list[int]:
+    values = [int(item.strip()) for item in value.split(",") if item.strip()]
+    if not values or len(set(values)) != len(values) or min(values) < 1:
+        raise argparse.ArgumentTypeError("box/column ids must be unique positive integers")
+    return values
+
+
+def jittered_initial_states(config: dict, jitter_deg: float, seed: int) -> dict[str, str]:
+    if jitter_deg <= 0.0:
+        return {}
+    rng = random.Random(seed)
+    ready = config["ready_joint_degrees"]
+    return {
+        name: ",".join(f"{float(value) + rng.uniform(-jitter_deg, jitter_deg):.8f}"
+                       for value in ready[key])
+        for name, key in (
+            ("initial_left_arm_joints_deg", "left"),
+            ("initial_right_arm_joints_deg", "right_front"),
+            ("top_initial_right_arm_joints_deg", "right_top_suction"),
+        )
+    }
+
 def planning_profile(
     config: dict,
+    layout: dict | None = None,
 ) -> tuple[
     set[int], set[int], dict[str, object], dict[int, dict[str, float]], list[int]
 ]:
@@ -319,29 +384,33 @@ def planning_profile(
     }
     if set(planning) != required:
         raise ValueError(f"invalid scoop planning profile: {sorted(planning)}")
+    layout = layout or layout_profile(config)
+    box_count = layout["rows"] * layout["columns"]
+    all_box_ids = set(range(1, box_count + 1))
+    active_box_ids = set(layout["active_box_ids"])
     top_down_box_ids = {int(value) for value in planning["top_down_box_ids"]}
-    if not top_down_box_ids or any(value < 1 or value > 25 for value in top_down_box_ids):
-        raise ValueError("top_down_box_ids must contain box ids in [1, 25]")
+    if not top_down_box_ids <= all_box_ids:
+        raise ValueError(f"top_down_box_ids must contain ids in [1, {box_count}]")
     left_arm_columns = {int(value) for value in planning["left_arm_columns"]}
     right_arm_columns = {int(value) for value in planning["right_arm_columns"]}
     if (
-        left_arm_columns != {1, 2}
-        or right_arm_columns != {3, 4, 5}
-        or left_arm_columns & right_arm_columns
+        left_arm_columns & right_arm_columns
+        or left_arm_columns | right_arm_columns != set(range(1, layout["columns"] + 1))
     ):
-        raise ValueError("arm columns must be left={1,2}, right={3,4,5}")
+        raise ValueError("arm columns must be disjoint and cover every layout column")
     right_arm_box_ids = {
-        box_id for box_id in range(1, 26)
-        if ((box_id - 1) % 5) + 1 in right_arm_columns
+        box_id for box_id in active_box_ids
+        if ((box_id - 1) % layout["columns"]) + 1 in right_arm_columns
     }
-    box_order = [int(value) for value in planning["box_order"]]
-    if sorted(box_order) != list(range(1, 26)):
-        raise ValueError("box_order must be a permutation of ids 1..25")
+    configured_order = [int(value) for value in planning["box_order"]]
+    if len(configured_order) != box_count or set(configured_order) != all_box_ids:
+        raise ValueError(f"box_order must be a permutation of ids 1..{box_count}")
+    box_order = [box_id for box_id in configured_order if box_id in active_box_ids]
     low_transfer_tcp_box_ids = {
         int(value) for value in planning["low_transfer_tcp_box_ids"]
     }
-    if low_transfer_tcp_box_ids != {6}:
-        raise ValueError("low_transfer_tcp_box_ids must be exactly {6}")
+    if not low_transfer_tcp_box_ids <= all_box_ids:
+        raise ValueError(f"low_transfer_tcp_box_ids must contain ids in [1, {box_count}]")
     minimum_trials = int(planning["upper_front_success_trials"])
     maximum_trials = int(planning["upper_front_max_success_trials"])
     if minimum_trials < 1 or maximum_trials < minimum_trials:
@@ -399,7 +468,9 @@ def planning_profile(
         }
         for box_id, values in planning["box_overrides"].items()
     }
-    for box_id in top_down_box_ids:
+    if not set(box_overrides) <= all_box_ids:
+        raise ValueError(f"box_overrides must contain ids in [1, {box_count}]")
+    for box_id in top_down_box_ids & active_box_ids:
         box_overrides.setdefault(box_id, {}).setdefault(
             "cartesian_transfer_search_enabled", False
         )
@@ -511,7 +582,9 @@ def loaded_transfer_motion_metrics(task: dict, reversal_threshold_deg: float) ->
     return stage_motion_metrics(task, "rrt_to_place", reversal_threshold_deg)
 
 
-def validate_retreat_motion(tasks: list[dict], acceptance: dict) -> dict:
+def validate_retreat_motion(
+    tasks: list[dict], acceptance: dict, rows: int = 5
+) -> dict:
     required = {
         "direction_change_threshold_deg",
         "max_retreat_joint_step_deg",
@@ -650,7 +723,8 @@ def validate_retreat_motion(tasks: list[dict], acceptance: dict) -> dict:
             )
     upper_front_tasks = [
         task for task in tasks
-        if int(task.get("box_id", 0)) <= 15 and task.get("mode") == "front"
+        if int(task.get("row", rows)) <= max(0, rows - 2)
+        and task.get("mode") == "front"
     ]
     upper_front_metrics = [task["motion_selection"] for task in upper_front_tasks]
     for task, motion in zip(upper_front_tasks, upper_front_metrics):
@@ -865,11 +939,29 @@ def add_motion_metrics_to_summary(summary_path: Path, aggregate: dict, tasks: li
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--save", type=Path, default=default_recording_path())
+    parser.add_argument("--station-config", default=STATION_CONFIG_NAME)
+    parser.add_argument("--rows", type=int)
+    parser.add_argument("--columns", type=int)
+    parser.add_argument("--active-box-ids", type=parse_id_list)
+    parser.add_argument("--box-order", type=parse_id_list)
+    parser.add_argument("--left-arm-columns", type=parse_id_list)
+    parser.add_argument("--right-arm-columns", type=parse_id_list)
+    parser.add_argument("--contact-x", type=float)
+    parser.add_argument("--wall-center-y", type=float)
+    parser.add_argument("--wall-bottom-z", type=float)
+    parser.add_argument("--box-depth", type=float)
+    parser.add_argument("--box-width", type=float)
+    parser.add_argument("--box-height", type=float)
+    parser.add_argument("--initial-left-arm-joints-deg")
+    parser.add_argument("--initial-right-arm-joints-deg")
+    parser.add_argument("--top-initial-right-arm-joints-deg")
+    parser.add_argument("--initial-joint-jitter-deg", type=float, default=0.0)
+    parser.add_argument("--random-seed", type=int, default=0)
     parser.add_argument("--spawn", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--playback-speed", type=float, default=2.5)
     parser.add_argument("--planning-timeout", type=float, default=15.0)
     parser.add_argument("--rrt-retries", type=int, default=2)
-    parser.add_argument("--limit-boxes", type=int, default=25)
+    parser.add_argument("--limit-boxes", type=int, default=0)
     parser.add_argument("--max-frame-rate", type=float, default=60.0)
     parser.add_argument("--transition-joint-speed-deg-s", type=float, default=90.0)
     parser.add_argument("--task-joint-speed-deg-s", type=float, default=40.0)
@@ -880,8 +972,6 @@ def main() -> int:
         parser.error("playback speed and planning timeout must be positive")
     if args.rrt_retries < 0:
         parser.error("rrt-retries must be non-negative")
-    if not 1 <= args.limit_boxes <= 25:
-        parser.error("limit-boxes must be in [1, 25]")
     if min(
         args.max_frame_rate,
         args.transition_joint_speed_deg_s,
@@ -890,25 +980,134 @@ def main() -> int:
     ) <= 0.0:
         parser.error("frame rate and joint speeds must be positive")
 
-    config = sequence.station_contract(STATION_CONFIG_NAME, STATION_SCHEMA)
+    config = copy.deepcopy(sequence.station_contract(args.station_config, STATION_SCHEMA))
     if config.get("end_effector") != END_EFFECTOR:
         raise ValueError("scoop station must select the scoop end effector")
     rear_conveyor_contract(config)
+    layout = config["layout"]
+    for argument, key in (
+        (args.rows, "rows"),
+        (args.columns, "columns"),
+        (args.active_box_ids, "active_box_ids"),
+        (args.contact_x, "contact_x_m"),
+        (args.wall_center_y, "center_y_m"),
+        (args.wall_bottom_z, "bottom_z_m"),
+        (args.box_depth, "box_depth_m"),
+        (args.box_width, "box_width_m"),
+        (args.box_height, "box_height_m"),
+    ):
+        if argument is not None:
+            layout[key] = argument
+    grid_changed = args.rows is not None or args.columns is not None
+    if grid_changed:
+        rows = int(layout["rows"])
+        columns = int(layout["columns"])
+        box_count = rows * columns
+        if args.active_box_ids is None:
+            layout["active_box_ids"] = list(range(1, box_count + 1))
+        config["planning"]["top_down_box_ids"] = [
+            value for value in config["planning"]["top_down_box_ids"]
+            if int(value) <= box_count
+        ]
+        config["planning"]["low_transfer_tcp_box_ids"] = [
+            value for value in config["planning"]["low_transfer_tcp_box_ids"]
+            if int(value) <= box_count
+        ]
+        config["planning"]["box_overrides"] = {
+            key: value for key, value in config["planning"]["box_overrides"].items()
+            if int(key) <= box_count
+        }
+        config["planning"]["box_order"] = list(range(1, box_count + 1))
+        if args.left_arm_columns is None and args.right_arm_columns is None:
+            split = columns // 2
+            config["planning"]["left_arm_columns"] = list(range(1, split + 1))
+            config["planning"]["right_arm_columns"] = list(range(split + 1, columns + 1))
+    if args.left_arm_columns is not None:
+        config["planning"]["left_arm_columns"] = args.left_arm_columns
+    if args.right_arm_columns is not None:
+        config["planning"]["right_arm_columns"] = args.right_arm_columns
+    layout = layout_profile(config)
     (
         top_down_box_ids,
         right_arm_box_ids,
         overrides,
         box_overrides,
-        box_order,
-    ) = planning_profile(config)
+        configured_order,
+    ) = planning_profile(config, layout)
+    box_order = args.box_order or configured_order
+    if len(box_order) != len(layout["active_box_ids"]) or set(box_order) != set(
+        layout["active_box_ids"]
+    ):
+        parser.error("box-order must be a permutation of active-box-ids")
+    args.limit_boxes = args.limit_boxes or len(box_order)
+    if not 1 <= args.limit_boxes <= len(box_order):
+        parser.error(f"limit-boxes must be in [1, {len(box_order)}]")
+    if args.initial_joint_jitter_deg < 0.0:
+        parser.error("initial-joint-jitter-deg must be non-negative")
+    wall_specs = list(sequence.scan.box_specs(
+        float(layout["contact_x_m"]),
+        float(layout["box_depth_m"]),
+        float(layout["box_width_m"]),
+        float(layout["box_height_m"]),
+        layout["rows"],
+        layout["columns"],
+        float(layout["center_y_m"]),
+        float(layout["bottom_z_m"]),
+    ))
+    overrides.update({
+        "contact_x": float(layout["contact_x_m"]),
+        "box_depth": float(layout["box_depth_m"]),
+        "box_width": float(layout["box_width_m"]),
+        "box_height": float(layout["box_height_m"]),
+        "box_grid_rows": layout["rows"],
+        "box_grid_columns": layout["columns"],
+        "box_grid_center_y": float(layout["center_y_m"]),
+        "box_grid_bottom_z": float(layout["bottom_z_m"]),
+    })
+    overrides.update(jittered_initial_states(
+        config, args.initial_joint_jitter_deg, args.random_seed
+    ))
+    for argument, key in (
+        (args.initial_left_arm_joints_deg, "initial_left_arm_joints_deg"),
+        (args.initial_right_arm_joints_deg, "initial_right_arm_joints_deg"),
+        (args.top_initial_right_arm_joints_deg, "top_initial_right_arm_joints_deg"),
+    ):
+        if argument is not None:
+            overrides[key] = argument
     allowed_sides_by_box = {
         box_id: {"right" if box_id in right_arm_box_ids else "left"}
-        for box_id in range(1, 26)
+        for box_id in layout["active_box_ids"]
+    }
+    default_layout = (
+        layout == DEFAULT_LAYOUT
+        and config["planning"]["left_arm_columns"] == [1, 2]
+        and config["planning"]["right_arm_columns"] == [3, 4, 5]
+        and box_order == config["planning"]["box_order"]
+        and args.initial_joint_jitter_deg == 0.0
+        and not any((args.initial_left_arm_joints_deg,
+                     args.initial_right_arm_joints_deg,
+                     args.top_initial_right_arm_joints_deg))
+    )
+    cache_config = config if default_layout else {
+        **config,
+        "runtime_variation": {
+            "box_order": box_order,
+            "initial_state_overrides": {
+                key: overrides[key] for key in (
+                    "initial_left_arm_joints_deg",
+                    "initial_right_arm_joints_deg",
+                    "top_initial_right_arm_joints_deg",
+                ) if key in overrides
+            },
+            "random_seed": args.random_seed,
+        },
     }
     cache_path = plan_cache_path(args.save.resolve())
     if not args.resume:
         cache_path.unlink(missing_ok=True)
-    cached_tasks = load_plan_cache(cache_path, config, args.limit_boxes) if args.resume else []
+    cached_tasks = (
+        load_plan_cache(cache_path, cache_config, args.limit_boxes) if args.resume else []
+    )
     if cached_tasks:
         print(f"RESUME completed={len(cached_tasks)}/{args.limit_boxes} cache={cache_path}", flush=True)
 
@@ -920,7 +1119,7 @@ def main() -> int:
             limit_boxes=args.limit_boxes,
             config=config,
             end_effector=END_EFFECTOR,
-            verified_selection=VERIFIED_SELECTION,
+            verified_selection=VERIFIED_SELECTION if default_layout else {},
             top_suction_box_ids=top_down_box_ids,
             planning_overrides=overrides,
             box_planning_overrides=box_overrides,
@@ -929,12 +1128,18 @@ def main() -> int:
             place_joint_resolver=unloading_joint_degrees,
             place_tcp_box_ids=set(config["planning"]["low_transfer_tcp_box_ids"]),
             box_order=box_order,
+            active_box_ids=layout["active_box_ids"],
+            wall_specs=wall_specs,
             motion_quality_contract=config["motion_acceptance"],
-            strict_verified_selection=True,
+            strict_verified_selection=default_layout,
             initial_tasks=cached_tasks,
-            task_completed_callback=lambda tasks: write_plan_cache(cache_path, config, tasks),
+            task_completed_callback=lambda tasks: write_plan_cache(
+                cache_path, cache_config, tasks
+            ),
         )
-        motion_metrics = validate_retreat_motion(tasks, config["motion_acceptance"])
+        motion_metrics = validate_retreat_motion(
+            tasks, config["motion_acceptance"], layout["rows"]
+        )
         recorder = sequence.SequenceRecorder(
             args.save.resolve(),
             args.playback_speed,
@@ -945,6 +1150,12 @@ def main() -> int:
             tool_name="scoop",
             total_boxes=args.limit_boxes,
             box_ids=box_order[:args.limit_boxes],
+            wall_specs=wall_specs,
+            box_size=(
+                float(layout["box_depth_m"]),
+                float(layout["box_width_m"]),
+                float(layout["box_height_m"]),
+            ),
             minimum_frame_interval_s=1.0 / args.max_frame_rate,
             transition_joint_speed_deg_s=args.transition_joint_speed_deg_s,
             task_joint_speed_deg_s=args.task_joint_speed_deg_s,

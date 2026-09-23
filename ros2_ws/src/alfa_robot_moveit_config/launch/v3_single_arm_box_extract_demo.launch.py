@@ -48,6 +48,9 @@ def generate_launch_description():
             DeclareLaunchArgument("initial_box_x", default_value="0.88"),
             DeclareLaunchArgument("initial_box_y", default_value="-0.20"),
             DeclareLaunchArgument("initial_box_z", default_value="0.55"),
+            DeclareLaunchArgument("box_depth", default_value="0.30"),
+            DeclareLaunchArgument("box_width", default_value="0.40"),
+            DeclareLaunchArgument("box_height", default_value="0.40"),
             DeclareLaunchArgument("initial_updown", default_value="-0.3"),
             DeclareLaunchArgument("initial_arm_pose", default_value="v3_home"),
             DeclareLaunchArgument("initial_left_arm_joints_deg", default_value=""),
@@ -179,6 +182,15 @@ def generate_launch_description():
                         "initial_box_x": ParameterValue(initial_box_x, value_type=float),
                         "initial_box_y": ParameterValue(initial_box_y, value_type=float),
                         "initial_box_z": ParameterValue(initial_box_z, value_type=float),
+                        "box_depth": ParameterValue(
+                            LaunchConfiguration("box_depth"), value_type=float
+                        ),
+                        "box_width": ParameterValue(
+                            LaunchConfiguration("box_width"), value_type=float
+                        ),
+                        "box_height": ParameterValue(
+                            LaunchConfiguration("box_height"), value_type=float
+                        ),
                         "initial_updown": ParameterValue(initial_updown, value_type=float),
                         "initial_arm_pose": LaunchConfiguration("initial_arm_pose"),
                         "initial_left_arm_joints_deg": ParameterValue(

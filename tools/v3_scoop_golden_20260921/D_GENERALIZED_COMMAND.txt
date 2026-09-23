@@ -1,0 +1,12 @@
+cd /home/astesia/Sevenova/.v3-scoop-golden-generalization-D && \
+source tools/ros_humble_env.sh && \
+source ros2_ws/install/setup.bash && \
+export ROS_DOMAIN_ID=199 && \
+/usr/bin/python3 ros2_ws/src/alfa_robot_moveit_config/scripts/v3_scoop_5x5_grasp_sequence_rerun.py \
+  --save /home/astesia/v3-scoop-golden-generalization-D/generalized/3x4-missing-perturbed-reordered.rrd \
+  --rows 3 --columns 4 \
+  --active-box-ids 1,3 --box-order 3,1 \
+  --contact-x 0.76 --wall-center-y 0.02 --wall-bottom-z 0.01 \
+  --box-depth 0.31 --box-width 0.38 --box-height 0.39 \
+  --initial-joint-jitter-deg 0.05 --random-seed 20260925 \
+  --limit-boxes 2 --no-spawn --no-resume --planning-timeout 15 --rrt-retries 2

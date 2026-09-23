@@ -317,6 +317,14 @@ def planning_args(
         center_front_suction_y_offset=0.08,
         center_front_suction_z_offset=-0.05,
         bottom_front_suction_z_offset=0.12,
+        contact_x=CONTACT_X,
+        box_depth=BOX_DEPTH,
+        box_width=BOX_WIDTH,
+        box_height=BOX_HEIGHT,
+        box_grid_rows=5,
+        box_grid_columns=5,
+        box_grid_center_y=0.0,
+        box_grid_bottom_z=0.0,
         ground_enabled=True,
         ground_surface_z=0.0,
         ground_clearance=0.005,
@@ -377,10 +385,14 @@ def ordered_candidates(
     z: float,
     mode: str,
     verified_selection: dict[int, tuple[str, float]] | None = None,
+    rows: int = 5,
 ) -> list[tuple[str, float]]:
-    preferred = (verified_selection or VERIFIED_SELECTION)[box_id]
-    fallback = scan.candidate_order(row, y, z, 0.25, mode)
-    return [preferred] + [candidate for candidate in fallback if candidate != preferred]
+    fallback = scan.candidate_order(row, y, z, 0.25, mode, rows)
+    selection = VERIFIED_SELECTION if verified_selection is None else verified_selection
+    preferred = selection.get(box_id)
+    return fallback if preferred is None else [
+        preferred, *[candidate for candidate in fallback if candidate != preferred]
+    ]
 
 
 def retryable_failure(result: dict[str, Any]) -> bool:
@@ -919,45 +931,60 @@ def plan_sequence(
     ] | None = None,
     place_tcp_box_ids: set[int] | None = None,
     box_order: list[int] | None = None,
+    active_box_ids: list[int] | set[int] | None = None,
+    wall_specs: list[tuple[int, int, int, float, float, float]] | None = None,
     motion_quality_contract: dict[str, Any] | None = None,
     strict_verified_selection: bool = False,
     initial_tasks: list[dict[str, Any]] | None = None,
     task_completed_callback: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> list[dict[str, Any]]:
-    if not 1 <= limit_boxes <= 25:
-        raise ValueError("limit_boxes must be in [1, 25]")
     config = config or station_contract()
+    wall_specs = list(wall_specs or scan.box_specs(
+        CONTACT_X, BOX_DEPTH, BOX_WIDTH, BOX_HEIGHT
+    ))
+    specs_by_id = {spec[0]: spec for spec in wall_specs}
+    if len(specs_by_id) != len(wall_specs) or not specs_by_id:
+        raise ValueError("wall_specs must contain unique positive box ids")
+    all_ids = set(specs_by_id)
+    if min(all_ids) < 1:
+        raise ValueError("wall_specs must contain unique positive box ids")
+    active_ids = list(active_box_ids) if active_box_ids is not None else list(specs_by_id)
+    if len(set(active_ids)) != len(active_ids) or not set(active_ids) <= all_ids:
+        raise ValueError("active_box_ids must be unique ids present in wall_specs")
+    order = list(box_order) if box_order is not None else active_ids
+    if len(order) != len(active_ids) or set(order) != set(active_ids):
+        raise ValueError("box_order must be a permutation of active_box_ids")
+    if not 1 <= limit_boxes <= len(order):
+        raise ValueError(f"limit_boxes must be in [1, {len(order)}]")
     args = planning_args(timeout, config, end_effector=end_effector)
     for name, value in (planning_overrides or {}).items():
         if not hasattr(args, name):
             raise ValueError(f"unknown planning override: {name}")
         setattr(args, name, value)
     for box_id, overrides in (box_planning_overrides or {}).items():
-        if box_id < 1 or box_id > 25:
+        if box_id not in all_ids:
             raise ValueError(f"invalid box planning override id: {box_id}")
         for name in overrides:
             if not hasattr(args, name):
                 raise ValueError(f"unknown box planning override: {name}")
     for box_id, allowed_sides in (allowed_sides_by_box or {}).items():
-        if box_id < 1 or box_id > 25 or not allowed_sides or not allowed_sides <= {"left", "right"}:
+        if box_id not in all_ids or not allowed_sides or not allowed_sides <= {"left", "right"}:
             raise ValueError(f"invalid allowed sides for box {box_id}: {allowed_sides}")
     place_tcp_box_ids = set(place_tcp_box_ids or ())
-    if any(box_id < 1 or box_id > 25 for box_id in place_tcp_box_ids):
-        raise ValueError("place_tcp_box_ids must contain box ids in [1, 25]")
+    if not place_tcp_box_ids <= all_ids:
+        raise ValueError("place_tcp_box_ids must contain ids present in wall_specs")
     if place_tcp_box_ids and handoff_pose_resolver is None:
         raise ValueError("place_tcp_box_ids requires a handoff_pose_resolver")
     base_planning_values = vars(args).copy()
-    verified_selection = verified_selection or VERIFIED_SELECTION
-    top_suction_box_ids = top_suction_box_ids or scan.DEFAULT_TOP_SUCTION_BOX_IDS
+    verified_selection = VERIFIED_SELECTION if verified_selection is None else verified_selection
+    top_suction_box_ids = (
+        scan.DEFAULT_TOP_SUCTION_BOX_IDS
+        if top_suction_box_ids is None
+        else top_suction_box_ids
+    )
     tasks: list[dict[str, Any]] = list(initial_tasks or [])
-    removed: set[int] = {int(task["box_id"]) for task in tasks}
-    order = list(box_order or range(1, 26))
-    if sorted(order) != list(range(1, 26)):
-        raise ValueError("box_order must be a permutation of ids 1..25")
-    specs_by_id = {
-        spec[0]: spec
-        for spec in scan.box_specs(CONTACT_X, BOX_DEPTH, BOX_WIDTH, BOX_HEIGHT)
-    }
+    removed: set[int] = all_ids - set(active_ids)
+    removed.update(int(task["box_id"]) for task in tasks)
     cached_ids = [int(task["box_id"]) for task in tasks]
     if cached_ids != order[:len(cached_ids)] or len(tasks) > limit_boxes:
         raise ValueError("initial tasks must be a prefix of the requested box order")
@@ -974,7 +1001,9 @@ def plan_sequence(
         mode = scan.grasp_mode_for_box(box_id, top_suction_box_ids)
         selected: dict[str, Any] | None = None
         attempt_serial = 0
-        candidates = ordered_candidates(box_id, row, y, z, mode, verified_selection)
+        candidates = ordered_candidates(
+            box_id, row, y, z, mode, verified_selection, args.box_grid_rows
+        )
         if strict_verified_selection:
             candidates = candidates[:1]
         allowed_sides = (allowed_sides_by_box or {}).get(box_id)
@@ -1031,7 +1060,9 @@ def plan_sequence(
                 int(value)
                 for value in (motion_quality_contract or {}).get("low_transfer_box_ids", [])
             }
-            upper_front_task = mode == "front" and row <= 3
+            upper_front_task = (
+                mode == "front" and row <= max(0, args.box_grid_rows - 2)
+            )
             if conveyor_task:
                 success_target = max(1, int(args.conveyor_success_trials))
                 max_success_target = max(
@@ -1094,7 +1125,7 @@ def plan_sequence(
                 )
                 planning_attempt_results.append(result)
                 print(
-                    f"PLAN {box_id:02d}/25 {mode} {side} updown={updown:.2f} "
+                    f"PLAN {box_id:02d}/{len(order)} {mode} {side} updown={updown:.2f} "
                     f"try={attempt_index + 1} "
                     f"{'SUCCESS' if result['success'] else result['failure_stage']}"
                     f"{'' if result['success'] else ': ' + str(result.get('failure_reason', ''))}",
@@ -1140,7 +1171,7 @@ def plan_sequence(
             if motion_quality_contract is not None and (conveyor_task or upper_front_task):
                 if len(successful_results) < required_success_target:
                     print(
-                        f"QUALITY_REJECT {box_id:02d}/25 {side} updown={updown:.2f} "
+                        f"QUALITY_REJECT {box_id:02d}/{len(order)} {side} updown={updown:.2f} "
                         f"successes={len(successful_results)}<{required_success_target}",
                         flush=True,
                     )
@@ -1155,7 +1186,7 @@ def plan_sequence(
                         key=lambda item: float(item["selection_score"]),
                     )
                     print(
-                        f"QUALITY_REJECT {box_id:02d}/25 {side} updown={updown:.2f} "
+                        f"QUALITY_REJECT {box_id:02d}/{len(order)} {side} updown={updown:.2f} "
                         f"successes={len(successful_results)} "
                         f"travel={best_motion['total_joint_travel_deg']:.1f}deg "
                         f"excess={best_motion['stage_excess_joint_travel_deg']:.1f}deg "
@@ -1172,7 +1203,7 @@ def plan_sequence(
                 transition_frames: list[dict[str, Any]] = []
                 transition_motion: dict[str, Any] = {}
                 transition_ok = True
-                if tasks or box_id == 1:
+                if tasks or not initial_tasks:
                     # Per-box transfer overrides apply to the loaded task only.
                     # Empty inter-box transitions retain the station's Cartesian search policy.
                     args.cartesian_transfer_search_enabled = base_planning_values[
@@ -1482,7 +1513,7 @@ def plan_sequence(
                     },
                 }
                 print(
-                    f"SELECT {box_id:02d}/25 score={motion['selection_score']:.1f} "
+                    f"SELECT {box_id:02d}/{len(order)} score={motion['selection_score']:.1f} "
                     f"travel={motion['total_joint_travel_deg']:.1f}deg "
                     f"reversals={motion['direction_reversals']}",
                     flush=True,
@@ -1552,6 +1583,8 @@ class SequenceRecorder:
         tool_name: str = "suction",
         total_boxes: int = 25,
         box_ids: list[int] | None = None,
+        wall_specs: list[tuple[int, int, int, float, float, float]] | None = None,
+        box_size: tuple[float, float, float] = (BOX_DEPTH, BOX_WIDTH, BOX_HEIGHT),
         minimum_frame_interval_s: float = 1.0 / 30.0,
         transition_joint_speed_deg_s: float = math.degrees(1.0),
         task_joint_speed_deg_s: float = 40.0,
@@ -1621,11 +1654,12 @@ class SequenceRecorder:
         selected_ids = set(box_ids) if box_ids is not None else set(range(1, total_boxes + 1))
         self.centers = {
             box_id: [x, y, z]
-            for box_id, _, _, x, y, z in scan.box_specs(
-                CONTACT_X, BOX_DEPTH, BOX_WIDTH, BOX_HEIGHT
+            for box_id, _, _, x, y, z in (
+                wall_specs or scan.box_specs(CONTACT_X, BOX_DEPTH, BOX_WIDTH, BOX_HEIGHT)
             )
             if box_id in selected_ids
         }
+        self.box_size = box_size
         self.remaining = set(self.centers)
         self.playback_speed = max(0.1, playback_speed)
         self.timeline_s = 0.0
@@ -1661,7 +1695,7 @@ class SequenceRecorder:
                 "world/boxes/remaining",
                 rr.Boxes3D(
                     centers=[self.centers[box_id] for box_id in regular_ids],
-                    half_sizes=[[BOX_DEPTH / 2.0, BOX_WIDTH / 2.0, BOX_HEIGHT / 2.0]],
+                    half_sizes=[[value / 2.0 for value in self.box_size]],
                     colors=[[238, 142, 48, 180]],
                     show_labels=False,
                 ),
@@ -1673,7 +1707,7 @@ class SequenceRecorder:
                 "world/boxes/target",
                 rr.Boxes3D(
                     centers=[self.centers[target_id]],
-                    half_sizes=[[BOX_DEPTH / 2.0, BOX_WIDTH / 2.0, BOX_HEIGHT / 2.0]],
+                    half_sizes=[[value / 2.0 for value in self.box_size]],
                     colors=[[50, 220, 90, 230]],
                     labels=[f"target {target_id}"],
                     show_labels=True,

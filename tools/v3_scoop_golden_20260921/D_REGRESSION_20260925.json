@@ -1,0 +1,88 @@
+{
+  "schema": "alfa.v3_scoop_golden_layout_regression.v1",
+  "date": "2026-09-25",
+  "default_5x5": {
+    "completed_boxes": 25,
+    "validated_transitions": 25,
+    "core_planning_s": {
+      "average": 2.03976,
+      "median": 1.753,
+      "p95": 3.86,
+      "maximum": 5.404,
+      "at_or_below_5s": 24
+    },
+    "joint_flip_events": 0,
+    "carried_box_inverted_frames": 0,
+    "timing_note": "Default geometry remains 25/25; this stochastic run has one 5.404 s outlier. C remains the exact 25/25 <=5 s gate.",
+    "artifacts": {
+      "v3-scoop-golden-D-default-25-attempt38.rrd": "5def029f86f47e43c0bd226c34ece9cccbb1f37c85058a8650779c2c3c5dd252",
+      "v3-scoop-golden-D-default-25-attempt38-summary.json": "b97b41fd215731e9cc70f4c39a5b84a9a1f2f913378fa545955446664bd67d57",
+      "v3-scoop-golden-D-default-25-attempt38-plan-cache.json": "67c2882b78cd27aacb0c324c51b2761e5f7b3b9a162c0f4bd3271eface081600",
+      "v3-scoop-golden-D-default-25-attempt38-metrics.csv": "8bc32b85d3df28fe23aac0328214802e694634c4ef51d0a2267a4158986e3956",
+      "v3-scoop-golden-D-default-25-attempt38-search-report.html": "8444c8fadd621ebfb9e03e59da780f71f381c50204acc2b26bc0b235ac716fdf",
+      "v3-scoop-golden-D-default-25-attempt38-rrd-verify.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "generalized": {
+    "schema": "alfa.v3_scoop_golden_layout_generalization_regression.v1",
+    "date": "2026-09-25",
+    "cases": [
+      {
+        "name": "3x4-missing-perturbed-box1",
+        "completed_boxes": 1,
+        "validated_transitions": 1,
+        "box_ids": [
+          1
+        ],
+        "sides": [
+          "left"
+        ],
+        "core_planning_s": {
+          "average": 2.129,
+          "median": 2.129,
+          "maximum": 2.129
+        },
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "artifacts": {
+          "3x4-missing-perturbed-box1.rrd": "1fdc37f21ad8be29905ca0cb95a7c942da3c6cd70e3060e568a4ca3dc721e9d6",
+          "3x4-missing-perturbed-box1-summary.json": "eb310746de4813aa8f435d90e8e33544c46181a16ac16608a38c7d8d027ccd8f",
+          "3x4-missing-perturbed-box1-plan-cache.json": "d1c4b7523385ef09fd87077bee325a21c150f58c907d0ebdedb1b53c069819fc",
+          "3x4-missing-perturbed-box1-metrics.csv": "8ca7af714018d3b18f0512362af666e47652be8dd2179a92a8696a4235e29b83",
+          "3x4-missing-perturbed-box1-search-report.html": "052e814c6313844c9690e0cb53d66472aaa2eda204dcb2d9478a3509a7aa33fe",
+          "3x4-missing-perturbed-box1.log": "f18dcaa15dfff585c109050b218a768f40fc31123ac8b509061e147844a3686b"
+        }
+      },
+      {
+        "name": "3x4-missing-perturbed-reordered",
+        "completed_boxes": 2,
+        "validated_transitions": 2,
+        "box_ids": [
+          3,
+          1
+        ],
+        "sides": [
+          "right",
+          "left"
+        ],
+        "core_planning_s": {
+          "average": 1.4395,
+          "median": 1.4395,
+          "maximum": 1.811
+        },
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "artifacts": {
+          "3x4-missing-perturbed-reordered.rrd": "f14d1543303e86f2ffed0639076dc6ec045c924bad69746befe62eb585d5ecce",
+          "3x4-missing-perturbed-reordered-summary.json": "b44623d617f598db82b8c8b628f189a0cfd629eac9880e9c491876fa26e653f9",
+          "3x4-missing-perturbed-reordered-plan-cache.json": "de7e6169f1143becd7dd70aff421035dd9a970fed0bdb1e7f0328acfd12954ca",
+          "3x4-missing-perturbed-reordered-metrics.csv": "0b5c5a27ab640c5ab7842aca6f9206a275e3b092a0b31e61b8e11a3f3a491eaf",
+          "3x4-missing-perturbed-reordered-search-report.html": "8296e7e27da2f816051d0abb5c7cdbf8f763c0d439d29d6e546861652d3c55a4",
+          "3x4-missing-perturbed-reordered.log": "94626bb893f0387b205e2b4a34b321ebc2dae004b4a67517263f757eacabe253"
+        }
+      }
+    ]
+  },
+  "current_l3_claimed": false,
+  "current_l4_claimed": false
+}

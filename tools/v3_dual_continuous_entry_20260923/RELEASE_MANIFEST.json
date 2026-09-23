@@ -1,0 +1,63 @@
+{
+  "schema": "alfa.v3_dual_continuous_entry_release.v1",
+  "name": "2026-09-23-dual-arm-continuous-entry-hybrid-planner",
+  "tag": "v3-dual-continuous-entry-2026.09.23",
+  "title": "V3 Dual-Arm Continuous-Entry Hybrid Planner | Whole-body Shortcut + TCP-RRT",
+  "repository": "kkozia188/alfa_robot",
+  "upstream_branch": "alfa_v3_dev",
+  "upstream_base_commit": "d949b694df9edce0c4705035733cd34dc44714f2",
+  "linear_issue": "MOTION-235",
+  "result_schema": "alfa.v3_scoop_5x5_dual_replay.v1",
+  "validation": {
+    "completed_boxes": 25,
+    "completed_rows": 5,
+    "group_count": 15,
+    "replay_frames": 4678,
+    "interpolated_edge_samples": 6685,
+    "task_core_below_3s": 25,
+    "selected_task_core_total_s": 33.719771002,
+    "selected_task_core_average_s": 1.34879084008,
+    "selected_task_core_max_s": 2.557013772,
+    "total_joint_travel_deg": 40060.2893417035,
+    "maximum_joint_step_deg": 2.9985344416543955,
+    "joint_flip_events": 0,
+    "maximum_left_carried_tilt_deg": 93.58362599130305,
+    "maximum_right_carried_tilt_deg": 94.39060490323719
+  },
+  "continuous_entry": {
+    "box_2": {
+      "tcp_path_before_m": 4.512,
+      "tcp_path_after_m": 2.863,
+      "joint_reversals_before": 6,
+      "joint_reversals_after": 2,
+      "validated_planning_s": 0.368284118
+    },
+    "box_25": {
+      "tcp_path_before_m": 3.006,
+      "tcp_path_after_m": 2.114,
+      "joint_reversals_before": 3,
+      "joint_reversals_after": 1,
+      "validated_planning_s": 0.506902811
+    }
+  },
+  "assets": [
+    {"name": "README.md", "size": 2762, "sha256": "765f63ad0326c8ad1e123ce43102aecd89dac92573e8abb4be5f914b31d47cc9"},
+    {"name": "SHA256SUMS", "size": 1737, "sha256": "e7e46a6304cfdd6f4452c429923cb453019ff9f9adbd1f8a5fb2e764c4259866"},
+    {"name": "box-02-box10-optimization-config.json", "size": 2119, "sha256": "44f8ee4ba2a32aacd271b10205505f38043793da1e6923fc0f20075f2677eab8"},
+    {"name": "box-25-continuous-entry-config.json", "size": 1028, "sha256": "8cd9ad114fdb2e540c63dd2f3dee99193694d5e613f540d03fdf9f59ab4c278d"},
+    {"name": "bridge-box02-box04-whole-body-direct.json", "size": 83016, "sha256": "0359dc06de55aaad17537ecf528b4cd500718fe5b696244a482271f6e3b3dba7"},
+    {"name": "bridge-box21-box25-whole-body-direct.json", "size": 165496, "sha256": "31d3abcd8ae43c97a2e089279e9c760e47bfbdb6a4d48029ab2bd8b1dca211f3"},
+    {"name": "dual-source-snapshot.tar.gz", "size": 67853, "sha256": "2d591eda3adc0c2785a0471f25ab90bcf145265f045aac620a650457ea1d9a49"},
+    {"name": "rerun-all-planning-times.png", "size": 1703384, "sha256": "228e34fa75c62d02d97fa9b74d47b4715e0b96d206df15304ee417670479ec41"},
+    {"name": "rerun-box02-continuous-direct.png", "size": 6028252, "sha256": "7d9b1c7525f0c8dad3442a8875bb2e43700a540a4b519554b73d35534fa04eeb"},
+    {"name": "rerun-box25-continuous-direct.png", "size": 6032555, "sha256": "9e5fd8119fcc86913cb4a5e1782c2f5902e8a06c42f3fac2754f4655eca7b4ee"},
+    {"name": "v3-dual-continuous-entry-rerun-demo.mp4", "size": 6921706, "sha256": "54da1aee98664f616ba5d7d131f15c4671fcc1cbfa4bdfcc2bb85621345f12dc"},
+    {"name": "v3-dual-continuous-entry-rerun-demo.rrd", "size": 6121610, "sha256": "10f5b8bc995eb623941df92cda450d15073d2a02a122202863b39eee4923ed17"},
+    {"name": "v3-scoop-x075-dual-row-wise-box-planning.csv", "size": 2079, "sha256": "c25971cdf3400d28de0fb13bc169d4847a04f77add451ba4a6d2b5e126c20bcf"},
+    {"name": "v3-scoop-x075-dual-row-wise-metrics.csv", "size": 2502, "sha256": "ece5df29fb401d1c00cf66c0ab2d62f70a2b27e5e8037215c09efcb0198cb620"},
+    {"name": "v3-scoop-x075-dual-row-wise-replay.json", "size": 3106061, "sha256": "04c7f39776c7f36e536b03fd2a33360a329ab017360e9cf091a3eb795d41c7f0"},
+    {"name": "v3-scoop-x075-dual-row-wise-summary.json", "size": 32739, "sha256": "39f5b590d93d89a5504504ef9057dbece2d6c613ee7d9309285bedec60c6d8f4"},
+    {"name": "v3-scoop-x075-dual-row-wise-validation.json", "size": 2344, "sha256": "c2c91048b9d0fee4a356e82df5b28d2fcc68b3b6ab570fe2919090a68deb680d"},
+    {"name": "v3-scoop-x075-dual-row-wise.rrd", "size": 14965917, "sha256": "f0dff51bb896ba2b68d5ff116aa0dd5a82e83355efd22dd6d4ad8ad960fcf047"}
+  ]
+}

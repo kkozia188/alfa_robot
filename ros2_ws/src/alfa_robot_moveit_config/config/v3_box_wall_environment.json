@@ -1,9 +1,9 @@
 {
-  "frame_id": "map",
+  "frame_id": "world",
   "anchor": "box_wall_back",
   "description": "Simulation warehouse INNER dimensions: X length 4m, Y width 2.4m, Z height 2.4m. Closed +X wall flush with box-wall back; -X end open. Ground and box-wall bottom Z=0. Walls 0.1m thick outward. Not site calibration.",
   "boxes": [
-    {"id": "ground", "center": [-2, 0, -0.050005], "size": [4.2, 2.6, 0.1]},
+    {"id": "ground", "center": [-2, 0, -0.05], "size": [4.2, 2.6, 0.1]},
     {"id": "left_wall", "center": [-2, -1.25, 1.2], "size": [4, 0.1, 2.4]},
     {"id": "right_wall", "center": [-2, 1.25, 1.2], "size": [4, 0.1, 2.4]},
     {"id": "front_wall", "center": [0.05, 0, 1.2], "size": [0.1, 2.6, 2.4]},

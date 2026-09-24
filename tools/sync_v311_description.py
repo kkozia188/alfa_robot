@@ -35,6 +35,7 @@ MANAGED_MESH_DIRECTORIES = (
     "meshes/active_suspension",
     "meshes/chassis",
     "meshes/head",
+    "meshes/head_chest_camera",
     "meshes/robot_v3",
     "meshes/robot_v3_1_1",
 )

@@ -32,8 +32,8 @@ def launch_nodes(context):
             pipeline[group]["planner_configs"].append("RRTConnectLocalPatchkConfigDefault")
     name = "v3_box_wall_grasp_demo"
     params = {"distance_demo": True, "collision_inset": 0.0}
-    for key, kind in (("x", float), ("box_id", int), ("arm", str), ("suction_mode", str), ("wall_context", str), ("initial_pose", str), ("direct_attach", bool), ("direct_placement_pose", str), ("post_extract_policy", str), ("rear_placement_strategy", str),
-                      ("auto_run_once", bool), ("sequence_mode", bool), ("rear_clearance", float), ("wall_center_y", float),
+    for key, kind in (("x", float), ("box_id", int), ("arm", str), ("suction_mode", str), ("wall_context", str), ("initial_pose", str), ("direct_attach", bool), ("direct_placement_pose", str), ("post_extract_policy", str), ("rear_placement_strategy", str), ("world_frame", str),
+                      ("auto_run_once", bool), ("sequence_mode", bool), ("rear_clearance", float), ("wall_center_y", float), ("wall_near_x_map", float),
                       ("wall_bottom_z", float), ("contact_numerical_gap", float),
                       ("align_height", bool), ("shoulder_box_offset", float), ("top_shoulder_above_wrist", float),
                       ("check_environment", bool), ("height_strategy", str), ("comfort_branch", str),
@@ -126,7 +126,9 @@ def generate_launch_description():
         ("auto_run_once", "true", "Plan launch request once, then wait for services"),
         ("chassis_front_x", "", "Optional calibrated world X; empty uses model_base collision maximum X"),
         ("wall_center_y", "0.0", "Wall middle column center in world Y, metres"),
+        ("wall_near_x_map", "-1.0", "Fixed wall near-face X in map; <=0 derives it from the current base for legacy tests"),
         ("wall_bottom_z", "0.0", "Wall bottom face in world Z, metres"),
+        ("world_frame", "map", "MoveIt model frame and fixed environment frame"),
         ("start_rviz", "true", "Start RViz observer"),
         ("start_rerun", "true", "Start Rerun observer"),
         ("spawn_viewer", "true", "Open Rerun window; false for headless recording"),

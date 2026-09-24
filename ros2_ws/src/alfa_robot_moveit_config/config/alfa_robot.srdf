@@ -294,4 +294,5 @@
     <disable_collisions link1="right_link5" link2="right_link6" reason="Adjacent"/>
     <disable_collisions link1="right_link6" link2="right_link7" reason="Adjacent"/>
     <disable_collisions link1="right_link7" link2="right_tool0" reason="Adjacent"/>
+    <virtual_joint name="map_to_base_footprint" type="planar" parent_frame="map" child_link="base_footprint"/>
 </robot>

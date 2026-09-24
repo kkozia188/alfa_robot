@@ -36,6 +36,9 @@
 #include <std_msgs/msg/color_rgba.hpp>
 #include <std_msgs/msg/string.hpp>
 #include <std_srvs/srv/trigger.hpp>
+#include <tf2/time.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
 #include <visualization_msgs/msg/interactive_marker.hpp>
 #include <visualization_msgs/msg/interactive_marker_control.hpp>
@@ -307,7 +310,7 @@ public:
       throw std::invalid_argument(
               "initial_pose must be home, second_home, or arms_down for wall simulation");
     side_ = getParameter<std::string>("side", "left");
-    world_frame_ = getParameter<std::string>("world_frame", "world");
+    world_frame_ = getParameter<std::string>("world_frame", "map");
     arm_base_link_ = getParameter<std::string>("arm_base_link", "arm_carriage");
     planning_group_name_ = getParameter<std::string>(
       "planning_group", side_ == "left" ? "left_arm" : "right_arm");
@@ -448,6 +451,12 @@ public:
     if (world_frame_ != robot_model_->getModelFrame()) {
       throw std::invalid_argument("world_frame must match the robot model frame");
     }
+    planar_root_joint_ = robot_model_->getJointModel("map_to_base_footprint");
+    if (!planar_root_joint_ || planar_root_joint_->getVariableCount() != 3U) {
+      throw std::runtime_error("V3 MoveIt model requires map_to_base_footprint planar root");
+    }
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     planning_group_ = robot_model_->getJointModelGroup(planning_group_name_);
     if (!planning_group_ || planning_group_->getVariableCount() != 7U) {
       throw std::runtime_error("planning group must be a seven-axis arm: " + planning_group_name_);
@@ -531,8 +540,10 @@ public:
         throw std::invalid_argument("rear_clearance must be finite and at least 0.01m");
       wall_center_y_ = getParameter<double>("wall_center_y", 0.0);
       wall_bottom_z_ = getParameter<double>("wall_bottom_z", 0.0);
+      wall_near_x_map_ = getParameter<double>("wall_near_x_map", -1.0);
       if (!std::isfinite(chassis_front_x_) || !std::isfinite(wall_center_y_) ||
-          !std::isfinite(wall_bottom_z_) || collision_inset_ != 0.0) {
+          !std::isfinite(wall_bottom_z_) || !std::isfinite(wall_near_x_map_) ||
+          collision_inset_ != 0.0) {
         throw std::invalid_argument("distance demo requires finite placement and zero collision_inset");
       }
       updateWallTarget(getParameter<double>("x", -1.0), getParameter<int>("box_id", 0));
@@ -700,11 +711,19 @@ public:
     const auto display_period = std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::duration<double>(1.0 / display_rate_hz_));
     display_timer_ = create_wall_timer(display_period, [this]() {publishDisplayState();});
+    if (distance_demo_) {
+      base_pose_timer_ = create_wall_timer(std::chrono::milliseconds(100), [this]() {
+        if (public_goal_active_ || busy()) return;
+        std::string ignored;
+        if (refreshPlanarRootFromTf(&ignored) && wall_target_catalog_publisher_) {
+          publishWallTargetCatalog();
+        }
+      });
+    }
     if (distance_demo_) selectArm(requested_arm_ == "auto" ? "left" : requested_arm_);
     publishPreview(direct_attach_ ? "第二初始姿态直接吸附双箱，Shortcut+局部RRT到命名放置位" :
       distance_demo_ ? "用 plan_wall_box 服务选择距离和箱号" :
       "拖动箱体XYZ；右键箱体并选择“确认并计算当前箱位”");
-    if (distance_demo_ && !direct_attach_) publishWallTargetCatalog();
     publishSceneMarkers();
     publishStatus("READY", true);
 
@@ -989,6 +1008,20 @@ private:
   bool loadCachedPublicFlow(CachedPublicFlow* flow, std::string* reason) const
   {
     if (!flow || trajectory_cache_.is_null()) return false;
+    if (std::abs(trajectory_cache_.at("wall_distance_m").get<double>() -
+        flow->wall_distance) > 0.01) {
+      if (reason) *reason = "trajectory cache wall distance differs from the current TF geometry";
+      return false;
+    }
+    const auto expected_root = trajectory_cache_.value(
+      "planar_root_map", std::vector<double>{0.0, 0.0, 0.0});
+    if (expected_root.size() != 3U ||
+        std::abs(expected_root[0] - base_pose_map_[0]) > 1e-4 ||
+        std::abs(expected_root[1] - base_pose_map_[1]) > 1e-4 ||
+        std::abs(normalizedAngle(expected_root[2] - base_pose_map_[2])) > 1e-4) {
+      if (reason) *reason = "trajectory cache planar root differs from the current TF pose";
+      return false;
+    }
     const nlohmann::json* selected = nullptr;
     const int expected_right = flow->dual ? flow->box_ids.at(1) : -1;
     for (const auto& entry : trajectory_cache_.at("entries")) {
@@ -1062,6 +1095,7 @@ private:
     CachedPublicFlow* flow, std::string* reason)
   {
     if (!flow) return false;
+    if (!refreshPlanarRootFromTf(reason)) return false;
     auto left = resolveWallTarget("left", targets.left_grasp_mode, targets.left_pose, reason);
     if (!left) return false;
     auto right = resolveWallTarget("right", targets.right_grasp_mode, targets.right_pose, reason);
@@ -1121,6 +1155,41 @@ private:
     return partitionPublicFlow(flow, reason);
   }
 
+  bool refreshPlanarRootFromTf(std::string* reason)
+  {
+    try {
+      const auto transform = tf_buffer_->lookupTransform(
+        world_frame_, "base_footprint", tf2::TimePointZero, tf2::durationFromSec(1.0));
+      const rclcpp::Time transform_stamp(transform.header.stamp);
+      if (transform_stamp.nanoseconds() == 0 ||
+          (now() - transform_stamp).seconds() > 0.5) {
+        throw tf2::TransformException("map to base_footprint TF is older than 500ms");
+      }
+      const auto& rotation = transform.transform.rotation;
+      const double sin_yaw = 2.0 * (rotation.w * rotation.z + rotation.x * rotation.y);
+      const double cos_yaw = 1.0 - 2.0 * (rotation.y * rotation.y + rotation.z * rotation.z);
+      const double values[] = {
+        transform.transform.translation.x,
+        transform.transform.translation.y,
+        std::atan2(sin_yaw, cos_yaw),
+      };
+      base_pose_map_ = {values[0], values[1], values[2]};
+      for (const auto& state : {initial_state_, home_state_, display_state_}) {
+        if (!state) continue;
+        state->setJointPositions(planar_root_joint_, values);
+        state->update(true);
+      }
+      chassis_front_x_ = modelChassisFrontX();
+      chassis_rear_x_ = modelChassisFrontX(true);
+      base_pose_ready_ = true;
+      return true;
+    } catch (const tf2::TransformException& error) {
+      base_pose_ready_ = false;
+      if (reason) *reason = std::string("base pose TF unavailable: ") + error.what();
+      return false;
+    }
+  }
+
   static builtin_interfaces::msg::Duration durationFromSeconds(double seconds)
   {
     builtin_interfaces::msg::Duration duration;
@@ -1142,7 +1211,11 @@ private:
       if (reason) *reason = "authoritative /joint_states is missing or older than 500ms";
       return false;
     }
+    const auto& root_variables = planar_root_joint_->getVariableNames();
     for (const auto& name : robot_model_->getVariableNames()) {
+      if (std::find(root_variables.begin(), root_variables.end(), name) != root_variables.end()) {
+        continue;
+      }
       if (!latest_feedback_.count(name)) {
         if (reason) *reason = "authoritative /joint_states is missing model axis " + name;
         return false;
@@ -1385,6 +1458,8 @@ private:
     last_result_["box_ids"] = flow.box_ids;
     last_result_["dual"] = flow.dual;
     last_result_["execution_backend"] = execution_backend_;
+    last_result_["planar_root_map"] = {
+      {"x", base_pose_map_[0]}, {"y", base_pose_map_[1]}, {"yaw", base_pose_map_[2]}};
     publishJson(last_result_);
   }
 
@@ -1560,8 +1635,12 @@ private:
                 std::string state_reason;
                 if (!readFjtState(&feedback, &state_reason))
                   throw std::runtime_error(state_reason);
-                for (const auto& name : robot_model_->getVariableNames())
+                const auto& root_variables = planar_root_joint_->getVariableNames();
+                for (const auto& name : robot_model_->getVariableNames()) {
+                  if (std::find(root_variables.begin(), root_variables.end(), name) !=
+                      root_variables.end()) continue;
                   initial_state_->setVariablePosition(name, feedback.at(name));
+                }
               } else {
                 for (size_t index = 0; index < all_joint_names_.size(); ++index)
                   initial_state_->setVariablePosition(all_joint_names_[index], frames.back().joints.at(index));
@@ -1584,6 +1663,8 @@ private:
         {"stage", publicStageName(goal->execution_stage)},
         {"box_ids", snapshot.box_ids},
         {"frames", frames.size()},
+        {"planar_root_map", {{"x", base_pose_map_[0]}, {"y", base_pose_map_[1]},
+          {"yaw", base_pose_map_[2]}}},
         {"backend", execution_backend_}}).dump();
       goal_handle->succeed(result);
       finishPublicGoal();
@@ -1607,6 +1688,8 @@ private:
       blocker = "FULL_JOINT_STATE_UNAVAILABLE";
     else if (execution_backend_ == "fjt" && !readSafetyState(nullptr))
       blocker = "SAFETY_STATE_UNAVAILABLE";
+    else if (!base_pose_ready_)
+      blocker = "BASE_POSE_TF_UNAVAILABLE";
     else if (execution_backend_ == "fjt" &&
         (!fjt_client_ || !fjt_client_->action_server_is_ready()))
       blocker = "FJT_SERVER_UNAVAILABLE";
@@ -1657,12 +1740,13 @@ private:
       const auto config = nlohmann::json::parse(getParameter<std::string>("environment_json", ""));
       if (config.at("frame_id").get<std::string>() != world_frame_)
         throw std::invalid_argument("frame_id must match planning world frame");
-      const auto anchor = config.value("anchor", std::string("world"));
-      if (anchor != "world" && anchor != "box_wall_back")
-        throw std::invalid_argument("anchor must be world or box_wall_back");
+      const auto anchor = config.value("anchor", std::string("map"));
+      if (anchor != "map" && anchor != "world" && anchor != "box_wall_back")
+        throw std::invalid_argument("anchor must be map, world, or box_wall_back");
       const Eigen::Vector3d offset = anchor == "box_wall_back" ?
         // Same micrometre tolerance as tool contact: avoid false penetration on attachment.
-        Eigen::Vector3d(chassis_front_x_ + wall_distance_ + box_depth_ + contact_numerical_gap_,
+        Eigen::Vector3d((wall_near_x_map_ > 0.0 ? wall_near_x_map_ :
+          chassis_front_x_ + wall_distance_) + box_depth_ + contact_numerical_gap_,
                         wall_center_y_, 0.0) :
         Eigen::Vector3d::Zero();
       environment_json_["anchor"] = anchor;
@@ -1753,7 +1837,8 @@ private:
 
   Eigen::Vector3d wallBoxCenter(double x, int box_id) const
   {
-    return {chassis_front_x_ + x + box_depth_ / 2.0,
+    const double near_x = wall_near_x_map_ > 0.0 ? wall_near_x_map_ : chassis_front_x_ + x;
+    return {near_x + box_depth_ / 2.0,
       wall_center_y_ + (box_id % 5 - 2) * (box_width_ + wall_gap_),
       wall_bottom_z_ + box_height_ / 2.0 + (box_id / 5) * (box_height_ + wall_gap_)};
   }
@@ -4587,6 +4672,8 @@ private:
   double maximum_updown_velocity_ = 0.15;
   double minimum_trajectory_step_s_ = 0.05;
   double display_rate_hz_ = 20.0;
+  std::array<double, 3> base_pose_map_{0.0, 0.0, 0.0};
+  std::atomic<bool> base_pose_ready_{false};
   std::string initial_pose_ = "home";
   double top_shoulder_above_wrist_ = 0.10;  // Offline-calibrated top policy, independent of front comfort ratio.
   bool sequence_running_ = false;
@@ -4628,6 +4715,7 @@ private:
   double chassis_front_x_ = 0.0;
   double wall_center_y_ = 0.0;
   double wall_bottom_z_ = 0.0;
+  double wall_near_x_map_ = -1.0;
   double wall_distance_ = 0.0;
   std::string requested_arm_ = "auto";
   std::string requested_suction_mode_ = "auto";
@@ -4676,6 +4764,9 @@ private:
   moveit::core::RobotStatePtr display_state_;
   std::unique_ptr<V3RedundantArmAnalyticIk> solver_;
   std::vector<std::string> all_joint_names_;
+  const moveit::core::JointModel* planar_root_joint_ = nullptr;
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
   std::unique_ptr<interactive_markers::InteractiveMarkerServer> marker_server_;
   interactive_markers::MenuHandler menu_handler_;
@@ -4697,6 +4788,7 @@ private:
   rclcpp::TimerBase::SharedPtr display_timer_;
   rclcpp::TimerBase::SharedPtr auto_run_timer_;
   rclcpp::TimerBase::SharedPtr readiness_timer_;
+  rclcpp::TimerBase::SharedPtr base_pose_timer_;
   rclcpp_action::Server<StageAction>::SharedPtr stage_action_server_;
   rclcpp_action::Client<FollowJointTrajectory>::SharedPtr fjt_client_;
   FollowJointTrajectoryGoalHandle::SharedPtr fjt_goal_handle_;

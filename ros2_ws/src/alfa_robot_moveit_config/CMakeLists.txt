@@ -304,6 +304,7 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   shape_msgs
   std_msgs
   std_srvs
+  tf2_ros
   trajectory_msgs
   visualization_msgs
 )

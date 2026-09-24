@@ -1,119 +1,183 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Source head: Z up, X forward. Mount disk bottom matches the carriage plate. -->
-<robot name="robot_v3_head">
-  <link name="head_mount">
-    <inertial>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <mass value="0.11917571" />
-      <inertia ixx="0.00011888471" iyy="0.00011888471" izz="0.00023578316" ixy="0" ixz="0" iyz="0" />
-    </inertial>
+<!--
+  Head and chest sensors from the 2026-09-21 CAD export.
+  Source CAD is Z-up with X forward. Camera and LiDAR field-of-view helper
+  solids are deliberately excluded from the mechanical description.
+-->
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="robot_v3_head_chest_cameras">
+  <material name="robot_v3_sensor_gray">
+    <color rgba="0.48 0.50 0.52 1" />
+  </material>
+  <material name="robot_v3_sensor_dark">
+    <color rgba="0.10 0.11 0.12 1" />
+  </material>
+
+  <xacro:macro name="sensor_visual" params="mesh material origin_xyz origin_rpy">
     <visual>
-      <material name="robot_v3_gray">
-        <color rgba="0.82 0.82 0.82 1" />
-      </material>
-      <origin xyz="0 0 0.005" rpy="0 0 0" />
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}" />
       <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_004_part.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="${mesh}" scale="0.001 0.001 0.001" />
       </geometry>
+      <material name="${material}" />
     </visual>
+  </xacro:macro>
+
+  <xacro:macro name="sensor_collision" params="mesh origin_xyz origin_rpy">
     <collision>
-      <origin xyz="0 0 0.005" rpy="0 0 0" />
+      <origin xyz="${origin_xyz}" rpy="${origin_rpy}" />
       <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_004_part.stl" scale="0.001 0.001 0.001" />
+        <mesh filename="${mesh}" scale="0.001 0.001 0.001" />
       </geometry>
     </collision>
-  </link>
+  </xacro:macro>
+
+  <xacro:property name="sensor_mesh_root"
+                  value="package://alfa_robot_description/meshes/head_chest_camera" />
+  <xacro:property name="head_mesh_xyz" value="-0.62426272 0.325 -0.21122269" />
+  <xacro:property name="head_mesh_rpy" value="0 1.5707963 -1.5707963" />
+  <xacro:property name="chest_mesh_xyz" value="-0.446 0.22515633392 -0.27276272583" />
+  <xacro:property name="chest_mesh_rpy" value="1.5707963 0 1.57079632679" />
+
+  <!-- This frame preserves the existing head_mount_fixed interface while its
+       pose now follows the new CAD yaw axis. -->
+  <link name="head_mount" />
+
   <link name="head_yaw">
     <inertial>
-      <origin xyz="0.0053059593 0 0.027131555" rpy="0 0 0" />
-      <mass value="0.15476448" />
-      <inertia ixx="0.00013500923" iyy="0.00019862629" izz="0.00014591322" ixy="0" ixz="-1.0625613e-05" iyz="0" />
+      <origin xyz="-0.005582338 0.017172659 0.027143688" rpy="0 0 0" />
+      <mass value="0.07210205" />
+      <inertia ixx="4.3740968e-05" iyy="5.6398892e-05" izz="4.9623545e-05"
+               ixy="1.1378012e-06" ixz="1.4980035e-06" iyz="-4.6151446e-06" />
     </inertial>
-    <visual>
-      <material name="robot_v3_gray">
-        <color rgba="0.82 0.82 0.82 1" />
-      </material>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_001_part.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_001_part.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
+    <xacro:sensor_visual
+      mesh="${sensor_mesh_root}/part_069_solid_069.stl"
+      material="robot_v3_sensor_gray"
+      origin_xyz="0.22515633 0.347 -0.58026272"
+      origin_rpy="1.5707963 0 0" />
+    <xacro:sensor_collision
+      mesh="${sensor_mesh_root}/part_069_solid_069.stl"
+      origin_xyz="0.22515633 0.347 -0.58026272"
+      origin_rpy="1.5707963 0 0" />
   </link>
+
   <link name="head">
+    <!-- Mesh-integrated properties for the physical head body (parts 046 and
+         068) at 1200 kg/m^3. CAD view-volume solids are not included. -->
     <inertial>
-      <origin xyz="0.041574319 -0.049784947 -0.004903311" rpy="0 0 0" />
-      <mass value="0.19975472" />
-      <inertia ixx="0.00045578413" iyy="0.00037483452" izz="0.00015903761" ixy="5.220145e-05" ixz="1.7450492e-07" iyz="-8.0682425e-07" />
+      <origin xyz="0.0720568148533 -0.0204392317077 0.0144579124977" rpy="0 0 0" />
+      <mass value="1.00116361294" />
+      <inertia ixx="0.00152570358958" iyy="0.00239277163575" izz="0.00223675328796"
+               ixy="-0.000262357255968" ixz="-1.10126287798e-05" iyz="-3.74139643256e-06" />
     </inertial>
-    <visual>
-      <material name="robot_v3_gray">
-        <color rgba="0.82 0.82 0.82 1" />
-      </material>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_003_ZED_X_Wide.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <visual>
-      <material name="robot_v3_gray">
-        <color rgba="0.82 0.82 0.82 1" />
-      </material>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_002_part.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <visual>
-      <material name="robot_v3_gray">
-        <color rgba="0.82 0.82 0.82 1" />
-      </material>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_005_mid-360-asm_V2.00126..5.3.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_003_ZED_X_Wide.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
-    <collision>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_002_part.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
-    <collision>
-      <origin xyz="-0.04 0.05 -0.005" rpy="1.5707963 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/head/part_005_mid-360-asm_V2.00126..5.3.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_046_solid_046.stl"
+                         material="robot_v3_sensor_gray"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_048_surface_shell_048.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_049_surface_shell_049.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_050_surface_shell_050.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_051_surface_shell_051.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_052_surface_shell_052.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_058_surface_shell_058.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_059_surface_shell_059.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_060_surface_shell_060.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_061_surface_shell_061.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_062_surface_shell_062.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_068_solid_068.stl"
+                         material="robot_v3_sensor_gray"
+                         origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_collision mesh="${sensor_mesh_root}/part_046_solid_046.stl"
+                            origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
+    <xacro:sensor_collision mesh="${sensor_mesh_root}/part_068_solid_068.stl"
+                            origin_xyz="${head_mesh_xyz}" origin_rpy="${head_mesh_rpy}" />
   </link>
+
+  <link name="chest_camera">
+    <!-- Body-centred frame, aligned with arm_carriage: +X is camera forward. -->
+    <inertial>
+      <origin xyz="-0.00211358597775 -4.1817123577e-09 -0.00136432265863" rpy="0 0 0" />
+      <mass value="0.137417570647" />
+      <inertia ixx="0.000417171826594" iyy="2.37247391686e-05" izz="0.000413174955648"
+               ixy="2.46417677782e-13" ixz="-3.38125049085e-06" iyz="1.12105686185e-13" />
+    </inertial>
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_070_solid_070.stl"
+                         material="robot_v3_sensor_gray"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_072_surface_shell_072.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_073_surface_shell_073.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_074_surface_shell_074.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_075_surface_shell_075.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_076_surface_shell_076.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_082_surface_shell_082.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_083_surface_shell_083.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_084_surface_shell_084.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_085_surface_shell_085.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_visual mesh="${sensor_mesh_root}/part_086_surface_shell_086.stl"
+                         material="robot_v3_sensor_dark"
+                         origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+    <xacro:sensor_collision mesh="${sensor_mesh_root}/part_070_solid_070.stl"
+                            origin_xyz="${chest_mesh_xyz}" origin_rpy="${chest_mesh_rpy}" />
+  </link>
+
+  <joint name="head_mount_fixed" type="fixed">
+    <parent link="arm_carriage" />
+    <child link="head_mount" />
+    <origin xyz="0.267 0 1.4228" rpy="0 0 1.57079632679" />
+  </joint>
   <joint name="head_joint" type="revolute">
-    <origin xyz="0 0 0.005" rpy="0 0 0" />
     <parent link="head_mount" />
     <child link="head_yaw" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
     <axis xyz="0 0 1" />
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5" />
   </joint>
   <joint name="head_pitch_joint" type="revolute">
-    <origin xyz="0.04 0.005 0.05" rpy="-1.5707963 0 0" />
     <parent link="head_yaw" />
     <child link="head" />
+    <origin xyz="0.01393364 0.022 0.044" rpy="0 -1.5707963 0" />
     <axis xyz="0 0 1" />
     <limit lower="-1.57" upper="1.57" effort="10" velocity="5" />
   </joint>
-  <joint name="head_mount_fixed" type="fixed">
+  <joint name="chest_camera_fixed" type="fixed">
     <parent link="arm_carriage" />
-    <child link="head_mount" />
-    <origin xyz="0.226 0 1.3806412" rpy="0 0 0" />
+    <child link="chest_camera" />
+    <origin xyz="0.366 -3.92e-09 1.11530000583" rpy="0 0 0" />
   </joint>
 </robot>

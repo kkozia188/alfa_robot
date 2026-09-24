@@ -6,7 +6,6 @@
 #include <urdf/model.h>
 
 #include <array>
-#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <memory>
@@ -79,10 +78,6 @@ std::string contacts(const collision_detection::CollisionResult& result)
 int main()
 {
   const auto model = makeRobotModel();
-  require(model->getModelFrame() == "map", "MoveIt model frame must be map");
-  const auto* root = model->getJointModel("map_to_base_footprint");
-  require(root != nullptr, "missing planar root joint");
-  require(root->getVariableCount() == 3, "planar root must expose x/y/theta");
   const auto* group = model->getJointModelGroup("whole_body");
   require(group != nullptr, "missing whole_body planning group");
   planning_scene::PlanningScene scene(model);
@@ -102,29 +97,5 @@ int main()
       request, result, state, scene.getAllowedCollisionMatrix());
     require(!result.collision, pose + " is self-colliding: " + contacts(result));
   }
-
-  moveit::core::RobotState origin(model);
-  origin.setToDefaultValues();
-  require(origin.setToDefaultValues(group, "home"), "missing home pose");
-  origin.update(true);
-  const Eigen::Isometry3d origin_base = origin.getGlobalLinkTransform("base_link");
-  const Eigen::Isometry3d origin_tool = origin.getGlobalLinkTransform("left_tool0");
-
-  moveit::core::RobotState moved(origin);
-  const double root_values[] = {1.2, -0.4, 0.35};
-  moved.setJointPositions(root, root_values);
-  moved.update(true);
-  const Eigen::Isometry3d moved_base = moved.getGlobalLinkTransform("base_link");
-  const Eigen::Isometry3d moved_tool = moved.getGlobalLinkTransform("left_tool0");
-  Eigen::Isometry3d expected = Eigen::Isometry3d::Identity();
-  expected.translation() = Eigen::Vector3d(root_values[0], root_values[1], 0.0);
-  expected.linear() = Eigen::AngleAxisd(root_values[2], Eigen::Vector3d::UnitZ()).toRotationMatrix();
-  require((moved_base.matrix() - (expected * origin_base).matrix()).norm() < 1e-9,
-    "base_link did not follow the planar root");
-  require((moved_tool.matrix() - (expected * origin_tool).matrix()).norm() < 1e-9,
-    "TCP did not follow the planar root");
-  require(((moved_base.inverse() * moved_tool).matrix() -
-    (origin_base.inverse() * origin_tool).matrix()).norm() < 1e-9,
-    "base_link-relative FK changed after moving the planar root");
   return 0;
 }

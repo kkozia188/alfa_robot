@@ -8,7 +8,7 @@ metadata:
   fixed_names_source: robot_fixed_names.urdf
   suction_source: robot_dual_suction.urdf
   chassis_source: robot.urdf (active-suspension full-robot export)
-  head_source: model_sources/head_chest_camera_20260921/robot.urdf
+  head_source: robot.urdf (camera STEP export)
   warning: >
     Arm position limits match the reviewed V3.1.1 description contract. Hardware
     velocity, acceleration and encoder direction require independent electrical

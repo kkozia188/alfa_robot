@@ -28,7 +28,7 @@ def main():
     lock = json.loads((DESCRIPTION_ROOT / "config/upstream_description.lock.json").read_text())
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
-    assert lock["upstream_commit"] == "a2f1fbb63f4f5872a0691fc5579c8688204ea63b"
+    assert lock["upstream_commit"] == "f2454a679c23b84a774cc8a43c5b294cbbd340a3"
 
     initial = yaml.safe_load((MOVEIT_ROOT / "config/initial_positions.yaml").read_text())["initial_positions"]
     named = yaml.safe_load((DESCRIPTION_ROOT / "config/named_poses.yaml").read_text())["named_poses"]
@@ -91,20 +91,6 @@ def main():
         "active_suspension_joint",
         *(f"{kind}{index:02d}_joint" for kind in ("caster", "wheel") for index in range(1, 5)),
     }
-    virtual_joints = srdf.findall("virtual_joint")
-    assert len(virtual_joints) == 1
-    assert virtual_joints[0].attrib == {
-        "name": "map_to_base_footprint",
-        "type": "planar",
-        "parent_frame": "map",
-        "child_link": "base_footprint",
-    }
-    semantic_joints = {
-        joint.get("name")
-        for element in (*srdf.findall("group"), *srdf.findall("group_state"))
-        for joint in element.findall("joint")
-    }
-    assert "map_to_base_footprint" not in semantic_joints
 
 
 if __name__ == "__main__":

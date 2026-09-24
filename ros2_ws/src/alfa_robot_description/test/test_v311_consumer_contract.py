@@ -29,8 +29,8 @@ def test_demo_consumes_pinned_v311_kkozia_profile():
     assert lock["model_revision"] == "robot_v3.1.1-hybrid"
     assert lock["profile"] == "suction"
     assert lock["upstream_branch"] == "robot_v3_suction_chassis"
-    assert lock["upstream_commit"] == "a2f1fbb63f4f5872a0691fc5579c8688204ea63b"
-    assert lock["upstream_ref_used_for_sync"] == "origin/robot_v3_suction_chassis"
+    assert lock["upstream_commit"] == "f2454a679c23b84a774cc8a43c5b294cbbd340a3"
+    assert lock["upstream_ref_used_for_sync"] == "f2454a6"
     for profile in ("", "_gripper", "_suction"):
         assert f"config/named_poses{profile}.yaml" in lock["managed_destination_files"]
 
@@ -73,10 +73,3 @@ def test_suction_and_gripper_profiles_match_control_inventory():
         assert joints["base_footprint_to_base_link"].find("origin").get("xyz") == (
             "0.190000002779484 -0.0000442724271391554 0.40000250599116"
         )
-        child_links = {
-            joint.find("child").get("link") for joint in robot.findall("joint")
-        }
-        assert {link.get("name") for link in robot.findall("link")} - child_links == {
-            "base_footprint"
-        }
-        assert "world_to_base" not in joints

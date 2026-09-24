@@ -11,24 +11,26 @@ from robot_motion_runtime.common import RuntimeStatusPublisher
 
 
 class VehiclePoseSourceNode(Node):
-    """Simulation stand-in for localization and odometry TF ownership."""
+    """Publishes the map->world transform describing where the vehicle sits in the map frame.
+
+    This is a stand-in for the navigation stack's localization output. `world` remains the
+    fixed base_link alias defined in the URDF (world_to_base), so this node is the only source
+    of truth for how the vehicle (and therefore world/base_link) is placed in map. Until the
+    navigation team's real interface is settled, motion set here comes from parameters only;
+    swapping in a real localization topic later only touches this node.
+    """
 
     def __init__(self) -> None:
         super().__init__("vehicle_pose_source")
         self.declare_parameter("map_frame", "map")
-        self.declare_parameter("odom_frame", "odom")
-        self.declare_parameter("base_frame", "base_footprint")
+        self.declare_parameter("world_frame", "world")
         self.declare_parameter("publish_rate_hz", 20.0)
-        self.declare_parameter("map_to_odom_x", 0.0)
-        self.declare_parameter("map_to_odom_y", 0.0)
-        self.declare_parameter("map_to_odom_yaw", 0.0)
         self.declare_parameter("x", 0.0)
         self.declare_parameter("y", 0.0)
         self.declare_parameter("yaw", 0.0)
 
         self.map_frame = str(self.get_parameter("map_frame").value)
-        self.odom_frame = str(self.get_parameter("odom_frame").value)
-        self.base_frame = str(self.get_parameter("base_frame").value)
+        self.world_frame = str(self.get_parameter("world_frame").value)
         publish_rate_hz = float(self.get_parameter("publish_rate_hz").value)
         if publish_rate_hz <= 0.0:
             raise ValueError(f"publish_rate_hz must be > 0, got {publish_rate_hz}")
@@ -38,8 +40,8 @@ class VehiclePoseSourceNode(Node):
         self.status = RuntimeStatusPublisher(
             self,
             "vehicle_pose_source",
-            f"simulated {self.map_frame}->{self.odom_frame}->{self.base_frame}; "
-            "placeholder for localization and navigation odometry",
+            f"simulated {self.map_frame}->{self.world_frame} vehicle pose; "
+            "placeholder for the navigation stack's localization output",
         )
         self.status.mark_ready(f"x={self.x:.3f} y={self.y:.3f} yaw_deg={math.degrees(self.yaw):.2f}")
         self.timer = self.create_timer(1.0 / publish_rate_hz, self.publish_transform)
@@ -65,31 +67,19 @@ class VehiclePoseSourceNode(Node):
         return SetParametersResult(successful=True)
 
     def publish_transform(self) -> None:
-        stamp = self.get_clock().now().to_msg()
-        self.broadcaster.sendTransform([
-            self._transform(
-                stamp,
-                self.map_frame,
-                self.odom_frame,
-                float(self.get_parameter("map_to_odom_x").value),
-                float(self.get_parameter("map_to_odom_y").value),
-                float(self.get_parameter("map_to_odom_yaw").value),
-            ),
-            self._transform(stamp, self.odom_frame, self.base_frame, self.x, self.y, self.yaw),
-        ])
-
-    @staticmethod
-    def _transform(stamp, parent: str, child: str, x: float, y: float, yaw: float):
         transform = TransformStamped()
-        transform.header.stamp = stamp
-        transform.header.frame_id = parent
-        transform.child_frame_id = child
-        transform.transform.translation.x = x
-        transform.transform.translation.y = y
-        half_yaw = yaw / 2.0
+        transform.header.stamp = self.get_clock().now().to_msg()
+        transform.header.frame_id = self.map_frame
+        transform.child_frame_id = self.world_frame
+        transform.transform.translation.x = self.x
+        transform.transform.translation.y = self.y
+        transform.transform.translation.z = 0.0
+        half_yaw = self.yaw / 2.0
+        transform.transform.rotation.x = 0.0
+        transform.transform.rotation.y = 0.0
         transform.transform.rotation.z = math.sin(half_yaw)
         transform.transform.rotation.w = math.cos(half_yaw)
-        return transform
+        self.broadcaster.sendTransform(transform)
 
 
 def main() -> None:

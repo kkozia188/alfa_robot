@@ -35,13 +35,19 @@ interpolated edges before accepting cached waypoints.
 
 - Completed boxes / rows / groups: `25/25`, `5/5`, `15/15`
 - Replay frames: `4,678`
-- Interpolated edge samples: `6,685` at `1 degree / 1 cm`
+- Interpolated edge samples: `6,684` at `1 degree / 1 cm`
 - Selected task-core total / average / maximum: `33.72 / 1.35 / 2.56 s`
 - Boxes below the 3-second task-core target: `25/25`
-- Total joint travel: `40,060.29 deg`
+- Total joint travel: `39,861.47 deg`
 - Maximum replay joint step: `2.999 deg`
 - Joint flip events: `0`
 - Maximum carried-box tilt: left `93.584 deg`, right `94.391 deg`
+
+Stage-local curvature smoothing preserves every grasp/release endpoint while
+rounding discrete empty-transition and RRT samples. Twelve groups accept two
+passes; collision-sensitive groups 3, 7, and 14 retain one pass. Internal TCP
+kinks above `90 / 60 / 35 degrees` changed from `20 / 34 / 57` to
+`0 / 9 / 29`; joint second-difference magnitude decreased by `11.7%`.
 
 Box 2 continuous entry:
 
@@ -65,6 +71,9 @@ Box 25 continuous entry:
 - `v3-dual-continuous-entry-rerun-demo.mp4`: Rerun Viewer screen recording.
 - `rerun-box02-continuous-direct.png`: box-2 continuous-entry visualization.
 - `rerun-box25-continuous-direct.png`: box-25 continuous-entry visualization.
+- `rerun-curvature-smoothed-pickup.png`: smoothed pickup-path example.
+- `rerun-curvature-smoothed-pullback.png`: smoothed pullback-path example.
+- `trajectory-curvature-smoothing-config.json`: smoothing and metric evidence.
 - `v3-scoop-x075-dual-row-wise-replay.json`: complete joint replay.
 - `v3-scoop-x075-dual-row-wise-validation.json`: MoveIt/FCL report.
 - `dual-source-snapshot.tar.gz`: exact implementation snapshot.

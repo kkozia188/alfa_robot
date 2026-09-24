@@ -13,12 +13,12 @@
     "completed_rows": 5,
     "group_count": 15,
     "replay_frames": 4678,
-    "interpolated_edge_samples": 6685,
+    "interpolated_edge_samples": 6684,
     "task_core_below_3s": 25,
     "selected_task_core_total_s": 33.719771002,
     "selected_task_core_average_s": 1.34879084008,
     "selected_task_core_max_s": 2.557013772,
-    "total_joint_travel_deg": 40060.2893417035,
+    "total_joint_travel_deg": 39861.4678147072,
     "maximum_joint_step_deg": 2.9985344416543955,
     "joint_flip_events": 0,
     "maximum_left_carried_tilt_deg": 93.58362599130305,
@@ -41,24 +41,127 @@
     }
   },
   "assets": [
-    {"name": "README.md", "size": 2838, "sha256": "57196455117521bdc775d90e9e4e814a82abb05a8f0fb908474cfe41fafbc796"},
-    {"name": "SHA256SUMS", "size": 1838, "sha256": "bcb4c632b8e1615f5ed90543319764eb9cd8f2ce8abacb3bf7061364532774e0"},
-    {"name": "box-02-box10-optimization-config.json", "size": 2119, "sha256": "44f8ee4ba2a32aacd271b10205505f38043793da1e6923fc0f20075f2677eab8"},
-    {"name": "box-25-continuous-entry-config.json", "size": 1028, "sha256": "8cd9ad114fdb2e540c63dd2f3dee99193694d5e613f540d03fdf9f59ab4c278d"},
-    {"name": "bridge-box02-box04-whole-body-direct.json", "size": 83016, "sha256": "0359dc06de55aaad17537ecf528b4cd500718fe5b696244a482271f6e3b3dba7"},
-    {"name": "bridge-box21-box25-whole-body-direct.json", "size": 165496, "sha256": "31d3abcd8ae43c97a2e089279e9c760e47bfbdb6a4d48029ab2bd8b1dca211f3"},
-    {"name": "dual-arm-5x5-complete-sequence.mp4", "size": 20766899, "sha256": "cc64b1590d1f164344e1478d8d0356b2854a216066f7b256c546a24e09a8480d"},
-    {"name": "dual-source-snapshot.tar.gz", "size": 67853, "sha256": "2d591eda3adc0c2785a0471f25ab90bcf145265f045aac620a650457ea1d9a49"},
-    {"name": "rerun-all-planning-times.png", "size": 1703384, "sha256": "228e34fa75c62d02d97fa9b74d47b4715e0b96d206df15304ee417670479ec41"},
-    {"name": "rerun-box02-continuous-direct.png", "size": 6028252, "sha256": "7d9b1c7525f0c8dad3442a8875bb2e43700a540a4b519554b73d35534fa04eeb"},
-    {"name": "rerun-box25-continuous-direct.png", "size": 6032555, "sha256": "9e5fd8119fcc86913cb4a5e1782c2f5902e8a06c42f3fac2754f4655eca7b4ee"},
-    {"name": "v3-dual-continuous-entry-rerun-demo.mp4", "size": 6921706, "sha256": "54da1aee98664f616ba5d7d131f15c4671fcc1cbfa4bdfcc2bb85621345f12dc"},
-    {"name": "v3-dual-continuous-entry-rerun-demo.rrd", "size": 6121610, "sha256": "10f5b8bc995eb623941df92cda450d15073d2a02a122202863b39eee4923ed17"},
-    {"name": "v3-scoop-x075-dual-row-wise-box-planning.csv", "size": 2079, "sha256": "c25971cdf3400d28de0fb13bc169d4847a04f77add451ba4a6d2b5e126c20bcf"},
-    {"name": "v3-scoop-x075-dual-row-wise-metrics.csv", "size": 2502, "sha256": "ece5df29fb401d1c00cf66c0ab2d62f70a2b27e5e8037215c09efcb0198cb620"},
-    {"name": "v3-scoop-x075-dual-row-wise-replay.json", "size": 3106061, "sha256": "04c7f39776c7f36e536b03fd2a33360a329ab017360e9cf091a3eb795d41c7f0"},
-    {"name": "v3-scoop-x075-dual-row-wise-summary.json", "size": 32739, "sha256": "39f5b590d93d89a5504504ef9057dbece2d6c613ee7d9309285bedec60c6d8f4"},
-    {"name": "v3-scoop-x075-dual-row-wise-validation.json", "size": 2344, "sha256": "c2c91048b9d0fee4a356e82df5b28d2fcc68b3b6ab570fe2919090a68deb680d"},
-    {"name": "v3-scoop-x075-dual-row-wise.rrd", "size": 14965917, "sha256": "f0dff51bb896ba2b68d5ff116aa0dd5a82e83355efd22dd6d4ad8ad960fcf047"}
-  ]
+    {
+      "name": "README.md",
+      "size": 3432,
+      "sha256": "4dd5e10507598f1821f42c46ec240fcf007f0eea6dfd13a6d2b60c74fa1fa357"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 2153,
+      "sha256": "6e1f812454ee424a60f88bf50a03a5bcd7019ec27f29c41e7b1b79d6c2516c9b"
+    },
+    {
+      "name": "box-02-box10-optimization-config.json",
+      "size": 2119,
+      "sha256": "44f8ee4ba2a32aacd271b10205505f38043793da1e6923fc0f20075f2677eab8"
+    },
+    {
+      "name": "box-25-continuous-entry-config.json",
+      "size": 1028,
+      "sha256": "8cd9ad114fdb2e540c63dd2f3dee99193694d5e613f540d03fdf9f59ab4c278d"
+    },
+    {
+      "name": "bridge-box02-box04-whole-body-direct.json",
+      "size": 83016,
+      "sha256": "0359dc06de55aaad17537ecf528b4cd500718fe5b696244a482271f6e3b3dba7"
+    },
+    {
+      "name": "bridge-box21-box25-whole-body-direct.json",
+      "size": 165496,
+      "sha256": "31d3abcd8ae43c97a2e089279e9c760e47bfbdb6a4d48029ab2bd8b1dca211f3"
+    },
+    {
+      "name": "dual-arm-5x5-complete-sequence.mp4",
+      "size": 20011814,
+      "sha256": "263aa6f7b34e9b6300e9538303f587d1f0e35354abbf345108fb3990ce4efdea"
+    },
+    {
+      "name": "dual-source-snapshot.tar.gz",
+      "size": 67853,
+      "sha256": "2d591eda3adc0c2785a0471f25ab90bcf145265f045aac620a650457ea1d9a49"
+    },
+    {
+      "name": "rerun-all-planning-times.png",
+      "size": 1703384,
+      "sha256": "228e34fa75c62d02d97fa9b74d47b4715e0b96d206df15304ee417670479ec41"
+    },
+    {
+      "name": "rerun-box02-continuous-direct.png",
+      "size": 6028252,
+      "sha256": "7d9b1c7525f0c8dad3442a8875bb2e43700a540a4b519554b73d35534fa04eeb"
+    },
+    {
+      "name": "rerun-box25-continuous-direct.png",
+      "size": 6032555,
+      "sha256": "9e5fd8119fcc86913cb4a5e1782c2f5902e8a06c42f3fac2754f4655eca7b4ee"
+    },
+    {
+      "name": "rerun-curvature-smoothed-pickup.png",
+      "size": 6043750,
+      "sha256": "ce1710b6d2801b1290167e665797768ae23e4d91c30d1989f8988ea31579831a"
+    },
+    {
+      "name": "rerun-curvature-smoothed-pullback.png",
+      "size": 6076143,
+      "sha256": "9735fc35c12c0cebf4bfc70232b7092f05e0719a2d187601f0bec74a4a17210f"
+    },
+    {
+      "name": "trajectory-curvature-smoothing-config.json",
+      "size": 1305,
+      "sha256": "2f753483800c0c41a0c446ea671f1014293cbbce1474fc84c99b740977cf7dfe"
+    },
+    {
+      "name": "v3-dual-continuous-entry-rerun-demo.mp4",
+      "size": 7623826,
+      "sha256": "78477ff619dbc3b4126dc71d76b70eeef5c062d1e7fcd52b291d5a9fef51871d"
+    },
+    {
+      "name": "v3-dual-continuous-entry-rerun-demo.rrd",
+      "size": 6123605,
+      "sha256": "8e4a0266cce245147dc0caa49e483d7a5baa34463a063293858b566fd4c8e537"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise-box-planning.csv",
+      "size": 2079,
+      "sha256": "c25971cdf3400d28de0fb13bc169d4847a04f77add451ba4a6d2b5e126c20bcf"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise-metrics.csv",
+      "size": 2502,
+      "sha256": "b36bea43720da4719b4f1e6db1b6be18286f4dd7010f0e269d7f921b6a09f3d0"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise-replay.json",
+      "size": 3109078,
+      "sha256": "ed308dff21ca9ddb68b140bbc527f77d13d97486e66253115601aa72295852aa"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise-summary.json",
+      "size": 32746,
+      "sha256": "a2f9ee97178b32171b4c082afd096d3f084c6372c62a05635accfe9c0beeed74"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise-validation.json",
+      "size": 2344,
+      "sha256": "69cf3d3b1d2b108d8c3fa695c0d8bd25754440e1a95ab47359cc302dceecb7e8"
+    },
+    {
+      "name": "v3-scoop-x075-dual-row-wise.rrd",
+      "size": 13265766,
+      "sha256": "a091461c1ef650c15994c27d197c69eb27fee6030909fc283134a455c6e6b2b0"
+    }
+  ],
+  "curvature_smoothing": {
+    "internal_kinks_over_90_deg_before": 20,
+    "internal_kinks_over_90_deg_after": 0,
+    "internal_kinks_over_60_deg_before": 34,
+    "internal_kinks_over_60_deg_after": 9,
+    "internal_kinks_over_35_deg_before": 57,
+    "internal_kinks_over_35_deg_after": 29,
+    "total_tcp_path_before_m": 111.62301728618544,
+    "total_tcp_path_after_m": 110.95944170111369,
+    "joint_second_difference_before_deg": 1587.570855313942,
+    "joint_second_difference_after_deg": 1401.2968045820433
+  }
 }

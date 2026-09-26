@@ -1720,10 +1720,10 @@ class SequenceRecorder:
                     ),
                     rrb.Vertical(
                         rrb.TextDocumentView(
-                            origin="/transition_status", name="空载过渡"
+                            origin="/transition_status", name="Unloaded transition"
                         ),
                         rrb.TimeSeriesView(
-                            origin="/metrics/transition", name="空载过渡时间 (s)"
+                            origin="/metrics/transition", name="Unloaded transition time (s)"
                         ),
                         rrb.TextDocumentView(origin="/status", name="Task status"),
                         row_shares=[0.34, 0.28, 0.38],
@@ -1755,8 +1755,8 @@ class SequenceRecorder:
         self.cartesian_joint_speed_deg_s = cartesian_joint_speed_deg_s
         self.last_box_id: int | None = None
         for name, label, color in (
-            ("total_search_s", "累计搜索（含失败重试）", [194, 91, 48]),
-            ("selected_core_s", "最终采用路径核心规划", [8, 121, 112]),
+            ("total_search_s", "Total search (including failed retries)", [194, 91, 48]),
+            ("selected_core_s", "Selected path core planning", [8, 121, 112]),
         ):
             rr.log(
                 f"metrics/transition/{name}",
@@ -1846,8 +1846,8 @@ class SequenceRecorder:
     def log_transition_status(self, task: dict[str, Any]) -> None:
         transition = task.get("transition_motion", {})
         search = task.get("planning_search", {}).get("transition", {})
-        from_label = "折叠初始位" if self.last_box_id is None else f"{self.last_box_id}号箱"
-        to_label = f"{task['box_id']}号箱"
+        from_label = "Folded initial pose" if self.last_box_id is None else f"Box {self.last_box_id}"
+        to_label = f"Box {task['box_id']}"
         attempts = int(search.get("attempts", 0))
         successes = int(search.get("successes", 0))
         total_seconds = float(search.get("process_wall_ms", 0.0)) / 1000.0
@@ -1862,9 +1862,9 @@ class SequenceRecorder:
             for segment in leg.get("segments", [])
             if segment.get("success") and segment.get("strategy") == "shortcut_repair_rrt"
         ]
-        repair_text = "无"
+        repair_text = "none"
         if repairs:
-            repair_text = "；".join(
+            repair_text = "; ".join(
                 f"{','.join(map(str, item.get('repaired_joints', [])))} "
                 f"{float(item.get('shortcut_repair_rrt_ms', 0.0)):.1f}ms"
                 for item in repairs
@@ -1873,20 +1873,20 @@ class SequenceRecorder:
         tcp_text = " / ".join(
             f"{float(leg.get('path_length_m', 0.0)):.2f}m"
             for leg in tcp_legs
-        ) or "未记录"
+        ) or "not recorded"
         rr.log(
             "transition_status",
             rr.TextDocument(
                 f"# {from_label} → {to_label}\n\n"
-                f"- 累计搜索：**{total_seconds:.2f}s**\n"
-                f"- 最终路径核心规划：**{selected_seconds:.2f}s**\n"
-                f"- 尝试：**{attempts}**（成功 {successes}）\n"
-                f"- 采用策略：`{' → '.join(strategies) or 'direct'}`\n"
-                f"- 局部关节修补：`{repair_text}`\n"
-                f"- TCP 路径：**{tcp_text}**\n"
-                f"- 过渡帧：**{int(transition.get('frame_count', 0))}**\n"
-                f"- 双臂总行程：**{float(transition.get('total_joint_travel_deg', 0.0)):.1f}°**\n"
-                f"- 换向：**{int(transition.get('direction_reversals', 0))}**",
+                f"- Total search: **{total_seconds:.2f}s**\n"
+                f"- Selected path core planning: **{selected_seconds:.2f}s**\n"
+                f"- Attempts: **{attempts}** ({successes} successful)\n"
+                f"- Strategies: `{' → '.join(strategies) or 'direct'}`\n"
+                f"- Local joint repairs: `{repair_text}`\n"
+                f"- TCP path: **{tcp_text}**\n"
+                f"- Transition frames: **{int(transition.get('frame_count', 0))}**\n"
+                f"- Both-arm joint travel: **{float(transition.get('total_joint_travel_deg', 0.0)):.1f}°**\n"
+                f"- Direction reversals: **{int(transition.get('direction_reversals', 0))}**",
                 media_type=rr.MediaType.MARKDOWN,
             ),
         )

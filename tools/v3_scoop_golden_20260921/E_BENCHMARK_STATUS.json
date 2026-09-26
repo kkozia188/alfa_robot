@@ -1,0 +1,38 @@
+[
+  {
+    "name": "low_wall_2x3_dual_side",
+    "level": "L2",
+    "seed": 104729,
+    "returncode": 0
+  },
+  {
+    "name": "layout_3x4_missing_reordered",
+    "level": "L4",
+    "seed": 104743,
+    "returncode": 0
+  },
+  {
+    "name": "dimensions_2x3",
+    "level": "L4",
+    "seed": 104759,
+    "returncode": 0
+  },
+  {
+    "name": "wall_pose_xyz_offset",
+    "level": "L4",
+    "seed": 104761,
+    "returncode": 0
+  },
+  {
+    "name": "initial_state_jitter",
+    "level": "L4",
+    "seed": 104773,
+    "returncode": 0
+  },
+  {
+    "name": "sparse_4x3_holdout",
+    "level": "L4",
+    "seed": 104801,
+    "returncode": 0
+  }
+]

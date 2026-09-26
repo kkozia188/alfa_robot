@@ -381,6 +381,10 @@ if(BUILD_TESTING)
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_ompl_seed.py
   )
   add_test(
+    NAME test_v3_scoop_current_contracts
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_current_contracts.py
+  )
+  add_test(
     NAME test_v3_scoop_layout_generalization
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_layout_generalization.py
   )

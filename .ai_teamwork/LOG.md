@@ -2097,3 +2097,9 @@
 - 改了哪里：归档完整RRD、summary、CSV、HTML搜索报告、25箱计划缓存、README、关键源码/配置/测试/文档快照和SHA256SUMS到`data/ik_benchmark/v3_scoop_5x5/baselines/2026-09-21-golden-box7-front-box20-fast/`。
 - 验证结果：归档前完整抓取/过渡25/25、核心规划25/25不超过5s、总行程41476.71°；归档文件SHA-256与RRD完整性校验通过。
 - 留给下个 AI：任何后续路径或速度实验必须写入新目录，不得覆盖此黄金基线；需要回退时先执行归档内README给出的`sha256sum -c`命令。
+
+## 2026-09-26 Codex / MOTION-224 黄金泛化 A→E 完成
+- 做了什么：从不可变 A `f6f1fb1` 串行完成 B 实时25/25、C无箱号身份命中、D布局/缺箱/尺寸/位姿/初态泛化和 E 当前17轴、安全、累计计时、path_duration、诚实clearance合同；固定公开8种子逐项比较C/D，同种子选中轨迹完全一致。
+- 改了哪里：正式本地分支 `feature/v3-scoop-golden-generalization-current-contracts`；新增通用完整状态/几何指纹缓存、固定种子门禁、E benchmark与L0→L4验收报告。
+- 验证结果：Release构建；30/30测试；L3抓取/过渡25/25，累计solve_time中位/p95/最大`0.787/1.014/1.048s`，25/25<=3s；翻转0、倒置0；L2与5个L4场景全部通过；所有当前RRD校验通过。
+- 留给下个 AI：结果仅留本地未合并分支，未push、未建PR；实机执行仍须独立硬件安全验收。

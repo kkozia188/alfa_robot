@@ -170,6 +170,20 @@ def write_sequence_summary(
         ),
         "total_sequence_joint_travel_deg": complete_sequence_joint_travel_deg(tasks),
         "planning_search": sequence_search_metrics(tasks),
+        "current_contract": {
+            "state_context_joint_count": 17,
+            "solve_time_scope": "all_timed_task_planner_attempts_including_failures",
+            "path_duration_scope": "selected_replay_velocity_bound_duration_excludes_dwell",
+            "minimum_clearance_scope": "selected_replay_waypoints_and_interpolated_edges_full_robot_phase_aware_attached_box",
+            "solve_time_ms": sum(
+                float(task.get("solve_contract", {}).get("solve_time_ms", 0.0))
+                for task in tasks
+            ),
+            "transition_solve_time_ms": sum(
+                float(task.get("solve_contract", {}).get("transition_solve_time_ms", 0.0))
+                for task in tasks
+            ),
+        },
         "boxes": [
             {
                 "box_id": task["box_id"],
@@ -207,6 +221,18 @@ def write_sequence_summary(
                 "carried_box_orientation": task.get("carried_box_orientation", {}),
                 "transition_motion": task.get("transition_motion", {}),
                 "planning_search": task.get("planning_search", {}),
+                "solve_contract": task.get("solve_contract", {}),
+                "path_duration": task["payload"].get("path_duration"),
+                "path_duration_scope": task["payload"].get("path_duration_scope"),
+                "minimum_clearance": task["payload"].get("minimum_clearance"),
+                "minimum_clearance_scope": task["payload"].get("minimum_clearance_scope"),
+                "minimum_clearance_sample_count": task["payload"].get(
+                    "minimum_clearance_sample_count", 0
+                ),
+                "minimum_clearance_reason": task["payload"].get(
+                    "minimum_clearance_reason", ""
+                ),
+                "state_context_joint_count": len(task["payload"].get("joint_names", [])),
                 "segment_search": task["payload"].get("segment_search", []),
                 "trajectory_analysis": task.get("trajectory_analysis", {}),
                 "transition_trajectory_analysis": task.get(
@@ -287,7 +313,7 @@ def folded_start_joints(config: dict[str, Any]) -> list[float]:
         raise ValueError("folded_start_updown_m must be in [-1.0, 0.0]")
     return [updown, 0.0] + [
         math.radians(value) for side in ("left", "right") for value in degrees[side]
-    ]
+    ] + [0.0]
 
 
 def planning_args(
@@ -420,6 +446,7 @@ def planner_search_metrics(results: list[dict[str, Any]]) -> dict[str, float | i
     metrics: dict[str, float | int] = {
         "attempts": len(results),
         "successes": sum(bool(result.get("success")) for result in results),
+        "timed_attempts": 0,
         "process_wall_ms": 0.0,
         "planner_wall_ms": 0.0,
         "ik_calls": 0,
@@ -472,7 +499,8 @@ def planner_search_metrics(results: list[dict[str, Any]]) -> dict[str, float | i
         payload = result.get("trajectory_result")
         if not isinstance(payload, dict):
             continue
-        metrics["planner_wall_ms"] += float(payload.get("total_ms", 0.0))
+        metrics["timed_attempts"] += 1
+        metrics["planner_wall_ms"] += float(payload.get("solve_time_ms", payload.get("total_ms", 0.0)))
         payload_metrics = payload.get("metrics", {})
         for name in integer_fields:
             metrics[name] += int(payload_metrics.get(name, 0))
@@ -485,6 +513,7 @@ def sequence_search_metrics(tasks: list[dict[str, Any]]) -> dict[str, dict[str, 
     fields = (
         "attempts",
         "successes",
+        "timed_attempts",
         "process_wall_ms",
         "planner_wall_ms",
         "ik_calls",
@@ -1083,7 +1112,7 @@ def plan_sequence(
             else:
                 success_target = 1
                 max_success_target = 1
-            required_success_target = 1 if strict_verified_selection else success_target
+            required_success_target = 1
 
             def motion_accepted(motion: dict[str, Any]) -> bool:
                 if motion_quality_contract is None:
@@ -1168,9 +1197,16 @@ def plan_sequence(
                             payload, side, "rrt_to_place"
                         )
                     successful_results.append((result, payload, motion))
+                    validated_task = any(
+                        segment.get("success") and
+                        segment.get("strategy") == "validated_task_waypoints"
+                        for segment in payload.get("segment_search", [])
+                    )
                     quality_reached = any(
                         motion_accepted(item[2]) for item in successful_results
                     )
+                    if motion_accepted(motion):
+                        break
                     if len(successful_results) >= success_target and quality_reached:
                         break
                     if len(successful_results) >= max_success_target:
@@ -1342,7 +1378,11 @@ def plan_sequence(
                                 + 0.005 * float(leg_motion["max_joint_winding_excess_deg"])
                             )
                             leg_candidates.append((tcp_score, frames, transition_payload, leg_motion))
-                            if first_transition_search:
+                            validated_transition = (
+                                transition_payload.get("transition_strategy") ==
+                                "validated_transition_waypoints"
+                            )
+                            if first_transition_search and not validated_transition:
                                 print(
                                     f"TRANSITION_TCP folded->{box_id:02d} "
                                     f"path={tcp_path:.3f}m deviation={tcp_deviation:.3f}m "
@@ -1372,7 +1412,7 @@ def plan_sequence(
                                         "max_first_transition_joint_winding_excess_deg", 100.0
                                     )) + 1e-6
                                 ]
-                                if len(leg_candidates) < 3 or not eligible_first:
+                                if not eligible_first:
                                     continue
                                 _, frames, transition_payload, leg_motion = min(
                                     eligible_first, key=lambda item: item[0]
@@ -1486,6 +1526,9 @@ def plan_sequence(
                     for left, right in zip(transition_frames[0]["joints"], from_joints)
                 ):
                     raise RuntimeError("transition must start at the previous release state")
+                task_search = planner_search_metrics(planning_attempt_results)
+                transition_search = planner_search_metrics(transition_attempt_results)
+                selected_search = planner_search_metrics([result])
                 selected = {
                     "box_id": box_id,
                     "row": row,
@@ -1524,9 +1567,32 @@ def plan_sequence(
                     "transition_motion": transition_motion,
                     "transition_planning_groups": transition_motion.get("planning_groups", []),
                     "planning_search": {
-                        "task": planner_search_metrics(planning_attempt_results),
-                        "transition": planner_search_metrics(transition_attempt_results),
-                        "selected_task": planner_search_metrics([result]),
+                        "task": task_search,
+                        "transition": transition_search,
+                        "selected_task": selected_search,
+                    },
+                    "solve_contract": {
+                        "solve_time_ms": float(task_search["planner_wall_ms"]),
+                        "transition_solve_time_ms": float(transition_search["planner_wall_ms"]),
+                        "sequence_planning_time_ms": float(task_search["planner_wall_ms"]) +
+                            float(transition_search["planner_wall_ms"]),
+                        "process_wall_ms": float(task_search["process_wall_ms"]) +
+                            float(transition_search["process_wall_ms"]),
+                        "process_overhead_ms": max(0.0,
+                            float(task_search["process_wall_ms"]) +
+                            float(transition_search["process_wall_ms"]) -
+                            float(task_search["planner_wall_ms"]) -
+                            float(transition_search["planner_wall_ms"])),
+                        "failed_attempts": int(task_search["attempts"] - task_search["successes"]) +
+                            int(transition_search["attempts"] - transition_search["successes"]),
+                        "missing_duration_attempts": int(task_search["attempts"] -
+                            task_search["timed_attempts"]) + int(transition_search["attempts"] -
+                            transition_search["timed_attempts"]),
+                        "retry_count": max(0, int(task_search["attempts"] +
+                            transition_search["attempts"]) - 2),
+                        "scope": "all_timed_task_planner_attempts_including_failures",
+                        "transition_scope": "all_timed_transition_planner_attempts_reported_separately",
+                        "process_scope": "launcher_and_process_wall_time_reported_separately",
                     },
                 }
                 print(

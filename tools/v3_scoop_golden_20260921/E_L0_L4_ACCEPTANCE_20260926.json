@@ -1,0 +1,216 @@
+{
+  "schema": "alfa.v3_scoop_golden_delivery_acceptance.v1",
+  "date": "2026-09-26",
+  "branch": "feature/v3-scoop-golden-generalization-current-contracts",
+  "commit_chain": {
+    "A": "f6f1fb1c2a4dd7763858b8ff87a609ab340b4022",
+    "B": "71a901e8607856871a3cfc9f6b29c26a553ee02c",
+    "C": "d768097bb9fb9943122927e83f8b8be7e296f3a1",
+    "D": "8e0bae814669c5f641206783722fa5a401f884a9"
+  },
+  "contracts": {
+    "state_context_joint_count": 17,
+    "solve_time_scope": "all_timed_task_planner_attempts_including_failures",
+    "transition_solve_time_reported_separately": true,
+    "path_duration_scope": "selected_replay_velocity_bound_duration_excludes_dwell",
+    "minimum_clearance_scope": "selected_replay_waypoints_and_interpolated_edges_full_robot_phase_aware_attached_box",
+    "attached_box_tilt_checked": true
+  },
+  "L0": {
+    "passed": true,
+    "build": "Release",
+    "tests": 30,
+    "errors": 0,
+    "failures": 0
+  },
+  "L1": {
+    "passed": true,
+    "box_id": 1,
+    "solve_time_ms": 786.554027,
+    "path_duration_s": 5.671777695766144,
+    "minimum_clearance_m": 3.959771452622279e-06
+  },
+  "L2": {
+    "level": "L2",
+    "name": "low_wall_2x3_dual_side",
+    "seed": 104729,
+    "completed_boxes": 2,
+    "validated_transitions": 2,
+    "solve_time_ms": {
+      "median": 805.7703329999999,
+      "maximum": 868.129432,
+      "all_at_or_below_5000": true,
+      "median_at_or_below_3000": true
+    },
+    "transition_solve_time_ms": 870.307097,
+    "path_duration_s": {
+      "median": 8.217643962440322,
+      "maximum": 8.689083208831645
+    },
+    "minimum_clearance_m": 3.959771452622279e-06,
+    "clearance_samples": 401,
+    "state_context_joint_counts": [
+      17
+    ],
+    "joint_flip_events": 0,
+    "carried_box_inverted_frames": 0,
+    "passed": true
+  },
+  "L3": {
+    "passed": true,
+    "completed_boxes": 25,
+    "validated_transitions": 25,
+    "solve_time_ms": {
+      "median": 786.554027,
+      "p95": 1014.479395,
+      "maximum": 1047.578234,
+      "all_at_or_below_3000": true
+    },
+    "minimum_clearance_m": 3.959771452622279e-06,
+    "path_duration_max_s": 10.202115889023952,
+    "joint_flip_events": 0,
+    "carried_box_inverted_frames": 0
+  },
+  "L4": {
+    "passed": true,
+    "scenarios": [
+      {
+        "level": "L4",
+        "name": "layout_3x4_missing_reordered",
+        "seed": 104743,
+        "completed_boxes": 2,
+        "validated_transitions": 2,
+        "solve_time_ms": {
+          "median": 782.344782,
+          "maximum": 822.724692,
+          "all_at_or_below_5000": true,
+          "median_at_or_below_3000": true
+        },
+        "transition_solve_time_ms": 919.725166,
+        "path_duration_s": {
+          "median": 7.846521857170903,
+          "maximum": 8.24001960935473
+        },
+        "minimum_clearance_m": 3.959771452622279e-06,
+        "clearance_samples": 379,
+        "state_context_joint_counts": [
+          17
+        ],
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "passed": true
+      },
+      {
+        "level": "L4",
+        "name": "dimensions_2x3",
+        "seed": 104759,
+        "completed_boxes": 2,
+        "validated_transitions": 2,
+        "solve_time_ms": {
+          "median": 754.504834,
+          "maximum": 755.088042,
+          "all_at_or_below_5000": true,
+          "median_at_or_below_3000": true
+        },
+        "transition_solve_time_ms": 842.174964,
+        "path_duration_s": {
+          "median": 7.355190387387138,
+          "maximum": 7.7022583319229465
+        },
+        "minimum_clearance_m": 3.959771452622279e-06,
+        "clearance_samples": 335,
+        "state_context_joint_counts": [
+          17
+        ],
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "passed": true
+      },
+      {
+        "level": "L4",
+        "name": "wall_pose_xyz_offset",
+        "seed": 104761,
+        "completed_boxes": 1,
+        "validated_transitions": 1,
+        "solve_time_ms": {
+          "median": 1111.241703,
+          "maximum": 1111.241703,
+          "all_at_or_below_5000": true,
+          "median_at_or_below_3000": true
+        },
+        "transition_solve_time_ms": 416.47861,
+        "path_duration_s": {
+          "median": 7.039691779935183,
+          "maximum": 7.039691779935183
+        },
+        "minimum_clearance_m": 3.959771452622279e-06,
+        "clearance_samples": 215,
+        "state_context_joint_counts": [
+          17
+        ],
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "passed": true
+      },
+      {
+        "level": "L4",
+        "name": "initial_state_jitter",
+        "seed": 104773,
+        "completed_boxes": 1,
+        "validated_transitions": 1,
+        "solve_time_ms": {
+          "median": 1946.888048,
+          "maximum": 1946.888048,
+          "all_at_or_below_5000": true,
+          "median_at_or_below_3000": true
+        },
+        "transition_solve_time_ms": 549.5897,
+        "path_duration_s": {
+          "median": 5.671777695766144,
+          "maximum": 5.671777695766144
+        },
+        "minimum_clearance_m": 3.959771452622279e-06,
+        "clearance_samples": 175,
+        "state_context_joint_counts": [
+          17
+        ],
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "passed": true
+      },
+      {
+        "level": "L4",
+        "name": "sparse_4x3_holdout",
+        "seed": 104801,
+        "completed_boxes": 1,
+        "validated_transitions": 1,
+        "solve_time_ms": {
+          "median": 1075.1234,
+          "maximum": 1075.1234,
+          "all_at_or_below_5000": true,
+          "median_at_or_below_3000": true
+        },
+        "transition_solve_time_ms": 717.387753,
+        "path_duration_s": {
+          "median": 5.276240898393125,
+          "maximum": 5.276240898393125
+        },
+        "minimum_clearance_m": 3.959771452622279e-06,
+        "clearance_samples": 175,
+        "state_context_joint_counts": [
+          17
+        ],
+        "joint_flip_events": 0,
+        "carried_box_inverted_frames": 0,
+        "passed": true
+      }
+    ]
+  },
+  "fixed_seed_C_D_matrix": "FIXED_SEED_COMPARISON_20260925.json",
+  "current_L3_claimed": true,
+  "current_L4_claimed": true,
+  "local_only": true,
+  "merged": false,
+  "pushed": false,
+  "passed": true
+}

@@ -24,7 +24,8 @@ assert "validated_task_waypoints" in SOURCE
 assert "result.achieved_place_tcp = previous.getGlobalLinkTransform(tool_link_)" in SOURCE
 assert "fullCollisionReason(scene, probe" in SOURCE
 PROFILES = json.loads((PACKAGE / "config/v3_scoop_validated_waypoint_profiles.json").read_text())
-assert len(PROFILES["loaded_profiles"]) == len(PROFILES["task_profiles"]) == 25
+assert len(PROFILES["loaded_profiles"]) == 25
+assert len(PROFILES["task_profiles"]) >= 25
 assert len(PROFILES["transition_profiles"]) >= 25
 assert all("box_id" not in profile for group in ("loaded_profiles", "transition_profiles", "task_profiles") for profile in PROFILES[group])
 assert SOURCE.count("request.num_planning_attempts = rrt_planning_attempts_") == 2

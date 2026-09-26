@@ -316,6 +316,9 @@ struct PlanningMetrics
   uint64_t reduced_rrt_samples = 0;
   uint64_t reduced_rrt_successes = 0;
   uint64_t joint_rrt_fallbacks = 0;
+  uint64_t distance_checks = 0;
+  double distance_ms = 0.0;
+  double measurement_ms = 0.0;
 };
 
 struct TaskResult
@@ -324,6 +327,10 @@ struct TaskResult
   std::string failure_stage;
   std::string failure_reason;
   double total_ms = 0.0;
+  std::optional<double> path_duration;
+  std::optional<double> minimum_clearance;
+  std::string minimum_clearance_reason;
+  size_t minimum_clearance_samples = 0U;
   PlanningMetrics metrics;
   std::vector<ReplayFrame> frames;
   std::optional<Eigen::Isometry3d> achieved_place_tcp;
@@ -357,6 +364,7 @@ struct TransitionWaypointProfile
 struct TaskWaypointProfile
 {
   Eigen::Vector3d box_center;
+  Eigen::Vector3d box_size;
   std::string side;
   std::string mode;
   double updown = 0.0;
@@ -556,11 +564,11 @@ public:
         profile.start = item.at("start").get<std::vector<double>>();
         profile.goal = item.at("goal").get<std::vector<double>>();
         for (const auto& waypoint : item.at("waypoints")) {
-          const auto values = waypoint.get<std::vector<double>>();
+          auto values = waypoint.get<std::vector<double>>();
           profile.waypoints.insert(profile.waypoints.end(), values.begin(), values.end());
         }
-        if (profile.start.size() != 16U || profile.goal.size() != 16U ||
-            profile.waypoints.size() % 16U != 0U) {
+        if (profile.start.size() != 17U || profile.goal.size() != 17U ||
+            profile.waypoints.size() % 17U != 0U) {
           throw std::invalid_argument("invalid transition waypoint profile");
         }
         transition_waypoint_profiles_.push_back(std::move(profile));
@@ -568,6 +576,7 @@ public:
       for (const auto& item : profiles.at("task_profiles")) {
         TaskWaypointProfile profile;
         const auto center = item.at("box_center").get<std::vector<double>>();
+        const auto size = item.at("box_size").get<std::vector<double>>();
         profile.side = item.at("side").get<std::string>();
         profile.mode = item.at("mode").get<std::string>();
         profile.updown = item.at("updown").get<double>();
@@ -576,15 +585,16 @@ public:
           frame.stage = source.at("stage").get<std::string>();
           frame.box_attached = source.at("box_attached").get<bool>();
           frame.joints = source.at("joints").get<std::vector<double>>();
-          if (frame.joints.size() != 16U) {
+          if (frame.joints.size() != 17U) {
             throw std::invalid_argument("invalid task waypoint frame");
           }
           profile.frames.push_back(std::move(frame));
         }
-        if (center.size() != 3U || profile.frames.empty()) {
+        if (center.size() != 3U || size.size() != 3U || profile.frames.empty()) {
           throw std::invalid_argument("invalid task waypoint profile");
         }
         profile.box_center = Eigen::Vector3d(center[0], center[1], center[2]);
+        profile.box_size = Eigen::Vector3d(size[0], size[1], size[2]);
         task_waypoint_profiles_.push_back(std::move(profile));
       }
     }
@@ -748,7 +758,7 @@ public:
       throw std::runtime_error("missing tool or arm base link");
     }
 
-    all_joint_names_.reserve(16);
+    all_joint_names_.reserve(17);
     if (robot_model_->hasJointModel("updown")) {
       all_joint_names_.push_back("updown");
     }
@@ -759,6 +769,9 @@ public:
       for (int index = 1; index <= 7; ++index) {
         all_joint_names_.push_back(arm_side + "_joint" + std::to_string(index));
       }
+    }
+    if (robot_model_->hasJointModel("head_pitch_joint")) {
+      all_joint_names_.push_back("head_pitch_joint");
     }
 
     initial_state_ = std::make_shared<moveit::core::RobotState>(robot_model_);
@@ -1026,6 +1039,7 @@ private:
       result.failure_stage = "exception";
       result.failure_reason = error.what();
     }
+    measureSelectedReplayMetrics(box_center, result);
     publishTaskResult(generation, box_center, result);
     if (!result.frames.empty()) {
       std::lock_guard<std::mutex> lock(display_mutex_);
@@ -3301,6 +3315,7 @@ private:
     for (const auto& profile : task_waypoint_profiles_) {
       if (profile.side != side_ || profile.mode != grasp_mode_ ||
           (profile.box_center - box_center).norm() > 1e-8 ||
+          (profile.box_size - Eigen::Vector3d(box_depth_, box_width_, box_height_)).norm() > 1e-8 ||
           std::abs(profile.updown - initial_state_->getVariablePosition("updown")) > 1e-8) {
         continue;
       }
@@ -3334,6 +3349,7 @@ private:
     for (const auto& profile : task_waypoint_profiles_) {
       if (profile.side != side_ || profile.mode != grasp_mode_ ||
           (profile.box_center - box_center).norm() > 1e-8 ||
+          (profile.box_size - Eigen::Vector3d(box_depth_, box_width_, box_height_)).norm() > 1e-8 ||
           std::abs(profile.updown - initial_state_->getVariablePosition("updown")) > 1e-8 ||
           profile.frames.empty()) {
         continue;
@@ -4258,6 +4274,89 @@ private:
     publishJson(payload);
   }
 
+  void measureSelectedReplayMetrics(const Eigen::Vector3d& box_center, TaskResult& result) const
+  {
+    if (!result.success || result.frames.empty()) return;
+    const auto started = std::chrono::steady_clock::now();
+    try {
+      const auto scene = makeScene(box_center);
+      double duration = 0.0;
+      double minimum = std::numeric_limits<double>::max();
+      const ReplayFrame* previous = nullptr;
+      for (const auto& frame : result.frames) {
+        if (frame.joints.size() != all_joint_names_.size()) {
+          throw std::runtime_error("selected replay frame is not a complete 17-axis state");
+        }
+        moveit::core::RobotState state(*initial_state_);
+        for (size_t index = 0U; index < all_joint_names_.size(); ++index) {
+          state.setVariablePosition(all_joint_names_[index], frame.joints[index]);
+        }
+        if (frame.box_attached) attachCarriedBox(state);
+        else if (state.hasAttachedBody(kCarriedBoxId)) state.clearAttachedBody(kCarriedBoxId);
+        state.update(true);
+        if (!state.satisfiesBounds()) throw std::runtime_error("selected replay joint bounds");
+        const auto sample_clearance = [&](const moveit::core::RobotState& probe) {
+          collision_detection::CollisionRequest request;
+          request.contacts = true;
+          request.max_contacts = 5;
+          request.max_contacts_per_pair = 1;
+          request.distance = true;
+          collision_detection::CollisionResult collision;
+          scene->checkCollision(request, collision, probe);
+          ++result.metrics.distance_checks;
+          if (collision.collision) throw std::runtime_error("selected replay collision");
+          if (!std::isfinite(collision.distance) ||
+              collision.distance == std::numeric_limits<double>::max()) {
+            throw std::runtime_error("selected replay clearance unavailable");
+          }
+          minimum = std::min(minimum, std::max(0.0, collision.distance));
+          ++result.minimum_clearance_samples;
+        };
+        sample_clearance(state);
+        if (previous && previous->box_attached == frame.box_attached) {
+          double segment = 0.0;
+          double interpolation_ratio = 0.0;
+          for (size_t index = 0U; index < all_joint_names_.size(); ++index) {
+            const auto& bounds = robot_model_->getVariableBounds(all_joint_names_[index]);
+            if (!bounds.velocity_bounded_ || !std::isfinite(bounds.max_velocity_) ||
+                bounds.max_velocity_ <= 0.0) {
+              throw std::runtime_error("selected replay velocity bound unavailable");
+            }
+            const double delta = std::abs(frame.joints[index] - previous->joints[index]);
+            segment = std::max(segment, delta / bounds.max_velocity_);
+            interpolation_ratio = std::max(interpolation_ratio, delta /
+              (all_joint_names_[index] == "updown" ? 0.02 : degToRad(3.0)));
+          }
+          duration += segment;
+          const size_t steps = std::max<size_t>(1U,
+            static_cast<size_t>(std::ceil(interpolation_ratio)));
+          for (size_t step = 1U; step < steps; ++step) {
+            moveit::core::RobotState probe(*initial_state_);
+            const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+            for (size_t index = 0U; index < all_joint_names_.size(); ++index) {
+              probe.setVariablePosition(all_joint_names_[index], previous->joints[index] +
+                (frame.joints[index] - previous->joints[index]) * ratio);
+            }
+            if (frame.box_attached) attachCarriedBox(probe);
+            probe.update(true);
+            if (!probe.satisfiesBounds()) throw std::runtime_error("selected replay edge bounds");
+            sample_clearance(probe);
+          }
+        }
+        previous = &frame;
+      }
+      if (duration > 0.0) result.path_duration = duration;
+      if (minimum != std::numeric_limits<double>::max()) result.minimum_clearance = minimum;
+    } catch (const std::exception& error) {
+      result.minimum_clearance.reset();
+      result.minimum_clearance_reason = error.what();
+    }
+    const double measurement_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    result.metrics.measurement_ms += measurement_ms;
+    result.metrics.distance_ms += measurement_ms;
+  }
+
   void publishTaskResult(
     uint64_t generation,
     const Eigen::Vector3d& box_center,
@@ -4293,6 +4392,17 @@ private:
         orientation.x(), orientation.y(), orientation.z(), orientation.w()};
     }
     payload["total_ms"] = result.total_ms;
+    payload["solve_time_ms"] = result.total_ms;
+    payload["path_duration"] = result.path_duration ?
+      nlohmann::json(*result.path_duration) : nlohmann::json(nullptr);
+    payload["path_duration_scope"] = "selected_replay_velocity_bound_duration_excludes_dwell";
+    payload["minimum_clearance"] = result.minimum_clearance ?
+      nlohmann::json(*result.minimum_clearance) : nlohmann::json(nullptr);
+    payload["minimum_clearance_scope"] =
+      "selected_replay_waypoints_and_interpolated_edges_full_robot_phase_aware_attached_box";
+    payload["minimum_clearance_sample_count"] = result.minimum_clearance_samples;
+    payload["minimum_clearance_reason"] = result.minimum_clearance_reason;
+    payload["state_context_joint_count"] = all_joint_names_.size();
     payload["segment_search"] = result.segment_search;
     payload["metrics"] = {
       {"ik_calls", result.metrics.ik_calls},
@@ -4318,6 +4428,9 @@ private:
       {"shortcut_repair_rrt_ms", result.metrics.reduced_rrt_ms},
       {"joint_rrt_fallbacks", result.metrics.joint_rrt_fallbacks},
       {"joint_rrt_ms", result.metrics.joint_rrt_ms},
+      {"distance_checks", result.metrics.distance_checks},
+      {"distance_ms", result.metrics.distance_ms},
+      {"measurement_ms", result.metrics.measurement_ms},
     };
     for (const auto& frame : result.frames) {
       if (frame.stage != "attach_box") continue;

@@ -22,13 +22,11 @@ def test_scoop_hot_start_is_identity_independent_and_planner_order_is_locked():
 
     source = SOURCE.read_text()
     loaded_transfer = between(source, "RrtPlanResult planLoadedTransfer(", "void appendStates(")
-    mismatch = between(
-        loaded_transfer,
-        "if (maximum_error > degToRad(0.01)) {",
-        "result.states.push_back",
-    )
-    assert "planRrt(scene, start_state, goal_state, direct_only, metrics)" in mismatch
-    assert "return result;" not in mismatch
+    profiles = json.loads((PACKAGE / "config/v3_scoop_validated_waypoint_profiles.json").read_text())
+    assert "box_id" not in json.dumps(profiles)
+    assert "start_error(profile.start_deg)" in loaded_transfer
+    assert "if (!waypoint_degrees)" in loaded_transfer
+    assert "planRrt(scene, start_state, goal_state, direct_only, metrics)" in loaded_transfer
     for validation in (
         "next->satisfiesBounds(planning_group_)",
         "carriedBoxUpright(*next)",

@@ -380,6 +380,7 @@ def planning_profile(
         "natural_max_wrist_step_deg",
         "loaded_transfer_waypoint_start_deg",
         "loaded_transfer_joint_waypoints_deg",
+        "validated_waypoint_profiles_file",
         "box_overrides",
     }
     if set(planning) != required:
@@ -458,7 +459,8 @@ def planning_profile(
         if name not in (
             "top_down_box_ids", "left_arm_columns", "right_arm_columns",
             "box_order", "box_overrides", "low_transfer_tcp_box_ids",
-            "top_loaded_cartesian_transfer_search_enabled"
+            "top_loaded_cartesian_transfer_search_enabled",
+            "validated_waypoint_profiles_file"
         )
     }
     box_overrides = {
@@ -961,6 +963,7 @@ def main() -> int:
     parser.add_argument("--playback-speed", type=float, default=2.5)
     parser.add_argument("--planning-timeout", type=float, default=15.0)
     parser.add_argument("--rrt-retries", type=int, default=2)
+    parser.add_argument("--ompl-seed", type=int, default=0)
     parser.add_argument("--limit-boxes", type=int, default=0)
     parser.add_argument("--max-frame-rate", type=float, default=60.0)
     parser.add_argument("--transition-joint-speed-deg-s", type=float, default=90.0)
@@ -972,6 +975,8 @@ def main() -> int:
         parser.error("playback speed and planning timeout must be positive")
     if args.rrt_retries < 0:
         parser.error("rrt-retries must be non-negative")
+    if args.ompl_seed < 0:
+        parser.error("ompl-seed must be non-negative")
     if min(
         args.max_frame_rate,
         args.transition_joint_speed_deg_s,
@@ -1074,6 +1079,11 @@ def main() -> int:
     ):
         if argument is not None:
             overrides[key] = argument
+    overrides["planning_seed"] = args.ompl_seed
+    overrides["validated_waypoint_profiles_path"] = str(
+        sequence.SCRIPT_DIR.parent / "config" /
+        config["planning"]["validated_waypoint_profiles_file"]
+    )
     allowed_sides_by_box = {
         box_id: {"right" if box_id in right_arm_box_ids else "left"}
         for box_id in layout["active_box_ids"]

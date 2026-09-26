@@ -84,5 +84,23 @@
     ]
   },
   "current_l3_claimed": false,
-  "current_l4_claimed": false
+  "current_l4_claimed": false,
+  "fixed_seed_matrix": {
+    "seeds": [
+      104729,
+      104743,
+      104759,
+      104761,
+      104773,
+      104779,
+      104789,
+      104801
+    ],
+    "all_C_runs_25_of_25": true,
+    "all_D_runs_25_of_25": true,
+    "all_C_and_D_selected_planning_at_or_below_5s": true,
+    "all_selected_trajectories_equal": true,
+    "comparison_report": "FIXED_SEED_COMPARISON_20260925.json",
+    "passed": true
+  }
 }

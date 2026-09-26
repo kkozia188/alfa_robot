@@ -43,8 +43,14 @@ def generate_launch_description():
             DeclareLaunchArgument("place_arm_joints_deg", default_value=""),
             DeclareLaunchArgument("loaded_transfer_joint_waypoints_deg", default_value=""),
             DeclareLaunchArgument("loaded_transfer_waypoint_start_deg", default_value=""),
+            DeclareLaunchArgument("loaded_transfer_joint_waypoints_alt_deg", default_value=""),
+            DeclareLaunchArgument("loaded_transfer_waypoint_alt_start_deg", default_value=""),
             DeclareLaunchArgument("transition_from_joints", default_value=""),
             DeclareLaunchArgument("transition_to_joints", default_value=""),
+            DeclareLaunchArgument("transition_waypoint_start_joints", default_value=""),
+            DeclareLaunchArgument("transition_waypoint_goal_joints", default_value=""),
+            DeclareLaunchArgument("transition_joint_waypoints", default_value=""),
+            DeclareLaunchArgument("validated_waypoint_profiles_path", default_value=""),
             DeclareLaunchArgument("initial_box_x", default_value="0.88"),
             DeclareLaunchArgument("initial_box_y", default_value="-0.20"),
             DeclareLaunchArgument("initial_box_z", default_value="0.55"),
@@ -88,6 +94,7 @@ def generate_launch_description():
             DeclareLaunchArgument("precontact_candidate_limit", default_value="8"),
             DeclareLaunchArgument("rrt_planning_time", default_value="1.0"),
             DeclareLaunchArgument("rrt_planning_attempts", default_value="1"),
+            DeclareLaunchArgument("planning_seed", default_value="0"),
             DeclareLaunchArgument("natural_motion_enabled", default_value="true"),
             DeclareLaunchArgument("natural_swivel_weight", default_value="0.02"),
             DeclareLaunchArgument("natural_wrist_singularity_weight", default_value="0.03"),
@@ -172,11 +179,31 @@ def generate_launch_description():
                             LaunchConfiguration("loaded_transfer_waypoint_start_deg"),
                             value_type=str,
                         ),
+                        "loaded_transfer_joint_waypoints_alt_deg": ParameterValue(
+                            LaunchConfiguration("loaded_transfer_joint_waypoints_alt_deg"),
+                            value_type=str,
+                        ),
+                        "loaded_transfer_waypoint_alt_start_deg": ParameterValue(
+                            LaunchConfiguration("loaded_transfer_waypoint_alt_start_deg"),
+                            value_type=str,
+                        ),
                         "transition_from_joints": ParameterValue(
                             LaunchConfiguration("transition_from_joints"), value_type=str
                         ),
                         "transition_to_joints": ParameterValue(
                             LaunchConfiguration("transition_to_joints"), value_type=str
+                        ),
+                        "transition_waypoint_start_joints": ParameterValue(
+                            LaunchConfiguration("transition_waypoint_start_joints"), value_type=str
+                        ),
+                        "transition_waypoint_goal_joints": ParameterValue(
+                            LaunchConfiguration("transition_waypoint_goal_joints"), value_type=str
+                        ),
+                        "transition_joint_waypoints": ParameterValue(
+                            LaunchConfiguration("transition_joint_waypoints"), value_type=str
+                        ),
+                        "validated_waypoint_profiles_path": ParameterValue(
+                            LaunchConfiguration("validated_waypoint_profiles_path"), value_type=str
                         ),
                         "side": side,
                         "initial_box_x": ParameterValue(initial_box_x, value_type=float),
@@ -286,6 +313,9 @@ def generate_launch_description():
                         ),
                         "rrt_planning_attempts": ParameterValue(
                             LaunchConfiguration("rrt_planning_attempts"), value_type=int
+                        ),
+                        "planning_seed": ParameterValue(
+                            LaunchConfiguration("planning_seed"), value_type=int
                         ),
                         "natural_motion_enabled": LaunchConfiguration("natural_motion_enabled"),
                         "natural_swivel_weight": ParameterValue(

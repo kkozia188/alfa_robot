@@ -1,0 +1,307 @@
+{
+  "schema": "alfa.v3_scoop_fixed_seed_c_d_comparison.v1",
+  "date": "2026-09-25",
+  "seeds": [
+    104729,
+    104743,
+    104759,
+    104761,
+    104773,
+    104779,
+    104789,
+    104801
+  ],
+  "acceptance": {
+    "all_seeds_must_pass": true,
+    "completed_boxes": 25,
+    "validated_transitions": 25,
+    "maximum_selected_core_planning_s": 5.0
+  },
+  "runs": [
+    {
+      "seed": 104729,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.76752,
+        "median_s": 0.758,
+        "p95_s": 0.971,
+        "maximum_s": 0.99,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7707599999999999,
+        "median_s": 0.768,
+        "p95_s": 0.967,
+        "maximum_s": 0.975,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 61.583984999999984,
+        "planner_median": 9.122036000000094,
+        "process_max": 84.40000000000009,
+        "process_median": 18.100000000000136
+      },
+      "passed": true
+    },
+    {
+      "seed": 104743,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7694,
+        "median_s": 0.765,
+        "p95_s": 0.961,
+        "maximum_s": 0.983,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.77256,
+        "median_s": 0.75,
+        "p95_s": 0.974,
+        "maximum_s": 1.044,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 80.258734,
+        "planner_median": 11.73933999999997,
+        "process_max": 72.39999999999986,
+        "process_median": 24.399999999999864
+      },
+      "passed": true
+    },
+    {
+      "seed": 104759,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.76884,
+        "median_s": 0.754,
+        "p95_s": 0.966,
+        "maximum_s": 0.983,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.77144,
+        "median_s": 0.753,
+        "p95_s": 0.971,
+        "maximum_s": 0.977,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 43.18389300000001,
+        "planner_median": 8.565077999999971,
+        "process_max": 101.89999999999986,
+        "process_median": 37.0
+      },
+      "passed": true
+    },
+    {
+      "seed": 104761,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.77668,
+        "median_s": 0.775,
+        "p95_s": 0.977,
+        "maximum_s": 1.005,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7801600000000001,
+        "median_s": 0.78,
+        "p95_s": 0.981,
+        "maximum_s": 1.071,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 94.24241799999993,
+        "planner_median": 17.586248999999953,
+        "process_max": 160.5999999999999,
+        "process_median": 36.399999999999864
+      },
+      "passed": true
+    },
+    {
+      "seed": 104773,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7750400000000001,
+        "median_s": 0.758,
+        "p95_s": 0.978,
+        "maximum_s": 0.994,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.77728,
+        "median_s": 0.761,
+        "p95_s": 0.963,
+        "maximum_s": 0.977,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 88.01295600000003,
+        "planner_median": 13.344294999999988,
+        "process_max": 97.5,
+        "process_median": 32.799999999999955
+      },
+      "passed": true
+    },
+    {
+      "seed": 104779,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.77904,
+        "median_s": 0.752,
+        "p95_s": 0.983,
+        "maximum_s": 1.076,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.76692,
+        "median_s": 0.757,
+        "p95_s": 0.97,
+        "maximum_s": 0.976,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 105.92064300000004,
+        "planner_median": 10.890034000000014,
+        "process_max": 124.20000000000027,
+        "process_median": 27.700000000000045
+      },
+      "passed": true
+    },
+    {
+      "seed": 104789,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.81036,
+        "median_s": 0.783,
+        "p95_s": 1.045,
+        "maximum_s": 1.296,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.80404,
+        "median_s": 0.801,
+        "p95_s": 1.026,
+        "maximum_s": 1.038,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 258.06683499999986,
+        "planner_median": 26.42396000000008,
+        "process_max": 331.9000000000001,
+        "process_median": 41.90000000000009
+      },
+      "passed": true
+    },
+    {
+      "seed": 104801,
+      "C": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7957599999999999,
+        "median_s": 0.782,
+        "p95_s": 0.979,
+        "maximum_s": 1.126,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "D": {
+        "completed_boxes": 25,
+        "validated_transitions": 25,
+        "average_s": 0.7928799999999999,
+        "median_s": 0.773,
+        "p95_s": 0.988,
+        "maximum_s": 0.989,
+        "at_or_below_5s": 25,
+        "joint_flip_events": 0,
+        "inverted_frames": 0
+      },
+      "selected_trajectories_equal": true,
+      "different_box_ids": [],
+      "stage_timing_delta_ms": {
+        "planner_max": 137.09846800000003,
+        "planner_median": 11.362518000000023,
+        "process_max": 114.0,
+        "process_median": 26.300000000000182
+      },
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "comparison_commits": {
+    "C_seeded": "c998dfc",
+    "D_seeded": "6ba06f1"
+  },
+  "runtime_worktree": "/home/astesia/Sevenova/.v3-scoop-golden-D-seeded",
+  "random_numbers_preload_sha256": "5384eac2bc40ad4176bd9c4d93b0ff89a63acb29db07d44b220fc59cb0e4bd5f",
+  "fixes": [
+    "OMPL and MoveIt random-number sources use the published seed.",
+    "Default C and D launch requests use the same parameters.",
+    "Validated warm starts match geometry and complete start/goal states; no box ID is stored.",
+    "Task, loaded-transfer, and transition paths are bounds/FCL/attached-box revalidated before replay."
+  ]
+}

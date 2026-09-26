@@ -200,6 +200,7 @@ def run_attempt(
         f"precontact_candidate_limit:={args.precontact_candidate_limit}",
         f"rrt_planning_time:={args.rrt_planning_time:.6f}",
         f"rrt_planning_attempts:={args.rrt_planning_attempts}",
+        f"planning_seed:={getattr(args, 'planning_seed', 0)}",
         "natural_seed_swivel_sampling:=" + (
             "true" if getattr(args, "natural_seed_swivel_sampling", False) else "false"
         ),
@@ -243,6 +244,9 @@ def run_attempt(
         f"analytic_path_only:={'true' if args.analytic_path_only else 'false'}",
     ]
     command.extend(box_geometry_launch_arguments(args))
+    profiles_path = getattr(args, "validated_waypoint_profiles_path", "")
+    if profiles_path:
+        command.append(f"validated_waypoint_profiles_path:={profiles_path}")
     place_tcp_pose = getattr(args, "place_tcp_pose", "")
     if place_tcp_pose and not is_transition:
         command.append(f"place_tcp_pose:={place_tcp_pose}")
@@ -257,11 +261,26 @@ def run_attempt(
     waypoint_start = getattr(args, "loaded_transfer_waypoint_start_deg", "")
     if waypoint_start and not is_transition:
         command.append(f"loaded_transfer_waypoint_start_deg:={waypoint_start}")
+    alternate_waypoints = getattr(args, "loaded_transfer_joint_waypoints_alt_deg", "")
+    alternate_start = getattr(args, "loaded_transfer_waypoint_alt_start_deg", "")
+    if alternate_waypoints and alternate_start and not is_transition:
+        command.extend((
+            f"loaded_transfer_joint_waypoints_alt_deg:={alternate_waypoints}",
+            f"loaded_transfer_waypoint_alt_start_deg:={alternate_start}",
+        ))
     if is_transition:
         command.extend((
             "transition_from_joints:=" + ",".join(f"{value:.10f}" for value in transition_from_joints),
             "transition_to_joints:=" + ",".join(f"{value:.10f}" for value in transition_to_joints),
         ))
+        for name in (
+            "transition_waypoint_start_joints",
+            "transition_waypoint_goal_joints",
+            "transition_joint_waypoints",
+        ):
+            value = getattr(args, name, "")
+            if value:
+                command.append(f"{name}:={value}")
     if removed_box_ids:
         command.append(
             "removed_box_ids:=" + ",".join(str(value) for value in sorted(removed_box_ids))
@@ -270,8 +289,12 @@ def run_attempt(
         result_json_path.parent.mkdir(parents=True, exist_ok=True)
         result_json_path.unlink(missing_ok=True)
         command.append(f"result_json_path:={result_json_path}")
+    environment = os.environ.copy()
+    if int(getattr(args, "planning_seed", 0)) > 0:
+        environment["V3_OMPL_SEED"] = str(int(args.planning_seed))
     process = subprocess.Popen(
         command,
+        env=environment,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

@@ -344,6 +344,7 @@ def planning_args(
         precontact_candidate_limit=8,
         rrt_planning_time=2.0,
         rrt_planning_attempts=3,
+        planning_seed=0,
         natural_seed_swivel_sampling=False,
         natural_seed_swivel_step_deg=1.0,
         natural_seed_swivel_neighbor_steps=2,
@@ -365,6 +366,12 @@ def planning_args(
         place_arm_joints_deg="",
         loaded_transfer_joint_waypoints_deg="",
         loaded_transfer_waypoint_start_deg="",
+        loaded_transfer_joint_waypoints_alt_deg="",
+        loaded_transfer_waypoint_alt_start_deg="",
+        transition_waypoint_start_joints="",
+        transition_waypoint_goal_joints="",
+        transition_joint_waypoints="",
+        validated_waypoint_profiles_path="",
         upper_front_success_trials=1,
         upper_front_max_success_trials=1,
         conveyor_success_trials=1,
@@ -1112,6 +1119,11 @@ def plan_sequence(
             successful_results: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
             for attempt_index in range(max_success_target + rrt_retries):
                 attempt_serial += 1
+                base_seed = int(box_planning_values.get("planning_seed", 0))
+                args.planning_seed = (
+                    ((base_seed + (attempt_serial - 1) * 0x9E3779B9) & 0x7FFFFFFF) or 1
+                    if base_seed > 0 else 0
+                )
                 result_path = scratch / f"box_{box_id:02d}_attempt_{attempt_serial:02d}.json"
                 result = scan.run_attempt(
                     args,
@@ -1262,6 +1274,11 @@ def plan_sequence(
                         ] = []
                         for transition_retry in range(transition_retries + 1):
                             attempt_serial += 1
+                            base_seed = int(box_planning_values.get("planning_seed", 0))
+                            args.planning_seed = (
+                                ((base_seed + (attempt_serial - 1) * 0x9E3779B9) & 0x7FFFFFFF) or 1
+                                if base_seed > 0 else 0
+                            )
                             transition = scan.run_attempt(
                                 args,
                                 box_id,

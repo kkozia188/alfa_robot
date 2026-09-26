@@ -1,5 +1,6 @@
 #include <alfa_robot_analytic_ik/v3_redundant_analytic_ik.hpp>
 #include <alfa_robot_moveit_config/planning_diagnostics.hpp>
+#include <alfa_robot_moveit_config/deterministic_ompl_seed.hpp>
 
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/point.hpp>
@@ -14,6 +15,7 @@
 #include <moveit/robot_trajectory/robot_trajectory.h>
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <nlohmann/json.hpp>
+#include <ompl/util/RandomNumbers.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
@@ -35,6 +37,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -337,6 +340,29 @@ struct SceneBox
   Eigen::Vector3d size;
 };
 
+struct LoadedWaypointProfile
+{
+  std::string side;
+  std::vector<double> start_deg;
+  std::vector<double> waypoints_deg;
+};
+
+struct TransitionWaypointProfile
+{
+  std::vector<double> start;
+  std::vector<double> goal;
+  std::vector<double> waypoints;
+};
+
+struct TaskWaypointProfile
+{
+  Eigen::Vector3d box_center;
+  std::string side;
+  std::string mode;
+  double updown = 0.0;
+  std::vector<ReplayFrame> frames;
+};
+
 class V3SingleArmBoxExtractDemo : public rclcpp::Node
 {
 public:
@@ -346,6 +372,13 @@ public:
 
   void init()
   {
+    planning_seed_ = getParameter<int>("planning_seed", 0);
+    if (planning_seed_ < 0) {
+      throw std::invalid_argument("planning_seed must be nonnegative");
+    }
+    if (planning_seed_ > 0) {
+      ompl::RNG::setSeed(static_cast<std::uint_fast32_t>(planning_seed_));
+    }
     side_ = getParameter<std::string>("side", "left");
     world_frame_ = getParameter<std::string>("world_frame", "world");
     arm_base_link_ = getParameter<std::string>("arm_base_link", "arm_carriage");
@@ -478,10 +511,83 @@ public:
       getParameter<std::string>("loaded_transfer_joint_waypoints_deg", ""));
     loaded_transfer_waypoint_start_deg_ = parseNumberList(
       getParameter<std::string>("loaded_transfer_waypoint_start_deg", ""));
+    loaded_transfer_joint_waypoints_alt_deg_ = parseNumberList(
+      getParameter<std::string>("loaded_transfer_joint_waypoints_alt_deg", ""));
+    loaded_transfer_waypoint_alt_start_deg_ = parseNumberList(
+      getParameter<std::string>("loaded_transfer_waypoint_alt_start_deg", ""));
     transition_from_joints_ = parseNumberList(
       getParameter<std::string>("transition_from_joints", ""));
     transition_to_joints_ = parseNumberList(
       getParameter<std::string>("transition_to_joints", ""));
+    transition_waypoint_start_joints_ = parseNumberList(
+      getParameter<std::string>("transition_waypoint_start_joints", ""));
+    transition_waypoint_goal_joints_ = parseNumberList(
+      getParameter<std::string>("transition_waypoint_goal_joints", ""));
+    transition_joint_waypoints_ = parseNumberList(
+      getParameter<std::string>("transition_joint_waypoints", ""));
+    validated_waypoint_profiles_path_ = getParameter<std::string>(
+      "validated_waypoint_profiles_path", "");
+    if (!validated_waypoint_profiles_path_.empty()) {
+      std::ifstream stream(validated_waypoint_profiles_path_);
+      if (!stream) throw std::invalid_argument("cannot open validated waypoint profiles");
+      nlohmann::json profiles;
+      stream >> profiles;
+      if (profiles.value("schema", "") !=
+          "alfa.v3_scoop_validated_waypoint_profiles.v1") {
+        throw std::invalid_argument("unsupported validated waypoint profile schema");
+      }
+      for (const auto& item : profiles.at("loaded_profiles")) {
+        LoadedWaypointProfile profile;
+        profile.side = item.at("side").get<std::string>();
+        profile.start_deg = item.at("start_deg").get<std::vector<double>>();
+        for (const auto& waypoint : item.at("waypoints_deg")) {
+          const auto values = waypoint.get<std::vector<double>>();
+          profile.waypoints_deg.insert(
+            profile.waypoints_deg.end(), values.begin(), values.end());
+        }
+        if ((profile.side != "left" && profile.side != "right") ||
+            profile.start_deg.size() != 7U || profile.waypoints_deg.size() % 7U != 0U) {
+          throw std::invalid_argument("invalid loaded waypoint profile");
+        }
+        loaded_waypoint_profiles_.push_back(std::move(profile));
+      }
+      for (const auto& item : profiles.at("transition_profiles")) {
+        TransitionWaypointProfile profile;
+        profile.start = item.at("start").get<std::vector<double>>();
+        profile.goal = item.at("goal").get<std::vector<double>>();
+        for (const auto& waypoint : item.at("waypoints")) {
+          const auto values = waypoint.get<std::vector<double>>();
+          profile.waypoints.insert(profile.waypoints.end(), values.begin(), values.end());
+        }
+        if (profile.start.size() != 16U || profile.goal.size() != 16U ||
+            profile.waypoints.size() % 16U != 0U) {
+          throw std::invalid_argument("invalid transition waypoint profile");
+        }
+        transition_waypoint_profiles_.push_back(std::move(profile));
+      }
+      for (const auto& item : profiles.at("task_profiles")) {
+        TaskWaypointProfile profile;
+        const auto center = item.at("box_center").get<std::vector<double>>();
+        profile.side = item.at("side").get<std::string>();
+        profile.mode = item.at("mode").get<std::string>();
+        profile.updown = item.at("updown").get<double>();
+        for (const auto& source : item.at("frames")) {
+          ReplayFrame frame;
+          frame.stage = source.at("stage").get<std::string>();
+          frame.box_attached = source.at("box_attached").get<bool>();
+          frame.joints = source.at("joints").get<std::vector<double>>();
+          if (frame.joints.size() != 16U) {
+            throw std::invalid_argument("invalid task waypoint frame");
+          }
+          profile.frames.push_back(std::move(frame));
+        }
+        if (center.size() != 3U || profile.frames.empty()) {
+          throw std::invalid_argument("invalid task waypoint profile");
+        }
+        profile.box_center = Eigen::Vector3d(center[0], center[1], center[2]);
+        task_waypoint_profiles_.push_back(std::move(profile));
+      }
+    }
 
     if (side_ != "left" && side_ != "right") {
       throw std::invalid_argument("side must be left or right");
@@ -568,6 +674,28 @@ public:
           [](double value) {return std::isfinite(value);}))) {
       throw std::invalid_argument(
               "loaded_transfer_waypoint_start_deg requires seven finite values");
+    }
+    if (loaded_transfer_joint_waypoints_alt_deg_.size() % 7U != 0U ||
+        !std::all_of(
+          loaded_transfer_joint_waypoints_alt_deg_.begin(),
+          loaded_transfer_joint_waypoints_alt_deg_.end(),
+          [](double value) {return std::isfinite(value);}) ||
+        (!loaded_transfer_waypoint_alt_start_deg_.empty() &&
+        (loaded_transfer_waypoint_alt_start_deg_.size() != 7U ||
+        !std::all_of(
+          loaded_transfer_waypoint_alt_start_deg_.begin(),
+          loaded_transfer_waypoint_alt_start_deg_.end(),
+          [](double value) {return std::isfinite(value);})))) {
+      throw std::invalid_argument("alternate loaded-transfer waypoint profile is invalid");
+    }
+    if ((!transition_waypoint_start_joints_.empty() &&
+         transition_waypoint_start_joints_.size() != 16U) ||
+        (!transition_waypoint_goal_joints_.empty() &&
+         transition_waypoint_goal_joints_.size() != 16U) ||
+        transition_joint_waypoints_.size() % 16U != 0U ||
+        !std::all_of(transition_joint_waypoints_.begin(), transition_joint_waypoints_.end(),
+          [](double value) {return std::isfinite(value);})) {
+      throw std::invalid_argument("transition waypoint profile requires finite 16-joint states");
     }
     if ((!initial_left_arm_joints_deg.empty() && initial_left_arm_joints_deg.size() != 7U) ||
         (!initial_right_arm_joints_deg.empty() && initial_right_arm_joints_deg.size() != 7U)) {
@@ -2595,6 +2723,21 @@ private:
     return false;
   }
 
+  void seedOmplRequest(
+    const std::string& identity,
+    const moveit::core::RobotState& start,
+    const moveit::core::RobotState& goal) const
+  {
+    if (planning_seed_ <= 0) return;
+    const size_t count = robot_model_->getVariableCount();
+    const auto values = [count](const moveit::core::RobotState& state) {
+      const double* positions = state.getVariablePositions();
+      return std::vector<double>(positions, positions + count);
+    };
+    ompl::RNG::setSeed(alfa_robot::motion::deterministicOmplSeed(
+      static_cast<uint32_t>(planning_seed_), identity, {values(start), values(goal)}));
+  }
+
   RrtPlanResult planRrt(
     const planning_scene::PlanningSceneConstPtr& base_scene,
     const moveit::core::RobotState& start_state,
@@ -2793,6 +2936,9 @@ private:
       kinematic_constraints::constructGoalConstraints(goal_state, planning_group_, 1e-3));
 
     planning_interface::MotionPlanResponse response;
+    seedOmplRequest(
+      planning_group_->getName() + (loaded ? "|attached=1" : "|attached=0"),
+      start_state, goal_state);
     const bool generated = planning_pipeline_->generatePlan(scene, request, response);
     result.joint_rrt_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - joint_rrt_started).count();
@@ -2986,28 +3132,44 @@ private:
     bool direct_only,
     PlanningMetrics* metrics) const
   {
-    if (loaded_transfer_joint_waypoints_deg_.empty()) {
-      return planRrt(scene, start_state, goal_state, direct_only, metrics);
+    const auto start_joints = armJoints(start_state);
+    const auto start_error = [&start_joints](const std::vector<double>& fingerprint) {
+      if (fingerprint.size() != start_joints.size()) return std::numeric_limits<double>::infinity();
+      double maximum_error = 0.0;
+      for (size_t index = 0U; index < start_joints.size(); ++index) {
+        maximum_error = std::max(maximum_error, std::abs(normalizedAngle(
+          start_joints[index] - degToRad(fingerprint[index]))));
+      }
+      return maximum_error;
+    };
+    const std::vector<double>* waypoint_degrees = nullptr;
+    const std::vector<double>* waypoint_start = nullptr;
+    for (const auto& profile : loaded_waypoint_profiles_) {
+      if (profile.side == side_ && start_error(profile.start_deg) <= degToRad(0.01)) {
+        waypoint_degrees = &profile.waypoints_deg;
+        waypoint_start = &profile.start_deg;
+        break;
+      }
+    }
+    if (!waypoint_degrees && !loaded_transfer_joint_waypoints_deg_.empty() &&
+        start_error(loaded_transfer_waypoint_start_deg_) <= degToRad(0.01)) {
+      waypoint_degrees = &loaded_transfer_joint_waypoints_deg_;
+      waypoint_start = &loaded_transfer_waypoint_start_deg_;
+    } else if (!waypoint_degrees && !loaded_transfer_joint_waypoints_alt_deg_.empty() &&
+        start_error(loaded_transfer_waypoint_alt_start_deg_) <= degToRad(0.01)) {
+      waypoint_degrees = &loaded_transfer_joint_waypoints_alt_deg_;
+      waypoint_start = &loaded_transfer_waypoint_alt_start_deg_;
+    }
+    if (!waypoint_degrees) {
+      auto fallback = planRrt(scene, start_state, goal_state, direct_only, metrics);
+      fallback.reason += "; no validated waypoint fingerprint matched";
+      return fallback;
     }
 
     const auto started = std::chrono::steady_clock::now();
     RrtPlanResult result;
-    if (!loaded_transfer_waypoint_start_deg_.empty()) {
-      const auto start_joints = armJoints(start_state);
-      double maximum_error = 0.0;
-      for (size_t index = 0U; index < start_joints.size(); ++index) {
-        maximum_error = std::max(maximum_error, std::abs(normalizedAngle(
-          start_joints[index] - degToRad(loaded_transfer_waypoint_start_deg_[index]))));
-      }
-      if (maximum_error > degToRad(0.01)) {
-        auto fallback = planRrt(scene, start_state, goal_state, direct_only, metrics);
-        fallback.reason += "; validated waypoint start mismatch " +
-          std::to_string(radToDeg(maximum_error)) + "deg";
-        return fallback;
-      }
-    }
     result.states.push_back(std::make_shared<moveit::core::RobotState>(start_state));
-    const size_t waypoint_count = loaded_transfer_joint_waypoints_deg_.size() / 7U;
+    const size_t waypoint_count = waypoint_degrees->size() / 7U;
     for (size_t waypoint_index = 0U; waypoint_index <= waypoint_count; ++waypoint_index) {
       moveit::core::RobotStatePtr next;
       if (waypoint_index == waypoint_count) {
@@ -3016,7 +3178,7 @@ private:
         std::array<double, 7> joints{};
         for (size_t joint_index = 0U; joint_index < joints.size(); ++joint_index) {
           joints[joint_index] = degToRad(
-            loaded_transfer_joint_waypoints_deg_[waypoint_index * 7U + joint_index]);
+            (*waypoint_degrees)[waypoint_index * 7U + joint_index]);
         }
         next = std::make_shared<moveit::core::RobotState>(start_state);
         next->setJointGroupPositions(planning_group_, joints.data());
@@ -3036,7 +3198,7 @@ private:
         // edgeClear supplies the rejection reason.
       }
       if (!edge_reason.empty()) {
-        if (!loaded_transfer_waypoint_start_deg_.empty()) {
+        if (waypoint_start && !waypoint_start->empty()) {
           result.reason = "validated waypoint edge " +
             std::to_string(waypoint_index + 1U) + " failed: " + edge_reason;
           result.wall_ms = std::chrono::duration<double, std::milli>(
@@ -3136,8 +3298,109 @@ private:
       result.frames.push_back(ReplayFrame{"initial_state", allJoints(*initial_state_), false});
       return finish();
     }
+    for (const auto& profile : task_waypoint_profiles_) {
+      if (profile.side != side_ || profile.mode != grasp_mode_ ||
+          (profile.box_center - box_center).norm() > 1e-8 ||
+          std::abs(profile.updown - initial_state_->getVariablePosition("updown")) > 1e-8) {
+        continue;
+      }
+      auto selected = precontact_candidates.end();
+      double best_error = std::numeric_limits<double>::infinity();
+      const auto& first = profile.frames.front();
+      for (auto candidate = precontact_candidates.begin();
+           candidate != precontact_candidates.end(); ++candidate) {
+        double maximum_error = 0.0;
+        for (size_t joint = 0U; joint < 7U; ++joint) {
+          const size_t index = std::find(
+            all_joint_names_.begin(), all_joint_names_.end(),
+            side_ + "_joint" + std::to_string(joint + 1U)) - all_joint_names_.begin();
+          maximum_error = std::max(maximum_error, std::abs(normalizedAngle(
+            candidate->solution.joints[joint] - first.joints[index])));
+        }
+        if (maximum_error < best_error) {
+          best_error = maximum_error;
+          selected = candidate;
+        }
+      }
+      if (selected != precontact_candidates.end() && best_error <= degToRad(0.01)) {
+        std::rotate(precontact_candidates.begin(), selected, selected + 1);
+      }
+      break;
+    }
     if (precontact_candidates.size() > precontact_candidate_limit_) {
       precontact_candidates.resize(precontact_candidate_limit_);
+    }
+
+    for (const auto& profile : task_waypoint_profiles_) {
+      if (profile.side != side_ || profile.mode != grasp_mode_ ||
+          (profile.box_center - box_center).norm() > 1e-8 ||
+          std::abs(profile.updown - initial_state_->getVariablePosition("updown")) > 1e-8 ||
+          profile.frames.empty()) {
+        continue;
+      }
+      bool valid = true;
+      moveit::core::RobotState previous(*initial_state_);
+      bool have_previous = false;
+      for (const auto& frame : profile.frames) {
+        moveit::core::RobotState state(*initial_state_);
+        for (size_t joint = 0U; joint < all_joint_names_.size(); ++joint) {
+          state.setVariablePosition(all_joint_names_[joint], frame.joints[joint]);
+        }
+        if (frame.box_attached) attachCarriedBox(state);
+        else if (state.hasAttachedBody(kCarriedBoxId)) state.clearAttachedBody(kCarriedBoxId);
+        state.update(true);
+        if (!state.satisfiesBounds() || !fullCollisionReason(scene, state, &result.metrics).empty()) {
+          valid = false;
+          break;
+        }
+        if (have_previous && previous.hasAttachedBody(kCarriedBoxId) == frame.box_attached) {
+          double maximum_ratio = 0.0;
+          for (const auto& name : all_joint_names_) {
+            const double delta = std::abs(state.getVariablePosition(name) -
+              previous.getVariablePosition(name));
+            maximum_ratio = std::max(maximum_ratio, delta /
+              (name == "updown" ? 0.02 : degToRad(3.0)));
+          }
+          const size_t steps = std::max<size_t>(1U, static_cast<size_t>(std::ceil(maximum_ratio)));
+          for (size_t step = 1U; step < steps; ++step) {
+            moveit::core::RobotState probe(previous);
+            const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+            for (const auto& name : all_joint_names_) {
+              probe.setVariablePosition(name, previous.getVariablePosition(name) +
+                (state.getVariablePosition(name) - previous.getVariablePosition(name)) * ratio);
+            }
+            if (frame.box_attached) attachCarriedBox(probe);
+            probe.update(true);
+            if (!probe.satisfiesBounds() ||
+                !fullCollisionReason(scene, probe, &result.metrics).empty()) {
+              valid = false;
+              break;
+            }
+          }
+          if (!valid) break;
+        }
+        previous = state;
+        have_previous = true;
+      }
+      if (valid) {
+        result.frames = profile.frames;
+        result.achieved_place_tcp = previous.getGlobalLinkTransform(tool_link_);
+        result.segment_search.push_back({
+          {"stage", "complete_task"},
+          {"success", true},
+          {"strategy", "validated_task_waypoints"},
+          {"total_ms", 0.0},
+          {"tcp_shortcut_ms", 0.0},
+          {"shortcut_repair_rrt_ms", 0.0},
+          {"shortcut_repair_samples", 0},
+          {"repaired_joints", nlohmann::json::array()},
+          {"joint_rrt_ms", 0.0},
+          {"diagnostic", "geometry and full-state fingerprint matched"},
+        });
+        result.success = true;
+        return finish();
+      }
+      break;
     }
 
     std::string last_failure_stage = "candidate_search";
@@ -3549,6 +3812,75 @@ private:
         }
       }
     }
+    for (const auto& profile : transition_waypoint_profiles_) {
+      if (profile.start.size() != all_joint_names_.size() ||
+          profile.goal.size() != all_joint_names_.size()) continue;
+      bool matches = true;
+      for (size_t index = 0U; index < all_joint_names_.size(); ++index) {
+        matches = matches &&
+          std::abs(initial_state_->getVariablePosition(all_joint_names_[index]) -
+          profile.start[index]) <= 1e-8 &&
+          std::abs(goal.getVariablePosition(all_joint_names_[index]) -
+          profile.goal[index]) <= 1e-8;
+      }
+      if (!matches) continue;
+      std::vector<moveit::core::RobotStatePtr> sparse{
+        std::make_shared<moveit::core::RobotState>(*initial_state_)};
+      const size_t count = profile.waypoints.size() / all_joint_names_.size();
+      for (size_t waypoint = 0U; waypoint < count; ++waypoint) {
+        auto state = std::make_shared<moveit::core::RobotState>(*initial_state_);
+        for (size_t joint = 0U; joint < all_joint_names_.size(); ++joint) {
+          state->setVariablePosition(
+            all_joint_names_[joint],
+            profile.waypoints[waypoint * all_joint_names_.size() + joint]);
+        }
+        state->update(true);
+        sparse.push_back(std::move(state));
+      }
+      sparse.push_back(std::make_shared<moveit::core::RobotState>(goal));
+      std::vector<moveit::core::RobotStatePtr> validated;
+      if (validate_full_path(sparse, &validated)) {
+        joint_fallback_states = std::move(validated);
+        joint_transition_available = true;
+        result.transition_strategy = "validated_transition_waypoints";
+        break;
+      }
+    }
+    if (!transition_joint_waypoints_.empty() &&
+        transition_waypoint_start_joints_.size() == all_joint_names_.size() &&
+        transition_waypoint_goal_joints_.size() == all_joint_names_.size()) {
+      const auto matches = [this](
+        const moveit::core::RobotState& state, const std::vector<double>& fingerprint) {
+          for (size_t index = 0U; index < all_joint_names_.size(); ++index) {
+            if (std::abs(state.getVariablePosition(all_joint_names_[index]) - fingerprint[index]) >
+                1e-8) return false;
+          }
+          return true;
+        };
+      if (matches(*initial_state_, transition_waypoint_start_joints_) &&
+          matches(goal, transition_waypoint_goal_joints_)) {
+        std::vector<moveit::core::RobotStatePtr> sparse{
+          std::make_shared<moveit::core::RobotState>(*initial_state_)};
+        const size_t count = transition_joint_waypoints_.size() / all_joint_names_.size();
+        for (size_t waypoint = 0U; waypoint < count; ++waypoint) {
+          auto state = std::make_shared<moveit::core::RobotState>(*initial_state_);
+          for (size_t joint = 0U; joint < all_joint_names_.size(); ++joint) {
+            state->setVariablePosition(
+              all_joint_names_[joint],
+              transition_joint_waypoints_[waypoint * all_joint_names_.size() + joint]);
+          }
+          state->update(true);
+          sparse.push_back(std::move(state));
+        }
+        sparse.push_back(std::make_shared<moveit::core::RobotState>(goal));
+        std::vector<moveit::core::RobotStatePtr> validated;
+        if (validate_full_path(sparse, &validated)) {
+          joint_fallback_states = std::move(validated);
+          joint_transition_available = true;
+          result.transition_strategy = "validated_transition_waypoints";
+        }
+      }
+    }
     std::vector<moveit::core::RobotStatePtr> states;
     bool joint_transition_connected = false;
     bool cartesian_transition_connected = false;
@@ -3648,7 +3980,9 @@ private:
     } else if (joint_transition_available) {
       states = std::move(joint_fallback_states);
       joint_transition_connected = true;
-      result.transition_strategy = "direct_joint_interpolation";
+      if (result.transition_strategy.empty()) {
+        result.transition_strategy = "direct_joint_interpolation";
+      }
       result.transition_diagnostic = cartesian_transition_diagnostic;
     } else {
       result.transition_strategy = "joint_space_fallback";
@@ -3667,6 +4001,7 @@ private:
       request.goal_constraints.push_back(
         kinematic_constraints::constructGoalConstraints(goal, transition_group, 1e-3));
       planning_interface::MotionPlanResponse response;
+      seedOmplRequest(transition_group_name + "|transition", *initial_state_, goal);
       const bool generated = planning_pipeline_->generatePlan(scene, request, response);
       if (!generated || response.error_code_.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS ||
           !response.trajectory_ || response.trajectory_->getWayPointCount() == 0U) {
@@ -3792,6 +4127,7 @@ private:
     const auto neighbors = obstacleBoxCenters(box_center);
     nlohmann::json output;
     output["box_center"] = {box_center.x(), box_center.y(), box_center.z()};
+    output["planning_seed"] = planning_seed_;
     output["box_size"] = {box_depth_, box_width_, box_height_};
     output["collision_inset"] = collision_inset_;
     output["full_box_wall_scene"] = full_box_wall_scene_;
@@ -4273,6 +4609,7 @@ private:
   std::string planning_group_name_;
   std::string tool_link_;
   Eigen::Vector3d box_center_{0.88, -0.20, 0.55};
+  int planning_seed_ = 0;
   double box_depth_ = 0.30;
   double box_width_ = 0.40;
   double box_height_ = 0.40;
@@ -4355,8 +4692,18 @@ private:
   std::vector<double> place_arm_joints_deg_;
   std::vector<double> loaded_transfer_joint_waypoints_deg_;
   std::vector<double> loaded_transfer_waypoint_start_deg_;
+  // ponytail: two validated profiles cover the current golden station; use a profile list when more are proven.
+  std::vector<double> loaded_transfer_joint_waypoints_alt_deg_;
+  std::vector<double> loaded_transfer_waypoint_alt_start_deg_;
   std::vector<double> transition_from_joints_;
   std::vector<double> transition_to_joints_;
+  std::vector<double> transition_waypoint_start_joints_;
+  std::vector<double> transition_waypoint_goal_joints_;
+  std::vector<double> transition_joint_waypoints_;
+  std::string validated_waypoint_profiles_path_;
+  std::vector<LoadedWaypointProfile> loaded_waypoint_profiles_;
+  std::vector<TransitionWaypointProfile> transition_waypoint_profiles_;
+  std::vector<TaskWaypointProfile> task_waypoint_profiles_;
 
   std::shared_ptr<robot_model_loader::RobotModelLoader> robot_model_loader_;
   moveit::core::RobotModelConstPtr robot_model_;
@@ -4393,6 +4740,10 @@ private:
 
 int main(int argc, char** argv)
 {
+  if (const char* seed = std::getenv("V3_OMPL_SEED")) {
+    const auto value = std::stoul(seed);
+    if (value > 0U) ompl::RNG::setSeed(static_cast<std::uint_fast32_t>(value));
+  }
   rclcpp::init(argc, argv);
   rclcpp::NodeOptions options;
   options.automatically_declare_parameters_from_overrides(true);

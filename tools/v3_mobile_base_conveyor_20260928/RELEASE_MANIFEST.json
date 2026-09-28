@@ -1,0 +1,94 @@
+{
+  "schema": "alfa.v3_mobile_base_conveyor_release.v1",
+  "name": "2026-09-28-simultaneous-backoff235-right-conveyor-y150",
+  "tag": "v3-mobile-base-conveyor-2026.09.28",
+  "title": "V3 Mobile-Base 5x5 Synchronized Pickup | Backoff + Conveyor Shuttle",
+  "repository": "kkozia188/alfa_robot",
+  "upstream_branch": "alfa_v3_dev",
+  "upstream_base_commit": "d4f5a5ab929475d0520d659ab216308920f6eb22",
+  "linear_issue": "MOTION-261",
+  "owner": "Zhang Zelin",
+  "result_schema": "alfa.v3_scoop_5x5_conveyor_shuttle_certificate.v1",
+  "task": {
+    "upper_front_clearance_m": 0.85,
+    "lower_front_clearance_m": 0.6,
+    "row_order": "top_to_bottom",
+    "group_order_per_row": "outer_pair_then_inner_pair_then_center",
+    "pickup_base_y_m": 0.0,
+    "backoff_distance_m": 2.35,
+    "right_shuttle_distance_m": 1.5,
+    "cycle_count": 15,
+    "dual_cycle_count": 10,
+    "simultaneous_dual_cycle_count": 10,
+    "single_center_cycle_count": 5
+  },
+  "validation": {
+    "success": true,
+    "completed_boxes": 25,
+    "completed_rows": 5,
+    "one_sided_attachment_frames_in_dual_cycles": 0,
+    "replay_frames": 28084,
+    "interpolated_edge_samples": 6778,
+    "maximum_joint_step_deg": 2.996969956096954,
+    "joint_flip_events": 0,
+    "maximum_left_carried_tilt_deg": 94.78635793971982,
+    "maximum_right_carried_tilt_deg": 93.84828315102303,
+    "task_core_below_3s": 25,
+    "maximum_task_core_s": 1.503809839,
+    "maximum_new_bridge_s": 1.663226222,
+    "base_travel_m": 115.74999999999883,
+    "rrd_verified": true
+  },
+  "assets": [
+    {
+      "name": "README.md",
+      "size": 1455,
+      "sha256": "d2884e8c9ab3a1dd88eb963fb366a7b09a7d60b1620a20a806628d0e9d645943"
+    },
+    {
+      "name": "MANIFEST.json",
+      "size": 1566,
+      "sha256": "2303e1f83a55d2b886ddaac016c7e6e076ea1f67fb9df750ef2302898a1a30da"
+    },
+    {
+      "name": "rerun-back235-conveyor-y150.png",
+      "size": 2749124,
+      "sha256": "2147ef4cc16f568509584ab686b0ea2a087f73323c977a83ab77746b5c4cc8f7"
+    },
+    {
+      "name": "v3-mobile-base-conveyor-source-snapshot.tar.gz",
+      "size": 98626,
+      "sha256": "7ce77a6b65b1af051b0ffacf687c8717a46bf013c1e65ad772af933a0c15db28"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor-box-planning.csv",
+      "size": 2320,
+      "sha256": "4fa6a99e525cc510480abede413d9ccf4458161a1be251ae42802ce6a58879c8"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor-metrics.csv",
+      "size": 2760,
+      "sha256": "266808f7a3707cd45a04326e0aacd8e0f855e66fa12aeb7fac608299a120b0e6"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor-replay.json",
+      "size": 20337696,
+      "sha256": "0d21773f37d0ef26eb43042321ed1ea22dbb1c90999451cffa443b4011165b73"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor-summary.json",
+      "size": 29885,
+      "sha256": "03d08cf4aacb505ad464cba7842056182eba0709fabe24951b132043c3dcd479"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor-validation.json",
+      "size": 3715,
+      "sha256": "f9c5a092be46957df29af3e74243c33fd5ed0ae1e28a4c97a64018b60918688d"
+    },
+    {
+      "name": "v3-scoop-u085-l060-back235-y150-conveyor.rrd",
+      "size": 43807087,
+      "sha256": "6998f02016ec9e06df508a16e49e03c1d557a826f8b3bf922ee7152dd497bdb1"
+    }
+  ]
+}

@@ -26,9 +26,9 @@ def controller_joints(path):
 
 def main():
     lock = json.loads((DESCRIPTION_ROOT / "config/upstream_description.lock.json").read_text())
-    assert lock["model_revision"] == "robot_v3.1.1-hybrid"
+    assert lock["model_revision"] == "robot_v3.2.2-suction"
     assert lock["profile"] == "suction"
-    assert lock["upstream_commit"] == "a2f1fbb63f4f5872a0691fc5579c8688204ea63b"
+    assert lock["upstream_commit"] == "542da7f3398c29d0a531668038bc91f341d5c857"
 
     initial = yaml.safe_load((MOVEIT_ROOT / "config/initial_positions.yaml").read_text())["initial_positions"]
     named = yaml.safe_load((DESCRIPTION_ROOT / "config/named_poses.yaml").read_text())["named_poses"]
@@ -74,23 +74,27 @@ def main():
     for pose_name in ("home", "second_home", "unloading", "second_unloading"):
         pose = named[pose_name]
         expected_arm = {name: pose[name] for name in arm_names}
-        assert states[("dual_arm", pose_name)] == expected_arm
-        assert states[("dual_arm_with_updown", pose_name)] == {
+        expected_updown = {
             "updown": pose["updown"], **expected_arm
         }
-        assert states[("whole_body", pose_name)] == {
+        expected_whole = {
             "updown": pose["updown"],
             "head_joint": 0.0,
             "head_pitch_joint": 0.0,
             **expected_arm,
         }
+        for group_name, expected in (
+            ("dual_arm", expected_arm),
+            ("dual_arm_with_updown", expected_updown),
+            ("whole_body", expected_whole),
+        ):
+            actual = states[(group_name, pose_name)]
+            assert set(actual) == set(expected)
+            assert all(abs(actual[name] - expected[name]) < 1e-12 for name in expected)
         for index in range(1, 8):
             assert pose[f"right_joint{index}"] == -pose[f"left_joint{index}"]
     passive = {joint.get("name") for joint in srdf.findall("passive_joint")}
-    assert passive == {
-        "active_suspension_joint",
-        *(f"{kind}{index:02d}_joint" for kind in ("caster", "wheel") for index in range(1, 5)),
-    }
+    assert passive == set()
     virtual_joints = srdf.findall("virtual_joint")
     assert len(virtual_joints) == 1
     assert virtual_joints[0].attrib == {

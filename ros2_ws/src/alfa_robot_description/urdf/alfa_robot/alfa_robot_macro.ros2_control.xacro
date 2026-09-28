@@ -6,7 +6,6 @@
                prefix
                use_mock_hardware:=true
                mock_sensor_commands:=true
-               end_effector:=suction
                updown_initial:=-0.3
                head_joint_initial:=0.0
                head_pitch_joint_initial:=0.0
@@ -23,18 +22,7 @@
                right_joint4_initial:=-1.57079632679490
                right_joint5_initial:=1.57079632679490
                right_joint6_initial:=0.69813170079773
-               right_joint7_initial:=0.0
-               left_moving_jaw_initial:=0.0
-               right_moving_jaw_initial:=0.0
-               active_suspension_joint_initial:=0.0
-               caster01_joint_initial:=0.0
-               wheel01_joint_initial:=0.0
-               caster02_joint_initial:=0.0
-               wheel02_joint_initial:=0.0
-               caster03_joint_initial:=0.0
-               wheel03_joint_initial:=0.0
-               caster04_joint_initial:=0.0
-               wheel04_joint_initial:=0.0">
+               right_joint7_initial:=0.0">
 
     <ros2_control name="${name}" type="system">
       <hardware>
@@ -72,19 +60,6 @@
       <xacro:control_joint joint_name="right_joint5" initial_value="${right_joint5_initial}" lower="-3.14159265" upper="3.14159265"/>
       <xacro:control_joint joint_name="right_joint6" initial_value="${right_joint6_initial}" lower="-1.91986218" upper="1.91986218"/>
       <xacro:control_joint joint_name="right_joint7" initial_value="${right_joint7_initial}" lower="-3.14159265" upper="3.14159265"/>
-      <xacro:if value="${end_effector == 'gripper'}">
-        <xacro:control_joint joint_name="left_moving_jaw_joint" initial_value="${left_moving_jaw_initial}" lower="0.0" upper="0.08"/>
-        <xacro:control_joint joint_name="right_moving_jaw_joint" initial_value="${right_moving_jaw_initial}" lower="0.0" upper="0.08"/>
-      </xacro:if>
-      <xacro:control_joint joint_name="active_suspension_joint" initial_value="${active_suspension_joint_initial}" lower="-0.15" upper="0.0"/>
-      <xacro:control_joint joint_name="caster01_joint" initial_value="${caster01_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="wheel01_joint" initial_value="${wheel01_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="caster02_joint" initial_value="${caster02_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="wheel02_joint" initial_value="${wheel02_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="caster03_joint" initial_value="${caster03_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="wheel03_joint" initial_value="${wheel03_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="caster04_joint" initial_value="${caster04_joint_initial}" lower="-3.14159" upper="3.14159"/>
-      <xacro:control_joint joint_name="wheel04_joint" initial_value="${wheel04_joint_initial}" lower="-3.14159" upper="3.14159"/>
     </ros2_control>
   </xacro:macro>
 </robot>

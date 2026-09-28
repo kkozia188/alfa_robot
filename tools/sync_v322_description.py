@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync the V3.1.1 Kkozia profile from the authoritative description repository."""
+"""Sync the V3.2.2 suction profile from the authoritative description repository."""
 
 import argparse
 import hashlib
@@ -12,32 +12,22 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPOSITORY_ROOT / "ros2_ws/src/alfa_robot_description"
 DEFAULT_SOURCE_REPOSITORY = Path("/mnt/mydisk/ALFA/SevenovaHangzhou/robot_description")
 DEFAULT_SOURCE_REF = "origin/robot_v3_suction_chassis"
-EXPECTED_MODEL_REVISION = "robot_v3.1.1-hybrid"
-SOURCE_MANIFEST = "config/v3_1_1_integration_manifest.json"
+EXPECTED_MODEL_REVISION = "robot_v3.2.2-suction"
+SOURCE_MANIFEST = "config/v3_2_2_source_manifest.json"
 SOURCE_XACROS = (
-    "urdf/robot_v3_1_1.xacro",
-    "urdf/robot_v3_chassis.xacro",
-    "urdf/robot_v3_end_effectors.xacro",
-    "urdf/robot_v3_head.xacro",
+    "urdf/robot.urdf.xacro",
 )
 SOURCE_CONFIGS = (
     "config/initial_positions.yaml",
-    "config/initial_positions_gripper.yaml",
     "config/initial_positions_suction.yaml",
     "config/named_poses.yaml",
-    "config/named_poses_gripper.yaml",
     "config/named_poses_suction.yaml",
     "config/joint_limits.yaml",
-    "config/joint_limits_gripper.yaml",
     "config/joint_limits_suction.yaml",
 )
 MANAGED_MESH_DIRECTORIES = (
-    "meshes/active_suspension",
-    "meshes/chassis",
-    "meshes/head",
-    "meshes/head_chest_camera",
     "meshes/robot_v3",
-    "meshes/robot_v3_1_1",
+    "model_sources/robot_v3_2_2",
 )
 
 
@@ -64,18 +54,15 @@ def source_paths(repository, source_ref, prefix):
 
 def transform_xacro(data):
     return data.replace(
-        b"package://robot_description/meshes/",
-        b"package://alfa_robot_description/meshes/",
-    ).replace(
-        b"$(find robot_description)/urdf/",
-        b"$(find alfa_robot_description)/urdf/alfa_robot/",
+        b"package://robot_description/",
+        b"package://alfa_robot_description/",
     )
 
 
 def destination_path(source_path):
     relative = Path(source_path)
     if relative.parts[0] == "urdf":
-        return PACKAGE_ROOT / "urdf/alfa_robot" / relative.name
+        return PACKAGE_ROOT / "urdf/alfa_robot/robot_v3_2_2.xacro"
     return PACKAGE_ROOT / relative
 
 
@@ -83,10 +70,8 @@ def expected_snapshot(repository, source_ref):
     commit = git_output(repository, "rev-parse", f"{source_ref}^{{commit}}").decode().strip()
     manifest_bytes = source_blob(repository, source_ref, SOURCE_MANIFEST)
     manifest = json.loads(manifest_bytes)
-    if manifest.get("model_revision") != EXPECTED_MODEL_REVISION:
-        raise ValueError(
-            f"{source_ref} provides {manifest.get('model_revision')}, expected {EXPECTED_MODEL_REVISION}"
-        )
+    if manifest.get("model_revision") != "robot_v3.2.2-source":
+        raise ValueError(f"{source_ref} does not provide the V3.2.2 source manifest")
 
     source_files = list(SOURCE_XACROS) + list(SOURCE_CONFIGS)
     for directory in MANAGED_MESH_DIRECTORIES:
@@ -122,7 +107,7 @@ def expected_snapshot(repository, source_ref):
             str(path.relative_to(PACKAGE_ROOT)): digest(data)
             for path, data in sorted(files.items(), key=lambda item: str(item[0]))
         },
-        "movable_joint_counts": {"suction": 26, "gripper": 28},
+        "movable_joint_counts": {"suction": 17},
         "integration_status": "moveit_demo_consumer_snapshot",
     }
     lock_bytes = json.dumps(lock, ensure_ascii=False, indent=2, sort_keys=True).encode() + b"\n"
@@ -151,23 +136,23 @@ def check_snapshot(files, allow_equivalent_source_ref=False):
                 continue
         mismatches.append(f"content differs: {path.relative_to(REPOSITORY_ROOT)}")
     if mismatches:
-        raise SystemExit("V3.1.1 description snapshot mismatch:\n" + "\n".join(mismatches))
+        raise SystemExit("V3.2.2 description snapshot mismatch:\n" + "\n".join(mismatches))
 
 
 def check_local_snapshot():
     lock_path = PACKAGE_ROOT / "config/upstream_description.lock.json"
     manifest_path = PACKAGE_ROOT / "config/upstream_description_manifest.json"
     if not lock_path.is_file() or not manifest_path.is_file():
-        raise SystemExit("V3.1.1 local snapshot lock or manifest is missing")
+        raise SystemExit("V3.2.2 local snapshot lock or manifest is missing")
     lock = json.loads(lock_path.read_text())
     if lock.get("model_revision") != EXPECTED_MODEL_REVISION:
-        raise SystemExit("V3.1.1 local snapshot lock has the wrong model revision")
+        raise SystemExit("V3.2.2 local snapshot lock has the wrong model revision")
     if digest(manifest_path.read_bytes()) != lock["upstream_manifest_sha256"]:
         raise SystemExit("V3.1.1 local manifest does not match its lock")
     for relative_path, expected_hash in lock["managed_destination_files"].items():
         path = PACKAGE_ROOT / relative_path
         if not path.is_file() or digest(path.read_bytes()) != expected_hash:
-            raise SystemExit(f"V3.1.1 managed file differs from its lock: {relative_path}")
+            raise SystemExit(f"V3.2.2 managed file differs from its lock: {relative_path}")
     print(
         f"Local consumer snapshot matches {EXPECTED_MODEL_REVISION} "
         f"at {lock['upstream_commit'][:10]}."
@@ -203,7 +188,7 @@ def main():
     files = expected_snapshot(source_repository, arguments.source_ref)
     if arguments.check:
         check_snapshot(files, allow_equivalent_source_ref=True)
-        print("V3.1.1 consumer snapshot matches the authoritative description commit.")
+        print("V3.2.2 consumer snapshot matches the authoritative description commit.")
         return
     write_snapshot(files)
     check_snapshot(files)

@@ -839,64 +839,16 @@
     <axis xyz="0 0 1" />
     <limit lower="-3.14159265" upper="3.14159265" effort="36" velocity="3.142" />
   </joint>
-  <link name="left_suction">
-    <inertial>
-      <origin xyz="-0.000330 -0.000125 0.070303" rpy="0 0 0" />
-      <mass value="2.618" />
-      <inertia ixx="0.008369176" ixy="-0.000035407" ixz="-0.000011217" iyy="0.025870483" iyz="0.000004429" izz="0.027959973" />
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/robot_v3/suction_visual.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="-0.158443333 -0.088374996 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/robot_v3/suction_collision.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
-  </link>
-  <joint name="left_suction_fixed" type="fixed">
-    <parent link="left_link7" />
-    <child link="left_suction" />
-    <origin xyz="0 0 0" rpy="0 0 -1.57079632679" />
-  </joint>
   <link name="left_tool0" />
   <joint name="left_tool0_fixed" type="fixed">
-    <parent link="left_suction" />
+    <parent link="left_link7" />
     <child link="left_tool0" />
-    <origin xyz="0 0 0.13585" rpy="0 0 0" />
-  </joint>
-  <link name="right_suction">
-    <inertial>
-      <origin xyz="-0.000330 -0.000125 0.070303" rpy="0 0 0" />
-      <mass value="2.618" />
-      <inertia ixx="0.008369176" ixy="-0.000035407" ixz="-0.000011217" iyy="0.025870483" iyz="0.000004429" izz="0.027959973" />
-    </inertial>
-    <visual>
-      <origin xyz="0 0 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/robot_v3/suction_visual.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </visual>
-    <collision>
-      <origin xyz="-0.158443333 -0.088374996 0" rpy="0 0 0" />
-      <geometry>
-        <mesh filename="package://alfa_robot_description/meshes/robot_v3/suction_collision.stl" scale="0.001 0.001 0.001" />
-      </geometry>
-    </collision>
-  </link>
-  <joint name="right_suction_fixed" type="fixed">
-    <parent link="right_link7" />
-    <child link="right_suction" />
-    <origin xyz="0 0 0" rpy="0 0 1.57079632679" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
   <link name="right_tool0" />
   <joint name="right_tool0_fixed" type="fixed">
-    <parent link="right_suction" />
+    <parent link="right_link7" />
     <child link="right_tool0" />
-    <origin xyz="0 0 0.13585" rpy="0 0 0" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
 </robot>

@@ -48,6 +48,7 @@ def test_suction_profile_matches_control_inventory():
     for profile, expected_count in (("suction", 17),):
         robot = render()
         joints = {joint.get("name"): joint for joint in robot.findall("joint")}
+        robot_links = {link.get("name") for link in robot.findall("link")}
         movable = {name for name, joint in joints.items() if joint.get("type") != "fixed"}
         control = robot.find("ros2_control")
         control_joints = {joint.get("name") for joint in control.findall("joint")}
@@ -68,8 +69,10 @@ def test_suction_profile_matches_control_inventory():
         updown = joints["updown"].find("limit")
         assert float(updown.get("lower")) == -1.0
         assert float(updown.get("upper")) == 0.0
-        assert joints["left_tool0_fixed"].find("parent").get("link") == "left_suction"
-        assert joints["right_tool0_fixed"].find("parent").get("link") == "right_suction"
+        assert joints["left_tool0_fixed"].find("parent").get("link") == "left_link7"
+        assert joints["right_tool0_fixed"].find("parent").get("link") == "right_link7"
+        assert "left_suction" not in robot_links
+        assert "right_suction" not in robot_links
         assert joints["base_footprint_to_base_link"].find("origin").get("xyz") == "0 0 0.335"
         child_links = {
             joint.find("child").get("link") for joint in robot.findall("joint")

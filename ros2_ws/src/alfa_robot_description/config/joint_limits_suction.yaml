@@ -6,7 +6,7 @@ metadata:
   status: design_description_requires_hardware_validation
   source: robot_v3.2.2 geometry with reviewed V3.1.1 joint semantics
   fixed_names_source: robot_fixed_names.urdf
-  suction_source: robot_dual_suction.urdf
+  end_effector_source: robot_v3.2.2_integrated_link7
   chassis_source: robot.urdf (active-suspension full-robot export)
   head_source: model_sources/head_chest_camera_20260921/robot.urdf
   warning: Position limits and logical zero semantics follow the reviewed V3.1.1 contract.

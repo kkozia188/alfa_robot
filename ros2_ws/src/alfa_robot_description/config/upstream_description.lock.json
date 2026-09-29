@@ -3,8 +3,8 @@
   "managed_destination_files": {
     "config/initial_positions.yaml": "e76de08af3cb05051a76acf596310ffbd491b4f56e0795a3ad8143f8d8ef3446",
     "config/initial_positions_suction.yaml": "e76de08af3cb05051a76acf596310ffbd491b4f56e0795a3ad8143f8d8ef3446",
-    "config/joint_limits.yaml": "6267dc2c5f458472cd997d3d542a8c48f437759db6bc5ff00ede8c5166426cbb",
-    "config/joint_limits_suction.yaml": "6267dc2c5f458472cd997d3d542a8c48f437759db6bc5ff00ede8c5166426cbb",
+    "config/joint_limits.yaml": "d4b309f98b6f6ce2610edde59f12fcff20773801a5401e3a1d4c2f3446b09d31",
+    "config/joint_limits_suction.yaml": "d4b309f98b6f6ce2610edde59f12fcff20773801a5401e3a1d4c2f3446b09d31",
     "config/named_poses.yaml": "73508f2cdaa7174d981701dae6131a29a3edacbf60c52b7a28ffb095ea7b7b6c",
     "config/named_poses_suction.yaml": "73508f2cdaa7174d981701dae6131a29a3edacbf60c52b7a28ffb095ea7b7b6c",
     "config/upstream_description_manifest.json": "0dac4a8a4742aa645f3ed886cf26e8e4f06d2b3d721ae4324f54b8742444add4",
@@ -129,13 +129,13 @@
     "model_sources/robot_v3_2_2/parts.json": "1424f350e2d8869a28333c939bcf8726d7f7c259dbd0550bfbf36ed835c85f42",
     "model_sources/robot_v3_2_2/robot.urdf": "f47796c30397d5aed1b38150a31e19878256153e47ae326e68b332de4888d938",
     "model_sources/robot_v3_2_2/user_model.json": "bcf987285050f81346ae998df5796f9f106606411731421301dd919a64c10441",
-    "urdf/alfa_robot/robot_v3_2_2.xacro": "9cb2c672017e3a3290648dda1804db391f3b3a5995c6a18325654fe552af27b1"
+    "urdf/alfa_robot/robot_v3_2_2.xacro": "67541966b453d1cf2f20418bba2eea26e669a4f3e6f57d7bb4d4263eb4f55726"
   },
   "managed_source_files": {
     "config/initial_positions.yaml": "e76de08af3cb05051a76acf596310ffbd491b4f56e0795a3ad8143f8d8ef3446",
     "config/initial_positions_suction.yaml": "e76de08af3cb05051a76acf596310ffbd491b4f56e0795a3ad8143f8d8ef3446",
-    "config/joint_limits.yaml": "6267dc2c5f458472cd997d3d542a8c48f437759db6bc5ff00ede8c5166426cbb",
-    "config/joint_limits_suction.yaml": "6267dc2c5f458472cd997d3d542a8c48f437759db6bc5ff00ede8c5166426cbb",
+    "config/joint_limits.yaml": "d4b309f98b6f6ce2610edde59f12fcff20773801a5401e3a1d4c2f3446b09d31",
+    "config/joint_limits_suction.yaml": "d4b309f98b6f6ce2610edde59f12fcff20773801a5401e3a1d4c2f3446b09d31",
     "config/named_poses.yaml": "73508f2cdaa7174d981701dae6131a29a3edacbf60c52b7a28ffb095ea7b7b6c",
     "config/named_poses_suction.yaml": "73508f2cdaa7174d981701dae6131a29a3edacbf60c52b7a28ffb095ea7b7b6c",
     "meshes/robot_v3/ee_fixed_body_collision.stl": "33d259b48b3dac49baef240f351cb346ee6bee51db47c97cac5bec5235b5ca46",
@@ -259,7 +259,7 @@
     "model_sources/robot_v3_2_2/parts.json": "1424f350e2d8869a28333c939bcf8726d7f7c259dbd0550bfbf36ed835c85f42",
     "model_sources/robot_v3_2_2/robot.urdf": "f47796c30397d5aed1b38150a31e19878256153e47ae326e68b332de4888d938",
     "model_sources/robot_v3_2_2/user_model.json": "bcf987285050f81346ae998df5796f9f106606411731421301dd919a64c10441",
-    "urdf/robot.urdf.xacro": "e511bc2c1b7e6036f960242f0ec094c634fe1d88f17570882e74409a0b842261"
+    "urdf/robot.urdf.xacro": "507ab19f496a349420a8e840125ebfdc443961a685576c10d0c222749d3de9b5"
   },
   "model_revision": "robot_v3.2.2-suction",
   "movable_joint_counts": {
@@ -272,7 +272,7 @@
   "profile": "suction",
   "schema_version": 2,
   "upstream_branch": "robot_v3_suction_chassis",
-  "upstream_commit": "03beb438fca8937179736f4f9f1b67d45a63c6ea",
+  "upstream_commit": "c9ffabd4ba27e0465b52d7c3264c1b983597793d",
   "upstream_manifest_sha256": "0dac4a8a4742aa645f3ed886cf26e8e4f06d2b3d721ae4324f54b8742444add4",
   "upstream_ref_used_for_sync": "fix/v3-3-2-2-adjacent-collision-matrix",
   "upstream_repository": "ssh://git@192.168.100.141:2222/SevenovaHangzhou/robot_description.git"

@@ -1,0 +1,22 @@
+{
+  "checked_edge_samples": 625,
+  "checked_frames": 812,
+  "input": "/home/tim/alfa_robot-motion261-v322-validation/v322-box01-conveyor-replay.json",
+  "maximum_left_tilt_deg": 0.003391008792158052,
+  "maximum_right_tilt_deg": 0.0,
+  "operations": [
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 625,
+      "checked_frames": 812,
+      "label": "V3.2.2 Box 1 pickup and conveyor shuttle",
+      "success": true
+    }
+  ],
+  "schema": "alfa.v3_scoop_5x5_dual_validation.v1",
+  "success": true
+}

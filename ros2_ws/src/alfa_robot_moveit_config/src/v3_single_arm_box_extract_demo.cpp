@@ -559,7 +559,7 @@ public:
     }
 
     solver_ = std::make_unique<V3RedundantArmAnalyticIk>(
-      side_ == "left" ? V3RedundantArmModel::V311Left : V3RedundantArmModel::V311Right);
+      side_ == "left" ? V3RedundantArmModel::V322Left : V3RedundantArmModel::V322Right);
 
     std::vector<std::string> request_adapters = {
       "default_planner_request_adapters/AddTimeOptimalParameterization",

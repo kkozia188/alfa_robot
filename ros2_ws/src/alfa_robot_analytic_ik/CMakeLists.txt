@@ -35,6 +35,11 @@ ament_export_include_directories(include)
 ament_export_dependencies(Eigen3)
 
 if(BUILD_TESTING)
+  find_package(ament_index_cpp REQUIRED)
+  find_package(moveit_core REQUIRED)
+  find_package(srdfdom REQUIRED)
+  find_package(urdf REQUIRED)
+
   add_executable(test_analytic_ik test/test_analytic_ik.cpp)
   target_link_libraries(test_analytic_ik alfa_robot_analytic_ik)
   add_test(NAME test_analytic_ik COMMAND test_analytic_ik)
@@ -42,6 +47,17 @@ if(BUILD_TESTING)
   add_executable(test_v3_redundant_analytic_ik test/test_v3_redundant_analytic_ik.cpp)
   target_link_libraries(test_v3_redundant_analytic_ik alfa_robot_analytic_ik)
   add_test(NAME test_v3_redundant_analytic_ik COMMAND test_v3_redundant_analytic_ik)
+
+  add_executable(test_v322_analytic_moveit_fk test/test_v322_analytic_moveit_fk.cpp)
+  target_link_libraries(test_v322_analytic_moveit_fk alfa_robot_analytic_ik)
+  ament_target_dependencies(
+    test_v322_analytic_moveit_fk
+    ament_index_cpp
+    moveit_core
+    srdfdom
+    urdf
+  )
+  add_test(NAME test_v322_analytic_moveit_fk COMMAND test_v322_analytic_moveit_fk)
 endif()
 
 ament_package()

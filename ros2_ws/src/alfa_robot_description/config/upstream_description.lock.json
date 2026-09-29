@@ -129,7 +129,7 @@
     "model_sources/robot_v3_2_2/parts.json": "1424f350e2d8869a28333c939bcf8726d7f7c259dbd0550bfbf36ed835c85f42",
     "model_sources/robot_v3_2_2/robot.urdf": "f47796c30397d5aed1b38150a31e19878256153e47ae326e68b332de4888d938",
     "model_sources/robot_v3_2_2/user_model.json": "bcf987285050f81346ae998df5796f9f106606411731421301dd919a64c10441",
-    "urdf/alfa_robot/robot_v3_2_2.xacro": "67541966b453d1cf2f20418bba2eea26e669a4f3e6f57d7bb4d4263eb4f55726"
+    "urdf/alfa_robot/robot_v3_2_2.xacro": "6b379da34164b0f252ee11af8ca8c01a496d166efb1b83d03f0f14e9f4b6b1ae"
   },
   "managed_source_files": {
     "config/initial_positions.yaml": "e76de08af3cb05051a76acf596310ffbd491b4f56e0795a3ad8143f8d8ef3446",
@@ -259,7 +259,7 @@
     "model_sources/robot_v3_2_2/parts.json": "1424f350e2d8869a28333c939bcf8726d7f7c259dbd0550bfbf36ed835c85f42",
     "model_sources/robot_v3_2_2/robot.urdf": "f47796c30397d5aed1b38150a31e19878256153e47ae326e68b332de4888d938",
     "model_sources/robot_v3_2_2/user_model.json": "bcf987285050f81346ae998df5796f9f106606411731421301dd919a64c10441",
-    "urdf/robot.urdf.xacro": "507ab19f496a349420a8e840125ebfdc443961a685576c10d0c222749d3de9b5"
+    "urdf/robot.urdf.xacro": "88392b64c0949e5701a980701567c600166fb6a97f5d77d39344ac6103c82616"
   },
   "model_revision": "robot_v3.2.2-suction",
   "movable_joint_counts": {
@@ -272,8 +272,8 @@
   "profile": "suction",
   "schema_version": 2,
   "upstream_branch": "robot_v3_suction_chassis",
-  "upstream_commit": "c9ffabd4ba27e0465b52d7c3264c1b983597793d",
+  "upstream_commit": "165df6fc15dbb754dad1e63b5afa641c843573ac",
   "upstream_manifest_sha256": "0dac4a8a4742aa645f3ed886cf26e8e4f06d2b3d721ae4324f54b8742444add4",
-  "upstream_ref_used_for_sync": "fix/v3-3-2-2-adjacent-collision-matrix",
+  "upstream_ref_used_for_sync": "fix/v3-3-2-2-tool0-offset-151mm",
   "upstream_repository": "ssh://git@192.168.100.141:2222/SevenovaHangzhou/robot_description.git"
 }

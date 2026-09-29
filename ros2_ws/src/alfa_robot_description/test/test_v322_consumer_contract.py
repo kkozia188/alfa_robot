@@ -71,6 +71,8 @@ def test_suction_profile_matches_control_inventory():
         assert float(updown.get("upper")) == 0.0
         assert joints["left_tool0_fixed"].find("parent").get("link") == "left_link7"
         assert joints["right_tool0_fixed"].find("parent").get("link") == "right_link7"
+        assert joints["left_tool0_fixed"].find("origin").get("xyz") == "0 0 0.151"
+        assert joints["right_tool0_fixed"].find("origin").get("xyz") == "0 0 0.151"
         assert "left_suction" not in robot_links
         assert "right_suction" not in robot_links
         assert joints["base_footprint_to_base_link"].find("origin").get("xyz") == "0 0 0.335"

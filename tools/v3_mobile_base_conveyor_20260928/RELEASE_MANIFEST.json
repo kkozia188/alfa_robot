@@ -6,6 +6,9 @@
   "repository": "kkozia188/alfa_robot",
   "upstream_branch": "alfa_v3_dev",
   "upstream_base_commit": "d4f5a5ab929475d0520d659ab216308920f6eb22",
+  "evidence_model_revision": "robot_v3.1.1-hybrid",
+  "rebased_upstream_base_commit": "7ac01bd7274afcfa2c00df9862e0ca73e7267dcb",
+  "integration_model_revision": "robot_v3.2.2-suction",
   "linear_issue": "MOTION-261",
   "owner": "Zhang Zelin",
   "result_schema": "alfa.v3_scoop_5x5_conveyor_shuttle_certificate.v1",
@@ -22,7 +25,7 @@
     "simultaneous_dual_cycle_count": 10,
     "single_center_cycle_count": 5
   },
-  "validation": {
+  "legacy_v311_validation": {
     "success": true,
     "completed_boxes": 25,
     "completed_rows": 5,
@@ -39,6 +42,51 @@
     "base_travel_m": 115.74999999999883,
     "rrd_verified": true
   },
+  "v322_migration": {
+    "full_25_box_certified": false,
+    "legacy_replay_reusable": false,
+    "legacy_replay_failure": {
+      "operation": "Box 1 + Box 5",
+      "failure_frame": 18,
+      "failure_edge_step": 1,
+      "failure_reason": "edge collision:base_link<->right_link5",
+      "checked_frames": 18,
+      "checked_edge_samples": 19
+    },
+    "analytic_moveit_fk": {
+      "samples_per_arm": 256,
+      "maximum_fk_position_m": 6.19490176634e-12,
+      "maximum_fk_orientation_rad": 5.09742904323e-12
+    },
+    "box_1_smoke": {
+      "success": true,
+      "pickup_planning_s": 1.702679953,
+      "pickup_frames": 41,
+      "backoff_distance_m": 2.35,
+      "right_shuttle_distance_m": 1.5,
+      "checked_frames": 812,
+      "interpolated_edge_samples": 625,
+      "maximum_left_carried_tilt_deg": 0.003391008792158052
+    },
+    "scope": "single_box_migration_smoke_not_full_25_box_certificate"
+  },
+  "migration_evidence": [
+    {
+      "name": "v322_migration/v311-replay-on-v322-validation.json",
+      "size": 728,
+      "sha256": "8689945f74e5aebf001817ddd2578ca9f27517955b890ef633c6e5776b611104"
+    },
+    {
+      "name": "v322_migration/v322-box01-conveyor-validation.json",
+      "size": 558,
+      "sha256": "35aa50626c789e6f771d13c6b4b2f3aa4fba1a6cdd4a040fcca2ec572bf62703"
+    },
+    {
+      "name": "v322_migration/v322-box01-migration-summary.json",
+      "size": 708,
+      "sha256": "ed18713621b7f8409df7ef58cd77a27581edbe28fbdc7de238a2afd1794601bc"
+    }
+  ],
   "assets": [
     {
       "name": "README.md",

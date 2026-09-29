@@ -25,6 +25,9 @@ enum class V3RedundantArmModel
   // Active V3.1.1 arms with the Kkozia carriage adapter and Tool0.
   V311Left,
   V311Right,
+  // Active V3.2.2 production suction geometry.
+  V322Left,
+  V322Right,
 };
 
 struct V3RedundantIkSolution

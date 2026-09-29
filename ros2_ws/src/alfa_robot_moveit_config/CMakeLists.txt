@@ -309,6 +309,30 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   visualization_msgs
 )
 
+add_executable(v3_dual_arm_5x5_replay_validator
+  src/v3_dual_arm_5x5_replay_validator.cpp
+)
+
+target_compile_features(v3_dual_arm_5x5_replay_validator PUBLIC cxx_std_17)
+
+target_include_directories(v3_dual_arm_5x5_replay_validator PRIVATE
+  include
+)
+
+target_link_libraries(v3_dual_arm_5x5_replay_validator
+  alfa_robot_motion_scene_adapter
+)
+
+ament_target_dependencies(v3_dual_arm_5x5_replay_validator
+  geometry_msgs
+  moveit_core
+  moveit_msgs
+  moveit_ros_planning
+  nlohmann_json
+  rclcpp
+  shape_msgs
+)
+
 add_executable(v3_dual_arm_cartesian_box_demo
   src/v3_dual_arm_cartesian_box_demo.cpp
 )
@@ -356,6 +380,7 @@ install(TARGETS
   v3_continuous_reachability
   v3_redundant_ik_interactive_demo
   v3_single_arm_box_extract_demo
+  v3_dual_arm_5x5_replay_validator
   v3_dual_arm_cartesian_box_demo
   v3_wrist_orientation_probe
   EXPORT export_alfa_robot_motion_core

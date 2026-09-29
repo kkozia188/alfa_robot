@@ -47,14 +47,14 @@ named_poses:
     updown: -0.3
     left_joint1: 2.443460952792061
     left_joint2: -1.7453292519943295
-    left_joint3: -3.141592653589793
+    left_joint3: -3.14159265
     left_joint4: 0.3490658503988659
     left_joint5: -1.5707963267948966
     left_joint6: -0.3490658503988659
     left_joint7: 0.0
     right_joint1: -2.443460952792061
     right_joint2: 1.7453292519943295
-    right_joint3: 3.141592653589793
+    right_joint3: 3.14159265
     right_joint4: -0.3490658503988659
     right_joint5: 1.5707963267948966
     right_joint6: 0.3490658503988659

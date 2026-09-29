@@ -22,7 +22,7 @@ install(
 )
 
 install(
-  DIRECTORY meshes
+  DIRECTORY meshes model_sources
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -30,10 +30,7 @@ install(
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_alfa_robot_urdf_xacro test/alfa_robot_test_urdf_xacro.py)
-  ament_add_pytest_test(test_v3_description_semantics test/test_v3_description_semantics.py)
-  ament_add_pytest_test(test_v3_chassis_semantics test/test_v3_chassis_semantics.py)
-  ament_add_pytest_test(test_v3_head_semantics test/test_v3_head_semantics.py)
-  ament_add_pytest_test(test_v311_consumer_contract test/test_v311_consumer_contract.py)
+  ament_add_pytest_test(test_v322_consumer_contract test/test_v322_consumer_contract.py)
 endif()
 
 ament_package()

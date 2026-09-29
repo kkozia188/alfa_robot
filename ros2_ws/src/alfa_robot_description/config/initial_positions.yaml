@@ -1,12 +1,11 @@
 metadata:
   schema_version: 1
   robot: alfa_v3
-  model_revision: robot_v3.1.1-hybrid
+  model_revision: robot_v3.2.2-suction
   end_effector: suction
   side_semantics: left_is_positive_y
-  arm_source: robot_v3.1.1
-  integration_policy: v3_1_1_arms_updown_with_kkozia_modules
-
+  arm_source: robot_v3.2.2
+  integration_policy: v3_2_2_geometry_with_v3_1_1_joint_semantics
 initial_positions:
   updown: -0.3
   head_joint: 0.0
@@ -14,23 +13,14 @@ initial_positions:
   left_joint1: 2.70526034059121
   left_joint2: -1.832595714594046
   left_joint3: 0.34906585039887
-  left_joint4: 1.57079632679490
-  left_joint5: -1.57079632679490
+  left_joint4: 1.5707963267949
+  left_joint5: -1.5707963267949
   left_joint6: -0.69813170079773
   left_joint7: 0.0
   right_joint1: -2.70526034059121
   right_joint2: 1.832595714594046
   right_joint3: -0.34906585039887
-  right_joint4: -1.57079632679490
-  right_joint5: 1.57079632679490
+  right_joint4: -1.5707963267949
+  right_joint5: 1.5707963267949
   right_joint6: 0.69813170079773
   right_joint7: 0.0
-  active_suspension_joint: 0.0
-  caster01_joint: 0.0
-  wheel01_joint: 0.0
-  caster02_joint: 0.0
-  wheel02_joint: 0.0
-  caster03_joint: 0.0
-  wheel03_joint: 0.0
-  caster04_joint: 0.0
-  wheel04_joint: 0.0

@@ -1,10 +1,9 @@
 metadata:
   schema_version: 1
   robot: alfa_v3
-  model_revision: robot_v3.1.1-hybrid
+  model_revision: robot_v3.2.2-suction
   end_effector: suction
   units: revolute_rad_prismatic_m
-
 named_poses:
   home:
     updown: -0.3
@@ -13,104 +12,68 @@ named_poses:
     left_joint1: 2.70526034059121
     left_joint2: -1.832595714594046
     left_joint3: 0.34906585039887
-    left_joint4: 1.57079632679490
-    left_joint5: -1.57079632679490
+    left_joint4: 1.5707963267949
+    left_joint5: -1.5707963267949
     left_joint6: -0.69813170079773
     left_joint7: 0.0
     right_joint1: -2.70526034059121
     right_joint2: 1.832595714594046
     right_joint3: -0.34906585039887
-    right_joint4: -1.57079632679490
-    right_joint5: 1.57079632679490
+    right_joint4: -1.5707963267949
+    right_joint5: 1.5707963267949
     right_joint6: 0.69813170079773
     right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0
   second_home:
     updown: -0.6
     head_joint: 0.0
     head_pitch_joint: 0.0
-    left_joint1: 0.52359877559830
+    left_joint1: 0.5235987755983
     left_joint2: 1.39626340159546
     left_joint3: 0.34906585039887
-    left_joint4: 1.57079632679490
-    left_joint5: 1.57079632679490
-    left_joint6: 1.04719755119660
+    left_joint4: 1.5707963267949
+    left_joint5: 1.5707963267949
+    left_joint6: 1.0471975511966
     left_joint7: 0.0
-    right_joint1: -0.52359877559830
+    right_joint1: -0.5235987755983
     right_joint2: -1.39626340159546
     right_joint3: -0.34906585039887
-    right_joint4: -1.57079632679490
-    right_joint5: -1.57079632679490
-    right_joint6: -1.04719755119660
+    right_joint4: -1.5707963267949
+    right_joint5: -1.5707963267949
+    right_joint6: -1.0471975511966
     right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0
   unloading:
+    head_joint: 0.0
+    head_pitch_joint: 0.0
     updown: -0.3
-    head_joint: 0.0
-    head_pitch_joint: 0.0
-    left_joint1: 2.26892802759263
-    left_joint2: -1.832595714594046
+    left_joint1: 2.443460952792061
+    left_joint2: -1.7453292519943295
     left_joint3: -3.14159265
-    left_joint4: 0.34906585039887
-    left_joint5: -1.57079632679490
-    left_joint6: -0.52359877559830
+    left_joint4: 0.3490658503988659
+    left_joint5: -1.5707963267948966
+    left_joint6: -0.3490658503988659
     left_joint7: 0.0
-    right_joint1: -2.26892802759263
-    right_joint2: 1.832595714594046
+    right_joint1: -2.443460952792061
+    right_joint2: 1.7453292519943295
     right_joint3: 3.14159265
-    right_joint4: -0.34906585039887
-    right_joint5: 1.57079632679490
-    right_joint6: 0.52359877559830
+    right_joint4: -0.3490658503988659
+    right_joint5: 1.5707963267948966
+    right_joint6: 0.3490658503988659
     right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0
   second_unloading:
-    updown: -0.6
     head_joint: 0.0
     head_pitch_joint: 0.0
+    updown: -0.6
     left_joint1: 0.0
-    left_joint2: 1.74532925199433
+    left_joint2: 1.7453292519943295
     left_joint3: 0.0
-    left_joint4: -0.78539816339745
-    left_joint5: 1.74532925199433
-    left_joint6: 0.78539816339745
+    left_joint4: -0.5235987755982988
+    left_joint5: 1.7453292519943295
+    left_joint6: 0.5235987755982988
     left_joint7: 0.0
     right_joint1: 0.0
-    right_joint2: -1.74532925199433
+    right_joint2: -1.7453292519943295
     right_joint3: 0.0
-    right_joint4: 0.78539816339745
-    right_joint5: -1.74532925199433
-    right_joint6: -0.78539816339745
+    right_joint4: 0.5235987755982988
+    right_joint5: -1.7453292519943295
+    right_joint6: -0.5235987755982988
     right_joint7: 0.0
-    active_suspension_joint: 0.0
-    caster01_joint: 0.0
-    wheel01_joint: 0.0
-    caster02_joint: 0.0
-    wheel02_joint: 0.0
-    caster03_joint: 0.0
-    wheel03_joint: 0.0
-    caster04_joint: 0.0
-    wheel04_joint: 0.0

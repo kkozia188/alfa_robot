@@ -39,26 +39,21 @@ def test_urdf_xacro():
         links = {link.attrib["name"]: link for link in robot.findall("link")}
         movable = {name for name, joint in joints.items() if joint.attrib["type"] != "fixed"}
 
-        assert joints["world_to_base"].find("parent").attrib["link"] == "world"
-        assert joints["world_to_base"].find("child").attrib["link"] == "base_footprint"
         assert joints["base_footprint_to_base_link"].find("origin").attrib["xyz"] == (
-            "0.190000002779484 -0.0000442724271391554 0.40000250599116"
-        )
-        assert joints["base_to_model"].find("origin").attrib["xyz"] == (
-            "-0.190000017371 6.50500004219e-09 0.662499964909"
+            "0 0 0.335"
         )
         assert joints["updown"].find("limit").attrib["lower"] == "-1"
         assert joints["updown"].find("limit").attrib["upper"] == "0"
         assert "head_pitch_joint" in joints
-        assert "active_suspension_joint" in joints
-        assert all(f"caster{index:02d}_joint" in joints for index in range(1, 5))
-        assert all(f"wheel{index:02d}_joint" in joints for index in range(1, 5))
+        assert "active_suspension_joint" not in joints
+        assert not any(name.startswith("caster") for name in joints)
+        assert not any(name.startswith("wheel") for name in joints)
         assert not any("moving_jaw" in name for name in links | joints.keys())
 
         ros2_control = robot.find("ros2_control")
         assert ros2_control is not None
         control_joints = {joint.attrib["name"] for joint in ros2_control.findall("joint")}
-        assert len(movable) == len(control_joints) == 26
+        assert len(movable) == len(control_joints) == 17
         assert movable == control_joints
 
         with open(positions_path, encoding="utf-8") as positions_file:

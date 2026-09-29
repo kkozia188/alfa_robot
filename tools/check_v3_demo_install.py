@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when the installed MoveIt demo is not the pinned V3.1.1 consumer snapshot."""
+"""Fail when the installed MoveIt demo is not the pinned V3.2.2 consumer snapshot."""
 
 import hashlib
 import argparse
@@ -17,7 +17,7 @@ SOURCE_MOVEIT = REPOSITORY_ROOT / "ros2_ws/src/alfa_robot_moveit_config"
 INSTALL_ROOT = REPOSITORY_ROOT / "ros2_ws/install"
 INSTALL_DESCRIPTION = INSTALL_ROOT / "alfa_robot_description/share/alfa_robot_description"
 INSTALL_MOVEIT = INSTALL_ROOT / "alfa_robot_moveit_config/share/alfa_robot_moveit_config"
-EXPECTED_REVISION = "robot_v3.1.1-hybrid"
+EXPECTED_REVISION = "robot_v3.2.2-suction"
 
 
 def digest(path):
@@ -41,7 +41,7 @@ def main():
     installed_lock = json.loads(installed_lock_path.read_text())
     if source_lock != installed_lock or source_lock.get("model_revision") != EXPECTED_REVISION:
         fail("installed description revision differs from the source lock")
-    active_relative_path = "urdf/alfa_robot/robot_v3_1_1.xacro"
+    active_relative_path = "urdf/alfa_robot/robot_v3_2_2.xacro"
     expected_xacro_hash = source_lock["managed_destination_files"][active_relative_path]
     for package_root in (SOURCE_DESCRIPTION, INSTALL_DESCRIPTION):
         active_xacro = package_root / active_relative_path
@@ -62,7 +62,7 @@ def main():
     limits = yaml.safe_load(source_limits_path.read_text())["joint_limits"]
     updown = limits["updown"]
     if updown["min_position"] != -1.0 or updown["max_position"] != 0.0:
-        fail("MoveIt updown range is not V3.1.1 [-1, 0] m")
+        fail("MoveIt updown range is not V3.2.2 [-1, 0] m")
     source_initial = yaml.safe_load(
         (SOURCE_MOVEIT / "config/initial_positions.yaml").read_text()
     )["initial_positions"]
@@ -78,9 +78,9 @@ def main():
         fail("installed SRDF differs from source")
     groups = {group.get("name"): group for group in ET.parse(source_srdf_path).getroot().findall("group")}
     if groups["left_arm"].find("chain").get("tip_link") != "left_tool0":
-        fail("left arm does not end at the Kkozia Tool0 frame")
+        fail("left arm does not end at the production Tool0 frame")
     if groups["right_arm"].find("chain").get("tip_link") != "right_tool0":
-        fail("right arm does not end at the Kkozia Tool0 frame")
+        fail("right arm does not end at the production Tool0 frame")
     print(
         f"V3 demo install matches {EXPECTED_REVISION} at "
         f"{source_lock['upstream_commit'][:10]}; updown=[-1, 0] m."

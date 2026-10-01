@@ -43,7 +43,8 @@
     "rrd_verified": true
   },
   "v322_migration": {
-    "full_25_box_certified": false,
+    "full_25_box_certified": true,
+    "release_tag": "v3-mobile-base-conveyor-v322-2026.10.01",
     "legacy_replay_reusable": false,
     "legacy_replay_failure": {
       "operation": "Box 1 + Box 5",
@@ -68,7 +69,29 @@
       "interpolated_edge_samples": 625,
       "maximum_left_carried_tilt_deg": 0.003391008792158052
     },
-    "scope": "single_box_migration_smoke_not_full_25_box_certificate"
+    "complete_result": {
+      "completed_boxes": 25,
+      "completed_rows": 5,
+      "cycle_count": 15,
+      "simultaneous_dual_cycles": 10,
+      "one_sided_attachment_frames": 0,
+      "task_core_total_s": 7.243508,
+      "task_core_average_s": 0.28974032,
+      "task_core_max_s": 0.995927,
+      "task_core_below_3s": 25,
+      "runtime_operation_validation_max_ms": 564.4437840091996,
+      "runtime_operations_below_3s": 16,
+      "checked_frames": 29556,
+      "interpolated_edge_samples": 1412,
+      "maximum_joint_step_deg": 2.996269102383248,
+      "joint_flip_events": 0,
+      "maximum_left_carried_tilt_deg": 0.3504196673175996,
+      "maximum_right_carried_tilt_deg": 0.07686611909385714,
+      "base_travel_m": 115.74999999999883,
+      "visual_mesh_count": 49,
+      "rrd_verified": true
+    },
+    "scope": "complete_v322_25_box_certificate"
   },
   "migration_evidence": [
     {
@@ -85,6 +108,21 @@
       "name": "v322_migration/v322-box01-migration-summary.json",
       "size": 708,
       "sha256": "ed18713621b7f8409df7ef58cd77a27581edbe28fbdc7de238a2afd1794601bc"
+    },
+    {
+      "name": "v322_migration/v322-full-conveyor-validation.json",
+      "size": 3630,
+      "sha256": "7e52259b34a8aaf4fc67303a10082d81519ef8c3475b5b69fa0f8c9eac43c371"
+    },
+    {
+      "name": "v322_migration/v322-runtime-validation-times.json",
+      "size": 4169,
+      "sha256": "40e61ca2e28e2070f43e4c7515998d1ab5ff9bba5e3cb49121b712e6bde54822"
+    },
+    {
+      "name": "v322_migration/v322-release-manifest.json",
+      "size": 3246,
+      "sha256": "0d39facd41eca0df0662c940c1e78fec45a36075ddefb8e832c8fe24f5bd30c0"
     }
   ],
   "assets": [

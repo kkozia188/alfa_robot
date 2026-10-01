@@ -59,20 +59,22 @@ The branch is rebased onto `alfa_v3_dev@7ac01bd7`, which introduces
 
 - Added exact V3.2.2 left/right fixed transforms to the redundant seven-axis
   IK model.
-- Added a deterministic bounded numerical fallback for the V3.2.2 geometry;
-  the V3.1.1 analytic path remains unchanged.
+- Added a deterministic bounded numerical solver for the V3.2.2 geometry and
+  seed-continuous Cartesian solving; the V3.1.1 analytic path remains unchanged.
 - MoveIt/FK comparison passed for 256 random samples per arm. Maximum FK
   position error was below `6.2e-12 m`.
 - The old 25-box replay is deliberately rejected on V3.2.2 at operation 1,
   frame 18: `base_link <-> right_link5`.
-- A newly planned box-1 pickup completed in `1.703 s`. Its full route through
-  `2.35 m` backoff and `1.50 m` right shuttle passed `812` frames and `625`
-  additional MoveIt/FCL edge samples.
-
-The box-1 result is a migration smoke test, not a replacement 25-box
-certificate. The remaining rows, synchronized pairs, inter-group transitions,
-and complete Rerun must be replanned and fully validated before this pull
-request is ready to merge.
+- The complete V3.2.2 task finishes `25/25` boxes in 15 cycles. All `10/10`
+  pair cycles are simultaneous, with zero one-sided attachment frames.
+- Fresh pickup task core total / average / maximum: `7.244 / 0.290 / 0.996 s`;
+  `25/25` boxes are below 3 seconds.
+- Deterministic per-operation MoveIt/FCL validation, including process startup,
+  is below 3 seconds for `16/16` operations; maximum `0.565 s`. Cache loading
+  is not counted.
+- The final replay passes `29,556` frames and `1,412` additional edge samples,
+  with maximum joint step `2.996269 deg` and zero joint flips.
+- The complete Rerun uses the V3.2.2 production shell (`49` visual meshes).
 
 ## Evidence
 
@@ -93,6 +95,12 @@ The GitHub pre-release attached to tag
   snapshot used to produce the evidence.
 - `MANIFEST.json` and `SHA256SUMS`: certificate and integrity checks.
 
+The complete V3.2.2 replacement is attached to tag
+`v3-mobile-base-conveyor-v322-2026.10.01`. Its Rerun is
+`v322-conveyor-production-shell.rrd`; its exact source snapshot, plan cache,
+certified replay, full validation, per-operation runtime validation and hashes
+are published alongside it.
+
 ## Replay
 
 ```bash
@@ -102,6 +110,13 @@ rerun --new v3-scoop-u085-l060-back235-y150-conveyor.rrd
 
 This command opens the historical V3.1.1 replay. Do not execute or validate it
 as a V3.2.2 trajectory.
+
+For V3.2.2, download the newer pre-release and run:
+
+```bash
+sha256sum -c SHA256SUMS
+rerun --new v322-conveyor-production-shell.rrd
+```
 
 ## Scope Boundary
 

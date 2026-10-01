@@ -3153,7 +3153,9 @@ private:
     PlanningMetrics* metrics,
     bool enforce_step,
     std::string* rejection_summary,
-    moveit::core::RobotStatePtr* rejected = nullptr) const
+    moveit::core::RobotStatePtr* rejected = nullptr,
+    const double* preferred_swivel = nullptr,
+    bool preferred_swivel_only = false) const
   {
     const Eigen::Isometry3d world_to_arm_base =
       seed_state.getGlobalLinkTransform(arm_base_link_).inverse();
@@ -3166,11 +3168,31 @@ private:
     std::string last_collision;
     moveit::core::RobotStatePtr last_rejected;
 
-    const int intervals = std::max(1, static_cast<int>(std::ceil(2.0 * kPi / psi_step_)));
-    for (int index = 0; index < intervals; ++index) {
+    std::vector<double> swivel_samples;
+    const auto add_swivel = [&swivel_samples](double value) {
+      const double normalized = normalizedAngle(value);
+      if (std::none_of(
+          swivel_samples.begin(), swivel_samples.end(),
+          [normalized](double existing) {
+            return std::abs(normalizedAngle(existing - normalized)) < 1e-8;
+          })) {
+        swivel_samples.push_back(normalized);
+      }
+    };
+    if (preferred_swivel) {
+      add_swivel(*preferred_swivel);
+    }
+    if (!preferred_swivel_only) {
+      const int intervals = std::max(
+        1, static_cast<int>(std::ceil(2.0 * kPi / psi_step_)));
+      for (int index = 0; index < intervals; ++index) {
+        add_swivel(-kPi + static_cast<double>(index) * 2.0 * kPi / intervals);
+      }
+    }
+    for (const double swivel : swivel_samples) {
       V3RedundantIkRequest request;
       request.target_in_arm_base = target_in_arm_base;
-      request.swivel_angle = -kPi + static_cast<double>(index) * 2.0 * kPi / intervals;
+      request.swivel_angle = swivel;
       request.seed = seed_joints;
       const auto started = std::chrono::steady_clock::now();
       const auto solutions = solver_->solveInArmBase(request);
@@ -3255,8 +3277,14 @@ private:
     std::string* reason,
     moveit::core::RobotStatePtr* rejected = nullptr) const
   {
+    double continuation_swivel = solver_->swivelAngle(armJoints(seed_state));
     auto candidates = solvePoseCandidates(
-      target_world, seed_state, attached, scene, metrics, true, reason, rejected);
+      target_world, seed_state, attached, scene, metrics, true, reason, rejected,
+      std::isfinite(continuation_swivel) ? &continuation_swivel : nullptr, true);
+    if (candidates.empty()) {
+      candidates = solvePoseCandidates(
+        target_world, seed_state, attached, scene, metrics, true, reason, rejected);
+    }
     // Only the first usable Cartesian candidate is consumed. Check edges in
     // score order instead of densely checking every unused swivel solution.
     for (const auto& candidate : candidates) {

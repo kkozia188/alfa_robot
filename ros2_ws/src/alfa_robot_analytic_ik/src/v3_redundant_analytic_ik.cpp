@@ -961,30 +961,13 @@ std::vector<V3RedundantIkSolution> numericalSolutions(
     starts.push_back(boundedJoints(start, model_kind));
   }
 
-  std::vector<V3RedundantIkSolution> solutions;
   for (const JointVector& start : starts) {
     const auto solution = numericalSolveFromSeed(request, model_kind, start);
-    if (!solution) {
-      continue;
-    }
-    const bool duplicate = std::any_of(
-      solutions.begin(), solutions.end(),
-      [&](const V3RedundantIkSolution& kept) {
-        return sameJointSolution(kept.joints, solution->joints);
-      });
-    if (!duplicate) {
-      solutions.push_back(*solution);
+    if (solution) {
+      return {*solution};
     }
   }
-  std::sort(
-    solutions.begin(), solutions.end(),
-    [](const V3RedundantIkSolution& lhs, const V3RedundantIkSolution& rhs) {
-      if (lhs.seed_distance != rhs.seed_distance) {
-        return lhs.seed_distance < rhs.seed_distance;
-      }
-      return lhs.minimum_joint_limit_margin > rhs.minimum_joint_limit_margin;
-    });
-  return solutions;
+  return {};
 }
 
 }  // namespace

@@ -54,8 +54,8 @@ V3.2.2 certificate.
 
 ## V3.2.2 Migration Status
 
-The branch is rebased onto `alfa_v3_dev@7ac01bd7`, which introduces
-`robot_v3.2.2-suction`.
+The branch is rebased onto `alfa_v3_dev@d9c330ce`, which introduces
+`robot_v3.2.2-suction` and the authoritative Tool0 local `+Z 0.151 m` offset.
 
 - Added exact V3.2.2 left/right fixed transforms to the redundant seven-axis
   IK model.
@@ -67,13 +67,13 @@ The branch is rebased onto `alfa_v3_dev@7ac01bd7`, which introduces
   frame 18: `base_link <-> right_link5`.
 - The complete V3.2.2 task finishes `25/25` boxes in 15 cycles. All `10/10`
   pair cycles are simultaneous, with zero one-sided attachment frames.
-- Fresh pickup task core total / average / maximum: `7.244 / 0.290 / 0.996 s`;
+- Fresh pickup task core total / average / maximum: `8.594 / 0.344 / 1.352 s`;
   `25/25` boxes are below 3 seconds.
 - Deterministic per-operation MoveIt/FCL validation, including process startup,
   is below 3 seconds for `16/16` operations; maximum `0.565 s`. Cache loading
   is not counted.
-- The final replay passes `29,556` frames and `1,412` additional edge samples,
-  with maximum joint step `2.996269 deg` and zero joint flips.
+- The final replay passes `27,372` frames and `1,020` additional edge samples,
+  with maximum joint step `2.943380 deg` and zero joint flips.
 - The complete Rerun uses the V3.2.2 production shell (`49` visual meshes).
 
 ## Evidence
@@ -96,7 +96,7 @@ The GitHub pre-release attached to tag
 - `MANIFEST.json` and `SHA256SUMS`: certificate and integrity checks.
 
 The complete V3.2.2 replacement is attached to tag
-`v3-mobile-base-conveyor-v322-2026.10.01`. Its Rerun is
+`v3-mobile-base-conveyor-v322-tool0151-2026.10.01`. Its Rerun is
 `v322-conveyor-production-shell.rrd`; its exact source snapshot, plan cache,
 certified replay, full validation, per-operation runtime validation and hashes
 are published alongside it.

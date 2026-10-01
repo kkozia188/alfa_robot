@@ -1,88 +1,88 @@
 {
   "schema": "alfa.v322_runtime_operation_validation.v1",
-  "source": "/home/tim/alfa_robot-motion261-v322-validation/v322_final/v322-conveyor-replay.json",
-  "output": "/home/tim/alfa_robot-motion261-v322-validation/v322_final/v322-conveyor-certified-replay.json",
+  "source": "/home/tim/alfa_robot-motion261-v322-validation/v322_tool0151_final/v322-conveyor-replay.json",
+  "output": "/home/tim/alfa_robot-motion261-v322-validation/v322_tool0151_final/v322-conveyor-certified-replay.json",
   "cache_loading_counted": false,
   "all_below_3s": true,
-  "maximum_validation_ms": 564.4437840091996,
+  "maximum_validation_ms": 539.0230680059176,
   "operations": [
     {
       "operation": 1,
       "label": "Box 1 + Box 5",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 478.1645619950723,
-      "checked_frames": 1774,
-      "checked_edge_samples": 98
+      "validation_ms_including_process_startup": 476.56433799420483,
+      "checked_frames": 1682,
+      "checked_edge_samples": 78
     },
     {
       "operation": 2,
       "label": "Box 2 + Box 4",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 520.7052109763026,
-      "checked_frames": 2424,
-      "checked_edge_samples": 86
+      "validation_ms_including_process_startup": 493.59372101025656,
+      "checked_frames": 1804,
+      "checked_edge_samples": 78
     },
     {
       "operation": 3,
       "label": "Box 3",
       "kind": "single_conveyor_cycle",
-      "validation_ms_including_process_startup": 544.4575519941282,
-      "checked_frames": 2262,
-      "checked_edge_samples": 98
+      "validation_ms_including_process_startup": 497.999785002321,
+      "checked_frames": 1826,
+      "checked_edge_samples": 78
     },
     {
       "operation": 4,
       "label": "Box 6 + Box 10",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 492.6937620039098,
-      "checked_frames": 1952,
-      "checked_edge_samples": 126
+      "validation_ms_including_process_startup": 471.3814480055589,
+      "checked_frames": 1594,
+      "checked_edge_samples": 104
     },
     {
       "operation": 5,
       "label": "Box 7 + Box 9",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 484.301324991975,
-      "checked_frames": 1892,
-      "checked_edge_samples": 98
+      "validation_ms_including_process_startup": 466.966149979271,
+      "checked_frames": 1632,
+      "checked_edge_samples": 78
     },
     {
       "operation": 6,
       "label": "Box 8",
       "kind": "single_conveyor_cycle",
-      "validation_ms_including_process_startup": 514.9565239844378,
-      "checked_frames": 1858,
-      "checked_edge_samples": 100
+      "validation_ms_including_process_startup": 509.7930630145129,
+      "checked_frames": 1886,
+      "checked_edge_samples": 56
     },
     {
       "operation": 7,
       "label": "Box 11 + Box 15",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 493.09370198170654,
-      "checked_frames": 1810,
-      "checked_edge_samples": 180
+      "validation_ms_including_process_startup": 477.94489000807516,
+      "checked_frames": 1648,
+      "checked_edge_samples": 90
     },
     {
       "operation": 8,
       "label": "Box 12 + Box 14",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 489.57980499835685,
-      "checked_frames": 1788,
-      "checked_edge_samples": 126
+      "validation_ms_including_process_startup": 478.04160599480383,
+      "checked_frames": 1642,
+      "checked_edge_samples": 92
     },
     {
       "operation": 9,
       "label": "Box 13",
       "kind": "single_conveyor_cycle",
-      "validation_ms_including_process_startup": 507.0797459920868,
-      "checked_frames": 2180,
-      "checked_edge_samples": 106
+      "validation_ms_including_process_startup": 497.0932549913414,
+      "checked_frames": 1990,
+      "checked_edge_samples": 58
     },
     {
       "operation": 10,
       "label": "Chassis X reposition before box 16",
       "kind": "base_transition",
-      "validation_ms_including_process_startup": 384.3363639898598,
+      "validation_ms_including_process_startup": 376.80491400533356,
       "checked_frames": 26,
       "checked_edge_samples": 22
     },
@@ -90,49 +90,49 @@
       "operation": 11,
       "label": "Box 16 + Box 20",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 495.2215100056492,
-      "checked_frames": 1886,
-      "checked_edge_samples": 70
+      "validation_ms_including_process_startup": 485.99189100787044,
+      "checked_frames": 1758,
+      "checked_edge_samples": 28
     },
     {
       "operation": 12,
       "label": "Box 17 + Box 19",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 485.4721630108543,
-      "checked_frames": 1722,
-      "checked_edge_samples": 42
+      "validation_ms_including_process_startup": 493.7061149976216,
+      "checked_frames": 1696,
+      "checked_edge_samples": 20
     },
     {
       "operation": 13,
       "label": "Box 18",
       "kind": "single_conveyor_cycle",
-      "validation_ms_including_process_startup": 519.8812980088405,
-      "checked_frames": 2192,
-      "checked_edge_samples": 36
+      "validation_ms_including_process_startup": 539.0230680059176,
+      "checked_frames": 2316,
+      "checked_edge_samples": 22
     },
     {
       "operation": 14,
       "label": "Box 21 + Box 25",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 517.0720900059678,
-      "checked_frames": 1886,
-      "checked_edge_samples": 114
+      "validation_ms_including_process_startup": 526.2438700010534,
+      "checked_frames": 1868,
+      "checked_edge_samples": 76
     },
     {
       "operation": 15,
       "label": "Box 22 + Box 24",
       "kind": "dual_conveyor_cycle",
-      "validation_ms_including_process_startup": 564.4437840091996,
-      "checked_frames": 1878,
-      "checked_edge_samples": 58
+      "validation_ms_including_process_startup": 506.77091200486757,
+      "checked_frames": 2032,
+      "checked_edge_samples": 102
     },
     {
       "operation": 16,
       "label": "Box 23",
       "kind": "single_conveyor_cycle",
-      "validation_ms_including_process_startup": 501.8242310034111,
-      "checked_frames": 2026,
-      "checked_edge_samples": 52
+      "validation_ms_including_process_startup": 490.79145802534185,
+      "checked_frames": 1972,
+      "checked_edge_samples": 38
     }
   ]
 }

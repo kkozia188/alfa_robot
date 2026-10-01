@@ -7,8 +7,9 @@
   "upstream_branch": "alfa_v3_dev",
   "upstream_base_commit": "d4f5a5ab929475d0520d659ab216308920f6eb22",
   "evidence_model_revision": "robot_v3.1.1-hybrid",
-  "rebased_upstream_base_commit": "7ac01bd7274afcfa2c00df9862e0ca73e7267dcb",
+  "rebased_upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
   "integration_model_revision": "robot_v3.2.2-suction",
+  "integration_tool0_offset_local_z_m": 0.151,
   "linear_issue": "MOTION-261",
   "owner": "Zhang Zelin",
   "result_schema": "alfa.v3_scoop_5x5_conveyor_shuttle_certificate.v1",
@@ -44,7 +45,7 @@
   },
   "v322_migration": {
     "full_25_box_certified": true,
-    "release_tag": "v3-mobile-base-conveyor-v322-2026.10.01",
+    "release_tag": "v3-mobile-base-conveyor-v322-tool0151-2026.10.01",
     "legacy_replay_reusable": false,
     "legacy_replay_failure": {
       "operation": "Box 1 + Box 5",
@@ -75,18 +76,18 @@
       "cycle_count": 15,
       "simultaneous_dual_cycles": 10,
       "one_sided_attachment_frames": 0,
-      "task_core_total_s": 7.243508,
-      "task_core_average_s": 0.28974032,
-      "task_core_max_s": 0.995927,
+      "task_core_total_s": 8.594481,
+      "task_core_average_s": 0.34377924,
+      "task_core_max_s": 1.351583,
       "task_core_below_3s": 25,
-      "runtime_operation_validation_max_ms": 564.4437840091996,
+      "runtime_operation_validation_max_ms": 539.0230680059176,
       "runtime_operations_below_3s": 16,
-      "checked_frames": 29556,
-      "interpolated_edge_samples": 1412,
-      "maximum_joint_step_deg": 2.996269102383248,
+      "checked_frames": 27372,
+      "interpolated_edge_samples": 1020,
+      "maximum_joint_step_deg": 2.943379824983848,
       "joint_flip_events": 0,
-      "maximum_left_carried_tilt_deg": 0.3504196673175996,
-      "maximum_right_carried_tilt_deg": 0.07686611909385714,
+      "maximum_left_carried_tilt_deg": 0.9239224489925627,
+      "maximum_right_carried_tilt_deg": 0.06559679978109437,
       "base_travel_m": 115.74999999999883,
       "visual_mesh_count": 49,
       "rrd_verified": true
@@ -111,18 +112,18 @@
     },
     {
       "name": "v322_migration/v322-full-conveyor-validation.json",
-      "size": 3630,
-      "sha256": "7e52259b34a8aaf4fc67303a10082d81519ef8c3475b5b69fa0f8c9eac43c371"
+      "size": 3635,
+      "sha256": "b98b428ce72b1da74bfba950456940fda54625d9cefb728a326a86a4bebdac87"
     },
     {
       "name": "v322_migration/v322-runtime-validation-times.json",
-      "size": 4169,
-      "sha256": "40e61ca2e28e2070f43e4c7515998d1ab5ff9bba5e3cb49121b712e6bde54822"
+      "size": 4188,
+      "sha256": "27d22fd16458dd12928dc880f4e088a420dd93621de189401ab8a6eac4cfb50b"
     },
     {
       "name": "v322_migration/v322-release-manifest.json",
-      "size": 3246,
-      "sha256": "0d39facd41eca0df0662c940c1e78fec45a36075ddefb8e832c8fe24f5bd30c0"
+      "size": 3370,
+      "sha256": "37f7fed4972c9be95ae11ba6a7f1cff90240ef8a53072a4ee973e9b039ae1077"
     }
   ],
   "assets": [

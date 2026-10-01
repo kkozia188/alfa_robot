@@ -1,9 +1,9 @@
 {
-  "checked_edge_samples": 1412,
-  "checked_frames": 29556,
-  "input": "/home/tim/alfa_robot-motion261-v322-validation/v322_final/v322-conveyor-certified-replay.json",
-  "maximum_left_tilt_deg": 0.3504196673175996,
-  "maximum_right_tilt_deg": 0.07686611909385714,
+  "checked_edge_samples": 1020,
+  "checked_frames": 27372,
+  "input": "/home/tim/alfa_robot-motion261-v322-validation/v322_tool0151_final/v322-conveyor-certified-replay.json",
+  "maximum_left_tilt_deg": 0.9239224489925627,
+  "maximum_right_tilt_deg": 0.06559679978109437,
   "operations": [
     {
       "base_pose_map": [
@@ -11,8 +11,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 98,
-      "checked_frames": 1774,
+      "checked_edge_samples": 78,
+      "checked_frames": 1682,
       "label": "Box 1 + Box 5",
       "success": true
     },
@@ -22,8 +22,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 86,
-      "checked_frames": 2424,
+      "checked_edge_samples": 78,
+      "checked_frames": 1804,
       "label": "Box 2 + Box 4",
       "success": true
     },
@@ -33,8 +33,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 98,
-      "checked_frames": 2262,
+      "checked_edge_samples": 78,
+      "checked_frames": 1826,
       "label": "Box 3",
       "success": true
     },
@@ -44,8 +44,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 126,
-      "checked_frames": 1952,
+      "checked_edge_samples": 104,
+      "checked_frames": 1594,
       "label": "Box 6 + Box 10",
       "success": true
     },
@@ -55,8 +55,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 98,
-      "checked_frames": 1892,
+      "checked_edge_samples": 78,
+      "checked_frames": 1632,
       "label": "Box 7 + Box 9",
       "success": true
     },
@@ -66,8 +66,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 100,
-      "checked_frames": 1858,
+      "checked_edge_samples": 56,
+      "checked_frames": 1886,
       "label": "Box 8",
       "success": true
     },
@@ -77,8 +77,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 180,
-      "checked_frames": 1810,
+      "checked_edge_samples": 90,
+      "checked_frames": 1648,
       "label": "Box 11 + Box 15",
       "success": true
     },
@@ -88,8 +88,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 126,
-      "checked_frames": 1788,
+      "checked_edge_samples": 92,
+      "checked_frames": 1642,
       "label": "Box 12 + Box 14",
       "success": true
     },
@@ -99,8 +99,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 106,
-      "checked_frames": 2180,
+      "checked_edge_samples": 58,
+      "checked_frames": 1990,
       "label": "Box 13",
       "success": true
     },
@@ -121,8 +121,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 70,
-      "checked_frames": 1886,
+      "checked_edge_samples": 28,
+      "checked_frames": 1758,
       "label": "Box 16 + Box 20",
       "success": true
     },
@@ -132,8 +132,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 42,
-      "checked_frames": 1722,
+      "checked_edge_samples": 20,
+      "checked_frames": 1696,
       "label": "Box 17 + Box 19",
       "success": true
     },
@@ -143,8 +143,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 36,
-      "checked_frames": 2192,
+      "checked_edge_samples": 22,
+      "checked_frames": 2316,
       "label": "Box 18",
       "success": true
     },
@@ -154,8 +154,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 114,
-      "checked_frames": 1886,
+      "checked_edge_samples": 76,
+      "checked_frames": 1868,
       "label": "Box 21 + Box 25",
       "success": true
     },
@@ -165,8 +165,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 58,
-      "checked_frames": 1878,
+      "checked_edge_samples": 102,
+      "checked_frames": 2032,
       "label": "Box 22 + Box 24",
       "success": true
     },
@@ -176,8 +176,8 @@
         0.0,
         0.0
       ],
-      "checked_edge_samples": 52,
-      "checked_frames": 2026,
+      "checked_edge_samples": 38,
+      "checked_frames": 1972,
       "label": "Box 23",
       "success": true
     }

@@ -509,6 +509,9 @@ Eigen::Isometry3d toolTransform(V3RedundantArmModel model)
              model == V3RedundantArmModel::V311Left ||
              model == V3RedundantArmModel::V311Right) {
     transform.translation().z() = 0.13585;
+  } else if (model == V3RedundantArmModel::V322Left ||
+             model == V3RedundantArmModel::V322Right) {
+    transform.translation().z() = 0.151;
   }
   return transform;
 }

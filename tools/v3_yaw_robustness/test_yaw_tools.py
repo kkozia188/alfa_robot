@@ -10,6 +10,7 @@ from plan_yaw_pickups import arm_seed_degrees, unique
 from run_yaw_case import yaw_slug
 from run_yaw_sweep import parse_yaws
 from summarize_yaw_sweep import operation_metrics
+from v3_yaw_rerun_demo import parse_certified_yaw
 
 
 class YawToolTests(unittest.TestCase):
@@ -18,6 +19,12 @@ class YawToolTests(unittest.TestCase):
         self.assertEqual(yaw_slug(0), "yaw-p00")
         self.assertEqual(yaw_slug(5), "yaw-p05")
         self.assertEqual(parse_yaws("-5,-4,0,5"), [-5, -4, 0, 5])
+        self.assertEqual(parse_certified_yaw("+5"), 5)
+        self.assertEqual(parse_certified_yaw("-3.0"), -3)
+        with self.assertRaises(ValueError):
+            parse_certified_yaw("1.5")
+        with self.assertRaises(ValueError):
+            parse_certified_yaw("6")
 
     def test_seed_extracts_only_active_arm(self) -> None:
         payload = {"frames": [{"joints": list(range(16))}]}

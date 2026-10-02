@@ -133,6 +133,19 @@ cd /home/tim/alfa_robot-motion274-docking-error && \
 
 ## Production-Shell Rerun
 
+For normal review, start the interactive selector. It prompts for one certified
+integer yaw from `-5` through `+5`, verifies the matching RRD, and opens Rerun:
+
+```bash
+cd /home/tim/alfa_robot-motion274-docking-error && \
+/usr/bin/python3 tools/v3_yaw_robustness/v3_yaw_rerun_demo.py
+```
+
+An automation caller can skip the prompt with, for example,
+`--yaw-deg=-3`.
+
+To rebuild a production-shell RRD from a certified case:
+
 ```bash
 cd /home/tim/alfa_robot-motion274-docking-error && \
 source /opt/ros/humble/setup.bash && \

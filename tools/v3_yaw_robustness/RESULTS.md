@@ -39,6 +39,14 @@ Each recording contains 21 links and 49 visual meshes from
 
 All three files pass `rerun rrd verify`.
 
+Production-shell RRDs are also available locally for every intermediate integer
+yaw. Open any certified angle through the interactive terminal selector:
+
+```bash
+cd /home/tim/alfa_robot-motion274-docking-error && \
+/usr/bin/python3 tools/v3_yaw_robustness/v3_yaw_rerun_demo.py
+```
+
 Aggregate certificate SHA-256:
 
 - `yaw-certificate.json`: `85e615f91a6c95c60f0150989bd9bafee4fe980c72658460d5a2e584c39bfb39`

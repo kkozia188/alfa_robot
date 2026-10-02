@@ -1,0 +1,36 @@
+{
+  "schema": "alfa.v3_docking_error_benchmark_config.v1",
+  "experiment_label": "motion-274-smoke-x",
+  "strategy_label": "dual-phase-repair-stage-planner",
+  "model_revision": "robot_v3.2.2-suction",
+  "tool0_offset_local_z_m": 0.151,
+  "upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
+  "planning_seed": 104729,
+  "error_matrix": {
+    "x_m": [-0.05, 0.0, 0.05],
+    "y_m": [0.0],
+    "yaw_deg": [0.0]
+  },
+  "cycle_ids": [1, 2, 3],
+  "nominal_base_pose_map": {
+    "upper_rows": [-0.6, 0.0, 0.0],
+    "lower_rows": [-0.35, 0.0, 0.0]
+  },
+  "wall_pose_map": {
+    "near_face_x_m": 0.75,
+    "center_y_m": 0.0,
+    "bottom_z_m": 0.0
+  },
+  "planner_startup_timeout_s": 90.0,
+  "stage_timeout_s": 180.0,
+  "display_rate_hz": 500.0,
+  "record_rerun_sample_ids": ["dx_p000_dy_p000_yaw_p0000"],
+  "planner_launch_arguments": {
+    "connection_planner": "shortcut_local_rrt",
+    "dual_entry_repair_enabled": "true",
+    "local_rrt_planning_time": "8.0",
+    "shortcut_padding_points": "5",
+    "shortcut_step_deg": "5.0",
+    "shortcut_updown_step_m": "0.01"
+  }
+}

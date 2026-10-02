@@ -567,6 +567,10 @@ if(BUILD_TESTING)
     NAME test_v3_stage_wall_cache
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_stage_wall_cache.py
   )
+  add_test(
+    NAME test_v322_stage_solver_contract
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v322_stage_solver_contract.py
+  )
 endif()
 
 ament_package()

@@ -11,6 +11,12 @@
 
 默认不要读归档；只有追溯历史原因、验收证据、责任边界或恢复旧方案时再查。
 
+## 2026-10-02 运控 / Codex / MOTION-274 停靠误差规划评测pilot
+- 做了什么：从`MOTION-261@610d612`建立独立工作树和Linear `MOTION-274`；新增动态TF + `base_link` 6D Pose的x/y/yaw矩阵评测、阶段统计、失败分类、断点续跑、before/after同设计指纹和Rerun。修复Stage规划器残留V3.1.1 IK/底盘链接选择，新增外部交接后空载回位策略，并以`dual_arm_with_updown`整体RRT修复独立双臂路径在phase 0/8的合成碰撞；默认旧策略不变。
+- 改了哪里：分支`feature/motion-274-v3-docking-error-robustness`；规划器/launch/合同测试及`tools/v3_docking_error_robustness/`。原`MOTION-261`工作树、Release和研究产物均未修改。
+- 验证结果：Release隔离构建通过；纯数据4项测试和V3.2.2 Stage合同测试通过。27点x顶排3循环pilot的baseline为`66/81=81.48%`，优化后`74/81=91.36%`（+9.88pp）；IK与预抓取均81/81，碰撞失败`15->7`。名义位优化后3/3，Rerun为3,739,235字节、103实体路径、82,668行，`rerun rrd verify`通过。报告：`tools/v3_docking_error_robustness/evidence/PILOT_REPORT.md`。
+- 留给下个 AI：必须继续跑已配置的125点x15循环baseline/optimized正式矩阵（1,875循环任务/策略），再做独立全量MoveIt/FCL复核与边界Rerun；当前pilot只覆盖顶排3循环，不能宣称全墙误差范围验收。优先处理2+4内侧双箱的7个剩余碰撞点，pilot停靠建议为保持`base_y=0`且暂不采用正X偏置。
+
 ## 2026-05-18 项目经理 / Codex / v5_dev 协作文件归档
 
 - 做了什么：切换到 `v5_dev`，将 2026-05-16～2026-05-18 的长日志、已完成摘要和归档前状态备份到 `.ai_teamwork/archive/2026-05-18_v5_dev_collaboration_cleanup/`。

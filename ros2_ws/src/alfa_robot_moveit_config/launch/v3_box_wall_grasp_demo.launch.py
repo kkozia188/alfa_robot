@@ -44,6 +44,8 @@ def launch_nodes(context):
                       ("shortcut_step_deg", float), ("shortcut_updown_step_m", float),
                       ("local_rrt_planning_time", float),
                       ("enable_stage_action", bool), ("playback_enabled", bool),
+                      ("retain_placed_boxes", bool),
+                      ("dual_entry_repair_enabled", bool),
                       ("execution_backend", str), ("follow_joint_trajectory_action", str),
                       ("trajectory_cache_file", str),
                       ("target_match_tolerance", float), ("target_orientation_tolerance", float),
@@ -100,7 +102,7 @@ def generate_launch_description():
                               description="auto stops at first successful arm"),
     ]
     for name, default, description in (
-        ("post_extract_policy", "rear_release", "rear_release places/releases behind chassis; loaded_home preserves the local attached return"),
+        ("post_extract_policy", "rear_release", "rear_release places behind chassis; loaded_home keeps payload; external_handoff releases after retreat and plans empty return"),
         ("connection_planner", "rrt_connect", "Validated baseline; opt into shortcut_local_rrt to repair blocked straight-path intervals"),
         ("shortcut_padding_points", "5", "Retreat/advance this many coarse shortcut points around blocked intervals"),
         ("shortcut_step_deg", "5.0", "Coarse shortcut spacing in degrees; edges retain fine collision validation"),
@@ -135,6 +137,8 @@ def generate_launch_description():
         ("rerun_recording_path", "", "Optional .rrd recording path"),
         ("enable_stage_action", "false", "Expose the central /motion/execute_stage Action"),
         ("playback_enabled", "true", "Replay legacy service results inside the planner"),
+        ("retain_placed_boxes", "true", "Keep released boxes in the scene; false models completed external handoff"),
+        ("dual_entry_repair_enabled", "false", "Repair colliding independently merged dual-arm entry/return phases with dual_arm_with_updown RRT"),
         ("execution_backend", "replay", "Stage execution backend: replay or fjt"),
         ("follow_joint_trajectory_action", "/whole_body_jtc/follow_joint_trajectory", "Downstream FJT Action for execution_backend=fjt"),
         ("trajectory_cache_file", "", "Optional verified V3 fixed-wall stage trajectory cache"),

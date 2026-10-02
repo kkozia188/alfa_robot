@@ -11,6 +11,12 @@
 
 默认不要读归档；只有追溯历史原因、验收证据、责任边界或恢复旧方案时再查。
 
+## 2026-10-02 运控 / Codex / MOTION-274 V3.2.2完整5x5任务Yaw鲁棒规划
+- 做了什么：按用户纠正撤销旧Stage Demo pilot路线，改为复用`MOTION-261`实际生成证书的最优25箱研究规划器；新增独立`v3_yaw_single_arm_box_extract_demo`，保留原`/motion/execute_stage`不变。每个Yaw重新读取planar TF、求解25个当前6D目标、搜索双箱共同升降高度、重建15组whole-body桥并生成完整仓外送带回放。
+- 改了哪里：分支`feature/motion-274-v3-docking-error-robustness`；新增独立规划器/launch、IK数值热启动和`tools/v3_yaw_robustness/`全套生成/验证/Rerun工具。原`MOTION-261`工作树、缓存、Release均只读。
+- 验证结果：Yaw `-5..+5度`按1度取11点全部通过；累计275/275箱、165/165循环、110/110双箱同步、单边吸附帧0。MoveIt/FCL检查301,518帧和11,540边样本，最大关节步长2.998284度、翻转0，左右携箱最大倾角0.417698/0.800591度。任务核心平均/最大0.363/3.275秒。`-5/0/+5度`三份生产外壳RRD均为21 link/49 mesh且verify通过。证据索引：`tools/v3_yaw_robustness/RESULTS.md`。
+- 留给下个 AI：本证书仅覆盖固定x/y、当前箱墙和送带回放下的Yaw整数度网格；不扩展为连续角度数学保证，也不包含导航、定位、吸盘或执行控制。用户查看时优先打开`yaw-m05-v322-production-shell.rrd`或`yaw-p05-v322-production-shell.rrd`。
+
 ## 2026-05-18 项目经理 / Codex / v5_dev 协作文件归档
 
 - 做了什么：切换到 `v5_dev`，将 2026-05-16～2026-05-18 的长日志、已完成摘要和归档前状态备份到 `.ai_teamwork/archive/2026-05-18_v5_dev_collaboration_cleanup/`。

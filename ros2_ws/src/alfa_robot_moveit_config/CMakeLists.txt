@@ -309,6 +309,42 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   visualization_msgs
 )
 
+add_executable(v3_yaw_single_arm_box_extract_demo
+  src/v3_yaw_single_arm_box_extract_demo.cpp
+)
+
+target_compile_features(v3_yaw_single_arm_box_extract_demo PUBLIC cxx_std_17)
+
+target_include_directories(v3_yaw_single_arm_box_extract_demo PRIVATE
+  ${OMPL_INCLUDE_DIRS}
+  include
+)
+
+target_link_libraries(v3_yaw_single_arm_box_extract_demo
+  ${OMPL_LIBRARIES}
+  "${cpp_typesupport_target}"
+  alfa_robot_motion_scene_adapter
+  alfa_robot_analytic_ik::alfa_robot_analytic_ik
+)
+
+ament_target_dependencies(v3_yaw_single_arm_box_extract_demo
+  alfa_robot_analytic_ik
+  geometry_msgs
+  interactive_markers
+  moveit_core
+  moveit_msgs
+  moveit_ros_planning
+  nlohmann_json
+  pluginlib
+  rclcpp
+  sensor_msgs
+  shape_msgs
+  std_msgs
+  std_srvs
+  tf2_ros
+  visualization_msgs
+)
+
 add_executable(v3_dual_arm_5x5_replay_validator
   src/v3_dual_arm_5x5_replay_validator.cpp
 )
@@ -380,6 +416,7 @@ install(TARGETS
   v3_continuous_reachability
   v3_redundant_ik_interactive_demo
   v3_single_arm_box_extract_demo
+  v3_yaw_single_arm_box_extract_demo
   v3_dual_arm_5x5_replay_validator
   v3_dual_arm_cartesian_box_demo
   v3_wrist_orientation_probe
@@ -566,6 +603,10 @@ if(BUILD_TESTING)
   add_test(
     NAME test_v3_stage_wall_cache
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_stage_wall_cache.py
+  )
+  add_test(
+    NAME test_v322_yaw_robustness_contract
+    COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v322_yaw_robustness_contract.py
   )
 endif()
 

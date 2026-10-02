@@ -1,0 +1,41 @@
+{
+  "schema": "alfa.v322_box_wall_action_family_config.v1",
+  "candidate_limit": 12,
+  "updown_grid_m": [0.0, -0.25, -0.5, -0.75, -1.0],
+  "top_suction_x_offset_m": -0.10,
+  "center_front_y_offset_m": 0.08,
+  "center_front_z_offset_m": -0.05,
+  "bottom_front_z_offset_m": 0.12,
+  "lift_change_weight": 2.0,
+  "target_height_weight": 4.0,
+  "center_arm_preference": {
+    "front": "right",
+    "top_suction": "left"
+  },
+  "center_lift_bias_m": {
+    "front": -0.25,
+    "top_suction": 0.0
+  },
+  "templates": [
+    {
+      "name": "front_face_extract",
+      "grasp_mode": "front",
+      "minimum_front_clearance_m": 0.35,
+      "minimum_top_clearance_m": 0.0,
+      "approach_distance_m": 0.05,
+      "retreat_distance_m": 0.35,
+      "preferred_rows_from_top": [1, 2, 3, 4],
+      "place_policy": "mobile_base_conveyor"
+    },
+    {
+      "name": "top_face_extract",
+      "grasp_mode": "top_suction",
+      "minimum_front_clearance_m": 0.20,
+      "minimum_top_clearance_m": 0.20,
+      "approach_distance_m": 0.05,
+      "retreat_distance_m": 0.20,
+      "preferred_rows_from_top": [5],
+      "place_policy": "mobile_base_conveyor"
+    }
+  ]
+}

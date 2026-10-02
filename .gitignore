@@ -2,9 +2,6 @@
 /build/
 /install/
 /log/
-/build-motion274/
-/install-motion274/
-/log-motion274/
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/

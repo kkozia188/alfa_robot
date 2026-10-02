@@ -280,8 +280,6 @@ class V3SingleArmBoxExtractViewer(Node):
 
     def update_scene(self, payload: dict, *, draw_boxes: bool = True) -> None:
         self.tool_link = str(payload.get("tool_link", self.tool_link))
-        if not bool(payload.get("retain_placed_boxes", True)):
-            rr.log("world/boxes/placed", rr.Clear(recursive=True))
         # Old recordings stored permuted dimensions in TCP axes; preserve their geometry.
         self.tool_to_box_rotation = np.asarray(payload.get("tool_to_box_rotation",
             [[0, 0, -1], [0, 1, 0], [1, 0, 0]]), dtype=float)
@@ -567,7 +565,6 @@ class V3SingleArmBoxExtractViewer(Node):
                         centers=[box["center"]], half_sizes=[np.asarray(box["size"]) * 0.5],
                         colors=[[255, 35, 35, 100]], labels=[f"COLLISION {box['id']}"]))
         if (self.wall_request.get("public_action") and
-                self.wall_request.get("retain_placed_boxes", True) and
                 frame.stage == "HOME_release_boundary"):
             for box in frame.carried_boxes:
                 tool = transforms.get(str(box.get("tool_link", "")))

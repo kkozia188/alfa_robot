@@ -59,7 +59,6 @@
 #include <future>
 #include <fstream>
 #include <iomanip>
-#include <iterator>
 #include <limits>
 #include <memory>
 #include <map>
@@ -294,10 +293,9 @@ public:
     post_extract_policy_ = getParameter<std::string>(
       "post_extract_policy", "rear_release");
     if (post_extract_policy_ != "rear_release" &&
-        post_extract_policy_ != "loaded_home" &&
-        post_extract_policy_ != "external_handoff") {
+        post_extract_policy_ != "loaded_home") {
       throw std::invalid_argument(
-              "post_extract_policy must be rear_release, loaded_home, or external_handoff");
+              "post_extract_policy must be rear_release or loaded_home");
     }
     rear_placement_strategy_ = getParameter<std::string>(
       "rear_placement_strategy", "geometric");
@@ -392,8 +390,6 @@ public:
     sequence_mode_ = getParameter<bool>("sequence_mode", false);
     playback_enabled_ = getParameter<bool>("playback_enabled", true);
     enable_stage_action_ = getParameter<bool>("enable_stage_action", false);
-    retain_placed_boxes_ = getParameter<bool>("retain_placed_boxes", true);
-    dual_entry_repair_enabled_ = getParameter<bool>("dual_entry_repair_enabled", false);
     execution_backend_ = getParameter<std::string>("execution_backend", "replay");
     follow_joint_trajectory_action_ = getParameter<std::string>(
       "follow_joint_trajectory_action", "/whole_body_jtc/follow_joint_trajectory");
@@ -533,8 +529,8 @@ public:
         throw std::invalid_argument("shoulder_box_offset must be finite and nonnegative metres");
       }
       const Eigen::Vector3d shoulder_midpoint = 0.5 * (
-        V3RedundantArmAnalyticIk(V3RedundantArmModel::V322Left).modelShoulderCenterInArmBase() +
-        V3RedundantArmAnalyticIk(V3RedundantArmModel::V322Right).modelShoulderCenterInArmBase());
+        V3RedundantArmAnalyticIk(V3RedundantArmModel::V311Left).modelShoulderCenterInArmBase() +
+        V3RedundantArmAnalyticIk(V3RedundantArmModel::V311Right).modelShoulderCenterInArmBase());
       initial_shoulder_z_ = (initial_state_->getGlobalLinkTransform(arm_base_link_) *
         shoulder_midpoint).z();
       chassis_front_x_ = getParameter<double>("chassis_front_x", modelChassisFrontX());
@@ -1624,12 +1620,12 @@ private:
                 release_state.setVariablePosition(
                   all_joint_names_[index], snapshot.place.back().joints.at(index));
               release_state.update(true);
-              if (retain_placed_boxes_ && trajectory_cache_.is_null() && snapshot.dual) {
+              if (trajectory_cache_.is_null() && snapshot.dual) {
                 placed_boxes_[snapshot.box_ids[0]] =
                   release_state.getGlobalLinkTransform("left_tool0") * toolToBox("left", snapshot.top);
                 placed_boxes_[snapshot.box_ids[1]] =
                   release_state.getGlobalLinkTransform("right_tool0") * toolToBox("right", snapshot.top);
-              } else if (retain_placed_boxes_ && trajectory_cache_.is_null()) {
+              } else if (trajectory_cache_.is_null()) {
                 placed_boxes_[snapshot.box_ids.front()] =
                   release_state.getGlobalLinkTransform(snapshot.single_side + "_tool0") *
                   toolToBox(snapshot.single_side, snapshot.top);
@@ -1810,27 +1806,20 @@ private:
 
   double modelChassisFrontX(bool rear = false) const
   {
-    std::vector<std::string> chassis_links;
-    if (robot_model_->hasLinkModel("model_base")) {
-      chassis_links = {"model_base", "chassis_base", "active_suspension_carriage",
-        "caster01", "caster02", "caster03", "caster04",
-        "wheel01", "wheel02", "wheel03", "wheel04"};
-    } else if (robot_model_->hasLinkModel("base_link")) {
-      // V3.2.2 consolidates the mobile-base collision meshes on base_link.
-      chassis_links = {"base_link"};
-    } else {
-      throw std::runtime_error("no supported V3 chassis root link");
-    }
+    constexpr std::array<const char*, 11> chassis_links = {
+      "model_base", "chassis_base", "active_suspension_carriage",
+      "caster01", "caster02", "caster03", "caster04",
+      "wheel01", "wheel02", "wheel03", "wheel04"};
     double front = rear ? std::numeric_limits<double>::infinity() :
       -std::numeric_limits<double>::infinity();
-    for (const auto& link_name : chassis_links) {
+    for (const char* link_name : chassis_links) {
       const auto* link = robot_model_->getLinkModel(link_name);
-      if (!link) throw std::runtime_error(link_name + " missing from V3 chassis model");
+      if (!link) throw std::runtime_error(std::string(link_name) + " missing from V3 chassis model");
       const auto& shapes = link->getShapes();
       const auto& origins = link->getCollisionOriginTransforms();
       for (size_t i = 0; i < shapes.size(); ++i) {
         if (shapes[i]->type != shapes::MESH) {
-          throw std::runtime_error(link_name + " chassis collision must be a mesh");
+          throw std::runtime_error(std::string(link_name) + " chassis collision must be a mesh");
         }
         const auto* mesh = static_cast<const shapes::Mesh*>(shapes[i].get());
         const Eigen::Isometry3d transform = initial_state_->getGlobalLinkTransform(link) * origins[i];
@@ -1877,7 +1866,7 @@ private:
     planning_group_name_ = side + "_arm";
     planning_group_ = robot_model_->getJointModelGroup(planning_group_name_);
     solver_ = std::make_unique<V3RedundantArmAnalyticIk>(
-      side == "left" ? V3RedundantArmModel::V322Left : V3RedundantArmModel::V322Right);
+      side == "left" ? V3RedundantArmModel::V311Left : V3RedundantArmModel::V311Right);
   }
 
   void createBoxMarker()
@@ -2138,8 +2127,7 @@ private:
         state.setVariablePosition(all_joint_names_[i], frame.joints.at(i));
       const bool attached = std::any_of(frame.carried_boxes.begin(), frame.carried_boxes.end(),
         [](const nlohmann::json& box) {return box.value("attached", false);});
-      if (enable_stage_action_ && retain_placed_boxes_ &&
-          !attached && !frame.box_visible && !placed_current_boxes) {
+      if (enable_stage_action_ && !attached && !frame.box_visible && !placed_current_boxes) {
         state.update(true);
         addPlacedBox(released, left_id,
           state.getGlobalLinkTransform("left_tool0") * toolToBox("left", top), "left");
@@ -2355,79 +2343,7 @@ private:
       }
     }
     std::string validation_reason;
-    bool valid = validateDualFrames(
-      result.frames, left_id, right_id, top, &result.metrics, &validation_reason);
-    const auto repair_dual_phase = [&](int phase) {
-      const std::string stage = "dual_" + std::to_string(phase);
-      const auto begin = std::find_if(
-        result.frames.begin(), result.frames.end(),
-        [&](const ReplayFrame& frame) {return frame.stage == stage;});
-      if (begin == result.frames.end()) return false;
-      const auto end = std::find_if(
-        begin, result.frames.end(),
-        [&](const ReplayFrame& frame) {return frame.stage != stage;});
-      moveit::core::RobotState start(*initial_state_);
-      moveit::core::RobotState goal(*initial_state_);
-      const auto& start_joints = phase == 0 ? common_joints : std::prev(begin)->joints;
-      const auto& goal_joints = std::prev(end)->joints;
-      for (size_t joint = 0; joint < all_joint_names_.size(); ++joint) {
-        start.setVariablePosition(all_joint_names_[joint], start_joints[joint]);
-        goal.setVariablePosition(all_joint_names_[joint], goal_joints[joint]);
-      }
-      start.update(true);
-      goal.update(true);
-      const auto* group = robot_model_->getJointModelGroup("dual_arm_with_updown");
-      auto repair_scene = makeDualScene(left_id, right_id);
-      repair_scene->getAllowedCollisionMatrixNonConst().setEntry(
-        kCarriedBoxLeftId, "left_tool0", true);
-      repair_scene->getAllowedCollisionMatrixNonConst().setEntry(
-        kCarriedBoxLeftId, "left_link7", true);
-      repair_scene->getAllowedCollisionMatrixNonConst().setEntry(
-        kCarriedBoxRightId, "right_tool0", true);
-      repair_scene->getAllowedCollisionMatrixNonConst().setEntry(
-        kCarriedBoxRightId, "right_link7", true);
-      const bool visible = phase == 0;
-      if (!visible) {
-        repair_scene->getWorldNonConst()->removeObject(kCarriedBoxLeftId);
-        repair_scene->getWorldNonConst()->removeObject(kCarriedBoxRightId);
-      }
-      auto repair = planRrtConnect(repair_scene, start, goal, true, false, group);
-      result.metrics.rrt_approach_ms += repair.wall_ms;
-      if (!repair.success) {
-        validation_reason += "; dual_phase_" + std::to_string(phase) +
-          "_repair=" + repair.reason;
-        return false;
-      }
-      std::vector<ReplayFrame> repaired;
-      repaired.reserve(result.frames.size() + repair.states.size());
-      repaired.insert(repaired.end(), result.frames.begin(), begin);
-      for (const auto& state : repair.states) {
-        ReplayFrame frame{stage, allJoints(*state), false};
-        frame.box_visible = visible;
-        frame.carried_boxes.push_back(carriedBoxJson(
-          left_id, left_center, "left", top, false, visible));
-        frame.carried_boxes.push_back(carriedBoxJson(
-          right_id, right_center, "right", top, false, visible));
-        repaired.push_back(std::move(frame));
-      }
-      repaired.insert(repaired.end(), end, result.frames.end());
-      result.frames = std::move(repaired);
-      return true;
-    };
-    if (!valid && dual_entry_repair_enabled_) {
-      for (const int phase : {0, 8}) {
-        if (validation_reason.find(
-            "dual_dual_" + std::to_string(phase) + "_collision") == std::string::npos) {
-          continue;
-        }
-        if (!repair_dual_phase(phase)) break;
-        validation_reason.clear();
-        valid = validateDualFrames(
-          result.frames, left_id, right_id, top, &result.metrics, &validation_reason);
-        if (valid) break;
-      }
-    }
-    if (!valid) {
+    if (!validateDualFrames(result.frames, left_id, right_id, top, &result.metrics, &validation_reason)) {
       result.failure_stage = "dual_combined_validation";
       result.failure_reason = validation_reason;
       result.frames.clear();
@@ -4102,64 +4018,6 @@ private:
         continue;
       }
 
-      if (post_extract_policy_ == "external_handoff") {
-        result.frames = executable_prefix;
-        moveit::core::RobotState released(*retreat_states.back());
-        released.clearAttachedBody(kCarriedBoxId);
-        released.update(true);
-        result.frames.push_back(ReplayFrame{
-          "release_box", allJoints(released), false, false});
-
-        auto released_scene = planning_scene::PlanningScene::clone(loaded);
-        moveit::core::RobotState arm_home(released);
-        const auto home_joints = armJoints(*home_state_);
-        arm_home.setJointGroupPositions(planning_group_, home_joints.data());
-        arm_home.update(true);
-
-        RrtPlanResult home_plan;
-        std::string home_direct_reason;
-        if (connection_planner_ == "shortcut_local_rrt") {
-          home_plan = planRrt(released_scene, released, arm_home, false, &result.metrics);
-          result.metrics.rrt_return_ms += home_plan.wall_ms;
-        } else if (edgeClear(released_scene, released, arm_home, false, &result.metrics,
-            &home_direct_reason, &home_plan.rejected_state) &&
-            alfa_robot::motion::sameShoulderElbowBranch(
-              armJoints(released), armJoints(arm_home))) {
-          home_plan.success = true;
-          home_plan.states = directArmPath(released, arm_home);
-        } else {
-          home_plan = planRrt(released_scene, released, arm_home, false, &result.metrics);
-          result.metrics.rrt_return_ms += home_plan.wall_ms;
-        }
-        if (!home_plan.success) {
-          result.rejected_state = home_plan.rejected_state;
-          last_failure_stage = "home_return";
-          last_failure_reason = home_plan.reason.empty() ?
-            home_direct_reason : home_plan.reason;
-          continue;
-        }
-        const size_t home_begin = result.frames.size();
-        appendStates(home_plan.states, "home_return", false, true, &result.frames);
-        for (size_t index = home_begin; index < result.frames.size(); ++index)
-          result.frames[index].box_visible = false;
-
-        const auto home_updown = moveUpdown(
-          released_scene, *home_plan.states.back(), home_state_->getVariablePosition("updown"),
-          false, &result.metrics);
-        if (!home_updown.success) {
-          result.rejected_state = home_updown.rejected_state;
-          last_failure_stage = "home_updown";
-          last_failure_reason = home_updown.reason;
-          continue;
-        }
-        const size_t updown_begin = result.frames.size();
-        appendStates(home_updown.states, "home_updown", false, true, &result.frames);
-        for (size_t index = updown_begin; index < result.frames.size(); ++index)
-          result.frames[index].box_visible = false;
-        result.success = true;
-        return finish();
-      }
-
       last_failure_stage.clear();
       moveit::core::RobotState return_goal(grasp_start);
       if (post_extract_policy_ == "loaded_home") {
@@ -4402,9 +4260,7 @@ private:
       output["local_rrt_planning_time_s"] = local_rrt_planning_time_;
       output["bounded_joint_distance"] = connection_planner_ == "shortcut_local_rrt";
       output["rear_placement_strategy"] = direct_attach_ ? "named_unloading" : rear_placement_strategy_;
-      output["release_after_transfer"] = !direct_attach_ &&
-        (post_extract_policy_ == "rear_release" || post_extract_policy_ == "external_handoff");
-      output["retain_placed_boxes"] = retain_placed_boxes_;
+      output["release_after_transfer"] = !direct_attach_ && post_extract_policy_ == "rear_release";
       output["initial_pose"] = initial_pose_;
       output["direct_attach"] = direct_attach_;
       output["planning_seed"] = planning_seed_;
@@ -4834,8 +4690,6 @@ private:
   bool sequence_mode_ = false;
   bool playback_enabled_ = true;
   bool enable_stage_action_ = false;
-  bool retain_placed_boxes_ = true;
-  bool dual_entry_repair_enabled_ = false;
   std::string execution_backend_ = "replay";
   std::string follow_joint_trajectory_action_ = "/whole_body_jtc/follow_joint_trajectory";
   std::string trajectory_cache_file_;

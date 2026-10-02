@@ -12,13 +12,6 @@ ALFA Robot 是 ROS2 双臂工业机器人项目；当前仓库只保留运控、
 
 ## 当前推进重点
 
-- 停靠误差鲁棒性新任务为 Linear `MOTION-274`，在独立工作树
-  `/home/tim/alfa_robot-motion274-docking-error` 推进，不改写 `MOTION-261`。
-  已完成 x/y 各 `{-5,0,+5}cm`、yaw `{-3,0,+3}deg` 的27点顶排pilot：
-  baseline `66/81=81.48%`，双臂 phase 0/8 whole-body RRT 修复后
-  `74/81=91.36%`；IK/预抓取均81/81，剩余7项全是2+4内侧双箱碰撞。
-  名义位3循环Rerun含103个实体路径和82,668行，verify通过。正式
-  125点x15循环全矩阵尚未运行，pilot不得作为整墙误差范围保证。
 - 当前主线：`v5_dev` 已收口左右箱体正面中心 6D 位姿任务合同；功能分支正在接入 V3 七轴双臂模型。
 - V3 模型工作跟踪：Linear `MOTION-94`。当前试验分支已接入 `robot_v3.0.9` 十六自由度整机模型；双臂外观与碰撞网格和 V3.0.8 上游资产逐字节一致。
 - V3 基础动作跟踪：Linear `MOTION-154`。分支 `motion-154-v3-dual-arm-simple-motion` 已完成首个40cm箱双臂同步解析笛卡尔平移Demo，待用户交互验收后继续旋转和异构握持任务。

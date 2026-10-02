@@ -12,6 +12,10 @@
   <depend>eigen</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
+  <test_depend>ament_index_cpp</test_depend>
+  <test_depend>moveit_core</test_depend>
+  <test_depend>srdfdom</test_depend>
+  <test_depend>urdf</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

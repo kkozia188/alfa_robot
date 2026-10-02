@@ -1,0 +1,62 @@
+{
+  "schema": "alfa.v322_tool0151_mobile_base_conveyor_release.v1",
+  "name": "2026-10-01-v322-tool0151-mobile-base-conveyor",
+  "tag": "v3-mobile-base-conveyor-v322-tool0151-2026.10.01",
+  "model_revision": "robot_v3.2.2-suction",
+  "tool0_offset_local_z_m": 0.151,
+  "upstream_branch": "alfa_v3_dev",
+  "upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
+  "linear_issue": "MOTION-261",
+  "owner": "Zhang Zelin",
+  "task": {
+    "upper_front_clearance_m": 0.85,
+    "lower_front_clearance_m": 0.6,
+    "row_order": "top_to_bottom",
+    "group_order_per_row": "outer_pair_then_inner_pair_then_center",
+    "pickup_base_y_m": 0.0,
+    "backoff_distance_m": 2.35,
+    "right_shuttle_distance_m": 1.5,
+    "cycle_count": 15,
+    "dual_cycle_count": 10,
+    "simultaneous_dual_cycle_count": 10,
+    "single_center_cycle_count": 5,
+    "one_sided_attachment_frames": 0
+  },
+  "planning": {
+    "task_core_total_s": 8.594481,
+    "task_core_average_s": 0.34377924,
+    "task_core_max_s": 1.351583,
+    "task_core_below_3s": 25,
+    "runtime_validation_max_ms_including_process_startup": 539.0230680059176,
+    "runtime_operations_below_3s": 16,
+    "cache_loading_counted": false
+  },
+  "validation": {
+    "success": true,
+    "completed_boxes": 25,
+    "completed_rows": 5,
+    "checked_frames": 27372,
+    "interpolated_edge_samples": 1020,
+    "maximum_joint_step_deg": 2.943379824983848,
+    "joint_flip_events": 0,
+    "maximum_left_carried_tilt_deg": 0.9239224489925627,
+    "maximum_right_carried_tilt_deg": 0.06559679978109437,
+    "base_travel_m": 115.74999999999883,
+    "visual_mesh_count": 49,
+    "rrd_verified": true
+  },
+  "artifacts": [
+    {"name": "dual-bridge-map.json", "size": 1056, "sha256": "313a41b038942f0121b3f1abaa7eae9295f97a7f02b4b76b30271543bc4497c8"},
+    {"name": "pickup-summary.json", "size": 6435, "sha256": "c962d0ad96f31e952992a4834cf226fa8c8855dec2b2741e98a625b6381a9e6e"},
+    {"name": "v322-conveyor-box-planning.csv", "size": 2675, "sha256": "b2faf210ee35e33ab52ffd7ca6307651db6e8576b5796e5fd5a20b3c4b67b43c"},
+    {"name": "v322-conveyor-certified-replay.json", "size": 20405942, "sha256": "068a4a24d13fbc8a51aa2cfd9cfb031df9f36eb987310ae1ce3ee43507fcfa08"},
+    {"name": "v322-conveyor-metrics.csv", "size": 2806, "sha256": "061bdbcab7db30310141460fdc7e5f4445808099f238f6cb7caa9a667bce7618"},
+    {"name": "v322-conveyor-production-shell.png", "size": 1673207, "sha256": "3f567030e75c1e4ced3cf847ac6663b6ed4e3173ea92beba080a149a1dce8edc"},
+    {"name": "v322-conveyor-production-shell.rrd", "size": 27953598, "sha256": "c909abcd4b59f9b0c8329343e96f445490e710f3dcfd33ebe20566e0c96de722"},
+    {"name": "v322-conveyor-summary.json", "size": 31619, "sha256": "87c816bbc0970884e5efdcaf48f3eee31f74f4d0949e9e675b59e81d783262a3"},
+    {"name": "v322-conveyor-validation.json", "size": 3635, "sha256": "b98b428ce72b1da74bfba950456940fda54625d9cefb728a326a86a4bebdac87"},
+    {"name": "v322-plan-cache.json", "size": 3728317, "sha256": "fc6e626675b29286029a139daf906fb409f2fb7412b18d141a9ebebb553990ba"},
+    {"name": "v322-runtime-validation-times.json", "size": 4188, "sha256": "27d22fd16458dd12928dc880f4e088a420dd93621de189401ab8a6eac4cfb50b"},
+    {"name": "v322-tool0151-mobile-base-conveyor-source-snapshot.tar.gz", "size": 159988, "sha256": "ecc250016d41403bcf62b38d489c951bd12d613892e947e408f36863fe600652"}
+  ]
+}

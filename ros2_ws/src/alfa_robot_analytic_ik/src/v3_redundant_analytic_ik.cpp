@@ -132,6 +132,56 @@ Eigen::Isometry3d rotationAroundLine(
 
 TransformArray fixedJointTransforms(V3RedundantArmModel model)
 {
+  if (model == V3RedundantArmModel::V322Left) {
+    return {
+      transformFromOrigin(
+        {0.266, -0.29054221, 0.2873005},
+        {kPi, 1.30899695359, kPi / 2.0}),
+      transformFromOrigin(
+        {0.04949, 5.2471965e-10, 0.15042},
+        {kUrdfHalfPi, -1.3089969, kUrdfHalfPi}),
+      transformFromOrigin(
+        {0.23761775, 0.063669485, -0.0513},
+        {0.0, -kUrdfHalfPi, -2.8797933}),
+      transformFromOrigin(
+        {-4.248689e-05, 0.085000001, 0.26},
+        {-kUrdfHalfPi, 0.0, 0.0}),
+      transformFromOrigin(
+        {0.0, -0.241, -0.082299999},
+        {2.28522397028e-09, -1.57079630099, 1.57079632451}),
+      transformFromOrigin(
+        {0.0, -0.090499999, 0.233},
+        {kUrdfHalfPi, 0.0, 0.0}),
+      transformFromOrigin(
+        {0.0, 0.0992, -0.0915},
+        {-kUrdfHalfPi, 0.0, 0.0}),
+    };
+  }
+  if (model == V3RedundantArmModel::V322Right) {
+    return {
+      transformFromOrigin(
+        {0.266, 0.29054221, 0.2873005},
+        {-kPi, 1.30899695359, -kPi / 2.0}),
+      transformFromOrigin(
+        {0.065, -5.2471962e-10, 0.15042},
+        {kUrdfHalfPi, 1.3089969, kUrdfHalfPi}),
+      transformFromOrigin(
+        {-0.23761775, 0.063669485, -0.06681},
+        {0.0, -kUrdfHalfPi, -0.26179939}),
+      transformFromOrigin(
+        {4.248689e-05, -0.085000001, 0.26},
+        {kUrdfHalfPi, 0.0, 0.0}),
+      transformFromOrigin(
+        {0.0, 0.241, -0.082299999},
+        {-2.28522397028e-09, -1.57079630099, -1.57079632451}),
+      transformFromOrigin(
+        {0.0, 0.090499999, 0.233},
+        {-kUrdfHalfPi, 0.0, 0.0}),
+      transformFromOrigin(
+        {0.0, -0.0992, -0.0915},
+        {kUrdfHalfPi, 0.0, 0.0}),
+    };
+  }
   if (model == V3RedundantArmModel::V311Left) {
     const Eigen::Isometry3d arm_mount = transformFromOrigin(
       {0.0, 0.0, -0.0142}, {0.0, 0.0, kPi / 2.0});
@@ -459,6 +509,9 @@ Eigen::Isometry3d toolTransform(V3RedundantArmModel model)
              model == V3RedundantArmModel::V311Left ||
              model == V3RedundantArmModel::V311Right) {
     transform.translation().z() = 0.13585;
+  } else if (model == V3RedundantArmModel::V322Left ||
+             model == V3RedundantArmModel::V322Right) {
+    transform.translation().z() = 0.151;
   }
   return transform;
 }
@@ -541,6 +594,14 @@ const Geometry& geometry(V3RedundantArmModel model)
   static const Geometry v309_right = makeGeometry(V3RedundantArmModel::V309Right);
   static const Geometry v311_left = makeGeometry(V3RedundantArmModel::V311Left);
   static const Geometry v311_right = makeGeometry(V3RedundantArmModel::V311Right);
+  static const Geometry v322_left = makeGeometry(V3RedundantArmModel::V322Left);
+  static const Geometry v322_right = makeGeometry(V3RedundantArmModel::V322Right);
+  if (model == V3RedundantArmModel::V322Left) {
+    return v322_left;
+  }
+  if (model == V3RedundantArmModel::V322Right) {
+    return v322_right;
+  }
   if (model == V3RedundantArmModel::V311Left) {
     return v311_left;
   }
@@ -589,7 +650,9 @@ const JointVector& lowerLimits(V3RedundantArmModel model)
       model == V3RedundantArmModel::V309Left ||
       model == V3RedundantArmModel::V309Right ||
       model == V3RedundantArmModel::V311Left ||
-      model == V3RedundantArmModel::V311Right) {
+      model == V3RedundantArmModel::V311Right ||
+      model == V3RedundantArmModel::V322Left ||
+      model == V3RedundantArmModel::V322Right) {
     return kV307LowerLimits;
   }
   return model == V3RedundantArmModel::LegacyV304 ?
@@ -605,7 +668,9 @@ const JointVector& upperLimits(V3RedundantArmModel model)
       model == V3RedundantArmModel::V309Left ||
       model == V3RedundantArmModel::V309Right ||
       model == V3RedundantArmModel::V311Left ||
-      model == V3RedundantArmModel::V311Right) {
+      model == V3RedundantArmModel::V311Right ||
+      model == V3RedundantArmModel::V322Left ||
+      model == V3RedundantArmModel::V322Right) {
     return kV307UpperLimits;
   }
   return model == V3RedundantArmModel::LegacyV304 ?
@@ -726,6 +791,188 @@ Eigen::Vector3d pointAfterJointMotions(
   return motion * home_point;
 }
 
+Eigen::Isometry3d forwardForModel(
+  const JointVector& joints, V3RedundantArmModel model_kind)
+{
+  const Geometry& model = geometry(model_kind);
+  Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
+  for (size_t index = 0; index < joints.size(); ++index) {
+    transform = transform * model.fixed_transforms[index] *
+      rotationTransform(rotZ(joints[index]));
+  }
+  return transform * toolTransform(model_kind);
+}
+
+double swivelAngleForModel(
+  const JointVector& joints, V3RedundantArmModel model_kind)
+{
+  const Geometry& model = geometry(model_kind);
+  const Eigen::Vector3d wrist = pointAfterJointMotions(model.wrist, joints, 4, model_kind);
+  const Eigen::Vector3d shoulder_to_wrist = wrist - model.shoulder;
+  const double shoulder_to_wrist_distance = shoulder_to_wrist.norm();
+  if (shoulder_to_wrist_distance < kGeometryTolerance) {
+    return 0.0;
+  }
+  const Eigen::Vector3d shoulder_to_wrist_direction =
+    shoulder_to_wrist / shoulder_to_wrist_distance;
+  const double circle_offset =
+    (model.upper_arm_length * model.upper_arm_length -
+     model.forearm_length * model.forearm_length +
+     shoulder_to_wrist_distance * shoulder_to_wrist_distance) /
+    (2.0 * shoulder_to_wrist_distance);
+  const double circle_radius_squared =
+    model.upper_arm_length * model.upper_arm_length - circle_offset * circle_offset;
+  if (circle_radius_squared <= kSingularityTolerance * kSingularityTolerance) {
+    return 0.0;
+  }
+  const Eigen::Vector3d circle_center =
+    model.shoulder + circle_offset * shoulder_to_wrist_direction;
+  const Eigen::Vector3d elbow = pointAfterJointMotions(model.elbow, joints, 2, model_kind);
+  const Eigen::Vector3d elbow_offset = (elbow - circle_center).normalized();
+  const auto [swivel_first, swivel_second] = swivelBasis(shoulder_to_wrist_direction);
+  return std::atan2(
+    elbow_offset.dot(swivel_second), elbow_offset.dot(swivel_first));
+}
+
+using NumericalResidual = Eigen::Matrix<double, 7, 1>;
+using NumericalJacobian = Eigen::Matrix<double, 7, 7>;
+
+NumericalResidual numericalResidual(
+  const JointVector& joints,
+  const V3RedundantIkRequest& request,
+  V3RedundantArmModel model_kind)
+{
+  constexpr double kOrientationWeight = 0.35;
+  constexpr double kSwivelWeight = 0.08;
+  const Eigen::Isometry3d actual = forwardForModel(joints, model_kind);
+  const Eigen::AngleAxisd orientation_error(
+    request.target_in_arm_base.linear() * actual.linear().transpose());
+  NumericalResidual residual;
+  residual.template head<3>() =
+    request.target_in_arm_base.translation() - actual.translation();
+  residual.template segment<3>(3) =
+    kOrientationWeight * orientation_error.angle() * orientation_error.axis();
+  residual(6) = kSwivelWeight * normalizeAngle(
+    request.swivel_angle - swivelAngleForModel(joints, model_kind));
+  return residual;
+}
+
+JointVector boundedJoints(const JointVector& joints, V3RedundantArmModel model_kind)
+{
+  const JointVector& lower = lowerLimits(model_kind);
+  const JointVector& upper = upperLimits(model_kind);
+  JointVector output{};
+  for (size_t index = 0; index < output.size(); ++index) {
+    output[index] = std::clamp(normalizeAngle(joints[index]), lower[index], upper[index]);
+  }
+  return output;
+}
+
+std::optional<V3RedundantIkSolution> numericalSolveFromSeed(
+  const V3RedundantIkRequest& request,
+  V3RedundantArmModel model_kind,
+  const JointVector& initial)
+{
+  constexpr size_t kMaximumIterations = 180;
+  constexpr double kFiniteDifferenceStep = 1e-6;
+  constexpr double kMaximumStep = 0.30;
+  constexpr double kSwivelTolerance = 2e-3;
+  JointVector joints = boundedJoints(initial, model_kind);
+  double damping = 1e-5;
+
+  for (size_t iteration = 0; iteration < kMaximumIterations; ++iteration) {
+    const Eigen::Isometry3d actual = forwardForModel(joints, model_kind);
+    const double position_error =
+      (request.target_in_arm_base.translation() - actual.translation()).norm();
+    const double rotation_error = orientationError(
+      request.target_in_arm_base.linear(), actual.linear());
+    const double swivel_error = std::abs(normalizeAngle(
+      request.swivel_angle - swivelAngleForModel(joints, model_kind)));
+    if (position_error <= request.position_tolerance &&
+        rotation_error <= request.orientation_tolerance &&
+        swivel_error <= kSwivelTolerance &&
+        (!request.enforce_joint_limits || insideLimits(joints, model_kind))) {
+      V3RedundantIkSolution solution;
+      solution.joints = joints;
+      solution.swivel_angle = swivelAngleForModel(joints, model_kind);
+      solution.position_error = position_error;
+      solution.orientation_error = rotation_error;
+      solution.seed_distance = seedDistance(joints, request.seed);
+      solution.minimum_joint_limit_margin = minimumLimitMargin(joints, model_kind);
+      return solution;
+    }
+
+    const NumericalResidual residual = numericalResidual(joints, request, model_kind);
+    NumericalJacobian jacobian;
+    for (size_t column = 0; column < joints.size(); ++column) {
+      JointVector perturbed = joints;
+      perturbed[column] += kFiniteDifferenceStep;
+      const NumericalResidual perturbed_residual =
+        numericalResidual(perturbed, request, model_kind);
+      jacobian.col(static_cast<Eigen::Index>(column)) =
+        (perturbed_residual - residual) / kFiniteDifferenceStep;
+    }
+
+    const Eigen::Matrix<double, 7, 7> normal =
+      jacobian.transpose() * jacobian +
+      damping * Eigen::Matrix<double, 7, 7>::Identity();
+    Eigen::Matrix<double, 7, 1> delta =
+      -normal.ldlt().solve(jacobian.transpose() * residual);
+    if (!delta.allFinite()) {
+      return std::nullopt;
+    }
+    const double maximum = delta.cwiseAbs().maxCoeff();
+    if (maximum > kMaximumStep) {
+      delta *= kMaximumStep / maximum;
+    }
+
+    bool accepted = false;
+    const double score = residual.squaredNorm();
+    for (double scale : {1.0, 0.5, 0.25, 0.1, 0.05}) {
+      JointVector candidate = joints;
+      for (size_t index = 0; index < candidate.size(); ++index) {
+        candidate[index] += scale * delta(static_cast<Eigen::Index>(index));
+      }
+      candidate = boundedJoints(candidate, model_kind);
+      if (numericalResidual(candidate, request, model_kind).squaredNorm() < score) {
+        joints = candidate;
+        damping = std::max(1e-9, damping * 0.5);
+        accepted = true;
+        break;
+      }
+    }
+    if (!accepted) {
+      damping = std::min(1e3, damping * 10.0);
+      if (damping >= 1e3) {
+        return std::nullopt;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+std::vector<V3RedundantIkSolution> numericalSolutions(
+  const V3RedundantIkRequest& request, V3RedundantArmModel model_kind)
+{
+  std::vector<JointVector> starts{request.seed};
+  for (const auto [joint_index, offset] : std::array<std::pair<size_t, double>, 10>{
+      std::pair<size_t, double>{0U, 0.8}, {0U, -0.8},
+      {1U, 0.6}, {1U, -0.6}, {2U, 1.0}, {2U, -1.0},
+      {4U, 1.0}, {4U, -1.0}, {6U, 1.0}, {6U, -1.0}}) {
+    JointVector start = request.seed;
+    start[joint_index] += offset;
+    starts.push_back(boundedJoints(start, model_kind));
+  }
+
+  for (const JointVector& start : starts) {
+    const auto solution = numericalSolveFromSeed(request, model_kind, start);
+    if (solution) {
+      return {*solution};
+    }
+  }
+  return {};
+}
+
 }  // namespace
 
 V3RedundantArmAnalyticIk::V3RedundantArmAnalyticIk(V3RedundantArmModel model)
@@ -736,6 +983,10 @@ V3RedundantArmAnalyticIk::V3RedundantArmAnalyticIk(V3RedundantArmModel model)
 std::vector<V3RedundantIkSolution> V3RedundantArmAnalyticIk::solveInArmBase(
   const V3RedundantIkRequest& request) const
 {
+  if (model_ == V3RedundantArmModel::V322Left ||
+      model_ == V3RedundantArmModel::V322Right) {
+    return numericalSolutions(request, model_);
+  }
   std::vector<V3RedundantIkSolution> solutions;
   if (!request.target_in_arm_base.matrix().allFinite()) {
     return solutions;
@@ -913,13 +1164,7 @@ std::vector<V3RedundantIkSolution> V3RedundantArmAnalyticIk::solveInArmBase(
 Eigen::Isometry3d V3RedundantArmAnalyticIk::forwardInArmBase(
   const JointVector& joints) const
 {
-  const Geometry& model = geometry(model_);
-  Eigen::Isometry3d transform = Eigen::Isometry3d::Identity();
-  for (size_t index = 0; index < joints.size(); ++index) {
-    transform = transform * model.fixed_transforms[index] *
-      rotationTransform(rotZ(joints[index]));
-  }
-  return transform * toolTransform(model_);
+  return forwardForModel(joints, model_);
 }
 
 std::vector<V3WristOrientationSolution> V3RedundantArmAnalyticIk::solveWristOrientation(

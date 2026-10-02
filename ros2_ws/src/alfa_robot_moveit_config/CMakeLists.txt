@@ -309,6 +309,30 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   visualization_msgs
 )
 
+add_executable(v3_dual_arm_5x5_replay_validator
+  src/v3_dual_arm_5x5_replay_validator.cpp
+)
+
+target_compile_features(v3_dual_arm_5x5_replay_validator PUBLIC cxx_std_17)
+
+target_include_directories(v3_dual_arm_5x5_replay_validator PRIVATE
+  include
+)
+
+target_link_libraries(v3_dual_arm_5x5_replay_validator
+  alfa_robot_motion_scene_adapter
+)
+
+ament_target_dependencies(v3_dual_arm_5x5_replay_validator
+  geometry_msgs
+  moveit_core
+  moveit_msgs
+  moveit_ros_planning
+  nlohmann_json
+  rclcpp
+  shape_msgs
+)
+
 add_executable(v3_dual_arm_cartesian_box_demo
   src/v3_dual_arm_cartesian_box_demo.cpp
 )
@@ -356,6 +380,7 @@ install(TARGETS
   v3_continuous_reachability
   v3_redundant_ik_interactive_demo
   v3_single_arm_box_extract_demo
+  v3_dual_arm_5x5_replay_validator
   v3_dual_arm_cartesian_box_demo
   v3_wrist_orientation_probe
   EXPORT export_alfa_robot_motion_core
@@ -542,6 +567,12 @@ if(BUILD_TESTING)
     NAME test_v3_stage_wall_cache
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_stage_wall_cache.py
   )
+
+  add_test(
+    NAME test_v3_scoop_dual_sequence
+    COMMAND /usr/bin/python3 -m pytest -q
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_dual_sequence.py
+  )
 endif()
 
 ament_package()
@@ -577,5 +608,13 @@ install(PROGRAMS
   scripts/visualize_moveit_box_stack_flow.py
   scripts/visualize_v3_continuous_reachability.py
   scripts/visualize_v3_reachability_scan_volume.py
+  scripts/v3_scoop_5x5_conveyor_demo.py
+  scripts/v3_scoop_5x5_dual_rerun.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES
+  scripts/scan_v3_single_arm_box_wall.py
+  scripts/v3_5x5_grasp_sequence_rerun.py
   DESTINATION lib/${PROJECT_NAME}
 )

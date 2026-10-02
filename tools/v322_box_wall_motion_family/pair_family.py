@@ -177,30 +177,58 @@ def compile_pair_request(
                 int(task["derived_geometry"]["row_from_top"]) for task in tasks
             )
             base_candidates = [-0.60, -0.35] if row_max <= 3 else [-0.35, -0.60]
+            target_y_values = [
+                float(task["box_pose"]["position_m"][1]) for task in tasks
+            ]
+            same_lateral_half = target_y_values[0] * target_y_values[1] > 1.0e-9
+            if same_lateral_half:
+                midpoint_y = 0.5 * sum(target_y_values)
+                sign = 1.0 if midpoint_y > 0.0 else -1.0
+                base_y_candidates = list(dict.fromkeys([
+                    max(-0.75, min(0.75, midpoint_y)),
+                    sign * min(abs(midpoint_y), 0.60),
+                    sign * min(abs(midpoint_y), 0.45),
+                    0.0,
+                ]))
+                base_candidates = list(dict.fromkeys([
+                    base_candidates[0], -0.475, base_candidates[1]
+                ]))
+                base_yaw_candidates = [
+                    0.0,
+                    sign * math.radians(15.0),
+                    -sign * math.radians(15.0),
+                ]
+            else:
+                base_y_candidates = [0.0]
+                base_yaw_candidates = [0.0]
             retreat_distances = (
                 [0.35, 0.30, 0.25, 0.20]
                 if first["grasp_mode"] == "front" else [0.20]
             )
             for base_rank, base_x in enumerate(base_candidates):
-                for retreat_distance in retreat_distances:
-                    score = (
-                        float(first["score"])
-                        + float(second["score"])
-                        + 0.25 * base_rank
-                        + 2.0 * (retreat_distances[0] - retreat_distance)
-                    )
-                    paired.append({
-                        "left_box_id": left_box_id,
-                        "right_box_id": right_box_id,
-                        "grasp_mode": first["grasp_mode"],
-                        "common_updown_m": first["updown_m"],
-                        "retreat_distance_m": retreat_distance,
-                        "base_pose_map": [base_x, 0.0, 0.0],
-                        "score": round(score, 6),
-                        "left_contact_pose": left_candidate["contact_pose"],
-                        "right_contact_pose": right_candidate["contact_pose"],
-                        "source_candidate_ranks": [first["rank"], second["rank"]],
-                    })
+                for base_y_rank, base_y in enumerate(base_y_candidates):
+                    for yaw_rank, base_yaw in enumerate(base_yaw_candidates):
+                        for retreat_distance in retreat_distances:
+                            score = (
+                                float(first["score"])
+                                + float(second["score"])
+                                + 0.25 * base_rank
+                                + 0.50 * base_y_rank
+                                + 0.20 * yaw_rank
+                                + 2.0 * (retreat_distances[0] - retreat_distance)
+                            )
+                            paired.append({
+                                "left_box_id": left_box_id,
+                                "right_box_id": right_box_id,
+                                "grasp_mode": first["grasp_mode"],
+                                "common_updown_m": first["updown_m"],
+                                "retreat_distance_m": retreat_distance,
+                                "base_pose_map": [base_x, base_y, base_yaw],
+                                "score": round(score, 6),
+                                "left_contact_pose": left_candidate["contact_pose"],
+                                "right_contact_pose": right_candidate["contact_pose"],
+                                "source_candidate_ranks": [first["rank"], second["rank"]],
+                            })
     paired.sort(key=lambda value: (
         float(value["score"]),
         abs(float(value["base_pose_map"][0])),
@@ -208,7 +236,7 @@ def compile_pair_request(
     ))
     if not paired:
         raise ContractError("no synchronized two-arm candidate shares one mode and lift")
-    limit = int(request.get("candidate_limit", 64))
+    limit = int(request.get("candidate_limit", 200))
     if limit <= 0:
         raise ContractError("candidate_limit must be positive")
     for rank, candidate in enumerate(paired[:limit], start=1):

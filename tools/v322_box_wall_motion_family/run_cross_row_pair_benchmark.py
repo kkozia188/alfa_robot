@@ -83,11 +83,15 @@ def plan_single(
     center: tuple[float, float, float],
     output: Path,
     retreat_distance_m: float,
+    base_y_m: float = 0.0,
+    base_yaw_rad: float = 0.0,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     args = backend_args(base_x, family)
     apply_current_arm_seed(args, seed_task)
     args.ignore_opposite_arm = True
     args.auto_safe_opposite_arm = False
+    args.base_y = base_y_m
+    args.base_yaw = base_yaw_rad
     args.front_retreat_distance_m = retreat_distance_m
     args.top_retreat_distance_m = retreat_distance_m
     result = backend.run_attempt(
@@ -107,11 +111,17 @@ def plan_bridge(
     start: list[float],
     goal: list[float],
     output: Path,
+    rrt_planning_time_s: float = 15.0,
+    rrt_planning_attempts: int = 8,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     args = backend_args(float(candidate["base_pose_map"][0]), family)
+    args.base_y = float(candidate["base_pose_map"][1])
+    args.base_yaw = float(candidate["base_pose_map"][2])
     apply_current_arm_seed(args, seed_task)
     args.analytic_path_only = False
     args.ignore_opposite_arm = False
+    args.rrt_planning_time = rrt_planning_time_s
+    args.rrt_planning_attempts = rrt_planning_attempts
     left_id = int(candidate["left_box_id"])
     result = backend.run_attempt(
         args,
@@ -153,6 +163,81 @@ def task_from_payload(
     }
 
 
+def compose_pair_cycle(
+    conveyor: ModuleType,
+    left_task: dict[str, Any],
+    right_task: dict[str, Any],
+    current: list[float],
+    removed: set[int],
+    bridge: dict[str, Any],
+) -> tuple[dict[str, Any], list[float]]:
+    pickup_pose = conveyor.dual.paired_base_pose(left_task, right_task)
+    operation, _ = conveyor.dual.combine_pair(
+        left_task,
+        right_task,
+        current,
+        removed,
+        "average",
+        "whole_body_bridge",
+        bridge,
+    )
+    frames = operation["frames"]
+    if not frames:
+        raise ValueError("dual pair has no frames")
+    partial_pickup = frames[-1]["stage"] != "release_at_place"
+    if frames[-1]["stage"] == "release_at_place":
+        frames.pop()
+    elif not (
+        bool(frames[-1].get("left_attached"))
+        and bool(frames[-1].get("right_attached"))
+    ):
+        raise ValueError("dual pair does not end with both boxes attached")
+    automatic_stow = None
+    if partial_pickup:
+        automatic_stow = [
+            {
+                "stage": "released_pickup_end",
+                "joints": [float(value) for value in frames[-1]["joints"]],
+            },
+            *[
+                {
+                    "stage": "reverse_validated_dual_pickup",
+                    "joints": [float(value) for value in source["joints"]],
+                }
+                for source in reversed(frames[:-1])
+            ],
+        ]
+    held_sides = {"left", "right"}
+    conveyor.append_conveyor_shuttle(
+        frames,
+        pickup_pose,
+        2.35,
+        1.50,
+        0.01,
+        held_sides,
+        automatic_stow,
+    )
+    left_id = int(left_task["box_id"])
+    right_id = int(right_task["box_id"])
+    operation.update({
+        "kind": "dual_conveyor_cycle",
+        "conveyor_pose_map": [
+            pickup_pose[0] - 2.35,
+            pickup_pose[1] - 1.50,
+            pickup_pose[2],
+        ],
+        "right_shuttle_distance_m": 1.50,
+        "backoff_distance_m": 2.35,
+        "pickup_order": [left_id, right_id],
+        "pickup_mode": "simultaneous",
+        "frames": frames,
+    })
+    operation["frames"] = conveyor.densify_operation_frames(
+        frames, default_base_pose=pickup_pose
+    )
+    return operation, list(operation["frames"][-1]["joints"])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pair-plan", type=Path, required=True)
@@ -179,7 +264,6 @@ def main() -> int:
     box_planning: list[dict[str, Any]] = []
     previous_pose: list[float] | None = None
     previous_obstacles: list[dict[str, Any]] | None = None
-    fallback: dict[str, dict[str, Any]] | None = None
     replay_joint_names: list[str] = []
 
     for request_index, request in enumerate(pair_plan["requests"], start=1):
@@ -200,16 +284,18 @@ def main() -> int:
             mode = str(candidate["grasp_mode"])
             updown = float(candidate["common_updown_m"])
             base_x = float(candidate["base_pose_map"][0])
+            base_y = float(candidate["base_pose_map"][1])
+            base_yaw = float(candidate["base_pose_map"][2])
             retreat_distance = float(candidate["retreat_distance_m"])
             left_result, left_payload = plan_single(
                 backend, family, seed_task, left_id, "left", mode, updown, base_x,
                 base_removed | {right_id}, centers[left_id], candidate_dir / "left.json",
-                retreat_distance,
+                retreat_distance, base_y, base_yaw,
             )
             right_result, right_payload = plan_single(
                 backend, family, seed_task, right_id, "right", mode, updown, base_x,
                 base_removed | {left_id}, centers[right_id], candidate_dir / "right.json",
-                retreat_distance,
+                retreat_distance, base_y, base_yaw,
             )
             attempt = {
                 "candidate_rank": rank,
@@ -264,22 +350,10 @@ def main() -> int:
                 right_id, int(right_target["row_from_top"]),
                 int(right_target["column_from_left"]), right_payload, bridge,
             )
-            current_fallback = fallback or {
-                "left": conveyor.dual.attachment(left_task),
-                "right": conveyor.dual.attachment(right_task),
-            }
             try:
-                operation, terminal = conveyor.operation_for_group(
-                    (left_id, right_id),
-                    {left_id: left_task, right_id: right_task},
-                    list(start),
-                    set(base_removed),
-                    current_fallback,
-                    2.35,
-                    1.50,
-                    0.01,
-                    {},
-                    {f"{left_id}+{right_id}": bridge},
+                operation, terminal = compose_pair_cycle(
+                    conveyor, left_task, right_task, list(start),
+                    set(base_removed), bridge,
                 )
             except ValueError as error:
                 attempt["composition_failure"] = str(error)
@@ -373,10 +447,6 @@ def main() -> int:
         operations.append(operation)
         previous_pose = pickup_pose
         previous_obstacles = operation["obstacles"]
-        fallback = {
-            "left": operation["left_attachment"],
-            "right": operation["right_attachment"],
-        }
         box_planning.extend(operation["box_planning"])
         replay_joint_names = [
             str(value) for value in selected["left_task"]["payload"]["joint_names"]

@@ -42,6 +42,33 @@ m to robot-right, release, stow outside the warehouse, and return.
 
 ## Cross-Row Result
 
+The exhaustive `25 choose 2` matrix is complete under the strict scene where
+all 23 non-target boxes remain present:
+
+- Certified pairs: `292/300` (`97.33%`)
+- Independent MoveIt/FCL: `563,353` frames plus `24,692` edge samples
+- One-sided attachment frames: `0`
+- Maximum joint step: `2.993892 deg`; joint flips: `0`
+- Maximum carried-box tilt, left/right: `6.093544 / 6.092935 deg`
+
+The current synchronized shared-lift family cannot complete these 8 pairs:
+
+- `1+21`, `2+22`, `4+24`, `5+25`
+- `11+21`, `15+25`
+- `16+21`, `20+25`
+
+Every failure exhausted 720-1197 candidates. No candidate produced complete
+precontact, approach, and retreat paths for both arms under one shared lift,
+grasp mode, and planar base pose. Candidate coverage includes X positions
+`-0.35/-0.475/-0.60m`, geometry-derived Y shifts up to `+/-0.75m`, and yaw
+`0/+/-15deg`.
+
+The detailed matrix is in `results/all-pair-matrix-acceptance.json/.md`, with
+all combinations in `results/all-pair-matrix-yaw.csv` and a visual matrix in
+`results/all-pair-matrix.png`.
+
+## Representative Replay
+
 Three representative cross-row ID pairs freshly planned and completed:
 
 - `1 + 10`: rows 1/2, common lift `0.00 m`, retreat `0.35 m`
@@ -95,15 +122,15 @@ rerun --new \
   /home/tim/alfa_robot-v322-box-wall-motion-family-validation/results/v322-cross-row-pair-full.rrd
 ```
 
-The pair acceptance results are `results/cross-row-pair-acceptance.json/.md` in
-the validation workspace. The earlier single-Pose result remains in
-`results/acceptance-report.json/.md`.
+The full matrix report is `results/all-pair-matrix-acceptance.json/.md`. The
+three-pair Rerun report remains `results/cross-row-pair-acceptance.json/.md`,
+and the earlier single-Pose result remains `results/acceptance-report.json/.md`.
 
 ## Limits
 
-- Three representative cross-row pairs are certified. This does not yet prove
-  all `25 choose 2` combinations; infeasible pairs return candidate failure
-  reasons.
+- The 8 listed same-column pairs are not supported by the current synchronized
+  shared-lift family. Supporting them requires a different task contract, such
+  as asynchronous lift/attachment or staged base repositioning between picks.
 - The backend currently assumes the configured axis-aligned wall geometry.
 - The lower-row entry bridges are the current timing hotspots; the maximum is
   `7.389 s`.

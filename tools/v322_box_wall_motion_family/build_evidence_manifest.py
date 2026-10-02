@@ -44,6 +44,12 @@ def main() -> int:
         "source_commit": args.source_commit,
         "tool0_offset_local_z_m": 0.151,
         "result": {
+            "all_pair_matrix": "292/300",
+            "unsupported_pairs": 8,
+            "matrix_one_sided_attachment_frames": 0,
+            "matrix_moveit_fcl": "PASS",
+            "matrix_checked_frames": 563353,
+            "matrix_checked_edge_samples": 24692,
             "cross_row_pair_requests": "3/3",
             "cross_row_boxes": "6/6",
             "one_sided_attachment_frames": 0,

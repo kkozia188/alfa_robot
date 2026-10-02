@@ -567,6 +567,12 @@ if(BUILD_TESTING)
     NAME test_v3_stage_wall_cache
     COMMAND /usr/bin/python3 ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_stage_wall_cache.py
   )
+
+  add_test(
+    NAME test_v3_scoop_dual_sequence
+    COMMAND /usr/bin/python3 -m pytest -q
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_dual_sequence.py
+  )
 endif()
 
 ament_package()
@@ -602,5 +608,13 @@ install(PROGRAMS
   scripts/visualize_moveit_box_stack_flow.py
   scripts/visualize_v3_continuous_reachability.py
   scripts/visualize_v3_reachability_scan_volume.py
+  scripts/v3_scoop_5x5_conveyor_demo.py
+  scripts/v3_scoop_5x5_dual_rerun.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(FILES
+  scripts/scan_v3_single_arm_box_wall.py
+  scripts/v3_5x5_grasp_sequence_rerun.py
   DESTINATION lib/${PROJECT_NAME}
 )

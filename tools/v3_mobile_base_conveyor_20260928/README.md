@@ -14,7 +14,9 @@ compatibility evidence described below.
 - Execute all ten two-box groups with both arms attached simultaneously.
 - Keep the base at `Y=0` while entering and picking from the wall.
 - Use a front clearance of `0.85 m` for the upper three rows and `0.60 m` for
-  the lower two rows.
+  the lower two rows by default. The certified input ranges are `0.80-0.90 m`
+  and `0.55-0.65 m`, measured from the vehicle front contact plane to the box
+  front contact plane and rounded half-up to the nearest centimeter.
 
 ## Base Route
 
@@ -75,6 +77,14 @@ The branch is rebased onto `alfa_v3_dev@d9c330ce`, which introduces
 - The final replay passes `27,372` frames and `1,020` additional edge samples,
   with maximum joint step `2.943380 deg` and zero joint flips.
 - The complete Rerun uses the V3.2.2 production shell (`49` visual meshes).
+- All `11 x 11 = 121` upper/lower clearance pairs pass complete MoveIt/FCL
+  replay validation: `3,288,544` frames and `123,074` interpolated edge
+  samples in total.
+- All `275/275` fresh selected profile tasks are below the 3-second core
+  planning target; the maximum is `2.696674 s`. Cache loading is excluded.
+- Every pair keeps pickup entry at `Y=0`, has `10/10` simultaneous dual-arm
+  groups with zero one-sided attachment frames, reverses `2.35 m`, moves
+  `1.50 m` to robot-right, releases, and returns to the pickup station.
 
 ## Evidence
 
@@ -117,6 +127,21 @@ For V3.2.2, download the newer pre-release and run:
 sha256sum -c SHA256SUMS
 rerun --new v322-conveyor-production-shell.rrd
 ```
+
+After placing the range certificate directory at
+`data/ik_benchmark/v3_scoop_5x5/range_certification_v322_tool0151`, the
+interactive certified-range entry is:
+
+```bash
+cd /home/tim/alfa_robot-alfa_v3_dev
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run alfa_robot_moveit_config v3_scoop_5x5_conveyor_demo.py
+```
+
+It prompts for the first-three-row and last-two-row clearances, verifies the
+V3.2.2 certificate and replay hashes, records the selected RRD when needed,
+verifies it, and opens Rerun.
 
 ## Scope Boundary
 

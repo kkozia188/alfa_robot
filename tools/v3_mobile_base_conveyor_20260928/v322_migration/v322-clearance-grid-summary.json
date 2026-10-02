@@ -1,0 +1,44 @@
+{
+  "schema": "alfa.v322_tool0151_conveyor_clearance_grid_summary.v1",
+  "success": true,
+  "model_revision": "robot_v3.2.2-suction",
+  "tool0_offset_local_z_m": 0.151,
+  "upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
+  "clearance_reference": "vehicle_front_contact_plane_to_box_front_contact_plane",
+  "upper_rows_1_to_3_range_m": [0.8, 0.9],
+  "lower_rows_4_to_5_range_m": [0.55, 0.65],
+  "input_resolution_m": 0.01,
+  "rounding": "decimal_half_up",
+  "certified_pair_count": 121,
+  "profile_task_core": {
+    "definition": "fresh selected pickup task core; cache loading excluded",
+    "task_count": 275,
+    "tasks_below_3s": 275,
+    "maximum_task_core_s": 2.696673571,
+    "maximum_task_profile": "lower-l064",
+    "maximum_task_box_id": 18
+  },
+  "validation": {
+    "total_checked_frames": 3288544,
+    "total_checked_edge_samples": 123074,
+    "minimum_pair_frames": 24653,
+    "maximum_pair_frames": 28590,
+    "minimum_pair_edge_samples": 929,
+    "maximum_pair_edge_samples": 1129,
+    "maximum_joint_step_deg": 2.9999812526251537,
+    "one_sided_attachment_frames_in_dual_cycles": 0
+  },
+  "motion_contract": {
+    "pickup_base_y_m": 0.0,
+    "backoff_before_right_shuttle_m": 2.35,
+    "right_shuttle_m": 1.5,
+    "cycle_count": 15,
+    "simultaneous_dual_cycle_count": 10,
+    "completed_boxes": 25
+  },
+  "certificate": {
+    "name": "clearance-grid-certificate.json",
+    "size": 119393,
+    "sha256": "720e75e52282f5a81a220531bf9a2a574d88d2550a44ed8ad88a3dfd27107394"
+  }
+}

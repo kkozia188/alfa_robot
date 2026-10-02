@@ -59,7 +59,10 @@ def main() -> int:
             super().__init__(
                 args.output.resolve(), args.playback_speed, box_planning, operations
             )
-            self.total_representatives = len(selected_ids)
+            self.total_cycles = sum(
+                operation.get("kind") != "base_transition" for operation in operations
+            )
+            self.total_boxes = len(selected_ids)
             self.remaining = set(selected_ids)
             self.completed_boxes = 0
             self.task_title = "Pose-driven box-wall action family"
@@ -73,7 +76,7 @@ def main() -> int:
                         rrb.TextDocumentView(origin="/report", name="Acceptance report"),
                         rrb.BarChartView(
                             origin="/planning/task_core_s",
-                            name="Fresh representative planning time (s)",
+                            name="Fresh task planning time (s)",
                         ),
                         rrb.TextDocumentView(origin="/transition_status", name="Current cycle"),
                         rrb.TextDocumentView(origin="/status", name="Current stage"),
@@ -106,12 +109,12 @@ def main() -> int:
                     "\n".join([
                         "# Pose-driven box-wall action family",
                         "",
-                        f"- Representative: **{group_index}/{self.total_representatives}**",
+                        f"- Cycle: **{group_index}/{self.total_cycles}**",
                         f"- Request: **{operation.get('pose_driven_request_id', operation['label'])}**",
                         f"- Row: **{operation['row']}/5**",
                         f"- Stage: `{stage}`",
                         f"- Path phase: **{path_phase}**",
-                        f"- Completed representatives: **{self.completed_boxes}/{self.total_representatives}**",
+                        f"- Completed boxes: **{self.completed_boxes}/{self.total_boxes}**",
                         f"- Base Y: `{self.base_transform[1, 3]:.3f} m`",
                         f"- Fresh task core: **{float(metrics['selected_task_core_s']):.3f}s**",
                         f"- Fresh entry bridge: **{float(metrics['selected_transition_core_s']):.3f}s**",
@@ -154,7 +157,7 @@ def main() -> int:
                             "# Chassis reposition",
                             "",
                             f"- Progress: **{frame_index}/{len(frames)}**",
-                            f"- Completed representatives: **{self.completed_boxes}/{self.total_representatives}**",
+                            f"- Completed boxes: **{self.completed_boxes}/{self.total_boxes}**",
                             f"- Base X: **{position[0]:.3f} m**",
                             f"- Target X: **{float(operation['base_pose_goal_map'][0]):.3f} m**",
                         ]),
@@ -189,7 +192,8 @@ def main() -> int:
                     "\n".join([
                         "# Pose-driven box-wall action family",
                         "",
-                        f"- Completed representatives: **{self.completed_boxes}/{self.total_representatives}**",
+                        f"- Completed boxes: **{self.completed_boxes}/{self.total_boxes}**",
+                        f"- Completed cycles: **{self.total_cycles}/{self.total_cycles}**",
                         "- Rows represented: **5/5**",
                         "- Full-cycle MoveIt/FCL: **PASS**",
                     ]),
@@ -208,7 +212,8 @@ def main() -> int:
         metrics.append(recorder.play_operation(operation, group_index, replay["joint_names"]))
     recorder.finish_family()
     print(
-        f"RESULT representatives={recorder.completed_boxes}/{len(selected_ids)} "
+        f"RESULT boxes={recorder.completed_boxes}/{len(selected_ids)} "
+        f"cycles={group_index}/{recorder.total_cycles} "
         f"frames={sum(item['frame_count'] for item in metrics)} output={args.output}",
         flush=True,
     )

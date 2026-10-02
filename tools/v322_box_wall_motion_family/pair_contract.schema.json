@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alfa.local/schemas/v322-box-wall-dual-id-request-v1.json",
+  "title": "ALFA V3.2.2 synchronized two-box ID request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "wall", "current_state", "requests"],
+  "properties": {
+    "schema": {"const": "alfa.v322_box_wall_dual_id_request.v1"},
+    "wall": {
+      "type": "object",
+      "required": [
+        "frame", "rows", "columns", "center_x_m", "bottom_z_m",
+        "center_y_m", "box_size_m"
+      ],
+      "properties": {
+        "frame": {"type": "string"},
+        "rows": {"type": "integer", "minimum": 1},
+        "columns": {"type": "integer", "minimum": 1},
+        "center_x_m": {"type": "number", "exclusiveMinimum": 0},
+        "bottom_z_m": {"type": "number"},
+        "center_y_m": {"type": "number"},
+        "box_size_m": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "gap_y_m": {"type": "number", "minimum": 0},
+        "gap_z_m": {"type": "number", "minimum": 0},
+        "orientation_tolerance_deg": {"type": "number", "minimum": 0}
+      }
+    },
+    "current_state": {
+      "type": "object",
+      "required": ["joint_positions"],
+      "properties": {
+        "joint_positions": {
+          "type": "array", "minItems": 17, "maxItems": 17,
+          "items": {"type": "number"}
+        }
+      }
+    },
+    "requests": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "box_ids"],
+        "properties": {
+          "request_id": {"type": "string", "minLength": 1},
+          "box_ids": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "uniqueItems": true, "items": {"type": "integer", "minimum": 1}
+          },
+          "removed_box_ids": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1}
+          },
+          "candidate_limit": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

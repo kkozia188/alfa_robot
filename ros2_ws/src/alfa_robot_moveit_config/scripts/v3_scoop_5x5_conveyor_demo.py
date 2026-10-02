@@ -112,9 +112,12 @@ def certified_pair_entry(
     entry = matches[0]
     for name in ("replay", "validation"):
         path = Path(str(entry[name]))
+        if not path.is_absolute():
+            path = manifest_path.parent / path
         if not path.is_file() or sha256(path) != str(entry[f"{name}_sha256"]):
             raise ValueError(f"certified {name} hash mismatch: {path}")
-    if not read_json(Path(str(entry["validation"]))).get("success"):
+        entry[name] = str(path.resolve())
+    if not read_json(Path(entry["validation"])).get("success"):
         raise ValueError("certified validation report is not successful")
     return entry
 

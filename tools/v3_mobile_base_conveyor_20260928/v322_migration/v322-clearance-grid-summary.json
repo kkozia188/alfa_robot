@@ -38,7 +38,12 @@
   },
   "certificate": {
     "name": "clearance-grid-certificate.json",
-    "size": 119393,
-    "sha256": "720e75e52282f5a81a220531bf9a2a574d88d2550a44ed8ad88a3dfd27107394"
+    "size": 91269,
+    "sha256": "6a2b2602ba5ab294a925d6d7aab3e4616ce53294239df77c712ca7c1b7052a19"
+  },
+  "evidence_archive": {
+    "name": "v322-tool0151-clearance-grid-evidence-2026.10.02.tar.zst",
+    "size": 67872126,
+    "sha256": "3c359072e777e7fbf34f53bbe268c0028327b3b1a1dabedef67333b00986bf4c"
   }
 }

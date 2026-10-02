@@ -70,9 +70,9 @@ def write_certificate(workspace: Path, model_revision: str = "robot_v3.2.2-sucti
         "success": True,
         "upper_front_clearance_m": 0.85,
         "lower_front_clearance_m": 0.60,
-        "replay": str(replay),
+        "replay": str(replay.relative_to(root)),
         "replay_sha256": MODULE.sha256(replay),
-        "validation": str(validation),
+        "validation": str(validation.relative_to(root)),
         "validation_sha256": MODULE.sha256(validation),
     }
     manifest = {
@@ -94,9 +94,14 @@ def write_certificate(workspace: Path, model_revision: str = "robot_v3.2.2-sucti
 def test_v322_certificate_entry_verifies_model_and_hashes(tmp_path):
     expected = write_certificate(tmp_path)
     actual = MODULE.certified_pair_entry(tmp_path, 0.85, 0.60)
-    assert actual == expected
+    assert actual["replay"] == str(
+        (certificate_root(tmp_path) / expected["replay"]).resolve()
+    )
+    assert actual["validation"] == str(
+        (certificate_root(tmp_path) / expected["validation"]).resolve()
+    )
 
-    replay = Path(expected["replay"])
+    replay = certificate_root(tmp_path) / expected["replay"]
     replay.write_text("modified", encoding="utf-8")
     with pytest.raises(ValueError, match="hash mismatch"):
         MODULE.certified_pair_entry(tmp_path, 0.85, 0.60)

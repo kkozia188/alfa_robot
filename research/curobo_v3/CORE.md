@@ -5,6 +5,7 @@ MOTION-276 完成 MoveIt 替代的阶段1～3。当前核心位于 `tools/curobo
 算法仍是 cuRobo 数值IK/FK/球碰撞、自研批量RRT及C++解析抽离。
 整合目标分支cb08548d的四规划器对比入口：默认仍为Informed RRT，已有RRT、
 RRTConnect及GPU PRM选择、固定接触构型对比及搜索统计保留在独立核心中。
+后续在同一核心入口增加Connect＋Informed和BIT* GPU批量变体；实验边界与页面命令见[SIX_PLANNERS.md](SIX_PLANNERS.md)。
 
 ## 数据与职责
 

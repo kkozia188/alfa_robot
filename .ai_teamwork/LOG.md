@@ -2138,4 +2138,5 @@
 - 改了哪里：research/curobo_v3/tools/curobo_core、CLI/GPU专项及CPU合同测试、CORE.md和迁移摘要；新增限定alfa_v3_curobo的CPU CI。未改原curobo_v2_ws、跨仓接口或模型资产。
 - 验证结果：CPU15/15通过；迁移前L24/R20完整周期10.599s，迁移后10.411/6.511s，两次成功且回位误差0；最终GPU专项10.003s完整周期通过，验证障碍/负载变更失效、同场景缓存复用、SCENE_CHANGED拒绝旧结果和无Viser导入。演示页面机器人和箱墙正常。
 - 留给下个AI：使用CORE.md的具名PlanRequest与SceneStore入口；预测场景事件不等于真实执行反馈。保留目标箱豁免、抽离延后负载碰撞和40球内接近似。当前全周期仅原点底盘/零头部/双臂轴对齐标准箱；没有11/60组、RT/Action、时间参数化或新增OBB/FCL验收声明。逐步记录及最终PR由MOTION-276跟踪，算法优化仍跟踪MOTION-275。
+- 2026-10-04 MOTION-275六规划器：增加Connect＋Informed与BIT* GPU批量验边/双队列/换父节点变体，并rebase同步MOTION-276核心封装，未覆盖同事实现。相同首组接触起点与完整6D目标、三段2s预算，新核心热态分别6.318s/6.227s完整成功；最终Home误差0、相邻关节步长≤0.5°。修复BIT空批次错误，3项GPU小场景测试通过。页面8090保留原四种及新增两种；详见SIX_PLANNERS.md与full_cycle_extra_planners.json。不声明原版BIT*最优性、全任务成功率或真实OBB/连续碰撞验收，未测CBS、未加入Shortcut/TrajOpt。
 - 整合收尾：PR #49 rebase到同事四规划器更新cb08548d，保留其页面/脚本/原始对比证据，将同一search_path迁入核心；15项CPU CI通过。复核首轮受已有8090演示显存占用影响OOM，改用仅本次进程的expandable_segments分配设置后四种规划器均通过首组完整周期、回位误差0且步长≤0.5°，未暂停或修改其他演示进程。该轮属于兼容复核，不作性能排名；结果与环境记录于validation.json。

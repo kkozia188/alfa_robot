@@ -2,7 +2,6 @@ import heapq
 import math
 import time
 
-import numpy as np
 import torch
 
 
@@ -34,6 +33,8 @@ def informed_samples(start, goals, weights, lower, upper, count, bound, generato
 
 def batched_bitstar_multi_goal(start, goals, lower, upper, validity, budget_s, seed,
                                batch_size=512, edge_batch_size=64, max_nodes=12000):
+    if not len(goals):
+        raise ValueError("BIT* requires at least one goal")
     generator = torch.Generator(device=start.device)
     generator.manual_seed(seed)
     weights = validity.weights
@@ -70,6 +71,13 @@ def batched_bitstar_multi_goal(start, goals, lower, upper, validity, budget_s, s
         if first_solution_ms is None:
             first_solution_ms = (time.perf_counter() - started) * 1000
 
+    for destination in goal_indices:
+        if torch.linalg.vector_norm((nodes[destination] - start) * weights).item() <= 1e-7:
+            if bool(validity.mask(start.reshape(1, -1)).all().item()):
+                parents[destination] = 0
+                costs[destination] = 0.0
+                record_solution(destination)
+                break
     while time.perf_counter() - started < budget_s:
         if best_cost <= heuristic[0] + 1e-7:
             break

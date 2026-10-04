@@ -35,9 +35,11 @@ def main():
     parser.add_argument("--named-poses", type=Path, default=DEFAULT_NAMED_POSES)
     parser.add_argument("--box-fit", type=Path, default=DEFAULT_BOX_FIT)
     parser.add_argument("--port", type=int, default=8090)
-    parser.add_argument("--comparison-json", type=Path)
+    parser.add_argument("--comparison-json", type=Path, nargs="+")
     args = parser.parse_args()
-    comparisons = json.loads(args.comparison_json.read_text()) if args.comparison_json else {}
+    comparisons = {}
+    for path in args.comparison_json or []:
+        comparisons.update(json.loads(path.read_text()))
     planner_labels = {"Batched RRT": "rrt", "Informed RRT": "informed_rrt",
                       "Batched RRTConnect": "rrtconnect", "GPU PRM": "prm",
                       "Connect + Informed": "informed_connect", "BIT* + GPU": "bitstar"}

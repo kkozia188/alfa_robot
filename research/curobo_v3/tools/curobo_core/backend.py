@@ -85,8 +85,15 @@ class CuroboBackend:
         self._cached_checkers = {}
 
     def search_path(self, start, goals, lower, upper, validity, budget, seed):
-        if self.planner_kind == "rrtconnect":
-            return batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget, seed)
+        if self.planner_kind in ("rrtconnect", "informed_connect"):
+            return batched_rrt_connect_multi_goal(
+                start, goals, lower, upper, validity, budget, seed,
+                informed_sampling=self.planner_kind == "informed_connect",
+            )
+        if self.planner_kind == "bitstar":
+            from v3_gpu_bitstar import batched_bitstar_multi_goal
+
+            return batched_bitstar_multi_goal(start, goals, lower, upper, validity, budget, seed)
         if self.planner_kind == "prm":
             return batched_prm_multi_goal(start, goals, lower, upper, validity, budget, seed)
         return batched_rrt_multi_goal(

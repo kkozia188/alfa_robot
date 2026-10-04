@@ -2,6 +2,13 @@
 
 这里仅保留当前分支仍需让新 AI 立刻看到的最新交接。长过程和已完成事项已归档。
 
+## 2026-10-04 运控 / Codex / 接手 V3 cuRobo 开发
+- 做了什么：按用户要求完整阅读远端/本地 HANDOFF 与 /tmp/handoff-x6TfV8.md（SHA256一致），读取 MOTION-238～243、275 正文及全部评论，核对当前周期入口、GPU有效性/搜索、附着变换、缓存、解析桥及版本化证据。
+- 当前落点：后续开发使用 /mnt/mydisk/ALFA/alfa_robot_v3_curobo 的 alfa_v3_curobo 分支；接手基线60ae10dd与远端一致。原 /mnt/mydisk/ALFA/curobo_v2_ws 保留第三方依赖、原实验及历史数据，不能只在那里改代码而漏同步正式分支。
+- 已确认：cuRobo数值IK/FK/球碰撞 + 自研GPU批量RRT + 固定Updown/ψ解析35cm抽离；15维运输、18维记录仅追加确定性yaw。首组L24/R20历史热态6.438/6.525秒成功；三段2秒Anytime、Shortcut/TrajOpt关闭，未在新checkout重新运行全周期。
+- 边界：目标箱在到位前已从碰撞场景移除，抽离中附着箱球碰撞延后至35cm终点；40球是内接近似，当前无通用全程真实OBB验收。缓存键只含任务组合，动态场景/负载变更需要失效；本原型尚无正式ROS执行接口、时间参数化和取消链路。
+- 下一步：先在本工作树原样复现首组并验证路径/模型/目标/球心同源，再按用户确定的优先级推进场景独立管理、批量回归或执行接口。238～243保持Done，算法跟踪275 In Progress；本轮仅接手阅读，未新增规划、实机或成功率声明。
+
 ## 归档索引
 
 - `.ai_teamwork/archive/2026-05-13_direction_reset/LOG.full_history.before_reset.md`
@@ -2125,3 +2132,9 @@
 - 留给下个 AI：Replay接口与算法缓存已验收；外部仿真仍需按26轴状态、17轴FJT和SafetyState合同完成实际执行验收，不得把Replay结果表述为FJT已通过。
 - 2026-10-04 V3 cuRobo正式分支：从origin/alfa_v3_dev@d9c330ce创建alfa_v3_curobo，独立worktree为/mnt/mydisk/ALFA/alfa_robot_v3_curobo；当前研究代码导入research/curobo_v3，保存完整周期/GPU搜索/拟合与历史实验源码、当前冻结模型与主要证据、解析源码精确快照、官方cuRobo本地修复patch及旧数据哈希清单。完整入口解除旧实验目录绝对import依赖，prepare_checkout重定位模型路径与编译解析桥；导入、米制mesh引用、60任务与40球及桥接加载检查通过。尚未重新运行全周期，不混作新验收；原研究服务目录保留。后续在此分支开发，提交关联Refs MOTION-275。
 - 2026-10-04 MOTION-275完整交接：新增research/curobo_v3/HANDOFF.md（228行），整理cuRobo官方能力与当前GPU算子/自研搜索/解析混合方案边界、模型/Tool0/完整6D目标同源合同、40球近似及抽离暂缓负载碰撞规则、任务场景移除目标箱简化、候选选择、Anytime/显存/缓存、当前首组证据与新checkout未复跑全周期的区别。提供源码导航、可复制启动命令、同事学习顺序和分组/精确碰撞/生产接口后续验收清单，详细实验数字链接既有Linear/JSON不重复抄录。相对证据链接全部验证存在，handoff技能临时文件/tmp/handoff-x6TfV8.md与持久文档内容一致；本轮仅文档，无新增规划成功声明。
+
+## 2026-10-04 运控 / Codex / MOTION-276 独立cuRobo场景与规划核心
+- 做了什么：在既有alfa_robot_v3_curobo工作树创建feature/motion-276-curobo-core，完成用户限定的阶段1～3：复现首组、不可变具名状态/场景与吸附释放事务、提取已有混合规划器；Viser与无GUI JSON入口复用同一核心。
+- 改了哪里：research/curobo_v3/tools/curobo_core、CLI/GPU专项及CPU合同测试、CORE.md和迁移摘要；新增限定alfa_v3_curobo的CPU CI。未改原curobo_v2_ws、跨仓接口或模型资产。
+- 验证结果：CPU15/15通过；迁移前L24/R20完整周期10.599s，迁移后10.411/6.511s，两次成功且回位误差0；最终GPU专项10.003s完整周期通过，验证障碍/负载变更失效、同场景缓存复用、SCENE_CHANGED拒绝旧结果和无Viser导入。演示页面机器人和箱墙正常。
+- 留给下个AI：使用CORE.md的具名PlanRequest与SceneStore入口；预测场景事件不等于真实执行反馈。保留目标箱豁免、抽离延后负载碰撞和40球内接近似。当前全周期仅原点底盘/零头部/双臂轴对齐标准箱；没有11/60组、RT/Action、时间参数化或新增OBB/FCL验收声明。逐步记录及最终PR由MOTION-276跟踪，算法优化仍跟踪MOTION-275。

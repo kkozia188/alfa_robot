@@ -63,14 +63,18 @@ def main():
                 vertices=sphere_mesh.vertices*radius, faces=sphere_mesh.faces,
                 position=center, color=(61, 170, 210), opacity=0.5)
     source_boxes = {}
-    for box_id in range(25):
+    for item in planner.snapshot.objects:
+        if not item.object_id.startswith("wall_box_"):
+            continue
+        box_id = int(item.object_id.removeprefix("wall_box_"))
         source_boxes[box_id] = server.scene.add_box(
-            f"/wall/box_{box_id}", position=wall_center(planner.front, .9, box_id),
-            dimensions=(.30, .40, .40), color=(87, 145, 165), opacity=.25)
-    for obstacle in planner.scene(planner.selected_task).cuboid:
-        if not obstacle.name.startswith("wall_box_"):
-            server.scene.add_box(f"/container/{obstacle.name}", dimensions=obstacle.dims,
-                                 position=obstacle.pose[:3], wxyz=obstacle.pose[3:7],
+            f"/wall/box_{box_id}", position=item.pose.position,
+            wxyz=item.pose.quaternion_wxyz, dimensions=item.dimensions_m,
+            color=(87, 145, 165), opacity=.25)
+    for item in planner.snapshot.objects:
+        if not item.object_id.startswith("wall_box_") and item.object_id != "ground":
+            server.scene.add_box(f"/container/{item.object_id}", dimensions=item.dimensions_m,
+                                 position=item.pose.position, wxyz=item.pose.quaternion_wxyz,
                                  color=(149, 160, 174), opacity=.06)
     labels = [entry[0] for entry in planner.task_options]
     with server.gui.add_folder("完整任务实时规划"):

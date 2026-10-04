@@ -1,0 +1,145 @@
+{
+  "issue": "MOTION-276",
+  "date": "2026-10-04",
+  "base_commit": "60ae10dd0b3fe8240deb5c1c8e2ae458b08c8274",
+  "description_snapshot": "071cb95",
+  "scope": "MoveIt replacement stages 1-3 only; independent state/scene and existing hybrid planner packaging",
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU 8 GiB",
+    "python": "3.10 curobo-v2-py310"
+  },
+  "baseline": {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "total_ms": 10599.120016093366,
+    "selected_candidate": 1,
+    "contact_ik_count": 32,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "model_id": null,
+    "scene_id": null,
+    "scene_revision": null,
+    "state_id": null,
+    "error": null,
+    "frame_count": 2054
+  },
+  "encapsulated_runs": [
+    {
+      "success": true,
+      "task": {
+        "left": 24,
+        "right": 20
+      },
+      "total_ms": 10411.276572966017,
+      "selected_candidate": 1,
+      "contact_ik_count": 32,
+      "max_adjacent_joint_step_deg": 0.4999623712096581,
+      "final_home_error": 0.0,
+      "model_id": "8af40b73883e9c08193db0c54a385184a22dae149fe3c6e0e253907db8f725c3",
+      "scene_id": "b33bc7da5145c85e27a0e64fa1e4ddae40311c57ad86458edacaa0b3e8c8edaa",
+      "scene_revision": 0,
+      "state_id": "ec5e8391526d3b5f5eba762e32e97cc13e43e4bc5fb63054f47813c131ca45ba",
+      "error": null,
+      "frame_count": 2054
+    },
+    {
+      "success": true,
+      "task": {
+        "left": 24,
+        "right": 20
+      },
+      "total_ms": 6511.492296005599,
+      "selected_candidate": 1,
+      "contact_ik_count": 32,
+      "max_adjacent_joint_step_deg": 0.4999623712096581,
+      "final_home_error": 0.0,
+      "model_id": "8af40b73883e9c08193db0c54a385184a22dae149fe3c6e0e253907db8f725c3",
+      "scene_id": "b33bc7da5145c85e27a0e64fa1e4ddae40311c57ad86458edacaa0b3e8c8edaa",
+      "scene_revision": 0,
+      "state_id": "ec5e8391526d3b5f5eba762e32e97cc13e43e4bc5fb63054f47813c131ca45ba",
+      "error": null,
+      "frame_count": 1453
+    }
+  ],
+  "gpu_smoke": {
+    "gpu_cache_reused": true,
+    "scene_update_rebuilt_cache": true,
+    "payload_update_rebuilt_cache": true,
+    "stale_plan_rejected": true,
+    "core_did_not_load_viser": true,
+    "cuda_allocated_mb": 560.7021484375
+  },
+  "gpu_success": {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "total_ms": 10003.100496018305,
+    "selected_candidate": 1,
+    "contact_ik_count": 32,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "model_id": "8af40b73883e9c08193db0c54a385184a22dae149fe3c6e0e253907db8f725c3",
+    "scene_id": "b939df9e89ac4ce5ad8856ac82676bc728b91847b58ad60cb11ae87650dbdf33",
+    "scene_revision": 1,
+    "state_id": "0f8978eb29f9aa94aa678a377ec2dc9aaa5ee014cbded39a7713c689c75644fc",
+    "error": null,
+    "frame_count": 2054
+  },
+  "stale_result": {
+    "success": false,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "total_ms": 6370.909058023244,
+    "selected_candidate": 1,
+    "contact_ik_count": 32,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "model_id": "8af40b73883e9c08193db0c54a385184a22dae149fe3c6e0e253907db8f725c3",
+    "scene_id": "b939df9e89ac4ce5ad8856ac82676bc728b91847b58ad60cb11ae87650dbdf33",
+    "scene_revision": 1,
+    "state_id": "0f8978eb29f9aa94aa678a377ec2dc9aaa5ee014cbded39a7713c689c75644fc",
+    "error": {
+      "code": "SCENE_CHANGED",
+      "stage": "acceptance",
+      "message": "scene or robot state changed during planning"
+    },
+    "frame_count": 1453
+  },
+  "cpu_tests_passed": 15,
+  "viser_initial_scene_checked": true,
+  "policy": {
+    "exclude_task_objects_before_contact": true,
+    "defer_payload_until_extract_end": true,
+    "ground_z_m": 0.0,
+    "max_box_tilt_deg": 89.0,
+    "ground_support_link": "base_link"
+  },
+  "full_output_local_files": [
+    {
+      "path": "/tmp/motion276_baseline_full.json",
+      "sha256": "e26204aa21775fdc426e8e673b99ec841dc429b779c181fbdcf04b1ca91e4276"
+    },
+    {
+      "path": "/tmp/motion276_core_full.json",
+      "sha256": "9a468c375bd9e11138b3ded147fe6023d5334c63b69ea4ca955a462c6f41e7a6"
+    },
+    {
+      "path": "/tmp/motion276_gpu_smoke_final.json",
+      "sha256": "8cbef2fcb7b8977e762249c40b5b78072781c669f45ec93c8b96baac77c4f73a"
+    }
+  ],
+  "limitations": [
+    "No RT/Action execution or time parameterization",
+    "No additional OBB/FCL acceptance gate",
+    "40-sphere payload remains an inner approximation",
+    "No 11/60-task regression claim",
+    "Full-cycle input limited to two axis-aligned standard boxes, base at map origin, both head joints at zero"
+  ]
+}

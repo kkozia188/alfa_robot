@@ -23,7 +23,7 @@ from v3_wall_ik_benchmark import (  # noqa: E402
 )
 
 
-def loaded_robot(robot, box_fit, active_sides=("left", "right")):
+def loaded_robot(robot, box_fit, active_sides=("left", "right"), attachments=None):
     loaded = copy.deepcopy(robot)
     kin = loaded.get("robot_cfg", loaded)["kinematics"]
     urdf_root = ET.parse(kin["urdf_path"]).getroot()
@@ -42,7 +42,15 @@ def loaded_robot(robot, box_fit, active_sides=("left", "right")):
             origin.attrib.get("xyz") if origin is not None else None,
             origin.attrib.get("rpy") if origin is not None else None,
         )
-        link_to_box = link_to_tool @ canonical_side_tool_to_box(side)
+        tool_to_box = canonical_side_tool_to_box(side)
+        if attachments is not None:
+            from curobo_core.adapter import pose_matrix
+
+            attachment = next(item for item in attachments if item.parent_link == side + "_tool0")
+            if not np.allclose(attachment.dimensions_m, box_fit["dimensions_m"], atol=1e-12):
+                raise ValueError("payload dimensions do not match sphere model")
+            tool_to_box = pose_matrix(attachment.tool_to_object)
+        link_to_box = link_to_tool @ tool_to_box
         for center, radius in zip(box_fit["centers"], box_fit["radii"]):
             point = link_to_box @ np.array([*center, 1.0])
             kin["collision_spheres"][f"{side}_link7"].append({

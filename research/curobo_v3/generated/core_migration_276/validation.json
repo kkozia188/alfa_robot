@@ -141,5 +141,52 @@
     "40-sphere payload remains an inner approximation",
     "No 11/60-task regression claim",
     "Full-cycle input limited to two axis-aligned standard boxes, base at map origin, both head joints at zero"
-  ]
+  ],
+  "rebase_integration": {
+    "target_commit": "cb08548d5c1c0d71b10b2f392bb9d27c989c5452",
+    "upstream_four_planner_dispatch_ast_identical": true,
+    "upstream_comparison_document_script_results_unchanged": true,
+    "initial_attempt": "CUDA OOM while existing 8090 demo held 3650MiB; no unrelated process was stopped",
+    "retry_environment": {
+      "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"
+    },
+    "existing_demo_left_running": true,
+    "measurement_note": "Compatibility only; shared GPU and mixed cold/hot runs, not a planner performance comparison",
+    "results": {
+      "informed_rrt": {
+        "success": true,
+        "planner": "informed_rrt",
+        "total_ms": 10962.721805088222,
+        "final_home_error": 0.0,
+        "max_adjacent_joint_step_deg": 0.4999623712096581,
+        "frame_count": 2054
+      },
+      "rrt": {
+        "success": true,
+        "planner": "rrt",
+        "total_ms": 6319.934438099153,
+        "final_home_error": 0.0,
+        "max_adjacent_joint_step_deg": 0.4999623712096581,
+        "frame_count": 1475
+      },
+      "rrtconnect": {
+        "success": true,
+        "planner": "rrtconnect",
+        "total_ms": 6333.108730032109,
+        "final_home_error": 0.0,
+        "max_adjacent_joint_step_deg": 0.4999623712096581,
+        "frame_count": 2044
+      },
+      "prm": {
+        "success": true,
+        "planner": "prm",
+        "total_ms": 6388.594502932392,
+        "final_home_error": 0.0,
+        "max_adjacent_joint_step_deg": 0.4999635157200214,
+        "frame_count": 2742
+      }
+    },
+    "local_output": "/tmp/motion276_rebase_four_planners.json",
+    "output_sha256": "507a59dc3bf41da82a470df19b40c99eb1f5db50b124c96ed4549c375a22f797"
+  }
 }

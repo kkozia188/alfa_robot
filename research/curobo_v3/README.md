@@ -2,6 +2,9 @@
 
 新同事和后续AI先读[完整研究与工程交接](HANDOFF.md)，再阅读本运行说明和当前入口代码。
 
+MOTION-276 的[独立规划核心说明](CORE.md)提供SceneSnapshot/RobotState、版本化场景、
+GPU缓存失效、无GUI规划入口和回归命令。现有Viser入口复用同一核心与快照。
+
 正式开发分支：`alfa_v3_curobo`，基于`alfa_v3_dev@d9c330ce`。算法研究跟踪[MOTION-275](https://linear.app/sevenova/issue/MOTION-275)，初步适配证据见已收口的MOTION-238～243。
 
 `tools/`保存已有研究源码；当前支持入口是`v3_full_cycle_demo.py`。历史实验脚本保留原路径/模型合同，仅用于追溯，不作为当前可直接运行的入口。`historical_artifacts_manifest.json`记录旧实验数据路径、大小和SHA256；大型旧回放、完整第三方仓库和虚拟环境未导入本分支。

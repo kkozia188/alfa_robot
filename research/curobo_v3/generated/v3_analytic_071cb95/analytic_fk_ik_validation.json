@@ -1,0 +1,26 @@
+{
+  "urdf": "/mnt/mydisk/ALFA/curobo_v2_ws/generated/v3_analytic_071cb95/model/robot_meter_meshes.urdf",
+  "seed": 20261003,
+  "arms": {
+    "left": {
+      "samples": 1001,
+      "ik_no_solution": [],
+      "solutions_verified": 8005,
+      "max_analytic_vs_urdf_fk_mm": 6.926511016462363e-09,
+      "max_analytic_vs_urdf_fk_deg": 2.920371197862056e-10,
+      "max_ik_urdf_roundtrip_mm": 6.82682431544025e-05,
+      "max_ik_urdf_roundtrip_deg": 1.9037082591886502e-06,
+      "mean_analytic_ik_us": 12.424697302697302
+    },
+    "right": {
+      "samples": 1001,
+      "ik_no_solution": [],
+      "solutions_verified": 8001,
+      "max_analytic_vs_urdf_fk_mm": 6.958139900795744e-09,
+      "max_analytic_vs_urdf_fk_deg": 2.9203532924439324e-10,
+      "max_ik_urdf_roundtrip_mm": 4.499614400063243e-05,
+      "max_ik_urdf_roundtrip_deg": 6.820309512583138e-07,
+      "mean_analytic_ik_us": 12.417585414585416
+    }
+  }
+}

@@ -1,0 +1,180 @@
+[
+  {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "joint_names": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "updown",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "attempts": [
+      {
+        "candidate": 1,
+        "extraction": {
+          "fixed_updown_m": -0.001000000280328095,
+          "fixed_psi_rad": [
+            2.2374494752675895,
+            -2.2374518562810173
+          ],
+          "max_line_error_mm": 0.03254228987077306,
+          "max_orientation_error_deg": 0.004625409942002566
+        },
+        "approach": {
+          "iterations": 19,
+          "tree_nodes": 26634,
+          "accepted_nodes": 26633,
+          "goal_count": 1,
+          "selected_goal": 0,
+          "first_solution_ms": 318.26793699292466,
+          "search_ms": 2122.735693003051,
+          "solutions_found": 66,
+          "best_weighted_length": 4.822227478027344,
+          "raw_waypoints": 8,
+          "shortcut_waypoints": 8,
+          "shortcut_applied": false,
+          "shortcut_ms": 16.610652033705264,
+          "fine_candidates_checked": 1,
+          "fine_seed_valid": true,
+          "informed_sampling": true
+        },
+        "wall_ms": 2229.4368729926646
+      }
+    ],
+    "timing_ms": {
+      "initial_checker_setup_and_validation": 1461.3313740119338,
+      "contact_solver_setup": 439.7370480000973,
+      "contact_ik_and_ranking": 814.2532379715703,
+      "loaded_checker_setup": 595.6266520079225,
+      "analytic_extract_and_validation": 86.06668800348416,
+      "approach_rrt_and_validation": 2143.3511869981885,
+      "transport_pipeline_total": 4213.655787985772,
+      "empty_turn_checker_setup": 346.1510220076889,
+      "empty_turn_validation": 2.139555988833308,
+      "home_rrt_and_validation": 2114.2652389826253,
+      "other_assembly_and_bookkeeping": 16.109601012431085
+    },
+    "contact_ik_count": 32,
+    "selected_candidate": 1,
+    "transport_timing_breakdown_ms": {
+      "setup": 823.1688289670274,
+      "target_ik": 49.999369017314166,
+      "target_filter": 2.47794296592474,
+      "rrt": 2191.2299550022,
+      "frame_assembly": 0.6340310210362077,
+      "mobile_checker_setup": 744.6523149847053,
+      "transport_and_turn_validation": 237.74841299746186,
+      "cleanup": 163.35667698876932
+    },
+    "transport_timing_ms": 4049.9488500063308,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "total_ms": 12232.687392970547
+  },
+  {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "joint_names": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "updown",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "attempts": [
+      {
+        "candidate": 1,
+        "extraction": {
+          "fixed_updown_m": -0.001000000280328095,
+          "fixed_psi_rad": [
+            2.2374494752675895,
+            -2.2374518562810173
+          ],
+          "max_line_error_mm": 0.03254228987077306,
+          "max_orientation_error_deg": 0.004625409942002566
+        },
+        "approach": {
+          "iterations": 19,
+          "tree_nodes": 26634,
+          "accepted_nodes": 26633,
+          "goal_count": 1,
+          "selected_goal": 0,
+          "first_solution_ms": 274.43550602765754,
+          "search_ms": 2107.8726450214162,
+          "solutions_found": 66,
+          "best_weighted_length": 4.822227478027344,
+          "raw_waypoints": 8,
+          "shortcut_waypoints": 8,
+          "shortcut_applied": false,
+          "shortcut_ms": 20.326972007751465,
+          "fine_candidates_checked": 1,
+          "fine_seed_valid": true,
+          "informed_sampling": true
+        },
+        "wall_ms": 2219.1948799882084
+      }
+    ],
+    "timing_ms": {
+      "initial_checker_setup_and_validation": 340.6382749672048,
+      "contact_solver_setup": 361.23595701064914,
+      "contact_ik_and_ranking": 51.27098999219015,
+      "loaded_checker_setup": 514.1263749683276,
+      "analytic_extract_and_validation": 87.05216099042445,
+      "approach_rrt_and_validation": 2132.1225340361707,
+      "transport_pipeline_total": 3619.489334989339,
+      "empty_turn_checker_setup": 318.1741060107015,
+      "empty_turn_validation": 2.337838988751173,
+      "home_rrt_and_validation": 2091.362837003544,
+      "other_assembly_and_bookkeeping": 15.093254041858017
+    },
+    "contact_ik_count": 32,
+    "selected_candidate": 1,
+    "transport_timing_breakdown_ms": {
+      "setup": 885.8546889969148,
+      "target_ik": 52.39894601982087,
+      "target_filter": 3.182025975547731,
+      "rrt": 2013.5718390229158,
+      "frame_assembly": 0.6601519999094307,
+      "mobile_checker_setup": 493.97866998333484,
+      "transport_and_turn_validation": 2.7617139858193696,
+      "cleanup": 166.7405380285345
+    },
+    "transport_timing_ms": 3452.4436549982056,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "total_ms": 9532.90366299916
+  }
+]

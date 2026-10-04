@@ -2123,3 +2123,4 @@
 - 改了哪里：更新 V3 阶段Action缓存与服务端、仿真客户端/启动脚本、交付合同、Release文档，并增加候选验证、缓存生成和完整Rerun脚本。
 - 验证结果：11轮共44个阶段Action Replay全部成功；完整序列18,341帧，首尾均为第一初始姿态，最大旋转步长0.5度、Updown步长2.86mm；RRD校验、13包自包含构建及27项相关测试通过。
 - 留给下个 AI：Replay接口与算法缓存已验收；外部仿真仍需按26轴状态、17轴FJT和SafetyState合同完成实际执行验收，不得把Replay结果表述为FJT已通过。
+- 2026-10-04 V3 cuRobo正式分支：从origin/alfa_v3_dev@d9c330ce创建alfa_v3_curobo，独立worktree为/mnt/mydisk/ALFA/alfa_robot_v3_curobo；当前研究代码导入research/curobo_v3，保存完整周期/GPU搜索/拟合与历史实验源码、当前冻结模型与主要证据、解析源码精确快照、官方cuRobo本地修复patch及旧数据哈希清单。完整入口解除旧实验目录绝对import依赖，prepare_checkout重定位模型路径与编译解析桥；导入、米制mesh引用、60任务与40球及桥接加载检查通过。尚未重新运行全周期，不混作新验收；原研究服务目录保留。后续在此分支开发，提交关联Refs MOTION-275。

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "description_repository": "SevenovaHangzhou/robot_description",
+  "description_commit": "6bb184b",
+  "model_revision": "robot_v3.2.2-suction-tool0-151mm",
+  "tool0_offset_m": 0.151,
+  "robot_collision": {
+    "config": "alfa_v322_suction_final.yml",
+    "links": 18,
+    "total_spheres": 260,
+    "base_link": {
+      "fit_type": "MORPHIT",
+      "requested_spheres": 40,
+      "retained_spheres": 33,
+      "iterations": 5000,
+      "coverage_weight": 100.0,
+      "protrusion_weight": 10.0
+    },
+    "other_links": {
+      "fit_type": "MORPHIT",
+      "sphere_density": 0.1,
+      "iterations": 1000,
+      "coverage_weight": 1000.0,
+      "protrusion_weight": 10.0
+    }
+  },
+  "attached_box_collision": {
+    "config": "box_morphit_final.json",
+    "dimensions_m": [0.3, 0.4, 0.4],
+    "fit_type": "MORPHIT",
+    "requested_spheres": 24,
+    "retained_spheres": 24,
+    "iterations": 1000,
+    "coverage_weight": 100.0,
+    "protrusion_weight": 100.0,
+    "default_tool_to_box_translation_m": [0.0, 0.0, 0.15]
+  },
+  "notes": [
+    "Tool0 offset changed only kinematics; robot sphere centers and radii are reused unchanged from the accepted bd1e455 candidate.",
+    "Attached-box pose is recomputed from the new Tool0 frame and is not copied from the old zero-offset model.",
+    "Final executable trajectories still require exact mesh/OBB validation."
+  ]
+}

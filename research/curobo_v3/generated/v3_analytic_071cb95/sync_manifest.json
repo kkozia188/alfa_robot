@@ -1,0 +1,107 @@
+{
+  "branch": "feat/v3-analytic-proxy",
+  "commit": "071cb954d8c626626c41cdeff599bc451a56c117",
+  "active_entry": "urdf/robot_analytic_proxy.urdf.xacro",
+  "joint_changes": [
+    {
+      "joint": "left_joint3",
+      "tag": "origin",
+      "old": {
+        "xyz": "0.23761775 0.063669485 -0.0513",
+        "rpy": "0 -1.5707963 -2.8797933"
+      },
+      "new": {
+        "xyz": "0.23761775 0.063669485 -0.04949",
+        "rpy": "0 -1.5707963 -2.8797933"
+      }
+    },
+    {
+      "joint": "left_joint4",
+      "tag": "origin",
+      "old": {
+        "xyz": "-4.248689e-05 0.085000001 0.26",
+        "rpy": "-1.5707963 0 0"
+      },
+      "new": {
+        "xyz": "0 0.085000001 0.26",
+        "rpy": "-1.5707963 0 0"
+      }
+    },
+    {
+      "joint": "left_joint5",
+      "tag": "origin",
+      "old": {
+        "xyz": "0 -0.241 -0.082299999",
+        "rpy": "2.28522397028e-09 -1.57079630099 1.57079632451"
+      },
+      "new": {
+        "xyz": "0 -0.241 -0.085",
+        "rpy": "2.28522397028e-09 -1.57079630099 1.57079632451"
+      }
+    },
+    {
+      "joint": "left_joint7",
+      "tag": "origin",
+      "old": {
+        "xyz": "0 0.0992 -0.0915",
+        "rpy": "-1.5707963 0 0"
+      },
+      "new": {
+        "xyz": "0 0.0992 -0.0905",
+        "rpy": "-1.5707963 0 0"
+      }
+    },
+    {
+      "joint": "right_joint3",
+      "tag": "origin",
+      "old": {
+        "xyz": "-0.23761775 0.063669485 -0.06681",
+        "rpy": "0 -1.5707963 -0.26179939"
+      },
+      "new": {
+        "xyz": "-0.23761775 0.063669485 -0.065",
+        "rpy": "0 -1.5707963 -0.26179939"
+      }
+    },
+    {
+      "joint": "right_joint4",
+      "tag": "origin",
+      "old": {
+        "xyz": "4.248689e-05 -0.085000001 0.26",
+        "rpy": "1.5707963 0 0"
+      },
+      "new": {
+        "xyz": "0 -0.085000001 0.26",
+        "rpy": "1.5707963 0 0"
+      }
+    },
+    {
+      "joint": "right_joint5",
+      "tag": "origin",
+      "old": {
+        "xyz": "0 0.241 -0.082299999",
+        "rpy": "-2.28522397028e-09 -1.57079630099 -1.57079632451"
+      },
+      "new": {
+        "xyz": "0 0.241 -0.085",
+        "rpy": "-2.28522397028e-09 -1.57079630099 -1.57079632451"
+      }
+    },
+    {
+      "joint": "right_joint7",
+      "tag": "origin",
+      "old": {
+        "xyz": "0 -0.0992 -0.0915",
+        "rpy": "1.5707963 0 0"
+      },
+      "new": {
+        "xyz": "0 -0.0992 -0.0905",
+        "rpy": "1.5707963 0 0"
+      }
+    }
+  ],
+  "collision_fitting": "reused: identical link-local meshes",
+  "box_model": "20 VOXEL + 12 edge + 8 corner",
+  "target_6d": "generated/current_carry_target_6d.json",
+  "full_mobile_entry_synced_but_inactive": "urdf/robot_analytic_proxy_mobile.urdf"
+}

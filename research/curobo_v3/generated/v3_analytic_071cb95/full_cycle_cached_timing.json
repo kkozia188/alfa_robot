@@ -1,0 +1,272 @@
+[
+  {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "joint_names": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "updown",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "attempts": [
+      {
+        "candidate": 1,
+        "extraction": {
+          "fixed_updown_m": -0.001000000280328095,
+          "fixed_psi_rad": [
+            2.2374494752675895,
+            -2.2374518562810173
+          ],
+          "max_line_error_mm": 0.03254228987077306,
+          "max_orientation_error_deg": 0.004625409942002566
+        },
+        "approach": {
+          "iterations": 21,
+          "tree_nodes": 29342,
+          "accepted_nodes": 29341,
+          "goal_count": 1,
+          "selected_goal": 0,
+          "first_solution_ms": 304.55600400455296,
+          "search_ms": 2000.7710329955444,
+          "solutions_found": 75,
+          "best_weighted_length": 4.822227478027344,
+          "raw_waypoints": 8,
+          "shortcut_waypoints": 8,
+          "shortcut_applied": false,
+          "shortcut_ms": 26.91948798019439,
+          "fine_candidates_checked": 1,
+          "fine_seed_valid": true,
+          "informed_sampling": true
+        },
+        "wall_ms": 2123.3993700006977
+      }
+    ],
+    "timing_ms": {
+      "initial_checker_setup_and_validation": 1582.1017930284142,
+      "contact_solver_setup": 422.41377499885857,
+      "contact_ik_and_ranking": 764.7090639802627,
+      "loaded_checker_setup": 483.29459701199085,
+      "analytic_extract_and_validation": 90.53581499028951,
+      "approach_rrt_and_validation": 2032.8421840094961,
+      "transport_pipeline_total": 3201.9564710208215,
+      "empty_turn_checker_setup": 330.89969801949337,
+      "empty_turn_validation": 2.0195849938318133,
+      "home_rrt_and_validation": 2038.1105149863288,
+      "other_assembly_and_bookkeeping": 22.60605595074594
+    },
+    "contact_ik_count": 32,
+    "selected_candidate": 1,
+    "transport_timing_breakdown_ms": {
+      "setup": 0.7586799911223352,
+      "target_ik": 42.486082995310426,
+      "target_filter": 2.274853002745658,
+      "rrt": 2138.6075299815275,
+      "frame_assembly": 1.6028449754230678,
+      "mobile_checker_setup": 784.2294609872624,
+      "transport_and_turn_validation": 231.70494503574446,
+      "cleanup": 0.018997001461684704
+    },
+    "transport_timing_ms": 3201.707140018698,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "total_ms": 10971.489552990533,
+    "allocated_gpu_mb": 584.39013671875
+  },
+  {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "joint_names": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "updown",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "attempts": [
+      {
+        "candidate": 1,
+        "extraction": {
+          "fixed_updown_m": -0.001000000280328095,
+          "fixed_psi_rad": [
+            2.2374494752675895,
+            -2.2374518562810173
+          ],
+          "max_line_error_mm": 0.03254228987077306,
+          "max_orientation_error_deg": 0.004625409942002566
+        },
+        "approach": {
+          "iterations": 22,
+          "tree_nodes": 30677,
+          "accepted_nodes": 30676,
+          "goal_count": 1,
+          "selected_goal": 0,
+          "first_solution_ms": 255.84144104504958,
+          "search_ms": 2078.984384017531,
+          "solutions_found": 81,
+          "best_weighted_length": 4.822227478027344,
+          "raw_waypoints": 8,
+          "shortcut_waypoints": 8,
+          "shortcut_applied": false,
+          "shortcut_ms": 24.688570003490895,
+          "fine_candidates_checked": 1,
+          "fine_seed_valid": true,
+          "informed_sampling": true
+        },
+        "wall_ms": 2181.2008089618757
+      }
+    ],
+    "timing_ms": {
+      "initial_checker_setup_and_validation": 8.690985036082566,
+      "contact_solver_setup": 0.017809972632676363,
+      "contact_ik_and_ranking": 36.931934009771794,
+      "loaded_checker_setup": 0.23745896760374308,
+      "analytic_extract_and_validation": 74.20343399280682,
+      "approach_rrt_and_validation": 2106.9724419503473,
+      "transport_pipeline_total": 2182.211324048694,
+      "empty_turn_checker_setup": 0.3941809991374612,
+      "empty_turn_validation": 2.6369779952801764,
+      "home_rrt_and_validation": 2097.4007309996523,
+      "other_assembly_and_bookkeeping": 14.970577030908316
+    },
+    "contact_ik_count": 32,
+    "selected_candidate": 1,
+    "transport_timing_breakdown_ms": {
+      "setup": 1.5921600279398263,
+      "target_ik": 40.58523697312921,
+      "target_filter": 4.758669994771481,
+      "rrt": 2123.8356890389696,
+      "frame_assembly": 0.7895499584265053,
+      "mobile_checker_setup": 1.8699869979172945,
+      "transport_and_turn_validation": 8.036787039600313,
+      "cleanup": 0.054616015404462814
+    },
+    "transport_timing_ms": 2181.535754003562,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "total_ms": 6524.667855002917,
+    "allocated_gpu_mb": 560.4072265625
+  },
+  {
+    "success": true,
+    "task": {
+      "left": 24,
+      "right": 20
+    },
+    "joint_names": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "updown",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "attempts": [
+      {
+        "candidate": 1,
+        "extraction": {
+          "fixed_updown_m": -0.001000000280328095,
+          "fixed_psi_rad": [
+            2.2374494752675895,
+            -2.2374518562810173
+          ],
+          "max_line_error_mm": 0.03254228987077306,
+          "max_orientation_error_deg": 0.004625409942002566
+        },
+        "approach": {
+          "iterations": 22,
+          "tree_nodes": 30677,
+          "accepted_nodes": 30676,
+          "goal_count": 1,
+          "selected_goal": 0,
+          "first_solution_ms": 227.9733389732428,
+          "search_ms": 2067.291100975126,
+          "solutions_found": 81,
+          "best_weighted_length": 4.822227478027344,
+          "raw_waypoints": 8,
+          "shortcut_waypoints": 8,
+          "shortcut_applied": false,
+          "shortcut_ms": 28.37749500758946,
+          "fine_candidates_checked": 1,
+          "fine_seed_valid": true,
+          "informed_sampling": true
+        },
+        "wall_ms": 2182.1415289887227
+      }
+    ],
+    "timing_ms": {
+      "initial_checker_setup_and_validation": 3.326795995235443,
+      "contact_solver_setup": 0.015434983652085066,
+      "contact_ik_and_ranking": 35.65441200044006,
+      "loaded_checker_setup": 1.1124939774163067,
+      "analytic_extract_and_validation": 76.35600795038044,
+      "approach_rrt_and_validation": 2105.7617750484496,
+      "transport_pipeline_total": 2103.3101339708082,
+      "empty_turn_checker_setup": 0.34906400833278894,
+      "empty_turn_validation": 2.4755059857852757,
+      "home_rrt_and_validation": 2087.950239016209,
+      "other_assembly_and_bookkeeping": 21.28460502717644
+    },
+    "contact_ik_count": 32,
+    "selected_candidate": 1,
+    "transport_timing_breakdown_ms": {
+      "setup": 1.2656550388783216,
+      "target_ik": 37.25013695657253,
+      "target_filter": 2.722462988458574,
+      "rrt": 2057.198040012736,
+      "frame_assembly": 1.632529019843787,
+      "mobile_checker_setup": 0.2303349901922047,
+      "transport_and_turn_validation": 2.8150720172561705,
+      "cleanup": 0.026119989342987537
+    },
+    "transport_timing_ms": 2103.1510360189714,
+    "max_adjacent_joint_step_deg": 0.4999623712096581,
+    "final_home_error": 0.0,
+    "total_ms": 6437.5964679638855,
+    "allocated_gpu_mb": 584.255859375
+  }
+]

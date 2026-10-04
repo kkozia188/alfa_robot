@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "name": "cuboid_voxel_edge_corner_v1",
+  "status": "approved",
+  "approved_date": "2026-10-03",
+  "applies_to": "attached_cuboid_objects",
+  "interior_fit": {
+    "method": "curobo_voxel",
+    "num_spheres": 20,
+    "random_seed": 20261003,
+    "require_inside_faces": true
+  },
+  "edge_support": {
+    "count": 12,
+    "placement": "edge_midpoints",
+    "radius_from_shortest_half_extent": 0.14
+  },
+  "corner_support": {
+    "count": 8,
+    "placement": "inset_corners",
+    "radius_from_shortest_half_extent": 0.09
+  },
+  "face_support": {
+    "count": 0
+  },
+  "total_spheres": 40,
+  "reference_cuboid_m": [0.3, 0.4, 0.4],
+  "reference_result": {
+    "axis_protruding_spheres": 0,
+    "voxel_interior_coverage_percent": 62.29,
+    "edge_sphere_diameter_mm": 42.0,
+    "corner_sphere_diameter_mm": 27.0
+  }
+}

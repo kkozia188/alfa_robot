@@ -12,7 +12,11 @@ def main():
     parser.add_argument("--compiler", default="g++")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    source_root = "/mnt/mydisk/ALFA/curobo_v2_ws/"
+    def relocate(value):
+        marker = "/generated/"
+        if marker in value:
+            return root / "generated" / value.split(marker, 1)[1]
+        return Path(value)
     for directory in (root / "generated").iterdir():
         if not directory.is_dir():
             continue
@@ -20,8 +24,8 @@ def main():
             tree = ET.parse(path)
             for mesh in tree.getroot().findall(".//mesh"):
                 filename = mesh.attrib["filename"]
-                if filename.startswith(source_root):
-                    destination = root / filename[len(source_root):]
+                if "/generated/" in filename:
+                    destination = relocate(filename)
                     if not destination.is_file():
                         raise FileNotFoundError(destination)
                     mesh.set("filename", str(destination))
@@ -33,8 +37,8 @@ def main():
                 continue
             for key in ("urdf_path", "asset_root_path"):
                 value = kin.get(key, "")
-                if value.startswith(source_root):
-                    kin[key] = str(root / value[len(source_root):])
+                if "/generated/" in value:
+                    kin[key] = str(relocate(value))
             path.write_text(yaml.safe_dump(data, sort_keys=False))
     vendor = root / "vendor/alfa_robot_analytic_ik"
     binary = root / "generated/v3_analytic_071cb95/libv3_analytic_bridge.so"

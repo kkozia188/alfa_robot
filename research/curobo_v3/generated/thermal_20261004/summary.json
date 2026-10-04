@@ -1,0 +1,75 @@
+{
+  "Local RTX 4060": {
+    "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+    "duration_s": 121.05089862500006,
+    "average_states_per_s": 528398.6878788028,
+    "first_interval_s": [
+      0.0,
+      21.93106612300005
+    ],
+    "last_interval_s": [
+      105.23372394500007,
+      121.05084282200005
+    ],
+    "first_states_per_s": 525935.9456266217,
+    "last_states_per_s": 530349.9370038912,
+    "change_percent": 0.8392640613317459,
+    "temperature_first_c": 56.0,
+    "temperature_last_c": 59.0,
+    "temperature_max_c": 60.0,
+    "utilization_mean_percent": 98.4201680672269,
+    "clock_first_mhz": 2085.0,
+    "clock_last_mhz": 2100.0,
+    "power_mean_w": 54.6709243697479,
+    "thermal_active_samples": 0,
+    "power_cap_active_samples": 119,
+    "thermal_report_values": {
+      "clocks_throttle_reasons.sw_thermal_slowdown": [
+        "Not Active"
+      ],
+      "clocks_throttle_reasons.hw_thermal_slowdown": [
+        "Not Active"
+      ]
+    },
+    "telemetry_samples": 119,
+    "telemetry_errors": []
+  },
+  "IPC RTX A2000": {
+    "gpu": "NVIDIA RTX A2000 Laptop GPU",
+    "duration_s": 120.76627801799623,
+    "average_states_per_s": 373355.6149944524,
+    "first_interval_s": [
+      0.0,
+      22.941175961997942
+    ],
+    "last_interval_s": [
+      103.86853344099654,
+      120.76623343999381
+    ],
+    "first_states_per_s": 457071.59987655655,
+    "last_states_per_s": 310271.8121585257,
+    "change_percent": -32.11745988105097,
+    "temperature_first_c": 70.0,
+    "temperature_last_c": 88.0,
+    "temperature_max_c": 89.0,
+    "utilization_mean_percent": 99.16949152542372,
+    "clock_first_mhz": 1687.0,
+    "clock_last_mhz": 742.0,
+    "power_mean_w": 45.24347457627119,
+    "thermal_active_samples": 97,
+    "power_cap_active_samples": 20,
+    "thermal_report_values": {
+      "clocks_throttle_reasons.sw_thermal_slowdown": [
+        "Active",
+        "Not Active"
+      ],
+      "clocks_throttle_reasons.hw_thermal_slowdown": [
+        "Not Active"
+      ]
+    },
+    "telemetry_samples": 118,
+    "telemetry_errors": []
+  },
+  "ipc_fraction_of_local_throughput": 0.70657937568552,
+  "matching_model_inputs_script_software": true
+}

@@ -2140,3 +2140,15 @@
 - 留给下个AI：使用CORE.md的具名PlanRequest与SceneStore入口；预测场景事件不等于真实执行反馈。保留目标箱豁免、抽离延后负载碰撞和40球内接近似。当前全周期仅原点底盘/零头部/双臂轴对齐标准箱；没有11/60组、RT/Action、时间参数化或新增OBB/FCL验收声明。逐步记录及最终PR由MOTION-276跟踪，算法优化仍跟踪MOTION-275。
 - 2026-10-04 MOTION-275六规划器：增加Connect＋Informed与BIT* GPU批量验边/双队列/换父节点变体，并rebase同步MOTION-276核心封装，未覆盖同事实现。相同首组接触起点与完整6D目标、三段2s预算，新核心热态分别6.318s/6.227s完整成功；最终Home误差0、相邻关节步长≤0.5°。修复BIT空批次错误，3项GPU小场景测试通过。页面8090保留原四种及新增两种；详见SIX_PLANNERS.md与full_cycle_extra_planners.json。不声明原版BIT*最优性、全任务成功率或真实OBB/连续碰撞验收，未测CBS、未加入Shortcut/TrajOpt。
 - 整合收尾：PR #49 rebase到同事四规划器更新cb08548d，保留其页面/脚本/原始对比证据，将同一search_path迁入核心；15项CPU CI通过。复核首轮受已有8090演示显存占用影响OOM，改用仅本次进程的expandable_segments分配设置后四种规划器均通过首组完整周期、回位误差0且步长≤0.5°，未暂停或修改其他演示进程。该轮属于兼容复核，不作性能排名；结果与环境记录于validation.json。
+
+## 2026-10-04 运控算法 / Codex / Linear子任务分工
+- 做了什么：按用户确认在MOTION-275下创建MOTION-277规划算法优化与多路线对比验证（In Progress）、MOTION-278搜索结果的轨迹优化与效果验证（Todo）。继承当前Project/milestone，负责人李昊洋。
+- 改了哪里：277补5条历史/当前推进评论；278补未开始说明；275描述与评论明确子任务归属，原始评论和同事视频保留追溯。
+- 验证结果：UI确认父子关系、状态和评论正文；截图/tmp/linear-275-subissues-20261004.jpg。本轮无算法代码修改或新增实验。
+- 留给下个AI：基础RRT/PRM及公共GPU加速仍归275；Informed、Connect、Connect＋Informed、BIT-star、任务空间引导与因子化协调等其他路线后续归277。搜索后压缩/重采样/TrajOpt等归278，尚未启动；旧模型TrajOpt尝试不当作新任务已完成。
+
+## 2026-10-04 运控算法 / Codex / MOTION-275 工控机持续GPU热压测
+- 做了什么：SSH sev_v3@192.168.100.28，在/home/sev_v3/curobo_thermal/venv部署同版本隔离环境，不改系统CUDA。两台实际cuRobo FK/自碰撞/世界碰撞/边界计算持续约2分钟；16384状态×4随机批次、15轴、340球、29障碍及CUDA Graph完全一致。
+- 改了哪里：新增v3_gpu_thermal_stress.py、v3_compare_thermal.py、THERMAL_STRESS.md及generated/thermal_20261004原始JSON/冻结输入/对比图。
+- 验证结果：模型/输入/脚本/软件哈希与版本一致，四批Graph与普通调用碰撞判定一致。4060本机121.05s，平均GPU98.42%、最高60°C，前后52.59→53.03万状态/s（+0.84%）；A2000工控机120.77s，平均GPU99.17%、最高89°C，45.71→31.03万（-32.12%），约21.66s/86°C首次温度降频，97/118采样Active。压测进程均退出，工控机温度下降、GPU回空闲。
+- 留给下个AI：这是单次持续GPU算子热负载，不等于完整RRT耗时或数小时稳态；驱动/内核和初始温度不同，不是单变量GPU对比。先核查散热再用同负载复测，保持温度保护。证据、区间和可复制命令见THERMAL_STRESS.md，正式进度继续评论275。

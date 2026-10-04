@@ -35,7 +35,11 @@ def main():
     parser.add_argument("--named-poses", type=Path, default=DEFAULT_NAMED_POSES)
     parser.add_argument("--box-fit", type=Path, default=DEFAULT_BOX_FIT)
     parser.add_argument("--port", type=int, default=8090)
+    parser.add_argument("--comparison-json", type=Path)
     args = parser.parse_args()
+    comparisons = json.loads(args.comparison_json.read_text()) if args.comparison_json else {}
+    planner_labels = {"Batched RRT": "rrt", "Informed RRT": "informed_rrt",
+                      "Batched RRTConnect": "rrtconnect", "GPU PRM": "prm"}
     planner = FullCyclePlanner(args)
     config = planner.mobile_robot["kinematics"]
     joint_names = config["cspace"]["joint_names"]
@@ -71,6 +75,8 @@ def main():
     labels = [entry[0] for entry in planner.task_options]
     with server.gui.add_folder("完整任务实时规划"):
         task = server.gui.add_dropdown("组合任务", options=labels, initial_value=labels[0])
+        planner_selector = server.gui.add_dropdown("规划器", options=list(planner_labels),
+                                                   initial_value="Informed RRT")
         run = server.gui.add_button("计算完整流程并播放")
         play = server.gui.add_checkbox("播放", initial_value=False)
         frame = server.gui.add_slider("轨迹帧", min=1, max=1, step=1, initial_value=1)
@@ -78,7 +84,21 @@ def main():
                                         initial_value=PHASE_NAMES["home"])
         spheres = server.gui.add_checkbox("显示附着箱40球", initial_value=False)
         status = server.gui.add_markdown("从第一初始姿态开始，一次计算完整流程。")
+        comparison_status = server.gui.add_markdown("")
     current = {"result": None, "busy": False}
+
+    def refresh_comparison():
+        lines = ["已计算完整流程对比（计算结果回放）", "", "| 规划器 | 结果 | 总计算 |",
+                 "| --- | --- | --- |"]
+        for label, kind in planner_labels.items():
+            result = comparisons.get(kind)
+            if result is None:
+                continue
+            verdict = "完成全部阶段" if result["success"] else result.get("blocked_stage", "失败")
+            seconds = result.get("measured_wall_ms", result.get("total_ms", 0)) / 1000
+            lines.append(f"| {label} | {verdict} | {seconds:.2f}s |")
+        lines += ["", "预载首组对比为热态。实时重算包含当次初始化状态；同一接触起点、每段2秒预算；无Shortcut/TrajOpt。"]
+        comparison_status.content = "\n".join(lines) if comparisons else ""
 
     def show_frame(index):
         result = current["result"]
@@ -139,9 +159,26 @@ def main():
         play.value = False
         current["result"] = None
         planner.selected_task = planner.task_map[task.value]
+        comparisons.clear()
+        planner.comparison_contact = None
+        refresh_comparison()
         frame.max = 1
         frame.value = 1
         show_frame(0)
+
+    @planner_selector.on_update
+    def on_planner(_event):
+        if current["busy"]:
+            return
+        play.value = False
+        planner.planner_kind = planner_labels[planner_selector.value]
+        result = comparisons.get(planner.planner_kind)
+        current["result"] = result
+        frame.max = max(1, len(result["frames"])) if result else 1
+        frame.value = 1
+        show_frame(0)
+        if result:
+            play.value = result["success"]
 
     @run.on_click
     def on_run(_event):
@@ -150,6 +187,7 @@ def main():
         current["busy"] = True
         run.disabled = True
         task.disabled = True
+        planner_selector.disabled = True
         play.value = False
         current["result"] = None
         show_frame(0)
@@ -170,9 +208,12 @@ def main():
                 current["busy"] = False
                 run.disabled = False
                 task.disabled = False
+                planner_selector.disabled = False
             path = args.robot_config.parent / "full_cycle_latest.json"
             path.write_text(json.dumps(result, indent=2, ensure_ascii=False)+"\n")
             current["result"] = result
+            comparisons[planner.planner_kind] = result
+            refresh_comparison()
             if result["frames"]:
                 frame.max = len(result["frames"])
                 frame.value = 1
@@ -188,6 +229,13 @@ def main():
         client.camera.look_at = (.6, 0, 1.2)
         client.camera.up_direction = (0, 0, 1)
 
+    if comparisons:
+        baseline = comparisons.get("informed_rrt")
+        if baseline and baseline.get("selected_candidate"):
+            planner.comparison_contact = baseline["contact_candidates"][baseline["selected_candidate"]-1]
+        current["result"] = baseline
+        frame.max = len(baseline["frames"]) if baseline else 1
+    refresh_comparison()
     show_frame(0)
     print(f"Ready: http://localhost:{args.port}", flush=True)
     while True:

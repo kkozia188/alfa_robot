@@ -24,6 +24,7 @@ from curobo.types import GoalToolPose, JointState, Pose
 
 from v3_batched_loaded_search import (
     GpuValidity, batched_rrt_multi_goal, densify, loaded_robot,
+    batched_rrt_connect_multi_goal, batched_prm_multi_goal,
 )
 from v3_search_helpers import audit_state
 from v3_wall_ik_benchmark import (
@@ -115,9 +116,20 @@ class InteractivePlanner:
         self.result = None
         self.busy = False
         self.random_counter = 0
+        self.planner_kind = "informed_rrt"
         self._cached_task = None
         self._cached_solver = None
         self._cached_checkers = {}
+
+    def search_path(self, start, goals, lower, upper, validity, budget, seed):
+        if self.planner_kind == "rrtconnect":
+            return batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget, seed)
+        if self.planner_kind == "prm":
+            return batched_prm_multi_goal(start, goals, lower, upper, validity, budget, seed)
+        return batched_rrt_multi_goal(
+            start, goals, lower, upper, validity, budget, seed,
+            apply_shortcut=False, informed_sampling=self.planner_kind == "informed_rrt",
+        )
 
     def prepare_task(self, boxes):
         key = tuple(sorted(boxes.items()))
@@ -302,12 +314,11 @@ class InteractivePlanner:
         torch.cuda.synchronize()
         timings["target_filter"] = (time.perf_counter() - started_filter) * 1000
         started_search = time.perf_counter()
-        path, stats = batched_rrt_multi_goal(
+        path, stats = self.search_path(
             start, goals,
             checker.kinematics.get_joint_limits().position[0] + 1e-5,
             checker.kinematics.get_joint_limits().position[1] - 1e-5,
             validity, 2.0, 20261003 + self.random_counter,
-            apply_shortcut=False, informed_sampling=True,
         )
         search_ms = (time.perf_counter() - started_search) * 1000.0
         timings["rrt"] = search_ms

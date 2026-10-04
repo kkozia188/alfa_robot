@@ -111,11 +111,10 @@ class FullCyclePlanner(InteractivePlanner):
 
     def joint_plan(self, start, target, checker, validity, seed):
         lower, upper = checker.kinematics.get_joint_limits().position
-        path, stats = batched_rrt_multi_goal(
+        path, stats = self.search_path(
             torch.tensor(start, device="cuda", dtype=torch.float32),
             torch.tensor(np.asarray(target).reshape(1, -1), device="cuda", dtype=torch.float32),
             lower + 1e-5, upper - 1e-5, validity, 2.0, seed,
-            apply_shortcut=False, informed_sampling=True,
         )
         if path is None:
             return None, stats
@@ -129,6 +128,7 @@ class FullCyclePlanner(InteractivePlanner):
         report = {"success": False, "task": boxes, "joint_names": list(
             self.mobile_robot["kinematics"]["cspace"]["joint_names"]),
             "frames": [], "phases": [], "payload": [], "attempts": []}
+        report["planner"] = self.planner_kind
         timing = {}
         report["timing_ms"] = timing
         self.last_partial = report
@@ -176,6 +176,11 @@ class FullCyclePlanner(InteractivePlanner):
         weights = np.array([5.0] + [1.0] * 14)
         candidates = candidates[np.argsort(np.sum(((candidates - self.home_values) * weights) ** 2, axis=1))]
         report["contact_ik_count"] = len(candidates)
+        report["contact_candidates"] = candidates.tolist()
+        fixed_contact = getattr(self, "comparison_contact", None)
+        if fixed_contact is not None:
+            candidates = np.asarray(fixed_contact).reshape(1, -1)
+            report["comparison_contact_fixed"] = True
         torch.cuda.synchronize()
         timing["contact_ik_and_ranking"] = (time.perf_counter()-segment_started)*1000
         segment_started = time.perf_counter()
@@ -232,6 +237,7 @@ class FullCyclePlanner(InteractivePlanner):
         append(transport["frames"][:transport["transport_frames"]], "transport", True)
         append(transport["frames"][transport["transport_frames"]:], "turn_loaded", True)
         report["transport_timing_ms"] = transport["total_ms"]
+        report["transport_search_stats"] = transport["rrt_stats"]
         append([report["frames"][-1]], "release", False)
         progress("检查箱体释放后原地转回")
         segment_started = time.perf_counter()
@@ -260,6 +266,7 @@ class FullCyclePlanner(InteractivePlanner):
         timing["home_rrt_and_validation"] = (time.perf_counter()-segment_started)*1000
         if home_path is None:
             raise CycleBlocked("空载回Home", f"2秒内无路径或验收失败: {stats}", report)
+        report["home_search_stats"] = stats
         append(home_path, "return_home", False)
         rows = np.asarray(report["frames"])
         report["max_adjacent_joint_step_deg"] = float(np.degrees(

@@ -499,7 +499,8 @@ def batched_rrt_multi_goal(start, goals, lower, upper, validity, budget_s, seed,
     }
 
 
-def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_s, seed):
+def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_s, seed,
+                                  informed_sampling=False):
     generator = torch.Generator(device="cuda")
     generator.manual_seed(seed)
     weights = validity.weights
@@ -548,6 +549,11 @@ def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_
             corridor + noise, uniform,
         )
         samples = torch.clamp(samples, lower, upper)
+        if informed_sampling and best_connections:
+            from v3_gpu_bitstar import informed_samples
+
+            samples = informed_samples(start, goals, weights, lower, upper, batch,
+                                       best_connections[0]["cost"], generator)
         expand_start = iterations % 2 == 0
         tree = start_tree if expand_start else goal_tree
         tree_parents = start_parents if expand_start else goal_parents
@@ -648,6 +654,7 @@ def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_
     elapsed_ms = (time.perf_counter() - started) * 1000.0
     if selected_path is None:
         return None, {
+            "informed_sampling": informed_sampling,
             "iterations": iterations, "start_nodes": len(start_tree),
             "goal_nodes": len(goal_tree), "accepted_nodes": accepted_total,
             "goal_count": len(goals), "selected_goal": None,
@@ -655,6 +662,7 @@ def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_
             "solutions_found": solutions_found, "fine_candidates_checked": checked,
         }
     return selected_path.detach().cpu().numpy(), {
+        "informed_sampling": informed_sampling,
         "iterations": iterations, "start_nodes": len(start_tree),
         "goal_nodes": len(goal_tree), "tree_nodes": len(start_tree) + len(goal_tree),
         "accepted_nodes": accepted_total, "goal_count": len(goals),

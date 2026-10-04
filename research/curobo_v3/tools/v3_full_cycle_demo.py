@@ -39,7 +39,8 @@ def main():
     args = parser.parse_args()
     comparisons = json.loads(args.comparison_json.read_text()) if args.comparison_json else {}
     planner_labels = {"Batched RRT": "rrt", "Informed RRT": "informed_rrt",
-                      "Batched RRTConnect": "rrtconnect", "GPU PRM": "prm"}
+                      "Batched RRTConnect": "rrtconnect", "GPU PRM": "prm",
+                      "Connect + Informed": "informed_connect", "BIT* + GPU": "bitstar"}
     planner = FullCyclePlanner(args)
     config = planner.mobile_robot["kinematics"]
     joint_names = config["cspace"]["joint_names"]

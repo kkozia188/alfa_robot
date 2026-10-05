@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-05",
+  "issue": "MOTION-246",
+  "curobo_commit": "78fd485fa82d9b9a063fb4985e371814587e666a",
+  "versions": {
+    "torch": "2.8.0",
+    "warp-lang": "1.17.0",
+    "pytest": "8.4.2",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "trimesh": "5.1.0",
+    "viser": "1.1.1",
+    "yourdfpy": "0.0.60"
+  },
+  "imports": {
+    "import_pairs_checked": 21,
+    "errors": []
+  },
+  "tests": {
+    "cpu_core_passed": 22,
+    "old_connector_tests_adapted_passed": 2,
+    "repository_connector_gpu_passed": 3,
+    "bitstar_gpu_passed": 3
+  },
+  "six_planner_first_pair": {
+    "informed_rrt": {
+      "success": true,
+      "total_ms": 10478.333620998455,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    },
+    "rrt": {
+      "success": true,
+      "total_ms": 6464.372091002588,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    },
+    "rrtconnect": {
+      "success": true,
+      "total_ms": 6227.134738001041,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    },
+    "prm": {
+      "success": true,
+      "total_ms": 6328.810068996972,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    },
+    "informed_connect": {
+      "success": true,
+      "total_ms": 6247.498920998623,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    },
+    "bitstar": {
+      "success": true,
+      "total_ms": 4213.979989999643,
+      "final_home_error": 0.0,
+      "max_adjacent_joint_step_deg": 0.49996250811017146
+    }
+  },
+  "core_smoke": {
+    "gpu_cache_reused": true,
+    "scene_update_rebuilt_cache": true,
+    "payload_update_rebuilt_cache": true,
+    "stale_plan_rejected": true,
+    "core_did_not_load_viser": true,
+    "cuda_allocated_mb": 573.724609375
+  },
+  "mesh_smoke": {
+    "success": true,
+    "snapshot_isolation": true,
+    "cache_reused_for_frozen_snapshot": true,
+    "cache_rebuilt_for_changed_mesh_pose": true,
+    "ik_solver_accepts_mesh_snapshot": true,
+    "mesh": {
+      "triangle_count_each": 12,
+      "units": "m",
+      "gap_m": 0.05
+    }
+  },
+  "mesh_results": {
+    "far": {
+      "valid": true,
+      "environment_collision": false,
+      "mesh_object_ids": [
+        "conveyor_pair/left",
+        "conveyor_pair/right"
+      ]
+    },
+    "near": {
+      "valid": false,
+      "environment_collision": true,
+      "mesh_object_ids": [
+        "conveyor_pair/left",
+        "conveyor_pair/right"
+      ]
+    },
+    "disabled": {
+      "valid": true,
+      "environment_collision": false,
+      "mesh_object_ids": []
+    }
+  },
+  "ui_checks": [
+    "live x moved -4 to 0 while frozen collision check stayed valid",
+    "frozen view showed -4 position while controls showed live 0",
+    "recapture at 0 reported environment collision",
+    "display-only recapture had 0 meshes and was valid"
+  ],
+  "limitations": [
+    "first-pair regression only, not 11/60 tasks",
+    "no environment-environment collision or navigation validation",
+    "current conveyor asset is closed cuboid mesh, not detailed roller geometry",
+    "untimed geometric planning, not hardware execution"
+  ],
+  "local_full_outputs": [
+    {
+      "path": "/tmp/motion246_main_six_planners.json",
+      "sha256": "b6069d9f4f87380a3700ce02fd870a7e24b39b00443750b59360e6f5c6dffe45"
+    },
+    {
+      "path": "/tmp/motion246_main_core_smoke.json",
+      "sha256": "9e44c0447b6025a8884f0cab4d783ea93d62ae984c9e2b01b1870cdd166f5c95"
+    },
+    {
+      "path": "/tmp/motion246_conveyor_gpu_final.json",
+      "sha256": "fb023a41ad79ea3fe4d48d8100f62a8f7725326ad46438245ec3ed5e4255370f"
+    }
+  ]
+}

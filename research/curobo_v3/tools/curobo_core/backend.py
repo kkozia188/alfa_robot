@@ -129,7 +129,8 @@ class CuroboBackend:
         if self._cached_solver is None:
             self._cached_solver = InverseKinematics(InverseKinematicsCfg.create(
                 robot=copy.deepcopy(self.robot), scene_model=self.scene(boxes),
-                collision_cache={"cuboid": max(40, len(self.snapshot.objects))}, num_seeds=512,
+                collision_cache={"cuboid": max(40, len(self.snapshot.objects)),
+                                 "mesh": len(self.snapshot.meshes)}, num_seeds=512,
                 self_collision_check=True, use_cuda_graph=False,
                 position_tolerance=0.002, orientation_tolerance=math.radians(1),
                 override_iters_for_multi_link_ik=500,
@@ -147,7 +148,8 @@ class CuroboBackend:
             self._cached_checkers[key] = RobotCollisionChecker(
                 RobotCollisionCheckerCfg.load_from_config(
                     robot_config=configured, scene_model=self.scene(boxes, mobile=mobile),
-                    n_cuboids=max(40, len(self.snapshot.objects)), n_meshes=0, collision_activation_distance=0.0,
+                    n_cuboids=max(40, len(self.snapshot.objects)), n_meshes=len(self.snapshot.meshes),
+                    collision_activation_distance=0.0,
                 ))
         return self._cached_checkers[key]
 
@@ -160,7 +162,8 @@ class CuroboBackend:
         scene = self.scene(boxes)
         solver = InverseKinematics(InverseKinematicsCfg.create(
             robot=copy.deepcopy(self.robot), scene_model=scene,
-            collision_cache={"cuboid": 40}, num_seeds=512,
+            collision_cache={"cuboid": max(40, len(self.snapshot.objects)),
+                             "mesh": len(self.snapshot.meshes)}, num_seeds=512,
             self_collision_check=True, use_cuda_graph=False,
             position_tolerance=0.002, orientation_tolerance=math.radians(1.0),
             override_iters_for_multi_link_ik=500,
@@ -193,7 +196,8 @@ class CuroboBackend:
         loaded = loaded_robot(self.robot, self.box_fit, active_sides=("left", "right"))
         checker = RobotCollisionChecker(RobotCollisionCheckerCfg.load_from_config(
             robot_config=copy.deepcopy(loaded), scene_model=scene,
-            n_cuboids=40, n_meshes=0, collision_activation_distance=0.0,
+            n_cuboids=max(40, len(self.snapshot.objects)), n_meshes=len(self.snapshot.meshes),
+            collision_activation_distance=0.0,
         ))
         validity = GpuValidity(
             checker, active_sides=("left", "right"), max_box_tilt_deg=self.snapshot.policy.max_box_tilt_deg,

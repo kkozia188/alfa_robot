@@ -158,7 +158,7 @@ IK“success”与后验collision/ground/tilt通过分别记录。一个提示�
 
 ## 10. 环境、第三方依赖与启动
 
-现有验证环境为Python3.10、PyTorch2.8/CUDA12.8、RTX4060 Laptop，cuRobo V2固定提交4ea77366ca48ee453e7df139e39fa6532af49f3b。README给出依赖边界，环境并非可在任意CPU机器直接运行的自包含包。
+2026-10-05当前环境已适配官方main@78fd485fa82d9b9a063fb4985e371814587e666a，Python3.10、PyTorch2.8/CUDA12.8、Warp1.17.0、pytest8.4.2、RTX4060 Laptop。旧正文实验数字仍基于4ea77366；旧本地连接器补丁不应用到新main。初始化变更、回归范围与可复制命令见CUROBO_MAIN.md。环境并非可在任意CPU机器直接运行的自包含包。
 
 当前分支保存我们的代码、冻结米制mesh、模型配置、解析源码和patch，未提交完整NVIDIA第三方仓库、venv和.so。prepare_checkout编译解析桥并重定位URDF/config路径，可能修改checkout里的生成文件；只提交有意变化，别把自己机器绝对路径无意推回。
 

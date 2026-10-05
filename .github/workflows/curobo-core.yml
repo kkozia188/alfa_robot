@@ -29,4 +29,4 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_core_*.py' -v
       - name: Core syntax
         working-directory: research/curobo_v3
-        run: python -m compileall -q tools/curobo_core tools/v3_plan_cycle.py tools/v3_core_smoke.py
+        run: python -m compileall -q tools/curobo_core tools/v3_plan_cycle.py tools/v3_core_smoke.py tools/v3_conveyor_snapshot_demo.py tools/v3_conveyor_snapshot_check.py tools/v3_curobo_import_audit.py

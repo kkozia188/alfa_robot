@@ -1,0 +1,1855 @@
+{
+  "baseline": {
+    "samples": 20,
+    "cpu_mean_percent": 1.9675575338057065,
+    "cpu_p95_percent": 2.914633477373902,
+    "cpu_peak_percent": 2.920478536242083,
+    "per_cpu": {
+      "cpu0": {
+        "mean_percent": 0.5387586160100876,
+        "peak_percent": 1.941747572815534
+      },
+      "cpu1": {
+        "mean_percent": 0.19607843137254902,
+        "peak_percent": 0.9803921568627451
+      },
+      "cpu2": {
+        "mean_percent": 0.34125188536953244,
+        "peak_percent": 2.9411764705882355
+      },
+      "cpu3": {
+        "mean_percent": 0.049019607843137254,
+        "peak_percent": 0.9803921568627451
+      },
+      "cpu4": {
+        "mean_percent": 3.982245883069175,
+        "peak_percent": 19.607843137254903
+      },
+      "cpu5": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu6": {
+        "mean_percent": 6.521830074541962,
+        "peak_percent": 26.21359223300971
+      },
+      "cpu7": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu8": {
+        "mean_percent": 6.138410698909367,
+        "peak_percent": 20.388349514563107
+      },
+      "cpu9": {
+        "mean_percent": 2.8586682197631528,
+        "peak_percent": 18.81188118811881
+      },
+      "cpu10": {
+        "mean_percent": 11.930993644657265,
+        "peak_percent": 21.568627450980394
+      },
+      "cpu11": {
+        "mean_percent": 1.9068360080151079,
+        "peak_percent": 13.861386138613861
+      },
+      "cpu12": {
+        "mean_percent": 4.616455200082236,
+        "peak_percent": 19.41747572815534
+      },
+      "cpu13": {
+        "mean_percent": 3.07717508176157,
+        "peak_percent": 20.192307692307693
+      },
+      "cpu14": {
+        "mean_percent": 5.897585958569499,
+        "peak_percent": 34.65346534653465
+      },
+      "cpu15": {
+        "mean_percent": 0.6377402446126966,
+        "peak_percent": 10.784313725490197
+      },
+      "cpu16": {
+        "mean_percent": 0.9324086595278164,
+        "peak_percent": 3.9603960396039604
+      },
+      "cpu17": {
+        "mean_percent": 0.6377590928710233,
+        "peak_percent": 1.9801980198019802
+      },
+      "cpu18": {
+        "mean_percent": 0.6862933580622482,
+        "peak_percent": 3.9215686274509802
+      },
+      "cpu19": {
+        "mean_percent": 0.6882158804115706,
+        "peak_percent": 3.9215686274509802
+      },
+      "cpu20": {
+        "mean_percent": 0.3888623140528699,
+        "peak_percent": 2.8846153846153846
+      },
+      "cpu21": {
+        "mean_percent": 0.3427176201783074,
+        "peak_percent": 1.9607843137254901
+      },
+      "cpu22": {
+        "mean_percent": 0.5378067789645898,
+        "peak_percent": 2.9411764705882355
+      },
+      "cpu23": {
+        "mean_percent": 1.0265939500860424,
+        "peak_percent": 4.901960784313726
+      },
+      "cpu24": {
+        "mean_percent": 0.4416903683515125,
+        "peak_percent": 1.9607843137254901
+      },
+      "cpu25": {
+        "mean_percent": 0.34364144581219974,
+        "peak_percent": 2.9702970297029703
+      },
+      "cpu26": {
+        "mean_percent": 0.04854368932038835,
+        "peak_percent": 0.970873786407767
+      },
+      "cpu27": {
+        "mean_percent": 0.29366972907368494,
+        "peak_percent": 1.9801980198019802
+      }
+    },
+    "cpu_temperature_mean_c": 69.3,
+    "cpu_temperature_max_c": 74.0,
+    "processes": [
+      {
+        "pid": 2041,
+        "name": "gnome-shell",
+        "mean_cpu_one_core": 44.13818251170186,
+        "peak_cpu_one_core": 71.84455392554906
+      },
+      {
+        "pid": 1362094,
+        "name": "python3",
+        "mean_cpu_one_core": 1.3260215803280442,
+        "peak_cpu_one_core": 2.9123207850709503
+      },
+      {
+        "pid": 898,
+        "name": "irq/159-nvidia",
+        "mean_cpu_one_core": 0.5408501795764826,
+        "peak_cpu_one_core": 0.984301752278053
+      },
+      {
+        "pid": 230,
+        "name": "ksoftirqd/1",
+        "mean_cpu_one_core": 0.5408340006101204,
+        "peak_cpu_one_core": 0.984301752278053
+      },
+      {
+        "pid": 3383,
+        "name": "nxrunner.bin",
+        "mean_cpu_one_core": 0.2459706390101375,
+        "peak_cpu_one_core": 0.9841469950873103
+      },
+      {
+        "pid": 1075,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.24595563257049563,
+        "peak_cpu_one_core": 0.9840067842256045
+      },
+      {
+        "pid": 1347344,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.24575503559496034,
+        "peak_cpu_one_core": 0.9841719715828638
+      },
+      {
+        "pid": 956,
+        "name": "dbus-daemon",
+        "mean_cpu_one_core": 0.1475180344452402,
+        "peak_cpu_one_core": 1.9674535608272095
+      },
+      {
+        "pid": 495,
+        "name": "irq/125-xhci_hcd",
+        "mean_cpu_one_core": 0.09839471269722702,
+        "peak_cpu_one_core": 0.98395027057375
+      },
+      {
+        "pid": 1624,
+        "name": "Xorg",
+        "mean_cpu_one_core": 0.0983864317308482,
+        "peak_cpu_one_core": 0.9840172968472958
+      },
+      {
+        "pid": 16,
+        "name": "ksoftirqd/0",
+        "mean_cpu_one_core": 0.09838353818921974,
+        "peak_cpu_one_core": 0.9839439833707903
+      },
+      {
+        "pid": 1351785,
+        "name": "kworker/u56:2-rtw88_usb: rx wq",
+        "mean_cpu_one_core": 0.09838276605702292,
+        "peak_cpu_one_core": 0.9839439833707903
+      },
+      {
+        "pid": 34,
+        "name": "ksoftirqd/2",
+        "mean_cpu_one_core": 0.09836751698654023,
+        "peak_cpu_one_core": 0.98395027057375
+      },
+      {
+        "pid": 890,
+        "name": "systemd-oomd",
+        "mean_cpu_one_core": 0.09772982129951871,
+        "peak_cpu_one_core": 0.9838228309667238
+      },
+      {
+        "pid": 19,
+        "name": "rcu_preempt",
+        "mean_cpu_one_core": 0.049215087613902656,
+        "peak_cpu_one_core": 0.984301752278053
+      },
+      {
+        "pid": 148,
+        "name": "ksoftirqd/20",
+        "mean_cpu_one_core": 0.049215087613902656,
+        "peak_cpu_one_core": 0.984301752278053
+      },
+      {
+        "pid": 509398,
+        "name": "kworker/18:1-mm_percpu_wq",
+        "mean_cpu_one_core": 0.04920859857914319,
+        "peak_cpu_one_core": 0.9841719715828638
+      },
+      {
+        "pid": 74,
+        "name": "ktimers/10",
+        "mean_cpu_one_core": 0.04920734975436551,
+        "peak_cpu_one_core": 0.9841469950873103
+      },
+      {
+        "pid": 198,
+        "name": "ktimers/25",
+        "mean_cpu_one_core": 0.04920734975436551,
+        "peak_cpu_one_core": 0.9841469950873103
+      },
+      {
+        "pid": 1358755,
+        "name": "kworker/u56:3-rtw88_usb: rx wq",
+        "mean_cpu_one_core": 0.04920734975436551,
+        "peak_cpu_one_core": 0.9841469950873103
+      },
+      {
+        "pid": 43,
+        "name": "ktimers/4",
+        "mean_cpu_one_core": 0.04920622747799713,
+        "peak_cpu_one_core": 0.9841245495599427
+      },
+      {
+        "pid": 106,
+        "name": "ktimers/16",
+        "mean_cpu_one_core": 0.04920622747799713,
+        "peak_cpu_one_core": 0.9841245495599427
+      },
+      {
+        "pid": 42,
+        "name": "rcuc/4",
+        "mean_cpu_one_core": 0.049200339211280225,
+        "peak_cpu_one_core": 0.9840067842256045
+      },
+      {
+        "pid": 137,
+        "name": "ktimers/19",
+        "mean_cpu_one_core": 0.049200339211280225,
+        "peak_cpu_one_core": 0.9840067842256045
+      },
+      {
+        "pid": 197,
+        "name": "rcuc/25",
+        "mean_cpu_one_core": 0.049200339211280225,
+        "peak_cpu_one_core": 0.9840067842256045
+      },
+      {
+        "pid": 968,
+        "name": "polkitd",
+        "mean_cpu_one_core": 0.049200339211280225,
+        "peak_cpu_one_core": 0.9840067842256045
+      },
+      {
+        "pid": 127,
+        "name": "ktimers/18",
+        "mean_cpu_one_core": 0.0491973243018051,
+        "peak_cpu_one_core": 0.983946486036102
+      },
+      {
+        "pid": 128,
+        "name": "ksoftirqd/18",
+        "mean_cpu_one_core": 0.0491973243018051,
+        "peak_cpu_one_core": 0.983946486036102
+      },
+      {
+        "pid": 86,
+        "name": "ksoftirqd/12",
+        "mean_cpu_one_core": 0.04919719916853951,
+        "peak_cpu_one_core": 0.9839439833707903
+      },
+      {
+        "pid": 138,
+        "name": "ksoftirqd/19",
+        "mean_cpu_one_core": 0.04919719916853951,
+        "peak_cpu_one_core": 0.9839439833707903
+      },
+      {
+        "pid": 146,
+        "name": "rcuc/20",
+        "mean_cpu_one_core": 0.04919460191648248,
+        "peak_cpu_one_core": 0.9838920383296496
+      },
+      {
+        "pid": 107,
+        "name": "ksoftirqd/16",
+        "mean_cpu_one_core": 0.04919045207087007,
+        "peak_cpu_one_core": 0.9838090414174013
+      },
+      {
+        "pid": 380,
+        "name": "kworker/11:1-events",
+        "mean_cpu_one_core": 0.04919045207087007,
+        "peak_cpu_one_core": 0.9838090414174013
+      },
+      {
+        "pid": 54,
+        "name": "ksoftirqd/6",
+        "mean_cpu_one_core": 0.04918633902068024,
+        "peak_cpu_one_core": 0.9837267804136047
+      },
+      {
+        "pid": 250,
+        "name": "ksoftirqd/5",
+        "mean_cpu_one_core": 0.04918556688848342,
+        "peak_cpu_one_core": 0.9837113377696683
+      },
+      {
+        "pid": 136,
+        "name": "rcuc/19",
+        "mean_cpu_one_core": 0.04917000345785273,
+        "peak_cpu_one_core": 0.9834000691570546
+      },
+      {
+        "pid": 893,
+        "name": "nvidia-modeset/kthread_q",
+        "mean_cpu_one_core": 0.04917000345785273,
+        "peak_cpu_one_core": 0.9834000691570546
+      },
+      {
+        "pid": 3175,
+        "name": "gjs",
+        "mean_cpu_one_core": 0.048968781081902064,
+        "peak_cpu_one_core": 0.9793756216380413
+      },
+      {
+        "pid": 64,
+        "name": "ktimers/8",
+        "mean_cpu_one_core": 0.048538679751182506,
+        "peak_cpu_one_core": 0.9707735950236501
+      },
+      {
+        "pid": 178,
+        "name": "ktimers/23",
+        "mean_cpu_one_core": 0.048538679751182506,
+        "peak_cpu_one_core": 0.9707735950236501
+      },
+      {
+        "pid": 240,
+        "name": "ksoftirqd/3",
+        "mean_cpu_one_core": 0.048538679751182506,
+        "peak_cpu_one_core": 0.9707735950236501
+      },
+      {
+        "pid": 983,
+        "name": "thermald",
+        "mean_cpu_one_core": 0.048538679751182506,
+        "peak_cpu_one_core": 0.9707735950236501
+      },
+      {
+        "pid": 2865,
+        "name": "nxserver.bin",
+        "mean_cpu_one_core": 0.048538679751182506,
+        "peak_cpu_one_core": 0.9707735950236501
+      }
+    ],
+    "package_throttle_delta": 0,
+    "per_cpu_frequency_mean_mhz": {
+      "cpu0": 1930.96175,
+      "cpu1": 2100.82105,
+      "cpu2": 1651.35485,
+      "cpu3": 1404.66115,
+      "cpu4": 2194.7099,
+      "cpu5": 1229.791,
+      "cpu6": 2828.4717,
+      "cpu7": 800.0,
+      "cpu8": 2940.94765,
+      "cpu9": 1414.8409,
+      "cpu10": 2987.45295,
+      "cpu11": 3347.26195,
+      "cpu12": 3032.62065,
+      "cpu13": 1912.5632,
+      "cpu14": 2727.4812,
+      "cpu15": 1037.5913,
+      "cpu16": 2780.0,
+      "cpu17": 2520.52155,
+      "cpu18": 2595.84315,
+      "cpu19": 3055.5012,
+      "cpu20": 2744.0036,
+      "cpu21": 2305.06125,
+      "cpu22": 2356.90505,
+      "cpu23": 2617.80465,
+      "cpu24": 2053.21285,
+      "cpu25": 2489.28335,
+      "cpu26": 1823.77495,
+      "cpu27": 1859.09815
+    }
+  },
+  "benchmark": {
+    "samples": 124,
+    "cpu_mean_percent": 6.430998759567649,
+    "cpu_p95_percent": 6.655588684067222,
+    "cpu_peak_percent": 27.5728837372673,
+    "per_cpu": {
+      "cpu0": {
+        "mean_percent": 1.3318507506136477,
+        "peak_percent": 24.752475247524753
+      },
+      "cpu1": {
+        "mean_percent": 1.7196801292479795,
+        "peak_percent": 85.29411764705883
+      },
+      "cpu2": {
+        "mean_percent": 1.679279354054192,
+        "peak_percent": 35.0
+      },
+      "cpu3": {
+        "mean_percent": 0.8663609101499363,
+        "peak_percent": 26.73267326732673
+      },
+      "cpu4": {
+        "mean_percent": 1.9016706649528503,
+        "peak_percent": 33.663366336633665
+      },
+      "cpu5": {
+        "mean_percent": 2.063976083169067,
+        "peak_percent": 33.333333333333336
+      },
+      "cpu6": {
+        "mean_percent": 1.8274147025277008,
+        "peak_percent": 36.633663366336634
+      },
+      "cpu7": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu8": {
+        "mean_percent": 12.622720358109987,
+        "peak_percent": 38.23529411764706
+      },
+      "cpu9": {
+        "mean_percent": 9.283302499476891,
+        "peak_percent": 75.49019607843137
+      },
+      "cpu10": {
+        "mean_percent": 82.0032388697445,
+        "peak_percent": 100.0
+      },
+      "cpu11": {
+        "mean_percent": 6.440270156997433,
+        "peak_percent": 100.0
+      },
+      "cpu12": {
+        "mean_percent": 13.829839509325302,
+        "peak_percent": 35.294117647058826
+      },
+      "cpu13": {
+        "mean_percent": 6.395435973287276,
+        "peak_percent": 33.980582524271846
+      },
+      "cpu14": {
+        "mean_percent": 24.862150624322364,
+        "peak_percent": 100.0
+      },
+      "cpu15": {
+        "mean_percent": 1.8734661958354364,
+        "peak_percent": 31.683168316831683
+      },
+      "cpu16": {
+        "mean_percent": 1.3260420418633474,
+        "peak_percent": 26.21359223300971
+      },
+      "cpu17": {
+        "mean_percent": 1.1912313012474147,
+        "peak_percent": 25.24271844660194
+      },
+      "cpu18": {
+        "mean_percent": 1.2071418527264537,
+        "peak_percent": 25.24271844660194
+      },
+      "cpu19": {
+        "mean_percent": 0.9162667310622323,
+        "peak_percent": 24.50980392156863
+      },
+      "cpu20": {
+        "mean_percent": 0.8938769592431295,
+        "peak_percent": 24.752475247524753
+      },
+      "cpu21": {
+        "mean_percent": 0.7684523102714123,
+        "peak_percent": 24.752475247524753
+      },
+      "cpu22": {
+        "mean_percent": 0.9721754002911223,
+        "peak_percent": 24.50980392156863
+      },
+      "cpu23": {
+        "mean_percent": 1.0729332631018231,
+        "peak_percent": 28.155339805825243
+      },
+      "cpu24": {
+        "mean_percent": 0.7446533845148334,
+        "peak_percent": 26.73267326732673
+      },
+      "cpu25": {
+        "mean_percent": 0.877570261688517,
+        "peak_percent": 24.50980392156863
+      },
+      "cpu26": {
+        "mean_percent": 0.6134894405485687,
+        "peak_percent": 25.24271844660194
+      },
+      "cpu27": {
+        "mean_percent": 0.576183569249219,
+        "peak_percent": 24.50980392156863
+      }
+    },
+    "cpu_temperature_mean_c": 77.76612903225806,
+    "cpu_temperature_max_c": 83.0,
+    "processes": [
+      {
+        "pid": 1362251,
+        "name": "python",
+        "mean_cpu_one_core": 98.76382951180082,
+        "peak_cpu_one_core": 117.94705565501792
+      },
+      {
+        "pid": 2041,
+        "name": "gnome-shell",
+        "mean_cpu_one_core": 60.94628300980956,
+        "peak_cpu_one_core": 71.76220480104904
+      },
+      {
+        "pid": 1362094,
+        "name": "python3",
+        "mean_cpu_one_core": 1.4556347968305283,
+        "peak_cpu_one_core": 2.9497779217842397
+      },
+      {
+        "pid": 230,
+        "name": "ksoftirqd/1",
+        "mean_cpu_one_core": 0.6966383716406539,
+        "peak_cpu_one_core": 0.9837679691767921
+      },
+      {
+        "pid": 898,
+        "name": "irq/159-nvidia",
+        "mean_cpu_one_core": 0.3324748857238088,
+        "peak_cpu_one_core": 0.9837679691767921
+      },
+      {
+        "pid": 1075,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.26130722272165224,
+        "peak_cpu_one_core": 1.966822023455882
+      },
+      {
+        "pid": 968,
+        "name": "polkitd",
+        "mean_cpu_one_core": 0.25296991527185797,
+        "peak_cpu_one_core": 14.73790885480526
+      },
+      {
+        "pid": 3383,
+        "name": "nxrunner.bin",
+        "mean_cpu_one_core": 0.22972625936480462,
+        "peak_cpu_one_core": 1.9667107246297992
+      },
+      {
+        "pid": 1347344,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.22174380591158732,
+        "peak_cpu_one_core": 0.983724578842457
+      },
+      {
+        "pid": 2865,
+        "name": "nxserver.bin",
+        "mean_cpu_one_core": 0.2057668539247642,
+        "peak_cpu_one_core": 5.895163541922104
+      },
+      {
+        "pid": 34,
+        "name": "ksoftirqd/2",
+        "mean_cpu_one_core": 0.1583936703673961,
+        "peak_cpu_one_core": 0.983713807342324
+      },
+      {
+        "pid": 956,
+        "name": "dbus-daemon",
+        "mean_cpu_one_core": 0.1581104350993196,
+        "peak_cpu_one_core": 2.909792969805774
+      },
+      {
+        "pid": 16,
+        "name": "ksoftirqd/0",
+        "mean_cpu_one_core": 0.15050880903368538,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 240,
+        "name": "ksoftirqd/3",
+        "mean_cpu_one_core": 0.08713070860219203,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 495,
+        "name": "irq/125-xhci_hcd",
+        "mean_cpu_one_core": 0.07920688647840295,
+        "peak_cpu_one_core": 0.983713807342324
+      },
+      {
+        "pid": 1351785,
+        "name": "kworker/u56:2-rtw88_usb: rx wq",
+        "mean_cpu_one_core": 0.07911838565833967,
+        "peak_cpu_one_core": 0.9835711252653214
+      },
+      {
+        "pid": 958,
+        "name": "NetworkManager",
+        "mean_cpu_one_core": 0.07121312726657275,
+        "peak_cpu_one_core": 1.9650545139740347
+      },
+      {
+        "pid": 19,
+        "name": "rcu_preempt",
+        "mean_cpu_one_core": 0.06338823307635898,
+        "peak_cpu_one_core": 0.9837319209624592
+      },
+      {
+        "pid": 44,
+        "name": "ksoftirqd/4",
+        "mean_cpu_one_core": 0.06338779414232382,
+        "peak_cpu_one_core": 0.9837319209624592
+      },
+      {
+        "pid": 893,
+        "name": "nvidia-modeset/kthread_q",
+        "mean_cpu_one_core": 0.055427766799154704,
+        "peak_cpu_one_core": 0.9835080540356304
+      },
+      {
+        "pid": 1624,
+        "name": "Xorg",
+        "mean_cpu_one_core": 0.055413699165787846,
+        "peak_cpu_one_core": 0.9833765581736953
+      },
+      {
+        "pid": 3175,
+        "name": "gjs",
+        "mean_cpu_one_core": 0.05541136399880676,
+        "peak_cpu_one_core": 0.9833552201643844
+      },
+      {
+        "pid": 2472,
+        "name": "clash-verge",
+        "mean_cpu_one_core": 0.04756703272553401,
+        "peak_cpu_one_core": 0.983713807342324
+      },
+      {
+        "pid": 250,
+        "name": "ksoftirqd/5",
+        "mean_cpu_one_core": 0.047487837892861436,
+        "peak_cpu_one_core": 0.9830652413824779
+      },
+      {
+        "pid": 65,
+        "name": "ksoftirqd/8",
+        "mean_cpu_one_core": 0.03962537721256483,
+        "peak_cpu_one_core": 0.9833161583323796
+      },
+      {
+        "pid": 1358755,
+        "name": "kworker/u56:3-rtw88_usb: rx wq",
+        "mean_cpu_one_core": 0.031720894096747734,
+        "peak_cpu_one_core": 0.983724578842457
+      },
+      {
+        "pid": 890,
+        "name": "systemd-oomd",
+        "mean_cpu_one_core": 0.03170743981939516,
+        "peak_cpu_one_core": 0.9833161583323796
+      },
+      {
+        "pid": 509398,
+        "name": "kworker/18:1-events",
+        "mean_cpu_one_core": 0.031694499234037284,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 953,
+        "name": "avahi-daemon",
+        "mean_cpu_one_core": 0.031690574406310276,
+        "peak_cpu_one_core": 0.9837679691767921
+      },
+      {
+        "pid": 118,
+        "name": "ksoftirqd/17",
+        "mean_cpu_one_core": 0.03162918417617772,
+        "peak_cpu_one_core": 0.9835080540356304
+      },
+      {
+        "pid": 32,
+        "name": "rcuc/2",
+        "mean_cpu_one_core": 0.023788277330904252,
+        "peak_cpu_one_core": 0.983656978036425
+      },
+      {
+        "pid": 127,
+        "name": "ktimers/18",
+        "mean_cpu_one_core": 0.023783580644288527,
+        "peak_cpu_one_core": 0.9835080540356304
+      },
+      {
+        "pid": 106,
+        "name": "ktimers/16",
+        "mean_cpu_one_core": 0.02377475721527748,
+        "peak_cpu_one_core": 0.9835336181851406
+      },
+      {
+        "pid": 117,
+        "name": "ktimers/17",
+        "mean_cpu_one_core": 0.02376930848361037,
+        "peak_cpu_one_core": 0.9836933033116226
+      },
+      {
+        "pid": 1070,
+        "name": "tailscaled",
+        "mean_cpu_one_core": 0.0237657372813401,
+        "peak_cpu_one_core": 0.9833592824882654
+      },
+      {
+        "pid": 270,
+        "name": "ksoftirqd/9",
+        "mean_cpu_one_core": 0.023763011049651034,
+        "peak_cpu_one_core": 0.9830091363221563
+      },
+      {
+        "pid": 137,
+        "name": "ktimers/19",
+        "mean_cpu_one_core": 0.023761855571390395,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 107,
+        "name": "ksoftirqd/16",
+        "mean_cpu_one_core": 0.02375650241791015,
+        "peak_cpu_one_core": 0.9832815615566267
+      },
+      {
+        "pid": 981,
+        "name": "systemd-logind",
+        "mean_cpu_one_core": 0.023750189100734447,
+        "peak_cpu_one_core": 0.9830378287360457
+      },
+      {
+        "pid": 96,
+        "name": "ksoftirqd/14",
+        "mean_cpu_one_core": 0.023684890246197604,
+        "peak_cpu_one_core": 0.9830652413824779
+      },
+      {
+        "pid": 1,
+        "name": "systemd",
+        "mean_cpu_one_core": 0.023676644965950785,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 86,
+        "name": "ksoftirqd/12",
+        "mean_cpu_one_core": 0.02364445577749347,
+        "peak_cpu_one_core": 0.9833765581736953
+      },
+      {
+        "pid": 116,
+        "name": "rcuc/17",
+        "mean_cpu_one_core": 0.015861550687638906,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 105,
+        "name": "rcuc/16",
+        "mean_cpu_one_core": 0.01586032431700969,
+        "peak_cpu_one_core": 0.9834176006083175
+      },
+      {
+        "pid": 167,
+        "name": "rcuc/22",
+        "mean_cpu_one_core": 0.01586032431700969,
+        "peak_cpu_one_core": 0.9834176006083175
+      },
+      {
+        "pid": 126,
+        "name": "rcuc/18",
+        "mean_cpu_one_core": 0.015860226757808297,
+        "peak_cpu_one_core": 0.9833865564116021
+      },
+      {
+        "pid": 179,
+        "name": "ksoftirqd/23",
+        "mean_cpu_one_core": 0.015859328858423404,
+        "peak_cpu_one_core": 0.9834176006083175
+      },
+      {
+        "pid": 169,
+        "name": "ksoftirqd/22",
+        "mean_cpu_one_core": 0.01585873275273998,
+        "peak_cpu_one_core": 0.983656978036425
+      },
+      {
+        "pid": 128,
+        "name": "ksoftirqd/18",
+        "mean_cpu_one_core": 0.01585780901531907,
+        "peak_cpu_one_core": 0.9835711252653214
+      },
+      {
+        "pid": 158,
+        "name": "ktimers/21",
+        "mean_cpu_one_core": 0.015857024915331728,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 228,
+        "name": "rcuc/1",
+        "mean_cpu_one_core": 0.01585690942238874,
+        "peak_cpu_one_core": 0.9833765581736953
+      },
+      {
+        "pid": 168,
+        "name": "ktimers/22",
+        "mean_cpu_one_core": 0.015856700135608335,
+        "peak_cpu_one_core": 0.983656978036425
+      },
+      {
+        "pid": 238,
+        "name": "rcuc/3",
+        "mean_cpu_one_core": 0.015855705298097975,
+        "peak_cpu_one_core": 0.9835336181851406
+      },
+      {
+        "pid": 52,
+        "name": "rcuc/6",
+        "mean_cpu_one_core": 0.01585483396603261,
+        "peak_cpu_one_core": 0.9831072813295608
+      },
+      {
+        "pid": 54,
+        "name": "ksoftirqd/6",
+        "mean_cpu_one_core": 0.015851013114302887,
+        "peak_cpu_one_core": 0.9829517873945497
+      },
+      {
+        "pid": 177,
+        "name": "rcuc/23",
+        "mean_cpu_one_core": 0.015849319978481675,
+        "peak_cpu_one_core": 0.9833765581736953
+      },
+      {
+        "pid": 138,
+        "name": "ksoftirqd/19",
+        "mean_cpu_one_core": 0.015849264255388188,
+        "peak_cpu_one_core": 0.9827815106811177
+      },
+      {
+        "pid": 248,
+        "name": "rcuc/5",
+        "mean_cpu_one_core": 0.015848181686497577,
+        "peak_cpu_one_core": 0.9835336181851406
+      },
+      {
+        "pid": 85,
+        "name": "ktimers/12",
+        "mean_cpu_one_core": 0.015844183384488748,
+        "peak_cpu_one_core": 0.9830378287360457
+      },
+      {
+        "pid": 23,
+        "name": "rcuc/0",
+        "mean_cpu_one_core": 0.015840368685114906,
+        "peak_cpu_one_core": 0.9830652413824779
+      },
+      {
+        "pid": 983,
+        "name": "thermald",
+        "mean_cpu_one_core": 0.015836064755517777,
+        "peak_cpu_one_core": 0.9827254244816341
+      },
+      {
+        "pid": 157,
+        "name": "rcuc/21",
+        "mean_cpu_one_core": 0.015819153828084565,
+        "peak_cpu_one_core": 0.9811404755717705
+      },
+      {
+        "pid": 42,
+        "name": "rcuc/4",
+        "mean_cpu_one_core": 0.015783832823435415,
+        "peak_cpu_one_core": 0.9829725049813663
+      },
+      {
+        "pid": 147,
+        "name": "ktimers/20",
+        "mean_cpu_one_core": 0.01578113725727446,
+        "peak_cpu_one_core": 0.9824269161670381
+      },
+      {
+        "pid": 886650,
+        "name": "cups-browsed",
+        "mean_cpu_one_core": 0.01573216410279846,
+        "peak_cpu_one_core": 0.9825272569870174
+      },
+      {
+        "pid": 63,
+        "name": "rcuc/8",
+        "mean_cpu_one_core": 0.015689079452043796,
+        "peak_cpu_one_core": 0.974434103734995
+      },
+      {
+        "pid": 229,
+        "name": "ktimers/1",
+        "mean_cpu_one_core": 0.00793326273260046,
+        "peak_cpu_one_core": 0.983724578842457
+      },
+      {
+        "pid": 196,
+        "name": "migration/25",
+        "mean_cpu_one_core": 0.007933010510577602,
+        "peak_cpu_one_core": 0.9836933033116226
+      },
+      {
+        "pid": 280,
+        "name": "ksoftirqd/11",
+        "mean_cpu_one_core": 0.00793271756480988,
+        "peak_cpu_one_core": 0.983656978036425
+      },
+      {
+        "pid": 269,
+        "name": "ktimers/9",
+        "mean_cpu_one_core": 0.007932503150019784,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 300,
+        "name": "ksoftirqd/15",
+        "mean_cpu_one_core": 0.007932503150019784,
+        "peak_cpu_one_core": 0.9836303906024532
+      },
+      {
+        "pid": 847,
+        "name": "nv_mem_pool_scrubber_queue",
+        "mean_cpu_one_core": 0.00793247697219383,
+        "peak_cpu_one_core": 0.9836271445520348
+      },
+      {
+        "pid": 849,
+        "name": "nv_mem_pool_scrubber_queue",
+        "mean_cpu_one_core": 0.00793247697219383,
+        "peak_cpu_one_core": 0.9836271445520348
+      },
+      {
+        "pid": 11404,
+        "name": "kworker/21:0-events",
+        "mean_cpu_one_core": 0.007931023192717393,
+        "peak_cpu_one_core": 0.9834468758969567
+      },
+      {
+        "pid": 648,
+        "name": "systemd-journal",
+        "mean_cpu_one_core": 0.007931013942384048,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 970,
+        "name": "power-profiles-",
+        "mean_cpu_one_core": 0.007931013942384048,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 1584,
+        "name": "pulseaudio",
+        "mean_cpu_one_core": 0.007931013942384048,
+        "peak_cpu_one_core": 0.983445728855622
+      },
+      {
+        "pid": 176,
+        "name": "migration/23",
+        "mean_cpu_one_core": 0.007930630737175546,
+        "peak_cpu_one_core": 0.9833982114097677
+      },
+      {
+        "pid": 210,
+        "name": "ksoftirqd/26",
+        "mean_cpu_one_core": 0.007930536745254856,
+        "peak_cpu_one_core": 0.9833865564116021
+      },
+      {
+        "pid": 10,
+        "name": "kworker/0:1-events",
+        "mean_cpu_one_core": 0.007929969018809513,
+        "peak_cpu_one_core": 0.9833161583323796
+      },
+      {
+        "pid": 189,
+        "name": "ksoftirqd/24",
+        "mean_cpu_one_core": 0.007929912758932949,
+        "peak_cpu_one_core": 0.9833091821076857
+      },
+      {
+        "pid": 1583,
+        "name": "pipewire-media-",
+        "mean_cpu_one_core": 0.00792953721532971,
+        "peak_cpu_one_core": 0.983262614700884
+      },
+      {
+        "pid": 75,
+        "name": "ksoftirqd/10",
+        "mean_cpu_one_core": 0.0079294923215935,
+        "peak_cpu_one_core": 0.9832570478775939
+      },
+      {
+        "pid": 95,
+        "name": "ktimers/14",
+        "mean_cpu_one_core": 0.007926453308084749,
+        "peak_cpu_one_core": 0.9828802102025088
+      },
+      {
+        "pid": 791410,
+        "name": "kworker/25:2-events",
+        "mean_cpu_one_core": 0.007926453308084749,
+        "peak_cpu_one_core": 0.9828802102025088
+      },
+      {
+        "pid": 84,
+        "name": "rcuc/12",
+        "mean_cpu_one_core": 0.007925783811566476,
+        "peak_cpu_one_core": 0.982797192634243
+      },
+      {
+        "pid": 156,
+        "name": "migration/21",
+        "mean_cpu_one_core": 0.007925657344202563,
+        "peak_cpu_one_core": 0.9827815106811177
+      },
+      {
+        "pid": 178,
+        "name": "ktimers/23",
+        "mean_cpu_one_core": 0.007925337120176082,
+        "peak_cpu_one_core": 0.9827418029018342
+      },
+      {
+        "pid": 3206,
+        "name": "nxrunner.bin",
+        "mean_cpu_one_core": 0.007925323100912646,
+        "peak_cpu_one_core": 0.9827400645131681
+      },
+      {
+        "pid": 94,
+        "name": "rcuc/14",
+        "mean_cpu_one_core": 0.007925237342100162,
+        "peak_cpu_one_core": 0.98272943042042
+      },
+      {
+        "pid": 148,
+        "name": "ksoftirqd/20",
+        "mean_cpu_one_core": 0.007925237342100162,
+        "peak_cpu_one_core": 0.98272943042042
+      },
+      {
+        "pid": 199,
+        "name": "ksoftirqd/25",
+        "mean_cpu_one_core": 0.00792411646705305,
+        "peak_cpu_one_core": 0.982590441914578
+      },
+      {
+        "pid": 462017,
+        "name": "kworker/23:2-mm_percpu_wq",
+        "mean_cpu_one_core": 0.00792411646705305,
+        "peak_cpu_one_core": 0.982590441914578
+      },
+      {
+        "pid": 125,
+        "name": "migration/18",
+        "mean_cpu_one_core": 0.007923951014457482,
+        "peak_cpu_one_core": 0.9825699257927278
+      },
+      {
+        "pid": 186,
+        "name": "migration/24",
+        "mean_cpu_one_core": 0.007923606911185623,
+        "peak_cpu_one_core": 0.9825272569870174
+      },
+      {
+        "pid": 218,
+        "name": "rcuc/27",
+        "mean_cpu_one_core": 0.007923476449738657,
+        "peak_cpu_one_core": 0.9825110797675934
+      },
+      {
+        "pid": 2284,
+        "name": "gvfs-afc-volume",
+        "mean_cpu_one_core": 0.007922082769030666,
+        "peak_cpu_one_core": 0.9823382633598026
+      },
+      {
+        "pid": 64,
+        "name": "ktimers/8",
+        "mean_cpu_one_core": 0.007920914744695449,
+        "peak_cpu_one_core": 0.9821934283422356
+      },
+      {
+        "pid": 964,
+        "name": "irqbalance",
+        "mean_cpu_one_core": 0.00791886386417768,
+        "peak_cpu_one_core": 0.9819391191580324
+      },
+      {
+        "pid": 146,
+        "name": "rcuc/20",
+        "mean_cpu_one_core": 0.007918539795702206,
+        "peak_cpu_one_core": 0.9818989346670736
+      },
+      {
+        "pid": 53,
+        "name": "ktimers/6",
+        "mean_cpu_one_core": 0.00791835534880828,
+        "peak_cpu_one_core": 0.9818760632522265
+      },
+      {
+        "pid": 268,
+        "name": "rcuc/9",
+        "mean_cpu_one_core": 0.00791835534880828,
+        "peak_cpu_one_core": 0.9818760632522265
+      },
+      {
+        "pid": 372,
+        "name": "kworker/12:1-mm_percpu_wq",
+        "mean_cpu_one_core": 0.007917563334924289,
+        "peak_cpu_one_core": 0.9817778535306118
+      },
+      {
+        "pid": 209,
+        "name": "ktimers/26",
+        "mean_cpu_one_core": 0.007916458959198054,
+        "peak_cpu_one_core": 0.9816409109405587
+      },
+      {
+        "pid": 187,
+        "name": "rcuc/24",
+        "mean_cpu_one_core": 0.007914554816645778,
+        "peak_cpu_one_core": 0.9814047972640765
+      },
+      {
+        "pid": 2848,
+        "name": "clash-verge-ser",
+        "mean_cpu_one_core": 0.00791221398531913,
+        "peak_cpu_one_core": 0.9811145341795721
+      },
+      {
+        "pid": 136,
+        "name": "rcuc/19",
+        "mean_cpu_one_core": 0.007909176059397133,
+        "peak_cpu_one_core": 0.9807378313652445
+      },
+      {
+        "pid": 231,
+        "name": "kworker/1:0-events",
+        "mean_cpu_one_core": 0.007909176059397133,
+        "peak_cpu_one_core": 0.9807378313652445
+      },
+      {
+        "pid": 73,
+        "name": "rcuc/10",
+        "mean_cpu_one_core": 0.007906730637989643,
+        "peak_cpu_one_core": 0.9804345991107156
+      },
+      {
+        "pid": 290,
+        "name": "ksoftirqd/13",
+        "mean_cpu_one_core": 0.007898284156985914,
+        "peak_cpu_one_core": 0.9793872354662534
+      },
+      {
+        "pid": 197,
+        "name": "rcuc/25",
+        "mean_cpu_one_core": 0.00789175599402075,
+        "peak_cpu_one_core": 0.978577743258573
+      },
+      {
+        "pid": 220,
+        "name": "ksoftirqd/27",
+        "mean_cpu_one_core": 0.007885424057477695,
+        "peak_cpu_one_core": 0.977792583127234
+      }
+    ],
+    "package_throttle_delta": 0,
+    "per_cpu_frequency_mean_mhz": {
+      "cpu0": 1577.4046612903226,
+      "cpu1": 1225.3795403225806,
+      "cpu2": 2052.0588548387095,
+      "cpu3": 1804.4677661290323,
+      "cpu4": 2423.146048387097,
+      "cpu5": 1979.5899112903226,
+      "cpu6": 2493.383112903226,
+      "cpu7": 800.0,
+      "cpu8": 3193.3570241935486,
+      "cpu9": 2070.7138548387097,
+      "cpu10": 4425.070548387097,
+      "cpu11": 4496.096024193548,
+      "cpu12": 2599.8187741935485,
+      "cpu13": 1608.489185483871,
+      "cpu14": 2791.992056451613,
+      "cpu15": 1256.391508064516,
+      "cpu16": 2718.2475887096775,
+      "cpu17": 2450.995709677419,
+      "cpu18": 2350.0921451612903,
+      "cpu19": 2687.3440161290323,
+      "cpu20": 2342.1474677419355,
+      "cpu21": 2675.2921693548387,
+      "cpu22": 2015.9961048387097,
+      "cpu23": 2319.286129032258,
+      "cpu24": 2195.0211612903227,
+      "cpu25": 1970.923137096774,
+      "cpu26": 1873.2940080645162,
+      "cpu27": 1875.7989596774194
+    }
+  },
+  "recovery": {
+    "samples": 10,
+    "cpu_mean_percent": 2.8228669989157233,
+    "cpu_p95_percent": 3.49601280070263,
+    "cpu_peak_percent": 3.645285664213109,
+    "per_cpu": {
+      "cpu0": {
+        "mean_percent": 0.6872828916243995,
+        "peak_percent": 1.941747572815534
+      },
+      "cpu1": {
+        "mean_percent": 0.19607843137254902,
+        "peak_percent": 0.9803921568627451
+      },
+      "cpu2": {
+        "mean_percent": 1.0892242622320485,
+        "peak_percent": 4.0
+      },
+      "cpu3": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu4": {
+        "mean_percent": 1.5601729414693435,
+        "peak_percent": 5.882352941176471
+      },
+      "cpu5": {
+        "mean_percent": 0.6863122063205749,
+        "peak_percent": 1.9607843137254901
+      },
+      "cpu6": {
+        "mean_percent": 1.9686446028954694,
+        "peak_percent": 6.930693069306931
+      },
+      "cpu7": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu8": {
+        "mean_percent": 15.437200394247569,
+        "peak_percent": 32.35294117647059
+      },
+      "cpu9": {
+        "mean_percent": 6.936988387588045,
+        "peak_percent": 31.372549019607842
+      },
+      "cpu10": {
+        "mean_percent": 15.57584038946881,
+        "peak_percent": 33.333333333333336
+      },
+      "cpu11": {
+        "mean_percent": 5.114597410626271,
+        "peak_percent": 28.431372549019606
+      },
+      "cpu12": {
+        "mean_percent": 15.633545419735489,
+        "peak_percent": 31.683168316831683
+      },
+      "cpu13": {
+        "mean_percent": 4.318578916715201,
+        "peak_percent": 31.372549019607842
+      },
+      "cpu14": {
+        "mean_percent": 0.689186565715395,
+        "peak_percent": 2.9702970297029703
+      },
+      "cpu15": {
+        "mean_percent": 0.0,
+        "peak_percent": 0.0
+      },
+      "cpu16": {
+        "mean_percent": 1.1794014924050942,
+        "peak_percent": 2.9702970297029703
+      },
+      "cpu17": {
+        "mean_percent": 1.0755758614125261,
+        "peak_percent": 2.9411764705882355
+      },
+      "cpu18": {
+        "mean_percent": 0.8842943117841195,
+        "peak_percent": 2.9411764705882355
+      },
+      "cpu19": {
+        "mean_percent": 0.8833801712552751,
+        "peak_percent": 3.9603960396039604
+      },
+      "cpu20": {
+        "mean_percent": 0.1960972796308757,
+        "peak_percent": 0.9900990099009901
+      },
+      "cpu21": {
+        "mean_percent": 0.4873405672948791,
+        "peak_percent": 1.941747572815534
+      },
+      "cpu22": {
+        "mean_percent": 0.7824843570329884,
+        "peak_percent": 2.9411764705882355
+      },
+      "cpu23": {
+        "mean_percent": 0.8814011041309728,
+        "peak_percent": 4.901960784313726
+      },
+      "cpu24": {
+        "mean_percent": 0.49021492668969924,
+        "peak_percent": 1.9607843137254901
+      },
+      "cpu25": {
+        "mean_percent": 0.49118561199352373,
+        "peak_percent": 0.9900990099009901
+      },
+      "cpu26": {
+        "mean_percent": 0.6862933580622482,
+        "peak_percent": 3.9215686274509802
+      },
+      "cpu27": {
+        "mean_percent": 0.4892630896442014,
+        "peak_percent": 1.9607843137254901
+      }
+    },
+    "cpu_temperature_mean_c": 72.7,
+    "cpu_temperature_max_c": 75.0,
+    "processes": [
+      {
+        "pid": 2041,
+        "name": "gnome-shell",
+        "mean_cpu_one_core": 64.69884544114521,
+        "peak_cpu_one_core": 65.69550749959696
+      },
+      {
+        "pid": 1362094,
+        "name": "python3",
+        "mean_cpu_one_core": 1.4726080436348388,
+        "peak_cpu_one_core": 2.948061938001873
+      },
+      {
+        "pid": 968,
+        "name": "polkitd",
+        "mean_cpu_one_core": 1.07680371958402,
+        "peak_cpu_one_core": 4.880296040164315
+      },
+      {
+        "pid": 230,
+        "name": "ksoftirqd/1",
+        "mean_cpu_one_core": 0.6870477382006025,
+        "peak_cpu_one_core": 0.9838103693632344
+      },
+      {
+        "pid": 2865,
+        "name": "nxserver.bin",
+        "mean_cpu_one_core": 0.5874918486723646,
+        "peak_cpu_one_core": 2.9401127579906285
+      },
+      {
+        "pid": 898,
+        "name": "irq/159-nvidia",
+        "mean_cpu_one_core": 0.4910078037485267,
+        "peak_cpu_one_core": 0.983978573519903
+      },
+      {
+        "pid": 3383,
+        "name": "nxrunner.bin",
+        "mean_cpu_one_core": 0.2943651393080323,
+        "peak_cpu_one_core": 0.9838103693632344
+      },
+      {
+        "pid": 1075,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.2940075367549642,
+        "peak_cpu_one_core": 0.983978573519903
+      },
+      {
+        "pid": 956,
+        "name": "dbus-daemon",
+        "mean_cpu_one_core": 0.2932156002062602,
+        "peak_cpu_one_core": 1.952118416065726
+      },
+      {
+        "pid": 3175,
+        "name": "gjs",
+        "mean_cpu_one_core": 0.19677590158450503,
+        "peak_cpu_one_core": 0.983978573519903
+      },
+      {
+        "pid": 1347344,
+        "name": "rustdesk",
+        "mean_cpu_one_core": 0.19675921850474604,
+        "peak_cpu_one_core": 0.9838103693632344
+      },
+      {
+        "pid": 16,
+        "name": "ksoftirqd/0",
+        "mean_cpu_one_core": 0.19638194016811023,
+        "peak_cpu_one_core": 0.9837818156842261
+      },
+      {
+        "pid": 34,
+        "name": "ksoftirqd/2",
+        "mean_cpu_one_core": 0.0983978573519903,
+        "peak_cpu_one_core": 0.983978573519903
+      },
+      {
+        "pid": 1624,
+        "name": "Xorg",
+        "mean_cpu_one_core": 0.0983978573519903,
+        "peak_cpu_one_core": 0.983978573519903
+      },
+      {
+        "pid": 117,
+        "name": "ktimers/17",
+        "mean_cpu_one_core": 0.09838103693632344,
+        "peak_cpu_one_core": 0.9838103693632344
+      },
+      {
+        "pid": 19,
+        "name": "rcu_preempt",
+        "mean_cpu_one_core": 0.09837804423251474,
+        "peak_cpu_one_core": 0.9837804423251474
+      },
+      {
+        "pid": 148,
+        "name": "ksoftirqd/20",
+        "mean_cpu_one_core": 0.09837804423251474,
+        "peak_cpu_one_core": 0.9837804423251474
+      },
+      {
+        "pid": 158,
+        "name": "ktimers/21",
+        "mean_cpu_one_core": 0.09835725009400623,
+        "peak_cpu_one_core": 0.9835725009400622
+      },
+      {
+        "pid": 228,
+        "name": "rcuc/1",
+        "mean_cpu_one_core": 0.09826873126672911,
+        "peak_cpu_one_core": 0.982687312667291
+      },
+      {
+        "pid": 33,
+        "name": "ktimers/2",
+        "mean_cpu_one_core": 0.09805299626805516,
+        "peak_cpu_one_core": 0.9805299626805517
+      },
+      {
+        "pid": 54,
+        "name": "ksoftirqd/6",
+        "mean_cpu_one_core": 0.09805299626805516,
+        "peak_cpu_one_core": 0.9805299626805517
+      },
+      {
+        "pid": 250,
+        "name": "ksoftirqd/5",
+        "mean_cpu_one_core": 0.09805299626805516,
+        "peak_cpu_one_core": 0.9805299626805517
+      },
+      {
+        "pid": 1070,
+        "name": "tailscaled",
+        "mean_cpu_one_core": 0.09805299626805516,
+        "peak_cpu_one_core": 0.9805299626805517
+      },
+      {
+        "pid": 168,
+        "name": "ktimers/22",
+        "mean_cpu_one_core": 0.09800375859968762,
+        "peak_cpu_one_core": 0.9800375859968762
+      },
+      {
+        "pid": 280,
+        "name": "ksoftirqd/11",
+        "mean_cpu_one_core": 0.09800375859968762,
+        "peak_cpu_one_core": 0.9800375859968762
+      },
+      {
+        "pid": 43,
+        "name": "ktimers/4",
+        "mean_cpu_one_core": 0.09795183381511659,
+        "peak_cpu_one_core": 0.9795183381511658
+      },
+      {
+        "pid": 495,
+        "name": "irq/125-xhci_hcd",
+        "mean_cpu_one_core": 0.09795183381511659,
+        "peak_cpu_one_core": 0.9795183381511658
+      },
+      {
+        "pid": 1361927,
+        "name": "kworker/u56:5-rtw88_usb: rx wq",
+        "mean_cpu_one_core": 0.09795183381511659,
+        "peak_cpu_one_core": 0.9795183381511658
+      },
+      {
+        "pid": 1,
+        "name": "systemd",
+        "mean_cpu_one_core": 0.0976059208032863,
+        "peak_cpu_one_core": 0.976059208032863
+      },
+      {
+        "pid": 178,
+        "name": "ktimers/23",
+        "mean_cpu_one_core": 0.0976059208032863,
+        "peak_cpu_one_core": 0.976059208032863
+      },
+      {
+        "pid": 893,
+        "name": "nvidia-modeset/kthread_q",
+        "mean_cpu_one_core": 0.0976059208032863,
+        "peak_cpu_one_core": 0.976059208032863
+      },
+      {
+        "pid": 958,
+        "name": "NetworkManager",
+        "mean_cpu_one_core": 0.0976059208032863,
+        "peak_cpu_one_core": 0.976059208032863
+      },
+      {
+        "pid": 1358755,
+        "name": "kworker/u56:3-events_unbound",
+        "mean_cpu_one_core": 0.0976059208032863,
+        "peak_cpu_one_core": 0.976059208032863
+      }
+    ],
+    "package_throttle_delta": 0,
+    "per_cpu_frequency_mean_mhz": {
+      "cpu0": 2202.0889,
+      "cpu1": 1702.617,
+      "cpu2": 2297.7302,
+      "cpu3": 1269.1211,
+      "cpu4": 2640.1941,
+      "cpu5": 2784.1954,
+      "cpu6": 3365.8281,
+      "cpu7": 800.0,
+      "cpu8": 3770.6376,
+      "cpu9": 1787.915,
+      "cpu10": 2567.8551,
+      "cpu11": 3976.0661999999998,
+      "cpu12": 2859.5463,
+      "cpu13": 1630.6317999999999,
+      "cpu14": 1402.7413,
+      "cpu15": 800.2124,
+      "cpu16": 2585.9347,
+      "cpu17": 2216.3435,
+      "cpu18": 1824.1206,
+      "cpu19": 2602.1279,
+      "cpu20": 2528.8367,
+      "cpu21": 2759.3953,
+      "cpu22": 2012.8398,
+      "cpu23": 2719.2913,
+      "cpu24": 2230.1725,
+      "cpu25": 2699.2008,
+      "cpu26": 1952.6242,
+      "cpu27": 1939.2376
+    }
+  },
+  "cpu_throttle_counter_changes": {
+    "cpu21": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu11": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu9": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu7": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu18": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu5": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu26": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu16": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu3": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu24": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu14": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu1": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu22": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu12": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu20": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu10": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu8": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu19": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu6": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu27": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu17": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu4": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu25": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu15": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu2": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu23": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu13": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    },
+    "cpu0": {
+      "core_throttle_count": 0,
+      "package_throttle_count": 0
+    }
+  },
+  "cpu_topology": {
+    "cpu21": {
+      "core_id": "37",
+      "physical_package_id": "0",
+      "thread_siblings_list": "21"
+    },
+    "cpu11": {
+      "core_id": "20",
+      "physical_package_id": "0",
+      "thread_siblings_list": "10-11"
+    },
+    "cpu9": {
+      "core_id": "16",
+      "physical_package_id": "0",
+      "thread_siblings_list": "8-9"
+    },
+    "cpu7": {
+      "core_id": "12",
+      "physical_package_id": "0",
+      "thread_siblings_list": "6-7"
+    },
+    "cpu18": {
+      "core_id": "34",
+      "physical_package_id": "0",
+      "thread_siblings_list": "18"
+    },
+    "cpu5": {
+      "core_id": "8",
+      "physical_package_id": "0",
+      "thread_siblings_list": "4-5"
+    },
+    "cpu26": {
+      "core_id": "42",
+      "physical_package_id": "0",
+      "thread_siblings_list": "26"
+    },
+    "cpu16": {
+      "core_id": "32",
+      "physical_package_id": "0",
+      "thread_siblings_list": "16"
+    },
+    "cpu3": {
+      "core_id": "4",
+      "physical_package_id": "0",
+      "thread_siblings_list": "2-3"
+    },
+    "cpu24": {
+      "core_id": "40",
+      "physical_package_id": "0",
+      "thread_siblings_list": "24"
+    },
+    "cpu14": {
+      "core_id": "28",
+      "physical_package_id": "0",
+      "thread_siblings_list": "14-15"
+    },
+    "cpu1": {
+      "core_id": "0",
+      "physical_package_id": "0",
+      "thread_siblings_list": "0-1"
+    },
+    "cpu22": {
+      "core_id": "38",
+      "physical_package_id": "0",
+      "thread_siblings_list": "22"
+    },
+    "cpu12": {
+      "core_id": "24",
+      "physical_package_id": "0",
+      "thread_siblings_list": "12-13"
+    },
+    "cpu20": {
+      "core_id": "36",
+      "physical_package_id": "0",
+      "thread_siblings_list": "20"
+    },
+    "cpu10": {
+      "core_id": "20",
+      "physical_package_id": "0",
+      "thread_siblings_list": "10-11"
+    },
+    "cpu8": {
+      "core_id": "16",
+      "physical_package_id": "0",
+      "thread_siblings_list": "8-9"
+    },
+    "cpu19": {
+      "core_id": "35",
+      "physical_package_id": "0",
+      "thread_siblings_list": "19"
+    },
+    "cpu6": {
+      "core_id": "12",
+      "physical_package_id": "0",
+      "thread_siblings_list": "6-7"
+    },
+    "cpu27": {
+      "core_id": "43",
+      "physical_package_id": "0",
+      "thread_siblings_list": "27"
+    },
+    "cpu17": {
+      "core_id": "33",
+      "physical_package_id": "0",
+      "thread_siblings_list": "17"
+    },
+    "cpu4": {
+      "core_id": "8",
+      "physical_package_id": "0",
+      "thread_siblings_list": "4-5"
+    },
+    "cpu25": {
+      "core_id": "41",
+      "physical_package_id": "0",
+      "thread_siblings_list": "25"
+    },
+    "cpu15": {
+      "core_id": "28",
+      "physical_package_id": "0",
+      "thread_siblings_list": "14-15"
+    },
+    "cpu2": {
+      "core_id": "4",
+      "physical_package_id": "0",
+      "thread_siblings_list": "2-3"
+    },
+    "cpu23": {
+      "core_id": "39",
+      "physical_package_id": "0",
+      "thread_siblings_list": "23"
+    },
+    "cpu13": {
+      "core_id": "24",
+      "physical_package_id": "0",
+      "thread_siblings_list": "12-13"
+    },
+    "cpu0": {
+      "core_id": "0",
+      "physical_package_id": "0",
+      "thread_siblings_list": "0-1"
+    }
+  },
+  "benchmark_pid": 1362251,
+  "benchmark_returncode": 0,
+  "gpu_average_states_per_s": 473726.9887770437,
+  "gpu_duration_s": 121.7403301190061
+}

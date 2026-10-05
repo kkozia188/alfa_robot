@@ -1,0 +1,35 @@
+{
+  "gpu": "NVIDIA RTX A2000 Laptop GPU",
+  "duration_s": 121.7403301190061,
+  "average_states_per_s": 473726.9887770437,
+  "first_interval_s": [
+    0.0,
+    21.687618578987895
+  ],
+  "last_interval_s": [
+    99.2184987780056,
+    121.74028006300796
+  ],
+  "first_states_per_s": 483490.61294166965,
+  "last_states_per_s": 465583.0667791205,
+  "change_percent": -3.703804310407499,
+  "temperature_first_c": 47.0,
+  "temperature_last_c": 79.0,
+  "temperature_max_c": 79.0,
+  "utilization_mean_percent": 100.0,
+  "clock_first_mhz": 1567.0,
+  "clock_last_mhz": 1485.0,
+  "power_mean_w": 59.40949579831933,
+  "thermal_active_samples": 0,
+  "power_cap_active_samples": 119,
+  "thermal_report_values": {
+    "clocks_throttle_reasons.sw_thermal_slowdown": [
+      "Not Active"
+    ],
+    "clocks_throttle_reasons.hw_thermal_slowdown": [
+      "Not Active"
+    ]
+  },
+  "telemetry_samples": 119,
+  "telemetry_errors": []
+}

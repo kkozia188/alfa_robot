@@ -86,6 +86,26 @@ class SceneObject:
 
 
 @dataclass(frozen=True)
+class MeshObject:
+    object_id: str
+    vertices_m: tuple
+    faces: tuple
+    pose: Pose = Pose()
+
+    def __post_init__(self):
+        vertices = tuple(finite_tuple(vertex, 3) for vertex in self.vertices_m)
+        faces = tuple(tuple(face) for face in self.faces)
+        if not self.object_id or len(vertices) < 4 or not faces:
+            raise ValueError("invalid mesh identity or geometry")
+        for face in faces:
+            if len(face) != 3 or any(not isinstance(index, int) or not 0 <= index < len(vertices)
+                                     for index in face):
+                raise ValueError("invalid triangle indices")
+        object.__setattr__(self, "vertices_m", vertices)
+        object.__setattr__(self, "faces", faces)
+
+
+@dataclass(frozen=True)
 class AttachedObject:
     object_id: str
     dimensions_m: tuple
@@ -124,11 +144,13 @@ class SceneSnapshot:
     frame_id: str = "map"
     revision: int = 0
     policy: CollisionPolicy = CollisionPolicy()
+    meshes: tuple = ()
 
     def __post_init__(self):
         object.__setattr__(self, "objects", tuple(self.objects))
         object.__setattr__(self, "attachments", tuple(self.attachments))
-        identities = [item.object_id for item in self.objects + self.attachments]
+        object.__setattr__(self, "meshes", tuple(self.meshes))
+        identities = [item.object_id for item in self.objects + self.attachments + self.meshes]
         if len(set(identities)) != len(identities):
             raise ValueError("an object cannot be both world and attached, or duplicated")
         if not self.model_id or not self.frame_id or self.revision < 0:
@@ -140,6 +162,7 @@ class SceneSnapshot:
             "model_id": self.model_id, "frame_id": self.frame_id,
             "objects": sorted((asdict(item) for item in self.objects), key=lambda item: item["object_id"]),
             "attachments": sorted((asdict(item) for item in self.attachments), key=lambda item: item["object_id"]),
+            "meshes": sorted((asdict(item) for item in self.meshes), key=lambda item: item["object_id"]),
             "base_pose": asdict(self.state.base_pose), "policy": asdict(self.policy),
         })
 
@@ -163,9 +186,11 @@ class SceneSnapshot:
             item["object_id"], item["dimensions_m"], item["parent_link"],
             Pose(**item["tool_to_object"]), item.get("touch_links", ()),
         ) for item in data.get("attachments", ()))
+        meshes = tuple(MeshObject(item["object_id"], item["vertices_m"], item["faces"], Pose(**item["pose"]))
+                       for item in data.get("meshes", ()))
         return cls(data["model_id"], RobotState(**state), objects, attachments,
                    data.get("frame_id", "map"), data.get("revision", 0),
-                   CollisionPolicy(**data.get("policy", {})))
+                   CollisionPolicy(**data.get("policy", {})), meshes)
 
 
 class SceneStore:

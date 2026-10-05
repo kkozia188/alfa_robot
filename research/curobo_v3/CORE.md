@@ -23,7 +23,7 @@ RRTConnect及GPU PRM选择、固定接触构型对比及搜索统计保留在独
 所有世界对象以 `map` 表达，四元数为wxyz，关节值为rad/m。`RobotState`按名称取值，
 缺少规划所需关节直接报错；`stamp_ns`由调用方提供，Demo使用主机时间，尚未定义ROS时钟
 或现场新鲜度准入。固定模型适配器做 `T_base^-1 * T_map_object`，mobile模型使用map对象。
-场景只支持长方体对象；mesh/点云接入另行设计。
+场景支持长方体和冻结三角网格；网格顶点为米制局部坐标，实例位姿以map表达。实时实例到规划快照的筛选见CONVEYOR.md；点云尚未接入。
 
 `SceneStore`每次更新产生新不可变快照，以expected_revision拒绝过期写入。双箱
 `attach_many()`在一次事务中移除世界副本并添加附着物；`release()`提供world_pose时

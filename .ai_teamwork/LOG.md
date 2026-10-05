@@ -2158,3 +2158,14 @@
 - 验证结果：整机CPU平均3.21%→6.20%→2.08%；压测进程平均1.02核、初始化峰值4.27核，稳态约1核。CPU背景已最高100°C且降频2次，运行期最高97°C/新增31次Package降频，不能归因GPU压测升温。GPU38.85万状态/s仍热降频。全部153样本包含28逻辑核、压测退出码0。
 - 证据：dd7aa031、CPU_IMPACT.md、generated/cpu_impact_20261005，Linear275评论cf8dffef-1f0b-496a-9cdd-6e516f6fe8b1。
 - 留给下个AI：资源占用不等于其他程序业务时延；未测真实任务P99/deadline，真实RRT树/近邻CPU工作未覆盖。首先关注散热与gnome-shell背景约0.76核负载；同核/共享GPU竞争需业务并行实验验证。
+
+## 2026-10-04 运控 / Codex / MOTION-246 龙头车快照接入暂停
+- 做了什么：同步最新alfa_v3_curobo@f37612ea，在既有工作树分支feature/motion-246-conveyor-snapshot开发独立实时实例、冻结Mesh快照与cuRobo适配，Linear范围已更新。未创建新仓库副本，未提交或拉PR。
+- 验证结果：CPU22/22通过；米制双车STL是2.40×0.94×0.732m的封闭12面长方体，间距5cm。首次GPU网格检查失败：cuRobo data_mesh.py调用wp.torch.device_from_torch，但当前warp-lang1.17.0没有warp.torch，公开函数已在warp顶层。
+- 留给下个AI：用户要求遇到问题先停下沟通，因此暂停进一步实现；待用户确认修复兼容后续GPU/可视化/PR。不能宣称Mesh检测通过，不能退回长方体检测掩盖失败。未跟踪源码仍保留在本分支工作目录；STL被忽略规则命中，未来提交需显式处理。MOTION-246仍In Progress。
+
+## 2026-10-05 运控 / Codex / MOTION-246 新main适配与龙头车快照
+- 做了什么：获用户授权后使用代理将原curobo_v2_ws源码/安装更新至官方main@78fd485f，保持Torch2.8/CUDA12.8、Warp1.17；pytest在虚拟环境升级8.4.2。官方已包含旧本地算法修复，旧补丁仅作历史保留；将测试按新版set_dependencies初始化，不改官方算法。
+- 验证结果：21组直接cuRobo导入通过，CPU核心22项、旧连接器2项、本仓连接器GPU3项、BIT3项通过，六种规划器首组全周期均成功且回Home误差0、步长≤0.5°。核心GPU缓存/SCENE_CHANGED测试通过；Mesh远离/重叠/关闭、IK/checker网格缓存通过。完整适配摘要见research/curobo_v3/generated/main_compatibility/validation.json。
+- 龙头车功能：复用米制STL与5cm双车布局，实时组合根独立；LiveScene筛选并冻结Mesh/货物到SceneSnapshot。8094页面可编辑实时xyyaw、播放跟随、冻结并切换显示，碰撞按钮只消费冻结快照。用户移动实时车不会影响旧检查；重新冻结重叠才报告碰撞，禁用后快照无龙头车。
+- 留给下个AI：CUROBO_MAIN.md/CONVEYOR.md提供完整命令。此处不含导航、ROS实时接口、环境-环境碰撞或带龙头车完整取放验收；完整动作继续248。当前正式工作树alfa_robot_v3_curobo；compare是同仓历史对比/压测工作树，含后续提交及本地改动，本次未删除、未复制新仓库。

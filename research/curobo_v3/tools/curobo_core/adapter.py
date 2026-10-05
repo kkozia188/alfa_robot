@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from dataclasses import replace
+
 from .scene import AttachedObject, Pose, SceneObject
 
 
@@ -43,13 +45,24 @@ def world_objects(snapshot, task_ids=(), mobile=False):
     return tuple(output)
 
 
+def world_meshes(snapshot, mobile=False):
+    if snapshot.frame_id != "map":
+        raise ValueError("scene poses must be in map")
+    return tuple(replace(item, pose=item.pose if mobile else relative_pose(
+        item.pose, snapshot.state.base_pose)) for item in snapshot.meshes)
+
+
 def to_curobo_scene(snapshot, task_ids=(), mobile=False):
-    from curobo.scene import Cuboid, Scene
+    from curobo.scene import Cuboid, Mesh, Scene
 
     return Scene(cuboid=[Cuboid(name=item.object_id,
                                pose=[*item.pose.position, *item.pose.quaternion_wxyz],
                                dims=list(item.dimensions_m))
-                        for item in world_objects(snapshot, task_ids, mobile)])
+                        for item in world_objects(snapshot, task_ids, mobile)],
+                 mesh=[Mesh(name=item.object_id, pose=[*item.pose.position, *item.pose.quaternion_wxyz],
+                            vertices=[list(vertex) for vertex in item.vertices_m],
+                            faces=[list(face) for face in item.faces])
+                       for item in world_meshes(snapshot, mobile)])
 
 
 def task_attachments(snapshot, tasks):

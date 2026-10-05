@@ -13,7 +13,9 @@ GPU缓存失效、无GUI规划入口和回归命令。现有Viser入口复用同
 
 ## 依赖与运行
 
-现有已验证环境：Python3.10、PyTorch2.8+CUDA12.8、cuRobo V2提交`4ea77366ca48ee453e7df139e39fa6532af49f3b`、NumPy/SciPy/trimesh/yourdfpy/viser/PyYAML、g++/Eigen3；CUDA显卡。`curobo-v2-local-fixes.patch`保存官方连接器首碰前截断修复及对应测试，适用于该cuRobo源码提交。没有提交第三方仓库或编译库。
+当前适配环境：Python3.10、PyTorch2.8+CUDA12.8、Warp1.17.0、pytest8.4.2及官方cuRobo main提交`78fd485fa82d9b9a063fb4985e371814587e666a`；其余依赖包括NumPy/SciPy/trimesh/yourdfpy/viser/PyYAML、g++/Eigen3及CUDA显卡。升级记录、测试和完整命令见[CUROBO_MAIN.md](CUROBO_MAIN.md)。固定提交用于复现，不自动追踪main后续变化。
+
+旧证据基于`4ea77366`；`curobo-v2-local-fixes.patch`仅适用于旧提交。新版官方已包含连接器首碰截断及Warp网格接口修复，不再应用旧算法补丁。回归测试按新版`set_dependencies`初始化，保存在本仓`tests/test_gpu_curobo_compat.py`。没有提交第三方仓库或编译库。
 
 本机完整命令：
 

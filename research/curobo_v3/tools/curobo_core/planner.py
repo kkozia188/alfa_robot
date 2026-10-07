@@ -61,6 +61,18 @@ class FullCyclePlanner(CuroboBackend):
     def checker(self, boxes, payload=False, mobile=False):
         return self.collision_checker(boxes, payload=payload, mobile=mobile)
 
+    def contact_poses_for_task(self, boxes):
+        output = {}
+        for side, box_id in boxes.items():
+            item = self.snapshot.object(f"wall_box_{box_id:02d}")
+            position = np.asarray(item.pose.position).copy()
+            position[0] -= item.dimensions_m[0] * 0.5
+            output[f"{side}_tool0"] = {"position": position, "quaternion": canonical_side_suction_quaternion_wxyz(side)}
+        return output
+
+    def plan_contact_approach(self, contact, checker, validity, seed):
+        return self.joint_plan(self.home_values, contact, checker, validity, seed)
+
     def demo_request(self, boxes):
         return PlanRequest(self.snapshot, tuple(boxes.items()), tuple(
             (name, Pose(tuple(pose["position"]), tuple(pose["quaternion"])))
@@ -129,7 +141,7 @@ class FullCyclePlanner(CuroboBackend):
     def _predicted_events(self, request, result):
         predicted = SceneStore(request.snapshot)
         events = []
-        attachments = task_attachments(request.snapshot, dict(request.tasks))
+        attachments = self.task_attachments(dict(request.tasks))
         for index, phase in enumerate(result.get("phases", ())):
             if phase == "attach" and not events:
                 values = dict(zip(result["joint_names"], result["frames"][index]))
@@ -157,6 +169,7 @@ class FullCyclePlanner(CuroboBackend):
                                   for name in self.fk_robot.actuated_joint_names})
 
     def analytic_extract(self, contact, empty_validity, loaded_validity):
+        self.last_extract_frames = np.asarray(contact, dtype=np.float64).reshape(1, -1)
         self.fk(contact)
         world_to_carriage = np.linalg.inv(
             self.fk_robot.get_transform("arm_carriage", self.fk_robot.base_link))
@@ -175,11 +188,13 @@ class FullCyclePlanner(CuroboBackend):
                 solutions = self.analytic.solve(side_index, world_to_carriage @ target,
                                                 swivels[side_index], seed)
                 if len(solutions) == 0:
+                    self.last_extract_frames = np.asarray(rows)
                     return None, f"{side}固定ψ解析无解@{distance*100:.1f}cm"
                 nearest = np.argmin(np.sum((solutions - seed) ** 2, axis=1))
                 next_row[offset:offset + 7] = solutions[nearest]
             rows.append(next_row)
         dense = np.asarray(densify(np.asarray(rows)))
+        self.last_extract_frames = dense
         extraction_validity = empty_validity if self.snapshot.policy.defer_payload_until_extract_end else loaded_validity
         valid = extraction_validity.mask(torch.tensor(dense, device="cuda", dtype=torch.float32))
         if not bool(valid.all().item()):
@@ -253,13 +268,7 @@ class FullCyclePlanner(CuroboBackend):
         torch.cuda.synchronize()
         timing["contact_solver_setup"] = (time.perf_counter()-segment_started)*1000
         segment_started = time.perf_counter()
-        contact_poses = {}
-        for side, box_id in boxes.items():
-            item = self.snapshot.object(f"wall_box_{box_id:02d}")
-            position = np.asarray(item.pose.position).copy()
-            position[0] -= item.dimensions_m[0] * 0.5
-            contact_poses[f"{side}_tool0"] = {
-                "position": position, "quaternion": canonical_side_suction_quaternion_wxyz(side)}
+        contact_poses = self.contact_poses_for_task(boxes)
         result = solver.solve_pose(goal(contact_poses), JointState.from_position(
             torch.tensor(self.home_values[None], device="cuda"), joint_names=ACTIVE_JOINTS), return_seeds=32)
         names = list(result.js_solution.joint_names)
@@ -304,8 +313,8 @@ class FullCyclePlanner(CuroboBackend):
                 continue
             progress(f"候选{index+1}抽离成功：规划初始→接触")
             segment_started = time.perf_counter()
-            approach, stats = self.joint_plan(self.home_values, contact, empty_checker,
-                                               empty_validity, 20261003 + index)
+            approach, stats = self.plan_contact_approach(contact, empty_checker,
+                                                       empty_validity, 20261003 + index)
             torch.cuda.synchronize()
             timing["approach_rrt_and_validation"] += (time.perf_counter()-segment_started)*1000
             attempt["approach"] = stats
@@ -317,7 +326,9 @@ class FullCyclePlanner(CuroboBackend):
         if selected is None:
             raise CycleBlocked("候选筛选", f"{len(candidates)}个候选均未通过抽离与到位", report)
         approach, extracted = selected
-        append(approach, "approach", False)
+        split = getattr(self, 'contact_approach_split', len(approach))
+        append(approach[:split], "approach", False)
+        append(approach[split:], "contact_approach", False)
         append([approach[-1]], "attach", True)
         append(extracted, "extract", True)
         progress("规划抽离终点→放置目标并验证携箱转身")

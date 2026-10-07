@@ -1,6 +1,6 @@
-def tasks():
+def tasks(task_rows=None):
     output = []
-    task_rows = [4, 3, 2]
+    task_rows = [4, 3, 2] if task_rows is None else task_rows
     left_columns = [4, 3, 2]
     right_columns = [0, 1, 2]
     for left_row in task_rows:

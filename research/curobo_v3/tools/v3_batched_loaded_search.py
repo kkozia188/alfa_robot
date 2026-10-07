@@ -90,7 +90,7 @@ class GpuValidity:
         for side in self.active_sides:
             quaternion = tool_poses[f"{side}_tool0"].quaternion.reshape(-1, 4)
             local_up = torch.tensor(
-                canonical_side_tool_to_box(side)[:3, 2],
+                getattr(self.checker, 'task_tool_to_box', {}).get(side, canonical_side_tool_to_box(side))[:3, 2],
                 device=quaternion.device, dtype=quaternion.dtype,
             ).expand(len(quaternion), -1)
             vector = quaternion[:, 1:]
@@ -120,6 +120,9 @@ class GpuValidity:
                 + self.checker.collision_constraint.forward(state).reshape(1, horizon, -1).sum(-1)
                 + self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1)
             ).reshape(-1)
+            base_mesh=getattr(self.checker,'base_mesh_layer',None)
+            if base_mesh is not None:
+                collision_cost=collision_cost+base_mesh.cost(state,hard=True).reshape(1,horizon,-1).sum(-1).reshape(-1)
             if self.check_ground:
                 ground_indices = [
                     index for index in range(spheres.shape[2])
@@ -500,7 +503,7 @@ def batched_rrt_multi_goal(start, goals, lower, upper, validity, budget_s, seed,
 
 
 def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_s, seed,
-                                  informed_sampling=False):
+                                  informed_sampling=False, stop_at_first_valid=False):
     generator = torch.Generator(device="cuda")
     generator.manual_seed(seed)
     weights = validity.weights
@@ -533,6 +536,8 @@ def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_
         return torch.stack(best_indices)[selected, torch.arange(len(samples), device="cuda")]
 
     iterations = 0
+    fine_checked = set()
+    fine_rejections = 0
     while time.perf_counter() - started < budget_s:
         batch = 1024
         goal_indices = torch.randint(len(goals), (batch,), device="cuda", generator=generator)
@@ -629,6 +634,41 @@ def batched_rrt_connect_multi_goal(start, goals, lower, upper, validity, budget_
             if first_solution_ms is None:
                 first_solution_ms = (time.perf_counter() - started) * 1000.0
         iterations += 1
+        observer = getattr(validity, 'search_observer', None)
+        if (observer is not None or stop_at_first_valid) and best_connections:
+            for connection in best_connections:
+                left_indices = []
+                node = connection['start_node']
+                while node >= 0:
+                    left_indices.append(node)
+                    node = start_parents[node]
+                right_indices = []
+                node = connection['goal_node']
+                while node >= 0:
+                    right_indices.append(node)
+                    node = goal_parents[node]
+                candidate_path = torch.cat((start_tree[left_indices[::-1]], goal_tree[right_indices]), dim=0)
+                if stop_at_first_valid:
+                    identity = (connection['start_node'], connection['goal_node'])
+                    if identity in fine_checked:
+                        continue
+                    fine_checked.add(identity)
+                    dense = densify(candidate_path.detach().cpu().numpy(), weights.detach().cpu().tolist())
+                    if bool(validity.mask(torch.tensor(dense, device='cuda', dtype=torch.float32)).all().item()):
+                        return candidate_path.detach().cpu().numpy(), dict(
+                            informed_sampling=informed_sampling, stop_at_first_valid=True,
+                            iterations=iterations, start_nodes=len(start_tree), goal_nodes=len(goal_tree),
+                            tree_nodes=len(start_tree)+len(goal_tree), accepted_nodes=accepted_total,
+                            goal_count=len(goals), selected_goal=connection['goal'],
+                            first_solution_ms=first_solution_ms,
+                            first_verified_solution_ms=(time.perf_counter()-started)*1000,
+                            search_ms=(time.perf_counter()-started)*1000, solutions_found=solutions_found,
+                            best_weighted_length=connection['cost'], raw_waypoints=len(candidate_path),
+                            shortcut_applied=False, fine_candidates_checked=len(fine_checked),
+                            fine_rejections=fine_rejections)
+                    fine_rejections += 1
+                if observer is not None and observer(candidate_path, connection['cost'], started):
+                    break
     selected_path = None
     selected = None
     checked = 0

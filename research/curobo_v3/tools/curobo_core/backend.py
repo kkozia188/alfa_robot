@@ -24,7 +24,7 @@ from v3_wall_ik_benchmark import (
     canonical_side_tool_to_box, chassis_front_x, make_scene, wall_center,
 )
 from .fixtures import tasks
-from .adapter import from_curobo_scene, task_attachments, to_curobo_scene
+from .adapter import from_curobo_scene, task_attachments, to_curobo_scene, pose_matrix
 from .scene import RobotState, SceneSnapshot, digest
 from .cache import resource_key
 
@@ -89,6 +89,7 @@ class CuroboBackend:
             return batched_rrt_connect_multi_goal(
                 start, goals, lower, upper, validity, budget, seed,
                 informed_sampling=self.planner_kind == "informed_connect",
+                stop_at_first_valid=self.planner_kind == 'informed_connect',
             )
         if self.planner_kind == "bitstar":
             from v3_gpu_bitstar import batched_bitstar_multi_goal
@@ -108,6 +109,9 @@ class CuroboBackend:
             self._cached_checkers.clear()
             self._cached_task = key
             gc.collect()
+
+    def task_attachments(self, boxes):
+        return task_attachments(self.snapshot, boxes)
 
     def _model_identity(self):
         import hashlib
@@ -143,14 +147,16 @@ class CuroboBackend:
         key = (payload, mobile)
         if key not in self._cached_checkers:
             robot = self.mobile_robot if mobile else self.robot
-            configured = loaded_robot(robot, self.box_fit, attachments=task_attachments(
-                self.snapshot, boxes)) if payload else copy.deepcopy(robot)
+            configured = loaded_robot(robot, self.box_fit, attachments=self.task_attachments(boxes)) if payload else copy.deepcopy(robot)
             self._cached_checkers[key] = RobotCollisionChecker(
                 RobotCollisionCheckerCfg.load_from_config(
                     robot_config=configured, scene_model=self.scene(boxes, mobile=mobile),
                     n_cuboids=max(40, len(self.snapshot.objects)), n_meshes=len(self.snapshot.meshes),
                     collision_activation_distance=0.0,
                 ))
+            self._cached_checkers[key].task_tool_to_box = {
+                item.parent_link.removesuffix('_tool0'): pose_matrix(item.tool_to_object)
+                for item in self.task_attachments(boxes)}
         return self._cached_checkers[key]
 
     def scene(self, boxes, mobile=False):

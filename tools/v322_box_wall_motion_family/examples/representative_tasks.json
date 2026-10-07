@@ -1,0 +1,79 @@
+{
+  "schema": "alfa.v322_box_wall_motion_family.v1",
+  "wall": {
+    "frame": "map",
+    "rows": 5,
+    "columns": 5,
+    "bottom_z_m": 0.0,
+    "center_y_m": 0.0,
+    "box_size_m": [0.30, 0.40, 0.40],
+    "gap_y_m": 0.0,
+    "gap_z_m": 0.0,
+    "orientation_tolerance_deg": 5.0
+  },
+  "current_state": {
+    "joint_positions": [
+      -0.3,
+      2.70526034059121, -1.832595714594046, 0.34906585039887,
+      1.5707963267949, -1.5707963267949, -0.69813170079773, 0.0,
+      -2.70526034059121, 1.832595714594046, -0.34906585039887,
+      -1.5707963267949, 1.5707963267949, 0.69813170079773, 0.0,
+      0.0, 0.0
+    ]
+  },
+  "tasks": [
+    {
+      "request_id": "top-row-left",
+      "box_pose": {"position_m": [0.90, 0.80, 1.80], "orientation_xyzw": [0, 0, 0, 1]},
+      "available_space": {
+        "front_clearance_m": 0.85, "top_clearance_m": 0.25,
+        "left_clearance_m": 0.50, "right_clearance_m": 0.50
+      },
+      "allowed_arms": ["left", "right"]
+    },
+    {
+      "request_id": "upper-middle-right",
+      "box_pose": {"position_m": [0.90, -0.40, 1.40], "orientation_xyzw": [0, 0, 0, 1]},
+      "available_space": {
+        "front_clearance_m": 0.85, "top_clearance_m": 0.20,
+        "left_clearance_m": 0.35, "right_clearance_m": 0.50
+      },
+      "clearance_channels": ["top"],
+      "clearance_radius_cells": 2,
+      "allowed_arms": ["left", "right"]
+    },
+    {
+      "request_id": "middle-center",
+      "box_pose": {"position_m": [0.90, 0.00, 1.00], "orientation_xyzw": [0, 0, 0, 1]},
+      "available_space": {
+        "front_clearance_m": 0.85, "top_clearance_m": 0.20,
+        "left_clearance_m": 0.40, "right_clearance_m": 0.40
+      },
+      "clearance_channels": ["top", "left", "right"],
+      "clearance_radius_cells": 2,
+      "allowed_arms": ["left", "right"]
+    },
+    {
+      "request_id": "lower-left-inner",
+      "box_pose": {"position_m": [0.90, 0.40, 0.60], "orientation_xyzw": [0, 0, 0, 1]},
+      "available_space": {
+        "front_clearance_m": 0.60, "top_clearance_m": 0.20,
+        "left_clearance_m": 0.50, "right_clearance_m": 0.35
+      },
+      "clearance_channels": ["top"],
+      "clearance_radius_cells": 2,
+      "allowed_arms": ["left", "right"]
+    },
+    {
+      "request_id": "bottom-center-top-access",
+      "box_pose": {"position_m": [0.90, 0.00, 0.20], "orientation_xyzw": [0, 0, 0, 1]},
+      "available_space": {
+        "front_clearance_m": 0.25, "top_clearance_m": 0.30,
+        "left_clearance_m": 0.40, "right_clearance_m": 0.40
+      },
+      "clearance_channels": ["top", "left", "right"],
+      "clearance_radius_cells": 2,
+      "allowed_arms": ["left", "right"]
+    }
+  ]
+}

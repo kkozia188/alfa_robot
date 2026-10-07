@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Record the five representative full cycles with the V3.2.2 production shell."""
+"""Record one or more certified full cycles with the V3.2.2 production shell."""
 
 from __future__ import annotations
 
@@ -53,6 +53,7 @@ def main() -> int:
     operations = list(replay["operations"])
     box_planning = list(replay["box_planning"])
     selected_ids = {int(item["box_id"]) for item in box_planning}
+    represented_rows = sorted({int(item["row"]) for item in box_planning})
 
     class FamilyRecorder(dual.DualSequenceRecorder):
         def __init__(self) -> None:
@@ -70,7 +71,7 @@ def main() -> int:
                 rrb.Horizontal(
                     rrb.Spatial3DView(
                         origin="/world", contents=["/world/**"],
-                        name="V3.2.2 representative full cycles",
+                        name="V3.2.2 certified dual-box cycles",
                     ),
                     rrb.Vertical(
                         rrb.TextDocumentView(origin="/report", name="Acceptance report"),
@@ -194,7 +195,8 @@ def main() -> int:
                         "",
                         f"- Completed boxes: **{self.completed_boxes}/{self.total_boxes}**",
                         f"- Completed cycles: **{self.total_cycles}/{self.total_cycles}**",
-                        "- Rows represented: **5/5**",
+                        f"- Rows represented: **{len(represented_rows)}/5** "
+                        f"(`{'+'.join(map(str, represented_rows))}`)",
                         "- Full-cycle MoveIt/FCL: **PASS**",
                     ]),
                     media_type=rr.MediaType.MARKDOWN,

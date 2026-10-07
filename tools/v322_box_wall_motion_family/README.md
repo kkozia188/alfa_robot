@@ -122,6 +122,19 @@ rerun --new \
   /home/tim/alfa_robot-v322-box-wall-motion-family-validation/results/v322-cross-row-pair-full.rrd
 ```
 
+Open any pair by ID (order does not matter):
+
+```bash
+cd /home/tim/alfa_robot-v322-box-wall-motion-family
+/usr/bin/python3 tools/v322_box_wall_motion_family/open_pair_rerun.py 1 6
+```
+
+The first request generates and caches a production-shell RRD; later requests
+open the cache directly. Use `--rebuild` to regenerate it or `--no-open` to
+only generate and verify. For one of the 8 unsupported pairs, such as `1 21`,
+the same command opens a failure-diagnostic RRD instead of a fabricated motion
+replay.
+
 The full matrix report is `results/all-pair-matrix-acceptance.json/.md`. The
 three-pair Rerun report remains `results/cross-row-pair-acceptance.json/.md`,
 and the earlier single-Pose result remains `results/acceptance-report.json/.md`.

@@ -93,6 +93,42 @@ def certified_pair_entry(
         )
     ):
         raise ValueError(f"invalid V3.2.2 clearance-grid certificate: {manifest_path}")
+    snapshot = dict(manifest.get("model_snapshot", {}))
+    model_manifest = Path(str(snapshot.get("manifest", "")))
+    if not model_manifest.is_absolute():
+        model_manifest = manifest_path.parent / model_manifest
+    if (
+        not model_manifest.is_file()
+        or sha256(model_manifest) != str(snapshot.get("manifest_sha256", ""))
+    ):
+        raise ValueError(f"certified model manifest hash mismatch: {model_manifest}")
+    model_files = read_json(model_manifest)
+    if (
+        model_files.get("schema") != "alfa.v322_tool0151_model_snapshot.v1"
+        or model_files.get("model_revision") != "robot_v3.2.2-suction"
+        or int(model_files.get("link_count", 0)) != 21
+        or int(model_files.get("visual_mesh_count", 0)) != 49
+        or not math.isclose(
+            float(model_files.get("tool0_offset_local_z_m", 0.0)),
+            0.151,
+            abs_tol=1e-12,
+        )
+    ):
+        raise ValueError(f"invalid certified model manifest: {model_manifest}")
+    for file_entry in model_files.get("files", []):
+        model_file = model_manifest.parent / str(file_entry["path"])
+        if (
+            not model_file.is_file()
+            or model_file.stat().st_size != int(file_entry["size"])
+            or sha256(model_file) != str(file_entry["sha256"])
+        ):
+            raise ValueError(f"certified model asset hash mismatch: {model_file}")
+    model_urdf = model_manifest.parent / str(snapshot.get("urdf", ""))
+    model_asset_root = model_manifest.parent / str(snapshot.get("asset_root", ""))
+    if not model_urdf.is_file() or not model_asset_root.is_dir():
+        raise ValueError("certified V3.2.2 model snapshot is incomplete")
+    if sha256(model_urdf) != str(snapshot.get("urdf_sha256", "")):
+        raise ValueError(f"certified model URDF hash mismatch: {model_urdf}")
     matches = [
         entry
         for entry in manifest.get("pairs", [])
@@ -119,7 +155,42 @@ def certified_pair_entry(
         entry[name] = str(path.resolve())
     if not read_json(Path(entry["validation"])).get("success"):
         raise ValueError("certified validation report is not successful")
+    entry["model_urdf"] = str(model_urdf.resolve())
+    entry["model_asset_root"] = str(model_asset_root.resolve())
+    entry["model_urdf_sha256"] = str(snapshot["urdf_sha256"])
     return entry
+
+
+def recording_is_current(
+    rrd: Path,
+    summary: Path,
+    replay: Path,
+    validation: Path,
+    model_urdf_sha256: str,
+) -> bool:
+    if not rrd.is_file() or not summary.is_file():
+        return False
+    try:
+        value = read_json(summary)
+        model = value.get("rerun_model", {})
+        return (
+            value.get("validation_success") is True
+            and Path(str(value["input"])).resolve() == replay.resolve()
+            and Path(str(value["validation_report"])).resolve() == validation.resolve()
+            and model.get("model_revision") == "robot_v3.2.2-suction"
+            and int(model.get("link_count", 0)) == 21
+            and int(model.get("visual_mesh_count", 0)) == 49
+            and math.isclose(
+                float(model.get("tool0_offset_local_z_m", 0.0)),
+                0.151,
+                abs_tol=1e-12,
+            )
+            and model.get("urdf_sha256") == model_urdf_sha256
+            and rrd.stat().st_mtime_ns
+            >= max(replay.stat().st_mtime_ns, validation.stat().st_mtime_ns)
+        )
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
 
 
 def main() -> int:
@@ -160,7 +231,13 @@ def main() -> int:
     summary = output_dir / f"v322-conveyor-{pair_name}-summary.json"
     metrics = output_dir / f"v322-conveyor-{pair_name}-metrics.csv"
     planning = output_dir / f"v322-conveyor-{pair_name}-box-planning.csv"
-    if not rrd.is_file() or rrd.stat().st_mtime_ns < replay.stat().st_mtime_ns:
+    if not recording_is_current(
+        rrd,
+        summary,
+        replay,
+        validation,
+        str(entry["model_urdf_sha256"]),
+    ):
         subprocess.run([
             sys.executable,
             str(SCRIPT_DIR / "v3_scoop_5x5_dual_rerun.py"),
@@ -170,6 +247,8 @@ def main() -> int:
             "--metrics-csv", str(metrics),
             "--box-planning-csv", str(planning),
             "--validation-report", str(validation),
+            "--model-urdf", str(entry["model_urdf"]),
+            "--model-asset-root", str(entry["model_asset_root"]),
             "--no-spawn",
         ], check=True)
     subprocess.run(["rerun", "rrd", "verify", str(rrd)], check=True)

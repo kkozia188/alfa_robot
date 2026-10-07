@@ -1701,13 +1701,16 @@ class SequenceRecorder:
         transition_joint_speed_deg_s: float = math.degrees(1.0),
         task_joint_speed_deg_s: float = 40.0,
         cartesian_joint_speed_deg_s: float = 40.0,
+        urdf_text: str | None = None,
     ) -> None:
         prefer_matching_rerun_cli()
         save.parent.mkdir(parents=True, exist_ok=True)
         save.unlink(missing_ok=True)
         rr.init(application_id, spawn=False)
         rr.save(str(save))
-        self.robot = UrdfRobot(render_current_urdf({"end_effector": end_effector}))
+        self.robot = UrdfRobot(
+            urdf_text or render_current_urdf({"end_effector": end_effector})
+        )
         log_robot_static_model(self.robot, "world/robot", log_meshes=True)
         rr.log("world", rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
         rr.log(

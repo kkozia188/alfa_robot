@@ -20,6 +20,15 @@ MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
+RERUN_SCRIPT = SCRIPT_DIR / "v3_scoop_5x5_dual_rerun.py"
+RERUN_SPEC = importlib.util.spec_from_file_location(
+    "v3_scoop_5x5_dual_rerun", RERUN_SCRIPT
+)
+assert RERUN_SPEC and RERUN_SPEC.loader
+RERUN = importlib.util.module_from_spec(RERUN_SPEC)
+sys.modules[RERUN_SPEC.name] = RERUN
+RERUN_SPEC.loader.exec_module(RERUN)
+
 
 def test_clearance_input_rounds_half_up_to_certified_centimeter():
     assert MODULE.round_to_certified_centimeter(0.804) == 0.80
@@ -66,6 +75,25 @@ def write_certificate(workspace: Path, model_revision: str = "robot_v3.2.2-sucti
     validation = pair / "validation.json"
     replay.write_text(json.dumps({"schema": "replay"}), encoding="utf-8")
     validation.write_text(json.dumps({"success": True}), encoding="utf-8")
+    model_root = root / "model"
+    asset_root = model_root / "alfa_robot_description"
+    asset_root.mkdir(parents=True)
+    model_urdf = model_root / "alfa-robot-v322-tool0151.urdf"
+    model_urdf.write_text('<robot name="test"/>', encoding="utf-8")
+    model_files = {
+        "schema": "alfa.v322_tool0151_model_snapshot.v1",
+        "model_revision": "robot_v3.2.2-suction",
+        "tool0_offset_local_z_m": 0.151,
+        "link_count": 21,
+        "visual_mesh_count": 49,
+        "files": [{
+            "path": model_urdf.name,
+            "size": model_urdf.stat().st_size,
+            "sha256": MODULE.sha256(model_urdf),
+        }],
+    }
+    model_manifest = model_root / "MANIFEST.json"
+    model_manifest.write_text(json.dumps(model_files), encoding="utf-8")
     entry = {
         "success": True,
         "upper_front_clearance_m": 0.85,
@@ -83,6 +111,13 @@ def write_certificate(workspace: Path, model_revision: str = "robot_v3.2.2-sucti
         "tool0_offset_local_z_m": 0.151,
         "upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
         "input_resolution_m": 0.01,
+        "model_snapshot": {
+            "manifest": str(model_manifest.relative_to(root)),
+            "manifest_sha256": MODULE.sha256(model_manifest),
+            "urdf": model_urdf.name,
+            "urdf_sha256": MODULE.sha256(model_urdf),
+            "asset_root": asset_root.name,
+        },
         "pairs": [entry],
     }
     (root / "clearance-grid-certificate.json").write_text(
@@ -100,6 +135,8 @@ def test_v322_certificate_entry_verifies_model_and_hashes(tmp_path):
     assert actual["validation"] == str(
         (certificate_root(tmp_path) / expected["validation"]).resolve()
     )
+    assert Path(actual["model_urdf"]).name == "alfa-robot-v322-tool0151.urdf"
+    assert Path(actual["model_asset_root"]).name == "alfa_robot_description"
 
     replay = certificate_root(tmp_path) / expected["replay"]
     replay.write_text("modified", encoding="utf-8")
@@ -121,3 +158,41 @@ def test_planar_base_pose_is_supported_by_validator_and_recorder():
     assert 'getJointModel("map_to_base_footprint")' in validator
     assert "frame_base_transform" in recorder
     assert "right conveyor" in recorder
+
+
+def test_rerun_rejects_a_wrong_robot_shell_before_recording():
+    replay = {
+        "model_revision": "robot_v3.2.2-suction",
+        "tool0_offset_local_z_m": 0.151,
+    }
+    with pytest.raises(ValueError, match="Rerun model mismatch"):
+        RERUN.validate_v322_model_urdf(
+            replay, '<robot name="wrong"><link name="base_footprint"/></robot>'
+        )
+
+
+def test_rrd_cache_requires_the_exact_certified_model(tmp_path):
+    replay = tmp_path / "replay.json"
+    validation = tmp_path / "validation.json"
+    rrd = tmp_path / "task.rrd"
+    summary = tmp_path / "summary.json"
+    for path in (replay, validation, rrd):
+        path.write_text("data", encoding="utf-8")
+    summary.write_text(json.dumps({
+        "input": str(replay),
+        "validation_report": str(validation),
+        "validation_success": True,
+        "rerun_model": {
+            "model_revision": "robot_v3.2.2-suction",
+            "link_count": 21,
+            "visual_mesh_count": 49,
+            "tool0_offset_local_z_m": 0.151,
+            "urdf_sha256": "correct",
+        },
+    }), encoding="utf-8")
+    assert MODULE.recording_is_current(
+        rrd, summary, replay, validation, "correct"
+    )
+    assert not MODULE.recording_is_current(
+        rrd, summary, replay, validation, "different"
+    )

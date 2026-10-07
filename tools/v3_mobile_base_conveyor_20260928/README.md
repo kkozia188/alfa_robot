@@ -143,6 +143,12 @@ It prompts for the first-three-row and last-two-row clearances, verifies the
 V3.2.2 certificate and replay hashes, records the selected RRD when needed,
 verifies it, and opens Rerun.
 
+The range certificate also carries the exact expanded V3.2.2 URDF and its
+description assets. Rerun refuses to record unless the model contract is
+`21` links, `49` visual meshes, and both Tool0 offsets are local `+Z 0.151 m`.
+This prevents V3.2.2 joint values from being rendered on an older V3.1.1 arm,
+which is especially misleading on the right arm because its J2/J4 signs differ.
+
 ## Scope Boundary
 
 This is simulation and planning evidence, not a hardware execution trajectory.

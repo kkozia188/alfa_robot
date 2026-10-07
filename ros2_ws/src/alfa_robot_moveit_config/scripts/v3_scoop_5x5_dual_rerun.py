@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import subprocess
@@ -28,6 +29,73 @@ from alfa_robot_rerun.visualize_rerun import log_robot_state
 
 SCHEMA = "alfa.v3_scoop_5x5_dual_replay.v1"
 VEHICLE_FRONT_X_IN_BASE_M = 0.500000002779484
+V322_MODEL_REVISION = "robot_v3.2.2-suction"
+V322_LINK_COUNT = 21
+V322_VISUAL_MESH_COUNT = 49
+V322_TOOL0_OFFSET_LOCAL_Z_M = 0.151
+
+
+def load_model_urdf(path: Path | None, asset_root: Path | None) -> str:
+    if path is None:
+        if asset_root is not None:
+            raise ValueError("--model-asset-root requires --model-urdf")
+        return sequence.render_current_urdf({"end_effector": "scoop"})
+    text = path.resolve().read_text(encoding="utf-8")
+    if asset_root is None and "package://" in text:
+        raise ValueError("a model URDF with package URIs requires --model-asset-root")
+    if asset_root is not None:
+        root = asset_root.resolve()
+        if not root.is_dir():
+            raise ValueError(f"model asset root does not exist: {root}")
+        text = text.replace(
+            "package://alfa_robot_description/", root.as_posix().rstrip("/") + "/"
+        )
+    return text
+
+
+def validate_v322_model_urdf(replay: dict[str, Any], urdf_text: str) -> dict[str, Any]:
+    if replay.get("model_revision") != V322_MODEL_REVISION:
+        raise ValueError(
+            f"replay model must be {V322_MODEL_REVISION}, got "
+            f"{replay.get('model_revision')}"
+        )
+    if not math.isclose(
+        float(replay.get("tool0_offset_local_z_m", 0.0)),
+        V322_TOOL0_OFFSET_LOCAL_Z_M,
+        abs_tol=1e-12,
+    ):
+        raise ValueError("replay does not use the certified Tool0 +Z 0.151 m offset")
+    robot = sequence.UrdfRobot(urdf_text)
+    mesh_count = sum(len(link.visuals) for link in robot.links.values())
+    if len(robot.links) != V322_LINK_COUNT or mesh_count != V322_VISUAL_MESH_COUNT:
+        raise ValueError(
+            "Rerun model mismatch: expected V3.2.2 production shell "
+            f"({V322_LINK_COUNT} links / {V322_VISUAL_MESH_COUNT} meshes), got "
+            f"{len(robot.links)} links / {mesh_count} meshes"
+        )
+    for side in ("left", "right"):
+        name = f"{side}_tool0_fixed"
+        joint = robot.joints.get(name)
+        expected_parent = f"{side}_link7"
+        if (
+            joint is None
+            or joint.parent != expected_parent
+            or joint.child != f"{side}_tool0"
+        ):
+            raise ValueError(f"Rerun model has an invalid {name} chain")
+        xyz = joint.origin[:3, 3]
+        if not np.allclose(
+            xyz, [0.0, 0.0, V322_TOOL0_OFFSET_LOCAL_Z_M], atol=1e-12
+        ):
+            raise ValueError(
+                f"Rerun model {name} offset is {xyz.tolist()}, expected [0, 0, 0.151]"
+            )
+    return {
+        "model_revision": V322_MODEL_REVISION,
+        "link_count": len(robot.links),
+        "visual_mesh_count": mesh_count,
+        "tool0_offset_local_z_m": V322_TOOL0_OFFSET_LOCAL_Z_M,
+    }
 
 
 def base_transform(operation: dict[str, Any]) -> np.ndarray:
@@ -62,6 +130,14 @@ def frame_base_transform(
 def read_json(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         return json.load(stream)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
@@ -251,6 +327,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         playback_speed: float,
         box_planning: list[dict[str, Any]],
         operations: list[dict[str, Any]],
+        urdf_text: str,
     ) -> None:
         self.is_dual_sequence = any(
             operation.get("kind") in {"dual", "dual_conveyor_cycle"}
@@ -278,6 +355,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             transition_joint_speed_deg_s=45.0,
             task_joint_speed_deg_s=45.0,
             cartesian_joint_speed_deg_s=35.0,
+            urdf_text=urdf_text,
         )
         self.base_transform = np.eye(4)
         self.completed_boxes = 0
@@ -884,6 +962,8 @@ def main() -> int:
     parser.add_argument("--metrics-csv", type=Path)
     parser.add_argument("--box-planning-csv", type=Path)
     parser.add_argument("--validation-report", type=Path)
+    parser.add_argument("--model-urdf", type=Path)
+    parser.add_argument("--model-asset-root", type=Path)
     parser.add_argument("--playback-speed", type=float, default=2.0)
     parser.add_argument("--spawn", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
@@ -914,9 +994,17 @@ def main() -> int:
     validation = read_json(args.validation_report) if args.validation_report else {}
     if validation and not bool(validation.get("success")):
         parser.error("validation report is not successful")
+    try:
+        model_urdf_text = load_model_urdf(args.model_urdf, args.model_asset_root)
+        model_contract = validate_v322_model_urdf(replay, model_urdf_text)
+        if args.model_urdf is not None:
+            model_contract["urdf_sha256"] = sha256(args.model_urdf.resolve())
+    except (OSError, TypeError, ValueError) as error:
+        parser.error(str(error))
 
     recorder = DualSequenceRecorder(
-        args.save.resolve(), args.playback_speed, box_planning, operations
+        args.save.resolve(), args.playback_speed, box_planning, operations,
+        model_urdf_text,
     )
     metrics = []
     group_index = 0
@@ -945,6 +1033,7 @@ def main() -> int:
             str(args.validation_report.resolve()) if args.validation_report else ""
         ),
         "validation_success": bool(validation.get("success", False)),
+        "rerun_model": model_contract,
         "completed_boxes": sum(len(operation_ids(item)) for item in operations),
         "completed_rows": 5,
         "group_count": sum(

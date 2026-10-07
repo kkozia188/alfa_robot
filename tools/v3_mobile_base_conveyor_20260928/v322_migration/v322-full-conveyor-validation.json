@@ -1,0 +1,187 @@
+{
+  "checked_edge_samples": 1020,
+  "checked_frames": 27372,
+  "input": "/home/tim/alfa_robot-motion261-v322-validation/v322_tool0151_final/v322-conveyor-certified-replay.json",
+  "maximum_left_tilt_deg": 0.9239224489925627,
+  "maximum_right_tilt_deg": 0.06559679978109437,
+  "operations": [
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 78,
+      "checked_frames": 1682,
+      "label": "Box 1 + Box 5",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 78,
+      "checked_frames": 1804,
+      "label": "Box 2 + Box 4",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 78,
+      "checked_frames": 1826,
+      "label": "Box 3",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 104,
+      "checked_frames": 1594,
+      "label": "Box 6 + Box 10",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 78,
+      "checked_frames": 1632,
+      "label": "Box 7 + Box 9",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 56,
+      "checked_frames": 1886,
+      "label": "Box 8",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 90,
+      "checked_frames": 1648,
+      "label": "Box 11 + Box 15",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 92,
+      "checked_frames": 1642,
+      "label": "Box 12 + Box 14",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 58,
+      "checked_frames": 1990,
+      "label": "Box 13",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 22,
+      "checked_frames": 26,
+      "label": "Chassis X reposition before box 16",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 28,
+      "checked_frames": 1758,
+      "label": "Box 16 + Box 20",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 20,
+      "checked_frames": 1696,
+      "label": "Box 17 + Box 19",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 22,
+      "checked_frames": 2316,
+      "label": "Box 18",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 76,
+      "checked_frames": 1868,
+      "label": "Box 21 + Box 25",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 102,
+      "checked_frames": 2032,
+      "label": "Box 22 + Box 24",
+      "success": true
+    },
+    {
+      "base_pose_map": [
+        -0.35,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 38,
+      "checked_frames": 1972,
+      "label": "Box 23",
+      "success": true
+    }
+  ],
+  "schema": "alfa.v3_scoop_5x5_dual_validation.v1",
+  "success": true
+}

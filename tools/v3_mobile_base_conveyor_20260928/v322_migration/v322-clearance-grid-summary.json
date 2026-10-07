@@ -1,0 +1,60 @@
+{
+  "schema": "alfa.v322_tool0151_conveyor_clearance_grid_summary.v1",
+  "success": true,
+  "model_revision": "robot_v3.2.2-suction",
+  "tool0_offset_local_z_m": 0.151,
+  "upstream_base_commit": "d9c330cef72981390d81ac2b1cd5a6eb9e892195",
+  "clearance_reference": "vehicle_front_contact_plane_to_box_front_contact_plane",
+  "upper_rows_1_to_3_range_m": [0.8, 0.9],
+  "lower_rows_4_to_5_range_m": [0.55, 0.65],
+  "input_resolution_m": 0.01,
+  "rounding": "decimal_half_up",
+  "certified_pair_count": 121,
+  "profile_task_core": {
+    "definition": "fresh selected pickup task core; cache loading excluded",
+    "task_count": 275,
+    "tasks_below_3s": 275,
+    "maximum_task_core_s": 2.696673571,
+    "maximum_task_profile": "lower-l064",
+    "maximum_task_box_id": 18
+  },
+  "validation": {
+    "total_checked_frames": 3288544,
+    "total_checked_edge_samples": 123074,
+    "minimum_pair_frames": 24653,
+    "maximum_pair_frames": 28590,
+    "minimum_pair_edge_samples": 929,
+    "maximum_pair_edge_samples": 1129,
+    "maximum_joint_step_deg": 2.9999812526251537,
+    "one_sided_attachment_frames_in_dual_cycles": 0
+  },
+  "motion_contract": {
+    "pickup_base_y_m": 0.0,
+    "backoff_before_right_shuttle_m": 2.35,
+    "right_shuttle_m": 1.5,
+    "cycle_count": 15,
+    "simultaneous_dual_cycle_count": 10,
+    "completed_boxes": 25
+  },
+  "rerun_model_binding": {
+    "model_revision": "robot_v3.2.2-suction",
+    "link_count": 21,
+    "visual_mesh_count": 49,
+    "tool0_offset_local_z_m": 0.151,
+    "urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893",
+    "model_manifest_sha256": "cfac830ee45e3ca087ae4afb83cc3d18c422d2a81795ef9a042a835bfb4fa2de",
+    "maximum_left_contact_center_error_mm": 0.00006956384888653717,
+    "maximum_right_contact_center_error_mm": 0.00005810767350879296,
+    "wrong_model_recording_rejected": true
+  },
+  "certificate": {
+    "name": "clearance-grid-certificate.json",
+    "size": 91689,
+    "sha256": "b8f243cc71e322ae859a927b03842f17cec6e25fe9f8fa4999a20f72eb690eb5"
+  },
+  "evidence_archive": {
+    "name": "v322-tool0151-clearance-grid-evidence-2026.10.07.tar.zst",
+    "size": 68112589,
+    "sha256": "49d610492982e12dc1eea0e18c10b9332700811f08a886b8e56734b822d48f63"
+  }
+}

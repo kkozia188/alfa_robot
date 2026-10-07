@@ -1,0 +1,29 @@
+{
+  "schema": "alfa.v322_mobile_base_conveyor_migration_smoke.v1",
+  "model_revision": "robot_v3.2.2-suction",
+  "upstream_base_commit": "7ac01bd7274afcfa2c00df9862e0ca73e7267dcb",
+  "scope": "single_box_migration_smoke_not_full_25_box_certificate",
+  "box_id": 1,
+  "pickup": {
+    "success": true,
+    "planning_ms": 1702.679953,
+    "frames": 41,
+    "ik_calls": 2952,
+    "ik_ms": 1594.3044609999981
+  },
+  "base_route": {
+    "pickup_base_pose_map": [
+      -0.6,
+      0,
+      0
+    ],
+    "backoff_m": 2.35,
+    "right_shuttle_m": 1.5
+  },
+  "validation": {
+    "success": true,
+    "checked_frames": 812,
+    "interpolated_edge_samples": 625,
+    "maximum_left_tilt_deg": 0.003391008792158052
+  }
+}

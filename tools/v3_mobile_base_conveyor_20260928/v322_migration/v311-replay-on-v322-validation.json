@@ -1,0 +1,25 @@
+{
+  "checked_edge_samples": 19,
+  "checked_frames": 18,
+  "input": "/home/tim/alfa_robot-alfa_v3_dev/data/ik_benchmark/v3_scoop_5x5/2026-09-28-simultaneous-backoff235-right-conveyor-y150/v3-scoop-u085-l060-back235-y150-conveyor-replay.json",
+  "maximum_left_tilt_deg": 0.0,
+  "maximum_right_tilt_deg": 0.0,
+  "operations": [
+    {
+      "base_pose_map": [
+        -0.6,
+        0.0,
+        0.0
+      ],
+      "checked_edge_samples": 19,
+      "checked_frames": 18,
+      "failure_edge_step": 1,
+      "failure_frame": 18,
+      "failure_reason": "edge collision:base_link<->right_link5",
+      "label": "Box 1 + Box 5",
+      "success": false
+    }
+  ],
+  "schema": "alfa.v3_scoop_5x5_dual_validation.v1",
+  "success": false
+}

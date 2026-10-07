@@ -10,6 +10,9 @@ inputs. Development lives in:
 
 - Git worktree: `/home/tim/alfa_robot-v322-box-wall-motion-family`
 - Validation workspace: `/home/tim/alfa_robot-v322-box-wall-motion-family-validation`
+- Linear: `MOTION-258` - V3 different-row box grasp action family and planning
+- Git branch: `feature/motion-258-v322-box-wall-motion-family`
+- Release tag: `v3-box-wall-motion-family-v322-2026.10.07`
 
 ## Two-Box ID Contract
 

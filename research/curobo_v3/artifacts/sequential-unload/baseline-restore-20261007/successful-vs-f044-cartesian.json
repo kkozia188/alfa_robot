@@ -1,0 +1,34 @@
+{
+  "historical_path": {
+    "source": "optimized-nine-runs-s11-r1.json",
+    "frames": 721,
+    "distance_m": 0.36000000294730516,
+    "max_line_error_m": 2.8034678109038357e-07,
+    "max_orientation_error_deg": 3.55031566022746e-05,
+    "swivel_start_rad": 1.0364696284552255,
+    "swivel_end_rad": 1.036470037619981,
+    "swivel_change_rad": 4.091647554105293e-07,
+    "swivel_range_rad": 5.913520650935311e-07,
+    "meets_f044_2mm_1deg": true
+  },
+  "f044_parameterized_forward_fixed_swivel": {
+    "success": true,
+    "details": {
+      "strategy": "f044_fixed_swivel",
+      "cartesian_step_m": 0.01,
+      "fixed_updown_m": -0.3,
+      "start_updown_m": -0.3,
+      "end_updown_m": null,
+      "fixed_psi_rad": [
+        1.0364696284552255,
+        -0.479089181221912
+      ],
+      "held_tool_frames": [],
+      "max_line_error_mm": 0.027796703607628908,
+      "max_orientation_error_deg": 0.003534800528949049
+    },
+    "wall_ms_cpu_without_collision": 53.140507000080106,
+    "failure": null
+  },
+  "conclusion": "The accepted path changes swivel; the fixed-swivel bridge loses analytic IK before 36cm."
+}

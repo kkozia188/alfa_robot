@@ -1,0 +1,111 @@
+{
+  "date": "2026-10-08",
+  "expected_runs": 6,
+  "successes": 4,
+  "passed": false,
+  "successful_median_s": 33.0565704075002,
+  "successful_worst_s": 35.42217114599953,
+  "runs": [
+    {
+      "seed": 11,
+      "repeat": 1,
+      "success": true,
+      "wall_s": 35.42217114599953,
+      "error": null,
+      "independent_fk_passed": true,
+      "frames": 2601,
+      "events": [
+        "right_attach",
+        "left_attach",
+        "left_release",
+        "right_release"
+      ]
+    },
+    {
+      "seed": 11,
+      "repeat": 2,
+      "success": true,
+      "wall_s": 33.20586445000026,
+      "error": null,
+      "independent_fk_passed": true,
+      "frames": 2601,
+      "events": [
+        "right_attach",
+        "left_attach",
+        "left_release",
+        "right_release"
+      ]
+    },
+    {
+      "seed": 29,
+      "repeat": 1,
+      "success": true,
+      "wall_s": 32.83282624399999,
+      "error": null,
+      "independent_fk_passed": true,
+      "frames": 2519,
+      "events": [
+        "right_attach",
+        "left_attach",
+        "left_release",
+        "right_release"
+      ]
+    },
+    {
+      "seed": 29,
+      "repeat": 2,
+      "success": true,
+      "wall_s": 32.90727636500014,
+      "error": null,
+      "independent_fk_passed": true,
+      "frames": 2519,
+      "events": [
+        "right_attach",
+        "left_attach",
+        "left_release",
+        "right_release"
+      ]
+    },
+    {
+      "seed": 41,
+      "repeat": 1,
+      "success": false,
+      "wall_s": 23.305713017000016,
+      "error": {
+        "code": "PLANNING_FAILED",
+        "stage": "left_place",
+        "message": "rear unloading search exhausted its 2 s budget"
+      },
+      "independent_fk_passed": false,
+      "frames": 868,
+      "events": [
+        "right_attach",
+        "left_attach"
+      ]
+    },
+    {
+      "seed": 41,
+      "repeat": 2,
+      "success": false,
+      "wall_s": 23.451572529999794,
+      "error": {
+        "code": "PLANNING_FAILED",
+        "stage": "left_place",
+        "message": "rear unloading search exhausted its 2 s budget"
+      },
+      "independent_fk_passed": false,
+      "frames": 868,
+      "events": [
+        "right_attach",
+        "left_attach"
+      ]
+    }
+  ],
+  "viser_url": "http://127.0.0.1:8094",
+  "viser_pid": 89477,
+  "sha256": {
+    "current-default-six-runs-20261008.log": "99c373f4fcf77158ea8b40ff2192397ffaea1832ddc172cb37dd3d25c365f1be",
+    "current-default-six-runs-20261008-fk.json": "caad989891b06083959839641aab7d7b72febd13fd24359936c1e90a2bbaf32e",
+    "current-default-six-runs-20261008.json.gz": "a3f240ac521f9cde9faa24285359970dc1ed075ad46a00af532d3b34224a312b"
+  }
+}

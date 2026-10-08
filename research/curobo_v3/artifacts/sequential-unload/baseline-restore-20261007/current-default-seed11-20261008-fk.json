@@ -1,0 +1,83 @@
+{
+  "kind": "independent_cpu_urdf_fk_audit",
+  "passed": true,
+  "nine_run_protocol": false,
+  "input_sha256": "81a50198704a3974185aa2520de6b97d66dc9fb0855f9613a866deec0d5c7e32",
+  "urdf_sha256": "448e11d3e6f3e2d44cc3a0424fe85f02d728b20dc8dcf3cf25d1efde4f59de1d",
+  "results": [
+    {
+      "passed": true,
+      "seed": 11,
+      "repeat": 1,
+      "frames_checked": 2601,
+      "max_frozen_joint_error": 5.701731553564571e-08,
+      "support_drift_m": 3.0530676621741486e-08,
+      "max_rigid_transform_error": 8.333005522181036e-16,
+      "max_box_tilt_deg": 55.3551555127491,
+      "minimum_box_bottom_m": 0.29996015855197644,
+      "release_checks": [
+        {
+          "side": "left",
+          "world_pose": {
+            "position": [
+              -0.780327299654734,
+              0.36569873099196426,
+              0.9285723214716869
+            ],
+            "quaternion_wxyz": [
+              -0.06619401622185032,
+              0.008714487147248052,
+              -0.32946900933501977,
+              0.9418028359577085
+            ]
+          },
+          "translation_error_m": 3.777462057212316e-07,
+          "rotation_error_deg": 9.69680703789558e-06
+        },
+        {
+          "side": "right",
+          "world_pose": {
+            "position": [
+              -0.7788367389466565,
+              -0.3429173670352129,
+              0.9834749444472922
+            ],
+            "quaternion_wxyz": [
+              0.06619400759709855,
+              -0.008714669970814713,
+              0.07448605663514496,
+              0.9949845402077768
+            ]
+          },
+          "translation_error_m": 7.480262269510871e-08,
+          "rotation_error_deg": 6.129842999383714e-06
+        }
+      ],
+      "line_checks": [
+        {
+          "phase": "left_extract",
+          "points": 89,
+          "line_error_m": 2.779681391559625e-05,
+          "rotation_error_deg": 0.0035347835932246752,
+          "distance_m": 0.3599999984244411,
+          "wall_clearance_m": 0.05999999842340986
+        },
+        {
+          "phase": "right_extract",
+          "points": 181,
+          "line_error_m": 7.533412372173734e-05,
+          "rotation_error_deg": 0.012005904236664021,
+          "distance_m": 0.36000000141594746,
+          "wall_clearance_m": 0.059999973970587206
+        },
+        {
+          "phase": "right_lower",
+          "points": 241,
+          "line_error_m": 8.131323878818915e-09,
+          "rotation_error_deg": 4.773108684408562e-07,
+          "distance_m": 0.4000000030783175
+        }
+      ]
+    }
+  ]
+}

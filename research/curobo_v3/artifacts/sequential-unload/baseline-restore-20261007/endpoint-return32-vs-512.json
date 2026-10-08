@@ -1,0 +1,23 @@
+{
+  "scope": "same +30deg endpoint, same baseline 512-seed/500-iteration solver; return count only changes exposed optimized outputs",
+  "reports": {
+    "32": {
+      "native_successes": 0,
+      "outputs": 32,
+      "finite": 32,
+      "pose_ok_2mm_1deg": 0,
+      "full_valid": 0,
+      "certified": 0,
+      "minimum_position_error_m": 0.019663525877717514
+    },
+    "512": {
+      "native_successes": 0,
+      "outputs": 512,
+      "finite": 512,
+      "pose_ok_2mm_1deg": 0,
+      "full_valid": 0,
+      "certified": 0,
+      "minimum_position_error_m": 0.019020721941114944
+    }
+  }
+}

@@ -100,3 +100,27 @@ ROS Action，不做时间参数化，也不删除历史MoveIt包。现有规划�
 
 本阶段基线及迁移结果摘要见 `generated/core_migration_276/validation.json`。完整周期
 成功只证明首组及现有实验规则下的几何规划，未重验11/60组或实机。
+
+## 固定基座双箱顺序卸载实验
+
+`PlanRequest.mode="sequential_unload"` 接入同一 `FullCyclePlanner`；默认仍是原
+`dual_cycle`。新模式固定 15 变量、上箱右支撑/下箱左卸载，严格场景/附件检查，
+不继承原演示的提前排除目标箱和延迟检查附件策略。当前实现及未完成的原生 GPU
+验收、精确局部接触规则和完整命令见
+`artifacts/sequential-unload/REPORT.md`。CPU 合同通过不代表双箱卸载成功。
+
+2026-10-06续跑：正式九次已经执行但均未通过（停在下箱直线构造），不再是“GPU占用未运行”。
+默认GPU回归2/2、原生保护测试12/12已通过。当前证据和CPU-only失败回放见上述报告。
+
+2026-10-07最终收口：新冻结版本的种子11/29/41各3次**9/9完整卸载释放通过**，
+独立CPU FK 9/9、原生保护12/12、默认GPU回归2/2通过。`artifacts/sequential-unload/REPORT.md`
+是当前报告；旧0/9和6/9结果单独保留，不拼接成功样本。1 mm笛卡尔+段中点检查、
+未来升降扫掠安全的命名停靠、附件相切的逐球对数值复核详见报告。
+仅仿真几何及生命周期，不是动力学/实机/全网格认证，不自动迁移现有方案。
+
+2026-10-07性能收口：先完成抬肘独立A/B（偏好默认关闭），再消除SAT早退前叉积、同帧重复FK和多余有序候选验证；不减少采样/检查或更改门限。
+优化后原姿态11/29/41×3再次9/9通过，中位44.211s、最慢48.071s；独立FK9/9、原生保护12/12、默认回归2/2通过。
+最新入口 `artifacts/sequential-unload/REPORT.md`，完整报告 `elbow-profile-20261007/REPORT.md`。
+显式 `support_elbow_rise_m` / CLI `--support-elbow-rise-m` 是软偏好，不是精确肘高约束；旧 `dual_cycle` 默认仍为0。
+
+2026-10-08新基线恢复 f044 IK 配置（512种子、500迭代、return32、2 mm/1°和缓存）及1 cm正向解析桥，只增加顺序任务所需的终点分支选择、0.18 m软抬肘、上箱8维终点IK和失败段局部冗余续解。当前默认seed11完整成功并通过独立FK；11/29/41各2次为4/6，seed41两次停在下箱放置路径最终验收，因此不能声明多种子验收通过。证据见 `artifacts/sequential-unload/baseline-restore-20261007/BASELINE_COMPARISON.md` 与 `CURRENT_DEFAULT_SIX_RUNS.md`。

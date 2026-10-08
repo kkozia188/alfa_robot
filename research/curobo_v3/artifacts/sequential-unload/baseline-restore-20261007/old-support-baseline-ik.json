@@ -1,0 +1,48 @@
+{
+  "old_support_right_joints": [
+    0.31022098313800905,
+    1.471787615948137,
+    -1.0932236957275305,
+    -1.31335358314029,
+    1.8965120680364647,
+    -1.3832749617938274,
+    1.267004904803623
+  ],
+  "old_endpoint_is_valid_now": true,
+  "old_endpoint_pose_error_m_rad": [
+    7.784156406437923e-09,
+    5.096427256790423e-12
+  ],
+  "restored_baseline_ik_candidates": 32,
+  "attempt": {
+    "stage": "left_extract_target",
+    "operation": "ik",
+    "seed": 11,
+    "solver_seed": 11,
+    "active_joints": [
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7"
+    ],
+    "initialization_ms": 1187.9318589999457,
+    "cache_hit": false,
+    "solve_ms": 2680.5194999997184,
+    "solver_successes": 0,
+    "returned_candidates": 32,
+    "position_tolerance_m": 0.002,
+    "orientation_tolerance_deg": 1.0,
+    "return_seeds": 32,
+    "recertification": {
+      "reason": "native_all_failed_with_attached_payload; same32 full-model validation",
+      "accepted": 32,
+      "extra_ik_samples": 0
+    },
+    "filter_ms": 813.231013999939,
+    "valid_candidates": 32,
+    "wall_ms": 4682.282809999833
+  }
+}

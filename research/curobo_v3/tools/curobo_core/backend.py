@@ -32,8 +32,8 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGET_POSES = WORKSPACE_ROOT / 'generated/current_carry_target_6d.json'
 
 
-def goal(poses):
-    frames = ['left_tool0', 'right_tool0']
+def goal(poses, frames=None):
+    frames = list(frames or ['left_tool0', 'right_tool0'])
     return GoalToolPose.from_poses({
         frame: Pose(
             position=torch.tensor(poses[frame]['position'], device='cuda', dtype=torch.float32).reshape(1, 3),
@@ -82,6 +82,7 @@ class CuroboBackend:
         self.target_poses = json.loads(Path(getattr(args, "target_poses", DEFAULT_TARGET_POSES)).read_text())
         self._cached_task = None
         self._cached_solver = None
+        self._cached_solver_key = None
         self._cached_checkers = {}
 
     def search_path(self, start, goals, lower, upper, validity, budget, seed):
@@ -101,10 +102,17 @@ class CuroboBackend:
             apply_shortcut=False, informed_sampling=self.planner_kind == "informed_rrt",
         )
 
+    def _release_ik_solver(self):
+        if self._cached_solver is not None:
+            self._cached_solver.destroy()
+            self._cached_solver = None
+            self._cached_solver_key = None
+            gc.collect()
+
     def prepare_task(self, boxes):
         key = resource_key(self.snapshot, boxes, self.box_fit)
         if key != self._cached_task:
-            self._cached_solver = None
+            self._release_ik_solver()
             self._cached_checkers.clear()
             self._cached_task = key
             gc.collect()
@@ -124,18 +132,33 @@ class CuroboBackend:
             raise ValueError("current checker only exempts base_link support")
         self.snapshot = snapshot
 
-    def ik_solver(self, boxes):
+    def ik_solver(self, boxes, *, robot=None, snapshot=None, random_seed=None):
+        """f044bf1 IK factory/cache; overrides only adapt the task context.
+
+        Target poses are deliberately not part of the cache key. A changed
+        robot group, frozen values, scene, attachments or seed invalidates it.
+        The original no-keyword entry keeps its original configuration.
+        """
         self.prepare_task(boxes)
-        if self._cached_solver is None:
+        snapshot = self.snapshot if snapshot is None else snapshot
+        robot = self.robot if robot is None else robot
+        key = (resource_key(snapshot, boxes, self.box_fit), digest(robot), random_seed)
+        self.ik_cache_hit = self._cached_solver is not None and self._cached_solver_key == key
+        if not self.ik_cache_hit:
+            self._release_ik_solver()
+            scene = self.scene(boxes) if snapshot is self.snapshot else to_curobo_scene(snapshot)
+            seed_options = {} if random_seed is None else {"random_seed": random_seed}
             self._cached_solver = InverseKinematics(InverseKinematicsCfg.create(
-                robot=copy.deepcopy(self.robot), scene_model=self.scene(boxes),
-                collision_cache={"cuboid": max(40, len(self.snapshot.objects)),
-                                 "mesh": len(self.snapshot.meshes)}, num_seeds=512,
+                robot=copy.deepcopy(robot), scene_model=scene,
+                collision_cache={"cuboid": max(40, len(snapshot.objects)),
+                                 "mesh": len(snapshot.meshes)}, num_seeds=512,
                 self_collision_check=True, use_cuda_graph=False,
                 position_tolerance=0.002, orientation_tolerance=math.radians(1),
                 override_iters_for_multi_link_ik=500,
                 optimizer_collision_activation_distance=0.005,
+                **seed_options,
             ))
+            self._cached_solver_key = key
         return self._cached_solver
 
     def collision_checker(self, boxes, payload=False, mobile=False):

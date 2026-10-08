@@ -27,6 +27,126 @@ PHASE_NAMES = {
 }
 
 
+def replay_sequential(args):
+    """Display this run's frozen request and actual per-frame attachment transforms."""
+    from curobo_core.adapter import pose_matrix
+    from curobo_core.contracts import PlanRequest
+    from curobo_core.scene import Pose
+    from v3_stage_timing import stage_label, stage_method, timing_markdown
+
+    document = json.loads(args.result_json.read_text())
+    request = PlanRequest.from_dict(document["request"])
+    if request.mode != "sequential_unload":
+        raise ValueError("--result-json expects a sequential_unload result")
+    result = document["result"] if "result" in document else document["results"][args.run_index]
+    if result.get("scene_id", request.snapshot.identity) != request.snapshot.identity:
+        raise ValueError("result scene identity differs from its frozen request")
+    urdf = yourdfpy.URDF.load(args.urdf, load_meshes=True, build_scene_graph=True)
+    server = viser.ViserServer(host="127.0.0.1", port=args.port,
+                               label="Sequential unload · untimed geometry replay")
+    server.gui.configure_theme(control_width="large")
+    server.scene.set_up_direction("+z")
+    server.scene.add_grid("/ground", width=5, height=3)
+    robot = ViserUrdf(server, urdf, root_node_name="/robot", mesh_color_override=(.45, .49, .57, 1.))
+    world = {item.object_id: server.scene.add_box(
+        "/world/"+item.object_id, dimensions=item.dimensions_m, position=item.pose.position,
+        wxyz=item.pose.quaternion_wxyz,
+        color=(216, 130, 70) if item.object_id == "warehouse_top_door_leaf" else (87, 145, 165),
+        opacity=.45 if item.object_id.startswith("wall_box_") else .08)
+        for item in request.snapshot.objects if item.object_id != "ground"}
+    attached = {side: server.scene.add_box("/payload/"+side, dimensions=(.3, .4, .4),
+                color=(239, 146, 62), visible=False) for side in ("left", "right")}
+    frames = result.get("frames", [])
+    frame = server.gui.add_slider("几何帧（非执行时间）", min=0, max=max(1, len(frames)-1), step=1, initial_value=0)
+    phase_keys = tuple(dict.fromkeys(result.get("phases", ["initialize"])))
+    phase_by_label = {stage_label(p): p for p in phase_keys}
+    stage = server.gui.add_dropdown("跳转阶段", options=tuple(phase_by_label))
+    play = server.gui.add_checkbox("播放", initial_value=False)
+    rejected = server.gui.add_checkbox("显示失败构型（未通过校验）", initial_value=False)
+    status = server.gui.add_markdown("")
+    with server.gui.add_folder("各阶段解算耗时与方法", expand_by_default=True):
+        server.gui.add_markdown(timing_markdown(result))
+
+    def update():
+        index = min(int(frame.value), max(0, len(frames)-1))
+        q = dict(zip(request.snapshot.state.joint_names, request.snapshot.state.positions))
+        phase = "initialize"
+        payloads = []
+        if frames:
+            q.update(zip(result["joint_names"], frames[index]))
+            phase = result["phases"][index]
+            payloads = result["attachments_by_frame"][index]
+        failure = result.get("failure_location")
+        diagnostic_snapshot = None
+        if rejected.value and failure and "joint_positions" in failure:
+            q.update(zip(result["joint_names"], failure["joint_positions"]))
+            phase = failure["phase"]+" (REJECTED CANDIDATE)"
+            diagnostic_snapshot = failure.get("snapshot")
+            if diagnostic_snapshot is not None:
+                payloads = diagnostic_snapshot["attachments"]
+        cfg = [q.get(name, 0.) for name in urdf.actuated_joint_names]
+        urdf.update_cfg(cfg)
+        robot.update_cfg(cfg)
+        removed = {event["object_id"] for event in result.get("predicted_scene_events", [])
+                   if event["frame_index"] <= index}
+        diagnostic_ids = {item["object_id"] for item in diagnostic_snapshot["objects"]} if diagnostic_snapshot else None
+        for object_id, node in world.items():
+            node.visible = object_id in diagnostic_ids if diagnostic_ids is not None else object_id not in removed
+        for node in attached.values():
+            node.visible = False
+        for item in payloads:
+            side = item["parent_link"].removesuffix("_tool0")
+            transform = urdf.get_transform(item["parent_link"], urdf.base_link) @ pose_matrix(Pose(**item["tool_to_object"]))
+            attached[side].position = transform[:3, 3]
+            attached[side].wxyz = quaternion(transform)
+            attached[side].visible = True
+        verdict = "已完整通过两箱卸载" if result.get("success") else "未通过完整任务"
+        released = sum(event["phase"].endswith("_release") and event["frame_index"] <= index
+                       for event in result.get("predicted_scene_events", []))
+        duration = result.get("stage_timing_ms", {}).get(phase)
+        duration_text = f"{duration/1000:.3f} 秒" if duration is not None else "旧结果未记录"
+        elbow_height = float(urdf.get_transform("right_link4", urdf.base_link)[2, 3])
+        support_text = (f"抬肘软偏好（阈值 +{request.support_elbow_rise_m:.3f} m，非精确抬升量）"
+                        if request.support_elbow_rise_m > 0 else "原排序（未启用抬肘偏好）")
+        status.content = (f"**本次规划：{verdict}**  \n数据：`{args.result_json.name}`  \n"
+                          f"右臂支撑：{support_text}  \n右肘高度（关节4原点）：**{elbow_height:.3f} m**  \n"
+                          f"当前阶段：**{stage_label(phase)}**  \n"
+                          f"阶段累计耗时：**{duration_text}**  \n求解方式：{stage_method(phase)}  \n"
+                          f"帧 {index+1}/{len(frames)} · 种子 {result.get('seed')}  \n"
+                          f"当前附件 {len(payloads)} · 已释放 {released}/2  \n"
+                          "仅仿真几何播放，不是动力学轨迹。")
+        if not result.get("success"):
+            status.content += f"  \n{result.get('blocked_stage')}: {result.get('blocked_details')}"
+
+    @stage.on_update
+    def on_stage(_):
+        play.value = False
+        rejected.value = False
+        frame.value = result["phases"].index(phase_by_label[stage.value])
+        update()
+
+    @frame.on_update
+    def on_frame(_):
+        update()
+
+    @rejected.on_update
+    def on_rejected(_):
+        play.value = False
+        update()
+
+    @server.on_client_connect
+    def on_client(client):
+        client.camera.position = (-3.2, 3.4, 2.8)
+        client.camera.look_at = (.6, 0, 1.2)
+        client.camera.up_direction = (0, 0, 1)
+
+    update()
+    while True:
+        if play.value and frames:
+            frame.value = (int(frame.value)+1) % len(frames)
+        time.sleep(.04)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot-config", type=Path, default=DEFAULT_ROBOT_CONFIG)
@@ -36,7 +156,12 @@ def main():
     parser.add_argument("--box-fit", type=Path, default=DEFAULT_BOX_FIT)
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--comparison-json", type=Path, nargs="+")
+    parser.add_argument("--result-json", type=Path)
+    parser.add_argument("--run-index", type=int, default=0)
     args = parser.parse_args()
+    if args.result_json:
+        replay_sequential(args)
+        return
     comparisons = {}
     for path in args.comparison_json or []:
         comparisons.update(json.loads(path.read_text()))

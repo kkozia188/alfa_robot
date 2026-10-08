@@ -18,6 +18,7 @@ from v3_wall_ik_benchmark import ACTIVE_JOINTS, canonical_side_suction_quaternio
 from .adapter import task_attachments
 from .contracts import PlanRequest
 from .scene import Pose, SceneStore
+from .distance_metric import joint_distance_weights
 
 
 class CycleBlocked(RuntimeError):
@@ -277,7 +278,7 @@ class FullCyclePlanner(CuroboBackend):
         candidates = values[successful][:, [names.index(name) for name in ACTIVE_JOINTS]].cpu().numpy()
         if len(candidates) == 0:
             raise CycleBlocked("接触IK", "cuRobo没有返回成功候选", report)
-        weights = np.array([5.0] + [1.0] * 14)
+        weights = np.array(joint_distance_weights(ACTIVE_JOINTS))
         candidates = candidates[np.argsort(np.sum(((candidates - self.home_values) * weights) ** 2, axis=1))]
         report["contact_ik_count"] = len(candidates)
         report["contact_candidates"] = candidates.tolist()

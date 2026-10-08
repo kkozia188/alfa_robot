@@ -27,6 +27,7 @@ from .fixtures import tasks
 from .adapter import from_curobo_scene, task_attachments, to_curobo_scene, pose_matrix
 from .scene import RobotState, SceneSnapshot, digest
 from .cache import resource_key
+from .distance_metric import joint_distance_weights
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGET_POSES = WORKSPACE_ROOT / 'generated/current_carry_target_6d.json'
@@ -54,6 +55,10 @@ class CuroboBackend:
         self.args = args
         self.robot = yaml.safe_load(args.robot_config.read_text())
         self.mobile_robot = yaml.safe_load(args.mobile_robot_config.read_text())
+        for robot in (self.robot, self.mobile_robot):
+            cspace = robot.get("robot_cfg", robot)["kinematics"]["cspace"]
+            cspace["cspace_distance_weight"] = joint_distance_weights(
+                cspace["joint_names"], cspace.get("cspace_distance_weight"))
         self.box_fit = json.loads(args.box_fit.read_text())
         self.home = yaml.safe_load(args.named_poses.read_text())["named_poses"]["home"]
         self.front = chassis_front_x(args.urdf, self.home)
@@ -304,7 +309,7 @@ class CuroboBackend:
                 f"箱体稳定性通过{int(stability_valid.sum().item())}个；联合合法0个"
             )
         goals = goals[full_valid]
-        metric = torch.tensor([5.0] + [1.0] * 14, device="cuda")
+        metric = torch.tensor(joint_distance_weights(ACTIVE_JOINTS), device="cuda")
         goals = goals[torch.argsort(torch.sum(((goals - start) * metric) ** 2, dim=1))[:16]]
         torch.cuda.synchronize()
         timings["target_filter"] = (time.perf_counter() - started_filter) * 1000

@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import math
+import unittest
+from pathlib import Path
+
+from generate_matrix import build_matrix
+from matrix_common import (
+    case_slug,
+    classify_failure,
+    evaluate_quality,
+    local_shuttle_poses,
+    read_json,
+)
+
+
+ROOT = Path(__file__).resolve().parent
+
+
+class MatrixToolTests(unittest.TestCase):
+    def test_case_slug_is_stable_and_sign_preserving(self) -> None:
+        self.assertEqual(
+            case_slug(-0.05, 0.1, -2.5),
+            "dx-m050mm_dy-p100mm_yaw-m025d10",
+        )
+
+    def test_failure_classification(self) -> None:
+        self.assertEqual(classify_failure("precontact_ik", "no solution"), "ik_or_reachability")
+        self.assertEqual(
+            classify_failure(
+                "precontact_ik", "candidates=0 bounds=0 collision=0 edge=0"
+            ),
+            "ik_or_reachability",
+        )
+        self.assertEqual(classify_failure("validation", "collision:a<->b"), "collision")
+        self.assertEqual(classify_failure("planner", "timeout"), "planning_timeout")
+        self.assertEqual(classify_failure("retreat", "carried box tilt"), "carried_box_tilt")
+
+    def test_quality_gate_distinguishes_warning_and_failure(self) -> None:
+        thresholds = read_json(ROOT / "default_matrix.json")["thresholds"]
+        status, findings = evaluate_quality(
+            task_core_ms=[3200.0], maximum_bridge_ms=100.0,
+            maximum_tilt_deg=1.0, maximum_joint_step_deg=2.0,
+            joint_flip_events=0, thresholds=thresholds,
+        )
+        self.assertEqual(status, "degraded")
+        self.assertEqual(findings, ["task_core_over_target"])
+        status, findings = evaluate_quality(
+            task_core_ms=[100.0], maximum_bridge_ms=100.0,
+            maximum_tilt_deg=20.0, maximum_joint_step_deg=2.0,
+            joint_flip_events=0, thresholds=thresholds,
+        )
+        self.assertEqual(status, "failed_quality_gate")
+        self.assertIn("carried_box_tilt_failure", findings)
+
+    def test_default_matrix_contains_complete_joint_product(self) -> None:
+        spec = read_json(ROOT / "default_matrix.json")
+        cases = build_matrix(spec)
+        full = [case for case in cases if "full_joint_matrix" in case["phases"]]
+        self.assertEqual(len(full), 3 * 5 * 5)
+        self.assertTrue(any("y_baseline" in case["phases"] for case in cases))
+        self.assertTrue(any("boundary_probe_y" in case["phases"] for case in cases))
+
+    def test_shuttle_route_is_relative_to_robot_yaw(self) -> None:
+        backed, conveyor = local_shuttle_poses(
+            [1.0, 2.0, math.pi / 2.0], 2.35, 1.5
+        )
+        self.assertAlmostEqual(backed[0], 1.0)
+        self.assertAlmostEqual(backed[1], -0.35)
+        self.assertAlmostEqual(conveyor[0], 2.5)
+        self.assertAlmostEqual(conveyor[1], -0.35)
+
+
+if __name__ == "__main__":
+    unittest.main()

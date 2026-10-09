@@ -115,6 +115,26 @@ error variable.
 Use `--family lower` for rows 4-5. The runner fixes the other row family at its
 nominal clearance and rejects changing both families in one experiment.
 
+## Open A Certified Rerun From Terminal Input
+
+Run the unified interactive entry point:
+
+```bash
+cd /home/tim/alfa_robot-motion257-docking-matrix
+/usr/bin/python3 tools/v3_docking_error_matrix/open_single_axis_rerun.py
+```
+
+It prompts for rows 1-3 X clearance, rows 4-5 X clearance, Y, and Yaw, then
+opens the matching complete Rerun. Only one of physical X, Y, or Yaw may differ
+from nominal in one run. X accepts the 121-pair strong-certificate ranges; Y
+accepts only complete locally validated values listed by the prompt; Yaw accepts
+integer degrees from -5 through +5. Use CLI arguments to skip the prompts:
+
+```bash
+/usr/bin/python3 tools/v3_docking_error_matrix/open_single_axis_rerun.py \
+  --upper-x-m 0.86 --lower-x-m 0.60 --y-m 0 --yaw-deg 0
+```
+
 ## Compact Evidence
 
 ```bash

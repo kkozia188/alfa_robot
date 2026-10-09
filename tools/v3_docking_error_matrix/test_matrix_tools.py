@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from matrix_common import (
     read_json,
     x_clearance_variable,
 )
+from open_single_axis_rerun import exact_y_case, parse_yaw, selected_axis
 
 
 ROOT = Path(__file__).resolve().parent
@@ -102,6 +104,26 @@ class MatrixToolTests(unittest.TestCase):
         self.assertAlmostEqual(backed[1], -0.35)
         self.assertAlmostEqual(conveyor[0], 2.5)
         self.assertAlmostEqual(conveyor[1], -0.35)
+
+    def test_unified_rerun_rejects_combined_errors(self) -> None:
+        self.assertEqual(selected_axis(0.86, 0.60, 0.0, 0.0), "x")
+        self.assertEqual(selected_axis(0.85, 0.60, -0.1, 0.0), "y")
+        self.assertEqual(selected_axis(0.85, 0.60, 0.0, 3.0), "yaw")
+        with self.assertRaises(ValueError):
+            selected_axis(0.86, 0.60, 0.01, 0.0)
+        with self.assertRaises(ValueError):
+            selected_axis(0.85, 0.60, 0.01, 1.0)
+
+    def test_unified_rerun_requires_complete_discrete_y_and_integer_yaw(self) -> None:
+        expected = Path(tempfile.gettempdir()) / "case-result.json"
+        value, path = exact_y_case(0.0875, {0.0875: expected})
+        self.assertEqual(value, 0.0875)
+        self.assertEqual(path, expected)
+        with self.assertRaises(ValueError):
+            exact_y_case(0.08, {0.0875: expected})
+        self.assertEqual(parse_yaw(-5.0), -5)
+        with self.assertRaises(ValueError):
+            parse_yaw(2.5)
 
 
 if __name__ == "__main__":

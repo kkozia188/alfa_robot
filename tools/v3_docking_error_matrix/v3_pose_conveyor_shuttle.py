@@ -25,7 +25,12 @@ from v3_scoop_5x5_two_standoff_demo import (
     VEHICLE_FRONT_X_IN_BASE_M,
     base_transition_operation,
 )
-from matrix_common import local_shuttle_poses
+from matrix_common import (
+    MODEL_REVISION,
+    TOOL0_OFFSET_LOCAL_Z_M,
+    UPSTREAM_BASE_COMMIT,
+    local_shuttle_poses,
+)
 
 
 SCHEMA = "alfa.v3_scoop_5x5_conveyor_shuttle_replay.v1"
@@ -723,6 +728,9 @@ def build_replay(
 
     replay = {
         "schema": dual.SCHEMA,
+        "model_revision": MODEL_REVISION,
+        "tool0_offset_local_z_m": TOOL0_OFFSET_LOCAL_Z_M,
+        "upstream_base_commit": UPSTREAM_BASE_COMMIT,
         "conveyor_shuttle_schema": SCHEMA,
         "source_plan_cache": str(cache_path.resolve()),
         "joint_names": names,

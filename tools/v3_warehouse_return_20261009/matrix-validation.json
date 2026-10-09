@@ -1,0 +1,29 @@
+{
+  "schema": "alfa.v322_warehouse_return_matrix.v1",
+  "linear_issue": "MOTION-291",
+  "model_revision": "robot_v3.2.2-suction",
+  "model_urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893",
+  "safety_clearance_m": 0.05,
+  "input_bounds": {
+    "x_m": [-0.5299999972205159, 0.6165234443995848],
+    "y_m": [-0.4065234416201008, 0.4065234416201008],
+    "yaw_deg": [-180.0, 180.0]
+  },
+  "matrix": {
+    "x_samples": 3,
+    "y_samples": 3,
+    "yaw_step_deg": 15,
+    "case_count": 225,
+    "successful_cases": 225
+  },
+  "result": {
+    "all_samples_collision_free": true,
+    "maximum_final_position_error_m": 0.000049082453366059106,
+    "maximum_final_yaw_error_deg": 0.009713662351717882,
+    "maximum_sampled_translation_excess_m": 0.002766202045160815,
+    "observed_maximum_linear_speed_mps": 0.25,
+    "observed_maximum_angular_speed_rad_s": 0.4,
+    "longest_duration_s": 22.999999999999687,
+    "maximum_sample_count": 576
+  }
+}

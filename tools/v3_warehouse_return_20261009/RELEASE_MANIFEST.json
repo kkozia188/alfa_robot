@@ -1,0 +1,92 @@
+{
+  "schema": "alfa.v322_warehouse_return_release.v1",
+  "linear_issue": "MOTION-291",
+  "owner": "Zhang Zelin",
+  "repository": "kkozia188/alfa_robot",
+  "base_branch": "feature/motion-261-v3-mobile-base-conveyor-replay",
+  "source_branch": "feature/motion-291-v322-warehouse-return",
+  "tag": "v3-warehouse-return-navigation-sim-2026.10.09",
+  "model_revision": "robot_v3.2.2-suction",
+  "model_upstream_commit": "165df6fc15dbb754dad1e63b5afa641c843573ac",
+  "model_urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893",
+  "origin": {
+    "vehicle_front_to_contact_m": 0.9,
+    "y_m": 0.0,
+    "yaw_deg": 0.0
+  },
+  "input_bounds": {
+    "x_m": [-0.5299999972205159, 0.6165234443995848],
+    "y_m": [-0.4065234416201008, 0.4065234416201008],
+    "yaw_deg": [-180.0, 180.0]
+  },
+  "validation": {
+    "matrix_cases": 225,
+    "successful_cases": 225,
+    "maximum_final_position_error_m": 0.000049082453366059106,
+    "maximum_final_yaw_error_deg": 0.009713662351717882,
+    "pytest_count": 10,
+    "package_build_passed": true,
+    "ctest_passed": true,
+    "rrd_verify_passed": true,
+    "render_inspection_passed": true
+  },
+  "source_files": [
+    {
+      "path": "ros2_ws/src/alfa_robot_moveit_config/scripts/v3_warehouse_return_demo.py",
+      "size": 39530,
+      "sha256": "55319776390e44063c060b433194a355af726507e2f31b40c4132f6de49be279"
+    },
+    {
+      "path": "ros2_ws/src/alfa_robot_moveit_config/test/test_v3_warehouse_return_demo.py",
+      "size": 5119,
+      "sha256": "e316e15d73ea00199066252c27422e35c99d978fe4e556f5b7cadec4cf38eace"
+    },
+    {
+      "path": "docs/运控/V3仓内闭环回原点Rerun.md",
+      "size": 2803,
+      "sha256": "7b2b126d133c5ee74b2ea0afe941dba9b599e055cf47d6e1434a1b969a3104c9"
+    },
+    {
+      "path": "tools/v3_warehouse_return_20261009/model/alfa-robot-v322-tool0151.urdf",
+      "size": 44973,
+      "sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893"
+    }
+  ],
+  "release_assets": [
+    {
+      "name": "v322-warehouse-return-ready.rrd",
+      "size": 711605,
+      "sha256": "d97d35db2099b7779276061794f5b56861664b9527fbd8904bf3e1dc5898acf9"
+    },
+    {
+      "name": "v322-warehouse-return-full.rrd",
+      "size": 1361244,
+      "sha256": "ebea480dcf7197ed8a16265a44969d79e507393f2a0c314040cd505e9d9f478e"
+    },
+    {
+      "name": "v322-warehouse-return-summary.json",
+      "size": 1870,
+      "sha256": "686b36c0673afde1e0f4fde1229cb706d706a675c7c627bbca78be55ec1f8a6c"
+    },
+    {
+      "name": "v322-warehouse-return-ready.png",
+      "size": 4494245,
+      "sha256": "45def75cc888570aabfdcfc4c23de97c1aaceaff6a6a8d1766285347b2db6aeb"
+    },
+    {
+      "name": "v322-warehouse-return-full.png",
+      "size": 4531567,
+      "sha256": "ebc7054ea8ee734fc3c68a97e88cff56bf6dc4d5cc5a854fbb0ee0d774fca2cb"
+    },
+    {
+      "name": "matrix-validation.json",
+      "size": 969,
+      "sha256": "a61ed79af47c74e9561a1e87d81d89e8e4a3cd95eca43bd9f7dca2ae739d48dd"
+    },
+    {
+      "name": "README.md",
+      "size": 2173,
+      "sha256": "64d9dc2d24f83481f137a6488f1e13fef6565afa81e2f98f305c3f39ba8e849a"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "alfa.v322_warehouse_return_demo.v1",
+  "success": true,
+  "model_revision": "robot_v3.2.2-suction",
+  "model_urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893",
+  "model_link_count": 21,
+  "model_visual_mesh_count": 49,
+  "origin_contract": {
+    "vehicle_front_to_contact_m": 0.9,
+    "base_x_map_m": -0.650000002779484,
+    "y_m": 0.0,
+    "yaw_deg": 0.0
+  },
+  "safety_clearance_m": 0.05,
+  "production_shell_bounds_base": {
+    "minimum": [
+      -0.5083092651367188,
+      -0.5428467914503017,
+      0.015000000000000013
+    ],
+    "maximum": [
+      0.6118831176757813,
+      0.5428468453496162,
+      2.0225186767578127
+    ],
+    "rotation_radius_m": 0.7334765583798991
+  },
+  "certified_input_bounds": {
+    "x_min": -0.5299999972205159,
+    "x_max": 0.6165234443995848,
+    "y_min": -0.4065234416201008,
+    "y_max": 0.4065234416201008,
+    "yaw_min_deg": -180.0,
+    "yaw_max_deg": 180.0
+  },
+  "input_pose": {
+    "x_m": 0.45,
+    "y_m": 0.3,
+    "yaw_deg": 135.0
+  },
+  "plan": {
+    "drive_direction": "reverse",
+    "drive_heading_deg": 33.69006752597978,
+    "straight_distance_m": 0.5408326913195984,
+    "initial_rotation_deg": -101.30993247402021,
+    "final_rotation_deg": -33.69006752597978,
+    "duration_s": 18.279999999999788,
+    "sample_count": 458,
+    "sampled_translation_length_m": 0.5434199614292252
+  },
+  "controller": {
+    "closed_loop": true,
+    "dt_s": 0.04,
+    "max_linear_speed_mps": 0.25,
+    "max_angular_speed_rad_s": 0.4,
+    "max_linear_acceleration_mps2": 0.2,
+    "max_angular_acceleration_rad_s2": 0.3,
+    "observed_max_linear_speed_mps": 0.25,
+    "observed_max_angular_speed_rad_s": 0.39906730428876824
+  },
+  "validation": {
+    "all_samples_collision_free": true,
+    "final_position_error_m": 4.666390707633279e-05,
+    "final_yaw_error_deg": 0.009445049265411143
+  }
+}

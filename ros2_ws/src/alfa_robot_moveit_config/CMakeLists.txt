@@ -573,6 +573,12 @@ if(BUILD_TESTING)
     COMMAND /usr/bin/python3 -m pytest -q
       ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_scoop_dual_sequence.py
   )
+
+  add_test(
+    NAME test_v3_warehouse_return_demo
+    COMMAND /usr/bin/python3 -m pytest -q
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/test_v3_warehouse_return_demo.py
+  )
 endif()
 
 ament_package()
@@ -610,6 +616,7 @@ install(PROGRAMS
   scripts/visualize_v3_reachability_scan_volume.py
   scripts/v3_scoop_5x5_conveyor_demo.py
   scripts/v3_scoop_5x5_dual_rerun.py
+  scripts/v3_warehouse_return_demo.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

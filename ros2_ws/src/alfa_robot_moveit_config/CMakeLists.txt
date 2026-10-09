@@ -309,6 +309,42 @@ ament_target_dependencies(v3_single_arm_box_extract_demo
   visualization_msgs
 )
 
+add_executable(v3_chest_carry_single_arm_box_planner
+  src/v3_chest_carry_single_arm_box_planner.cpp
+)
+
+target_compile_features(v3_chest_carry_single_arm_box_planner PUBLIC cxx_std_17)
+
+target_include_directories(v3_chest_carry_single_arm_box_planner PRIVATE
+  ${OMPL_INCLUDE_DIRS}
+  include
+)
+
+target_link_libraries(v3_chest_carry_single_arm_box_planner
+  ${OMPL_LIBRARIES}
+  "${cpp_typesupport_target}"
+  alfa_robot_motion_scene_adapter
+  alfa_robot_analytic_ik::alfa_robot_analytic_ik
+)
+
+ament_target_dependencies(v3_chest_carry_single_arm_box_planner
+  alfa_robot_analytic_ik
+  geometry_msgs
+  interactive_markers
+  moveit_core
+  moveit_msgs
+  moveit_ros_planning
+  nlohmann_json
+  pluginlib
+  rclcpp
+  sensor_msgs
+  shape_msgs
+  std_msgs
+  std_srvs
+  tf2_ros
+  visualization_msgs
+)
+
 add_executable(v3_dual_arm_5x5_replay_validator
   src/v3_dual_arm_5x5_replay_validator.cpp
 )
@@ -380,6 +416,7 @@ install(TARGETS
   v3_continuous_reachability
   v3_redundant_ik_interactive_demo
   v3_single_arm_box_extract_demo
+  v3_chest_carry_single_arm_box_planner
   v3_dual_arm_5x5_replay_validator
   v3_dual_arm_cartesian_box_demo
   v3_wrist_orientation_probe

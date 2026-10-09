@@ -204,6 +204,12 @@ ros2_ws/RenderOption_*.json
 # Local experiment outputs
 data/
 
+# Isolated V3.2.2 chest-carry project outputs
+/build-chest-carry/
+/install-chest-carry/
+/log-chest-carry/
+/results/v322_chest_carry_fast_base/
+
 # MOTION-38 local one-off/debug scripts
 scripts/ik_benchmark/motion38/visualize_single_down_point_9_orients.py
 

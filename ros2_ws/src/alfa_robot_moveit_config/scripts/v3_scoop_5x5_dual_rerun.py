@@ -330,19 +330,28 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         urdf_text: str,
     ) -> None:
         self.is_dual_sequence = any(
-            operation.get("kind") in {"dual", "dual_conveyor_cycle"}
+            operation.get("kind") in {
+                "dual", "dual_conveyor_cycle",
+                "dual_chest_carry_conveyor_cycle",
+            }
             for operation in operations
         )
         self.has_conveyor_shuttle = any(
             str(operation.get("kind", "")).endswith("conveyor_cycle")
             for operation in operations
         )
+        self.has_chest_carry = any(
+            "chest_carry" in str(operation.get("kind", ""))
+            for operation in operations
+        )
         sequence_title = (
+            "Dual-arm 5x5 chest carry + fast-base shuttle"
+            if self.has_chest_carry else (
             "Dual-arm 5x5 right-conveyor shuttle"
             if self.has_conveyor_shuttle else (
                 "Dual-arm 5x5 row-wise grasp" if self.is_dual_sequence
                 else "Vehicle-front clearance sequential 5x5 grasp"
-            )
+            ))
         )
         super().__init__(
             save,
@@ -583,6 +592,12 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             "single_center": "single center",
             "dual_conveyor_cycle": "dual pickup + right conveyor shuttle",
             "single_conveyor_cycle": "single pickup + right conveyor shuttle",
+            "dual_chest_carry_conveyor_cycle": (
+                "dual pickup + chest carry + fast conveyor shuttle"
+            ),
+            "single_chest_carry_conveyor_cycle": (
+                "single pickup + chest carry + fast conveyor shuttle"
+            ),
         }
         kind = kinds.get(str(operation["kind"]), str(operation["kind"]))
         bridge_seconds = float(metrics["bridge_planning_s"])
@@ -608,6 +623,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                 f"- Base Y: `{self.base_transform[1, 3]:.3f} m`\n"
                 f"- Conveyor route: `back {float(operation.get('backoff_distance_m', 0.0)):.3f} m, "
                 f"right {float(operation.get('right_shuttle_distance_m', 0.0)):.3f} m`\n"
+                f"- Base speed: **{float(operation.get('base_speed_m_s', 0.10)):.2f} m/s**\n"
                 f"- Transition: `{metrics['transition_strategy']}`\n"
                 f"- Bridge search: **{bridge_text}**\n"
                 f"- Task core: **{float(metrics['selected_task_core_s']):.2f}s**\n"
@@ -745,7 +761,10 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             delay = max(self.minimum_frame_interval_s, maximum_delta_deg / speed)
             base_position = self.base_transform[:3, 3]
             base_distance = float(np.linalg.norm(base_position - previous_base_position))
-            delay = max(delay, base_distance / 0.10)
+            base_speed = float(operation.get("base_speed_m_s", 0.10))
+            if base_speed <= 0.0:
+                raise ValueError("base_speed_m_s must be positive")
+            delay = max(delay, base_distance / base_speed)
             if previous_stage and stage != previous_stage:
                 delay = max(delay, 0.18)
             self.advance(min(delay, 0.20))

@@ -21,6 +21,7 @@ from matrix_common import (
     classify_failure,
     evaluate_quality,
     first_failed_attempt,
+    is_single_axis_error,
     pose_contract,
     read_json,
     write_json,
@@ -160,6 +161,10 @@ def fail_result(
 
 def main() -> int:
     args = parse_args()
+    if not is_single_axis_error(args.base_dx_m, args.base_dy_m, args.yaw_deg):
+        raise SystemExit(
+            "single-variable experiment requires at most one nonzero error"
+        )
     spec = read_json(args.spec.resolve())
     thresholds = spec["thresholds"]
     slug = case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg)

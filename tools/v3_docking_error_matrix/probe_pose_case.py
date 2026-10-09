@@ -18,6 +18,7 @@ from matrix_common import (
     case_slug,
     classify_failure,
     first_failed_attempt,
+    is_single_axis_error,
     pose_contract,
     read_json,
     write_json,
@@ -74,6 +75,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if not is_single_axis_error(args.base_dx_m, args.base_dy_m, args.yaw_deg):
+        raise SystemExit(
+            "single-variable experiment requires at most one nonzero error"
+        )
     slug = case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg)
     output_dir = args.output_root.resolve() / slug
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,59 @@
+{
+  "schema": "alfa.v322_docking_error_single_axis_range.v1",
+  "date": "2026-10-09",
+  "model_revision": "robot_v3.2.2-suction",
+  "tool0_offset_local_z_m": 0.151,
+  "experiment_contract": {
+    "x_sweep": "vary dx; fix dy=0 and yaw=0",
+    "y_sweep": "vary dy; fix dx=0 and yaw=0",
+    "yaw_sweep": "vary yaw; fix dx=0 and dy=0",
+    "functional_pass": "complete 25-box, 15-cycle task with successful MoveIt/FCL validation",
+    "degraded": "functional pass with task or whole-body bridge planning at or above 3 seconds",
+    "combined_error_cases_included": false
+  },
+  "complete_functional_ranges": {
+    "x_m": {
+      "passed": [-0.15, 0.0875],
+      "nearest_failed_or_timed_out": [-0.175, 0.10],
+      "negative_failure": "box 13 precontact IK screen failure",
+      "positive_failure": "box 18 pickup search exceeded the 2400-second case limit",
+      "maximum_pass_task_core_ms": 3624.503951,
+      "maximum_pass_bridge_core_ms": 8134.866564
+    },
+    "y_m": {
+      "passed": [-0.12, 0.0875],
+      "nearest_failed": [-0.13, 0.10],
+      "negative_failure": "box 18 Cartesian approach failure",
+      "positive_failure": "group 22+24 carried left box collided with wall box 23",
+      "maximum_pass_task_core_ms": 1133.058475,
+      "maximum_pass_bridge_core_ms": 10023.723334
+    },
+    "yaw_deg": {
+      "passed": [-5.0, 5.0],
+      "nearest_failed": [-5.15625, 5.3125],
+      "negative_failure": "dual carried right box collided with wall box 23 during backoff",
+      "positive_failure": "dual carried left box collided with wall box 23 during backoff",
+      "certified_baseline_task_core_max_ms": 3274.862605
+    }
+  },
+  "performance_conclusion": {
+    "all_selected_task_cores_below_3s": false,
+    "all_whole_body_bridges_below_3s": false,
+    "nominal_maximum_bridge_core_ms": 5616.908085,
+    "statement": "Functional ranges do not meet an all-fresh-planning-below-3s guarantee."
+  },
+  "tilt_conclusion": {
+    "failure_observed": false,
+    "warning_gate_deg": 5.0,
+    "failure_gate_deg": 15.0
+  },
+  "official_evidence_coverage": {
+    "result_rows": 107,
+    "screen_rows": 62,
+    "new_complete_case_rows": 23,
+    "imported_complete_baseline_rows": 22,
+    "combined_error_rows": 0,
+    "checked_frames": 848811,
+    "checked_edge_samples": 32267
+  }
+}

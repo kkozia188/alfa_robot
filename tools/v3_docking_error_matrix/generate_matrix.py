@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import itertools
 from pathlib import Path
 from typing import Any
 
@@ -60,11 +59,6 @@ def build_matrix(spec: dict[str, Any]) -> list[dict[str, Any]]:
             cases, yaw["dx_m"], yaw["dy_m"], yaw_deg,
             "yaw_baseline", "import", yaw["source"],
         )
-    joint = spec["full_joint_matrix"]
-    for dx_m, dy_m, yaw_deg in itertools.product(
-        joint["dx_values_m"], joint["dy_values_m"], joint["yaw_values_deg"]
-    ):
-        add_case(cases, dx_m, dy_m, yaw_deg, "full_joint_matrix", "full")
     boundary = spec["boundary_probe"]
     for dx_m in boundary["x_values_m"]:
         add_case(cases, dx_m, 0.0, 0.0, "boundary_probe_x", "screen")

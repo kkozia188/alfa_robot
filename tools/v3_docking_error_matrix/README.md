@@ -1,8 +1,8 @@
 # V3.2.2 Docking Error Matrix
 
-This is the independent batch experiment project for Linear `MOTION-257`.
-It extends the existing certified X-clearance and Yaw data into Y-offset and
-combined `x/y/yaw` planning experiments without overwriting either baseline.
+This is the independent single-variable experiment project for Linear
+`MOTION-257`. X, Y, and Yaw are scanned separately; the other two errors are
+always fixed at zero.
 
 ## Coordinates
 
@@ -18,7 +18,7 @@ map-left. Yaw is counter-clockwise in degrees.
 
 ## Dataset Design
 
-The default specification contains four distinct datasets:
+The default specification contains three independent datasets:
 
 1. **Certified X baseline**: `dx=-0.05..+0.05 m`, 1 cm steps. These 11 aligned
    upper/lower cases are imported from the MOTION-261 121-pair certificate.
@@ -26,10 +26,6 @@ The default specification contains four distinct datasets:
    cases must be screened and then run as complete 25-box tasks.
 3. **Existing Yaw baseline**: `-5..+5 deg`, 1 degree steps from the current
    MOTION-257 certificate.
-4. **Complete joint matrix**: `3 X x 5 Y x 5 Yaw = 75` complete cases over
-   `dx={-5,0,+5} cm`, `dy={-10,-5,0,+5,+10} cm`, and
-   `yaw={-5,-2.5,0,+2.5,+5} deg`.
-
 A wider boundary probe covers the current experiment limits of `dx +/-40 cm`,
 `dy +/-50 cm`, and `yaw +/-15 deg`. It is deliberately outside the intended certification domain
 so that the experiment records real reachability, collision, and timeout
@@ -86,17 +82,19 @@ Generate pass/fail brackets and suggested bisection cases:
   --output data/ik_benchmark/v3_docking_error_matrix/release/boundaries.json
 ```
 
-## Run A Complete Case
+## Run A Complete Single-Variable Case
 
 ```bash
 /usr/bin/python3 tools/v3_docking_error_matrix/run_pose_case.py \
-  --base-dx-m 0.05 --base-dy-m 0.10 --yaw-deg 5 \
+  --base-dx-m 0 --base-dy-m 0.0875 --yaw-deg 0 \
   --baseline-cache /home/tim/alfa_robot-alfa_v3_dev/data/ik_benchmark/v3_scoop_5x5/releases/2026-10-01-v322-tool0151-mobile-base-conveyor/v322-plan-cache.json \
   --output-root data/ik_benchmark/v3_docking_error_matrix/full
 ```
 
 Only `case-result.json` values with all 25 boxes, 15 cycles, 10 simultaneous
 dual cycles, and successful MoveIt/FCL validation count as complete results.
+Official batch execution additionally rejects cases with more than one nonzero
+error variable.
 
 ## Compact Evidence
 
@@ -116,6 +114,6 @@ This project evaluates planning robustness. It does not certify localization,
 navigation execution, suction hardware, or the physical accuracy of a docking
 controller.
 
-The latest empirically bounded result is documented in `MAXIMUM_RANGE.md` and
-`MAXIMUM_RANGE.json`. Keep single-axis limits separate from the smaller joint
-box whose eight corners were all validated.
+The latest result is documented in `SINGLE_AXIS_RANGE.md` and
+`SINGLE_AXIS_RANGE.json`. Historical combined-error runs are excluded from
+official aggregation and evidence.

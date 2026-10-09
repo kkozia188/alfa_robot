@@ -1,28 +1,23 @@
 # Preliminary Result: 2026-10-08
 
-This is the first batch from the independent `MOTION-257` X/Y/Yaw matrix
-project. It validates the experiment machinery and records real failure modes;
-it is not yet the final 75-case complete joint-matrix certificate.
+This is the first batch from the independent `MOTION-257` single-variable
+X/Y/Yaw project. It validates the experiment machinery and records real
+failure modes. Only one error variable is nonzero in official results.
 
 ## Dataset State
 
-- Designed unique poses after aggressive expansion: `141`.
+- Official single-axis poses after aggressive expansion: `73`.
 - Imported complete baselines: `11` aligned X cases from MOTION-261 and `11`
   Yaw cases from MOTION-257.
 - Newly screened Y cases: `21`, from `-0.20 m` to `+0.20 m` in `0.02 m`
   steps.
-- Newly attempted complete cases: `4`.
-- Aggregate result rows after scope-aware de-duplication: `47`.
+- New complete single-axis case rows: `23`.
+- Official aggregate rows after scope-aware de-duplication: `107`.
 - Existing and new full validations represented by the aggregate:
-  `629,105` MoveIt/FCL frames and `23,783` interpolated edges.
+  `848,811` MoveIt/FCL frames and `32,267` interpolated edges.
 
-The default full joint matrix contains `75` cases:
-
-```text
-dx   = {-0.05, 0, +0.05} m
-dy   = {-0.10, -0.05, 0, +0.05, +0.10} m
-yaw  = {-5, -2.5, 0, +2.5, +5} deg
-```
+Historical combined-error runs are excluded from the official success rate,
+range report, and evidence package.
 
 ## Y Baseline Screen
 
@@ -77,16 +72,6 @@ group `22+24`, frame `331`:
 edge collision:dual_carried_box_left<->wall_box_23
 ```
 
-### Joint effects
-
-`dx=+0.05 m, dy=+0.10 m, yaw=+5 deg` fails on box 23 with no precontact IK for
-any tested front/top suction and lift combination, even though `dy=+0.10 m`
-alone passes the pickup screen.
-
-The opposite corner `dx=-0.05 m, dy=-0.10 m, yaw=-5 deg` passes the original
-seven-group screen but fails the complete planner at box 13. The sentinel set
-was consequently expanded to include group 9 / box 13.
-
 ## Failure Classes Observed
 
 - `ik_or_reachability`;
@@ -105,15 +90,14 @@ classified if this occurs; no synthetic tilt failure is reported.
 1. Run complete tasks at `dy=-0.14, -0.10, +0.05 m` to distinguish screen and
    full-task safe regions.
 2. Bisect the Y brackets near `-0.15 m` and `+0.11 m`.
-3. Screen all 75 joint-matrix points, then execute complete tasks for every
-   screen pass and every point adjacent to a pass/fail boundary.
-4. Optimize repeated dominant failures and rerun the same immutable matrix for
+3. Complete denser independent X/Y/Yaw samples around each pass/fail boundary.
+4. Optimize repeated dominant failures and rerun the same immutable single-axis matrix for
    before/after success-rate comparison.
 
-The task remains `In Progress` until the full joint matrix and optimization
+The task remains `In Progress` until the independent sweeps and optimization
 comparison are complete.
 
-## Aggressive Maximum-Range Search: 2026-10-09
+## Aggressive Single-Axis Range Search: 2026-10-09
 
 Complete single-axis functional ranges have been bounded to:
 
@@ -122,12 +106,4 @@ Complete single-axis functional ranges have been bounded to:
 - Yaw: `-5.0 .. +5.0 deg`, with nearest failures at
   `-5.15625/+5.3125 deg`.
 
-All eight corners of the joint box below complete 25/25 and MoveIt/FCL:
-
-```text
-|dx| <= 7.5 mm, |dy| <= 12.5 mm, |yaw| <= 0.75 deg
-```
-
-The next nested box (`8.75 mm / 16.25 mm / 0.875 deg`) fails on all four
-positive-Yaw corners because the left carried box collides with box 23 during
-base backoff. Details are in `MAXIMUM_RANGE.md` and `MAXIMUM_RANGE.json`.
+Details are in `SINGLE_AXIS_RANGE.md` and `SINGLE_AXIS_RANGE.json`.

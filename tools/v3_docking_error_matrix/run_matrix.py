@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from matrix_common import read_json, write_json
+from matrix_common import is_single_axis_error, read_json, write_json
 
 
 ROOT = Path(__file__).resolve().parent
@@ -45,6 +45,10 @@ def select_cases(matrix: dict[str, Any], args: argparse.Namespace) -> list[dict[
     ids = {value for value in args.case_ids.split(",") if value}
     selected = []
     for case in matrix["cases"]:
+        if not is_single_axis_error(
+            float(case["dx_m"]), float(case["dy_m"]), float(case["yaw_deg"])
+        ):
+            raise ValueError(f"official matrix contains a combined-error case: {case}")
         if ids and case["case_id"] not in ids:
             continue
         if phases and not phases.intersection(case["phases"]):

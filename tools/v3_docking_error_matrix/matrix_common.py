@@ -73,6 +73,10 @@ def pose_contract(dx_m: float, dy_m: float, yaw_deg: float) -> dict[str, Any]:
     }
 
 
+def is_single_axis_error(dx_m: float, dy_m: float, yaw_deg: float) -> bool:
+    return sum(abs(value) > 1e-12 for value in (dx_m, dy_m, yaw_deg)) <= 1
+
+
 def local_shuttle_poses(
     pickup_pose: list[float], backoff_m: float, right_m: float
 ) -> tuple[list[float], list[float]]:
@@ -112,6 +116,8 @@ def classify_failure(stage: str, reason: str) -> str:
         return "collision"
     if "contact" in text or "suction" in text:
         return "contact_or_suction"
+    if "approach" in text:
+        return "approach"
     if "retreat" in text or "extract" in text:
         return "retreat"
     if "transition" in text or "bridge" in text:

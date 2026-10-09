@@ -9,7 +9,7 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
-from matrix_common import sha256, write_json
+from matrix_common import is_single_axis_error, read_json, sha256, write_json
 
 
 PATTERNS = (
@@ -23,15 +23,16 @@ PATTERNS = (
     "probes/*/probe-result.json",
     "full/*/case-result.json",
     "full/*/v322-pose-conveyor-validation.json",
-    "aggressive-*/**/probe-result.json",
-    "aggressive-*/**/case-result.json",
-    "aggressive-*/**/v322-pose-conveyor-validation.json",
+    "aggressive-screen/**/probe-result.json",
+    "aggressive-refine/**/probe-result.json",
+    "aggressive-full/**/case-result.json",
+    "aggressive-full/**/v322-pose-conveyor-validation.json",
     "release/matrix-summary.json",
     "release/matrix-results.csv",
     "release/REPORT.md",
     "release/y-boundaries.json",
-    "release/MAXIMUM_RANGE.json",
-    "release/MAXIMUM_RANGE.md",
+    "release/SINGLE_AXIS_RANGE.json",
+    "release/SINGLE_AXIS_RANGE.md",
 )
 
 
@@ -39,7 +40,28 @@ def collect(root: Path) -> list[Path]:
     files: set[Path] = set()
     for pattern in PATTERNS:
         files.update(path for path in root.glob(pattern) if path.is_file())
-    return sorted(files)
+    output = []
+    for path in sorted(files):
+        result_path = next(
+            (
+                candidate for candidate in (
+                    path.parent / "case-result.json",
+                    path.parent / "probe-result.json",
+                ) if candidate.is_file()
+            ),
+            None,
+        )
+        if result_path is not None:
+            result = read_json(result_path)
+            error = result.get("error", {})
+            if not is_single_axis_error(
+                float(error.get("dx_m", 0.0)),
+                float(error.get("dy_m", 0.0)),
+                float(error.get("yaw_deg", 0.0)),
+            ):
+                continue
+        output.append(path)
+    return output
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,7 +78,7 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     release_dir = root / "release"
     release_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("MAXIMUM_RANGE.json", "MAXIMUM_RANGE.md"):
+    for name in ("SINGLE_AXIS_RANGE.json", "SINGLE_AXIS_RANGE.md"):
         shutil.copyfile(Path(__file__).resolve().parent / name, release_dir / name)
     files = collect(root)
     entries: list[dict[str, Any]] = [{
@@ -65,15 +87,15 @@ def main() -> int:
         "sha256": sha256(path),
     } for path in files]
     manifest = {
-        "schema": "alfa.v322_docking_error_maximum_range_evidence.v1",
-        "scope": "baselines, aggressive screens, complete-case boundaries and joint-box validation",
+        "schema": "alfa.v322_docking_error_single_axis_evidence.v1",
+        "scope": "independent X, Y, and Yaw sweeps with other variables fixed at zero",
         "data_root": "v3_docking_error_matrix",
         "file_count": len(entries),
         "files": entries,
     }
     manifest_path = output / "PRELIMINARY_MANIFEST.json"
     write_json(manifest_path, manifest)
-    archive = output / "v322-docking-error-maximum-range-2026.10.09.tar.gz"
+    archive = output / "v322-docking-error-single-axis-2026.10.09.tar.gz"
     with tarfile.open(archive, "w:gz") as stream:
         stream.add(manifest_path, arcname=manifest_path.name)
         for path in files:
@@ -82,7 +104,7 @@ def main() -> int:
                 arcname=str(Path("v3_docking_error_matrix") / path.relative_to(root)),
             )
     write_json(output / "ARCHIVE.json", {
-        "schema": "alfa.v322_docking_error_maximum_range_archive.v1",
+        "schema": "alfa.v322_docking_error_single_axis_archive.v1",
         "name": archive.name,
         "size": archive.stat().st_size,
         "sha256": sha256(archive),

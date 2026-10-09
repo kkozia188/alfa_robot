@@ -12,6 +12,7 @@ from matrix_common import (
     classify_failure,
     evaluate_quality,
     local_shuttle_poses,
+    is_single_axis_error,
     read_json,
 )
 
@@ -36,6 +37,10 @@ class MatrixToolTests(unittest.TestCase):
         )
         self.assertEqual(classify_failure("validation", "collision:a<->b"), "collision")
         self.assertEqual(classify_failure("planner", "timeout"), "planning_timeout")
+        self.assertEqual(
+            classify_failure("cartesian_approach", "no continuous solution"),
+            "approach",
+        )
         self.assertEqual(classify_failure("retreat", "carried box tilt"), "carried_box_tilt")
 
     def test_quality_gate_distinguishes_warning_and_failure(self) -> None:
@@ -55,11 +60,14 @@ class MatrixToolTests(unittest.TestCase):
         self.assertEqual(status, "failed_quality_gate")
         self.assertIn("carried_box_tilt_failure", findings)
 
-    def test_default_matrix_contains_complete_joint_product(self) -> None:
+    def test_default_matrix_is_strictly_single_axis(self) -> None:
         spec = read_json(ROOT / "default_matrix.json")
         cases = build_matrix(spec)
-        full = [case for case in cases if "full_joint_matrix" in case["phases"]]
-        self.assertEqual(len(full), 3 * 5 * 5)
+        self.assertEqual(len(cases), 73)
+        self.assertTrue(all(
+            is_single_axis_error(case["dx_m"], case["dy_m"], case["yaw_deg"])
+            for case in cases
+        ))
         self.assertTrue(any("y_baseline" in case["phases"] for case in cases))
         self.assertTrue(any("boundary_probe_y" in case["phases"] for case in cases))
 

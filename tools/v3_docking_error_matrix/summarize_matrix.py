@@ -8,7 +8,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from matrix_common import read_json, write_json
+from matrix_common import is_single_axis_error, read_json, write_json
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,7 +71,8 @@ def main() -> int:
                 ),
                 "joint_flip_events": int(trajectory.get("joint_flip_events", 0)),
             }
-            row_map[(row["case_id"], row["scope"])] = row
+            if is_single_axis_error(row["dx_m"], row["dy_m"], row["yaw_deg"]):
+                row_map[(row["case_id"], row["scope"])] = row
     if args.imported_baselines:
         imported = read_json(args.imported_baselines.resolve())
         for item in imported["rows"]:
@@ -97,7 +98,8 @@ def main() -> int:
                 "maximum_joint_step_deg": 0.0,
                 "joint_flip_events": 0,
             }
-            row_map[(row["case_id"], row["scope"])] = row
+            if is_single_axis_error(row["dx_m"], row["dy_m"], row["yaw_deg"]):
+                row_map[(row["case_id"], row["scope"])] = row
     rows = sorted(
         row_map.values(), key=lambda row: (
             row["scope"], row["yaw_deg"], row["dy_m"], row["dx_m"]

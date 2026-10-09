@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate probe and complete-case results into JSON, CSV, and Markdown."""
+"""Aggregate independent Y/Yaw probe and complete-case results."""
 
 from __future__ import annotations
 
@@ -36,6 +36,8 @@ def main() -> int:
                 continue
             result = read_json(path)
             error = result.get("error", {})
+            if abs(float(error.get("dx_m", 0.0))) > 1e-12:
+                continue
             planning = result.get("planning", {})
             validation = result.get("validation", {})
             trajectory = result.get("trajectory", {})
@@ -76,6 +78,8 @@ def main() -> int:
     if args.imported_baselines:
         imported = read_json(args.imported_baselines.resolve())
         for item in imported["rows"]:
+            if item.get("x_family"):
+                continue
             row = {
                 "case_id": item["case_id"],
                 "scope": "imported_" + str(item["source"]),
@@ -135,7 +139,7 @@ def main() -> int:
             writer.writeheader()
             writer.writerows(rows)
     lines = [
-        "# V3.2.2 Docking Error Matrix",
+        "# V3.2.2 Independent Y/Yaw Results",
         "",
         "## Coverage",
         "",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a fast high-risk-group screen for one X/Y/Yaw docking-error case."""
+"""Run a fast high-risk-group screen for one Y or Yaw docking-error case."""
 
 from __future__ import annotations
 
@@ -75,6 +75,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if abs(args.base_dx_m) > 1e-12:
+        raise SystemExit(
+            "X uses run_x_clearance_sweep.py; common base dx is not official"
+        )
     if not is_single_axis_error(args.base_dx_m, args.base_dy_m, args.yaw_deg):
         raise SystemExit(
             "single-variable experiment requires at most one nonzero error"

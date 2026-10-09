@@ -1,78 +1,84 @@
-# Independent X, Y, and Yaw Ranges
+# Independent X-Clearance, Y, and Yaw Ranges
 
 Date: 2026-10-09
 
-Each experiment varies exactly one base-pose error. The other two variables
-remain zero. Historical combined-error cases are not included in this report.
+X is the physical distance from the vehicle-front contact plane to the box-front
+contact plane. It is not a common base `dx`. Y and Yaw remain independent base
+pose errors. Inputs finer than 1 cm are rounded half-up to the nearest centimeter.
 
-“Pass” means the complete 25-box task, 15 cycles, and complete MoveIt/FCL frame
-plus interpolated-edge validation.
+“Complete” means all 25 boxes, 15 cycles, 10 simultaneous dual-arm cycles, and
+complete MoveIt/FCL frame plus interpolated-edge validation.
 
-| Experiment | Complete functional range | Nearest tested failure |
+| Experiment | Complete functional range | Nearest tested failures |
 | --- | ---: | ---: |
-| X, with Y=0/Yaw=0 | `-0.150 .. +0.0875 m` | `-0.175 / +0.100 m` |
-| Y, with X=0/Yaw=0 | `-0.120 .. +0.0875 m` | `-0.130 / +0.100 m` |
-| Yaw, with X=0/Y=0 | `-5.0 .. +5.0 deg` | `-5.15625 / +5.3125 deg` |
+| Rows 1-3 X clearance; rows 4-5 fixed at 0.60 m | `0.74 .. 1.02 m` | `0.73 / 1.03 m` |
+| Rows 4-5 X clearance; rows 1-3 fixed at 0.85 m | `0.36 .. 0.79 m` | `0.35 / 0.80 m` |
+| Y; X clearances nominal and Yaw=0 | `-0.120 .. +0.0875 m` | `-0.130 / +0.100 m` |
+| Yaw; X clearances nominal and Y=0 | `-5.0 .. +5.0 deg` | `-5.15625 / +5.3125 deg` |
 
-Positive X moves the vehicle closer to the wall. Positive Y is map-left and
-positive Yaw is counter-clockwise.
+## X Guarantee Levels
 
-## X Sweep
+The recommended input ranges remain:
 
-- `X=-0.150 m`: complete 25/25 and FCL pass; maximum task core `1.040 s`,
-  maximum fresh bridge `6.131 s`.
-- `X=-0.175 m`: box 13 has no precontact IK in the enhanced screen.
-- `X=+0.0875 m`: complete pass; maximum task core `3.625 s`, maximum bridge
-  `8.135 s`.
-- `X=+0.100 m`: box 18 pickup search exceeds the 2400-second case limit.
+- rows 1-3: `0.80..0.90 m`, nominal `0.85 m`;
+- rows 4-5: `0.55..0.65 m`, nominal `0.60 m`.
 
-## Y Sweep
+These ranges have the strongest evidence: all `121` cross-combinations passed,
+with `3,288,544` validated frames, `123,074` interpolated edges, and all `275`
+selected pickup task cores below 3 seconds; maximum `2.697 s`.
+
+The independent one-centimeter extension establishes wider functional limits:
+
+- rows 1-3 at `0.74..1.02 m`; `0.74..0.76 m` completes but raises a carried-box
+  tilt warning, so the posture-qualified interval is `0.77..1.02 m`;
+- rows 4-5 at `0.36..0.79 m`; posture remains below the warning gate, but
+  `0.51/0.52 m` exceed 3 seconds in selected task-core planning. The contiguous
+  posture-plus-task-core-under-3s interval around nominal is `0.53..0.79 m`.
+
+Every fresh extension run has at least one whole-body entry bridge over 3
+seconds. The wider intervals are functional robustness results, not an
+all-planning-under-3s guarantee. Details are in `X_CLEARANCE_RANGE.md`.
+
+## X Boundary Failures
+
+- rows 1-3 at `0.73 m`: `left_link7 <-> warehouse_right_wall` during
+  post-release stow;
+- rows 1-3 at `1.03 m`: box 13 has no precontact IK;
+- rows 4-5 at `0.35 m`: both link7 bodies collide with the warehouse rear wall
+  at the 17+19 transition endpoint;
+- rows 4-5 at `0.80 m`: box 21 top-suction precontact has no IK.
+
+## Y Sweep and Asymmetry
 
 - `Y=-0.120 m`: complete pass; maximum task core `1.037 s`, maximum bridge
-  `10.024 s`.
-- `Y=-0.130 m`: box 18 Cartesian approach fails.
+  `10.024 s`;
+- `Y=-0.130 m`: box 18 right-arm Cartesian approach fails;
 - `Y=+0.0875 m`: complete pass; maximum task core `1.133 s`, maximum bridge
-  `8.278 s`.
+  `8.278 s`;
 - `Y=+0.100 m`: group 22+24 collides
   `dual_carried_box_left <-> wall_box_23`.
 
+Y is not symmetric because the task policy is not mirrored: center boxes
+3/8/13/18 use the right arm, box 23 uses the left arm, the removal order is
+fixed, and every loaded cycle moves to robot-right. `Y_ASYMMETRY.md` records the
+code contract and the different positive/negative failure mechanisms.
+
 ## Yaw Sweep
 
-- Existing complete baseline: every integer Yaw from `-5 deg` through
-  `+5 deg` passes.
-- `Yaw=-5.15625 deg`: backoff collides
-  `dual_carried_box_right <-> wall_box_23`.
-- `Yaw=+5.3125 deg`: backoff collides
-  `dual_carried_box_left <-> wall_box_23`.
-
-## Planning-Time Qualification
-
-The functional ranges do not satisfy an all-planning-below-3-seconds claim:
-
-- the nominal zero-error case has a `5.617 s` fresh whole-body bridge;
-- the positive X pass boundary has a `3.625 s` selected task core;
-- the Y pass boundaries have fresh bridges up to `10.024 s`;
-- the existing Yaw sweep has one selected task core at `3.275 s`.
-
-These are functional ranges, not performance-qualified ranges.
-
-## Tilt
-
-No carried-box tilt failure was observed. The 5-degree warning and 15-degree
-failure gates remain active; no synthetic failure is reported.
+- every integer Yaw from `-5 deg` through `+5 deg` completes;
+- `Yaw=-5.15625 deg`: carried right box collides with wall box 23 during backoff;
+- `Yaw=+5.3125 deg`: carried left box collides with wall box 23 during backoff.
 
 ## Evidence Coverage
 
-- official result rows: `107`;
-- screen rows: `62`;
-- new complete single-axis cases: `23`;
-- imported complete X/Yaw baselines: `22`;
-- combined-error rows: `0`;
-- MoveIt/FCL frames: `848,811`;
-- interpolated edge samples: `32,267`.
+- physical X rows: `77` (`73` complete, `4` failed), `1,989,100` frames and
+  `77,072` interpolated edges;
+- independent Y/Yaw rows: `75`, `467,459` frames and `17,598` interpolated
+  edges;
+- total official rows: `152`; common-`dx` X and combined-error rows: `0`;
+- joint flips in successful X extension cases: `0`;
+- carried-box tilt failures: `0`; X warning maximum: `6.093 deg`.
 
-## Scope
-
-The values are sampled empirical ranges for the current task order, warehouse,
-box wall, route, robot model, and planner. They do not imply any combined-error
-guarantee and do not certify navigation, localization, or hardware execution.
+These are sampled empirical ranges for the current robot model, task order,
+warehouse, box wall, suction modes, and conveyor route. They do not certify
+navigation/localization error, combined errors, or physical hardware execution.

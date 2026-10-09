@@ -18,13 +18,17 @@ from matrix_common import (
     TOOL0_OFFSET_LOCAL_Z_M,
     UPSTREAM_BASE_COMMIT,
     case_slug,
+    clearance_slug,
+    clearance_pose_contract,
     classify_failure,
     evaluate_quality,
     first_failed_attempt,
     is_single_axis_error,
     pose_contract,
+    quantize_front_clearance,
     read_json,
     write_json,
+    x_clearance_variable,
 )
 
 
@@ -99,6 +103,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-dx-m", type=float, required=True)
     parser.add_argument("--base-dy-m", type=float, required=True)
     parser.add_argument("--yaw-deg", type=float, required=True)
+    parser.add_argument("--upper-front-clearance-m", type=float)
+    parser.add_argument("--lower-front-clearance-m", type=float)
     parser.add_argument("--baseline-cache", type=Path, required=True)
     parser.add_argument("--continuation-cache", type=Path)
     parser.add_argument("--output-root", type=Path, required=True)
@@ -111,6 +117,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage-wall-timeout-s", type=float, default=1800.0)
     parser.add_argument("--resume", action="store_true")
     return parser.parse_args()
+
+
+def is_clearance_case(args: argparse.Namespace) -> bool:
+    return (
+        args.upper_front_clearance_m is not None
+        or args.lower_front_clearance_m is not None
+    )
+
+
+def experiment_case_id(args: argparse.Namespace) -> str:
+    if is_clearance_case(args):
+        return clearance_slug(
+            args.upper_front_clearance_m, args.lower_front_clearance_m
+        )
+    return case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg)
+
+
+def experiment_contract(args: argparse.Namespace) -> dict[str, Any]:
+    if is_clearance_case(args):
+        return clearance_pose_contract(
+            args.upper_front_clearance_m, args.lower_front_clearance_m
+        )
+    return pose_contract(args.base_dx_m, args.base_dy_m, args.yaw_deg)
+
+
+def validate_experiment_args(args: argparse.Namespace) -> None:
+    if is_clearance_case(args):
+        if args.upper_front_clearance_m is None or args.lower_front_clearance_m is None:
+            raise SystemExit("both front-clearance arguments are required")
+        if not 0.40 <= args.upper_front_clearance_m <= 1.30:
+            raise SystemExit("upper front clearance must be in [0.40, 1.30] m")
+        if not 0.30 <= args.lower_front_clearance_m <= 1.00:
+            raise SystemExit("lower front clearance must be in [0.30, 1.00] m")
+        if any(abs(value) > 1e-12 for value in (
+            args.base_dx_m, args.base_dy_m, args.yaw_deg
+        )):
+            raise SystemExit("front-clearance experiments require dx=dy=yaw=0")
+        try:
+            x_clearance_variable(
+                args.upper_front_clearance_m, args.lower_front_clearance_m
+            )
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
+    elif abs(args.base_dx_m) > 1e-12:
+        raise SystemExit(
+            "X uses row-family front-clearance arguments; common base dx is not official"
+        )
+    elif not is_single_axis_error(args.base_dx_m, args.base_dy_m, args.yaw_deg):
+        raise SystemExit(
+            "single-variable experiment requires at most one nonzero error"
+        )
 
 
 def fail_result(
@@ -136,11 +193,11 @@ def fail_result(
     )
     write_json(output_dir / "case-result.json", {
         "schema": "alfa.v322_docking_error_case.v1",
-        "case_id": case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg),
+        "case_id": experiment_case_id(args),
         "model_revision": MODEL_REVISION,
         "tool0_offset_local_z_m": TOOL0_OFFSET_LOCAL_Z_M,
         "upstream_base_commit": UPSTREAM_BASE_COMMIT,
-        **pose_contract(args.base_dx_m, args.base_dy_m, args.yaw_deg),
+        **experiment_contract(args),
         "status": "failed",
         "failed_stage": stage,
         "failure_class": failure_class,
@@ -152,7 +209,7 @@ def fail_result(
         "wall_timings_ms": timings,
     })
     print(
-        f"CASE failed case={case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg)} "
+        f"CASE failed case={experiment_case_id(args)} "
         f"stage={stage} class={failure_class}",
         flush=True,
     )
@@ -161,13 +218,19 @@ def fail_result(
 
 def main() -> int:
     args = parse_args()
-    if not is_single_axis_error(args.base_dx_m, args.base_dy_m, args.yaw_deg):
-        raise SystemExit(
-            "single-variable experiment requires at most one nonzero error"
-        )
+    if is_clearance_case(args):
+        if args.upper_front_clearance_m is not None:
+            args.upper_front_clearance_m = quantize_front_clearance(
+                args.upper_front_clearance_m
+            )
+        if args.lower_front_clearance_m is not None:
+            args.lower_front_clearance_m = quantize_front_clearance(
+                args.lower_front_clearance_m
+            )
+    validate_experiment_args(args)
     spec = read_json(args.spec.resolve())
     thresholds = spec["thresholds"]
-    slug = case_slug(args.base_dx_m, args.base_dy_m, args.yaw_deg)
+    slug = experiment_case_id(args)
     output_dir = args.output_root.resolve() / slug
     output_dir.mkdir(parents=True, exist_ok=True)
     cache_path = output_dir / "v322-pose-plan-cache.json"
@@ -186,6 +249,11 @@ def main() -> int:
         "--output-dir", str(output_dir),
         "--timeout-s", f"{args.pickup_attempt_timeout_s:.3f}",
     ]
+    if is_clearance_case(args):
+        pickup.extend((
+            "--upper-front-clearance-m", f"{args.upper_front_clearance_m:.6f}",
+            "--lower-front-clearance-m", f"{args.lower_front_clearance_m:.6f}",
+        ))
     if args.continuation_cache:
         pickup.extend((
             "--continuation-cache", str(args.continuation_cache.resolve())
@@ -204,6 +272,11 @@ def main() -> int:
         "--output-dir", str(output_dir),
         "--timeout-s", f"{args.bridge_attempt_timeout_s:.3f}",
     ]
+    if is_clearance_case(args):
+        cache.extend((
+            "--upper-front-clearance-m", f"{args.upper_front_clearance_m:.6f}",
+            "--lower-front-clearance-m", f"{args.lower_front_clearance_m:.6f}",
+        ))
     if args.resume:
         cache.append("--resume")
     commands.append(("bridge_planning", cache))
@@ -274,7 +347,7 @@ def main() -> int:
 
     cache_value = read_json(cache_path)
     replay = read_json(replay_path)
-    expected = pose_contract(args.base_dx_m, args.base_dy_m, args.yaw_deg)
+    expected = experiment_contract(args)
     observed = {
         tuple(float(value) for value in task["payload"]["base_pose_map"])
         for task in cache_value["tasks"]

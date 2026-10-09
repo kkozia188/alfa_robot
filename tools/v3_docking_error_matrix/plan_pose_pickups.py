@@ -11,6 +11,12 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from matrix_common import (
+    base_x_for_front_clearance,
+    quantize_front_clearance,
+    x_clearance_variable,
+)
+
 
 SCRIPT = (
     Path(__file__).resolve().parent.parent
@@ -87,7 +93,7 @@ def run_candidate(
     height: float,
     mode: str,
     removed: set[int],
-    base_dx_m: float,
+    base_x_m: float,
     base_dy_m: float,
     yaw_rad: float,
     ik_seed: str,
@@ -98,12 +104,11 @@ def run_candidate(
     scan = candidate_dir / f"box-{box_id:02d}.csv"
     result.unlink(missing_ok=True)
     scan.unlink(missing_ok=True)
-    nominal_x = -0.60 if box_id <= 15 else -0.35
     command = [
         "/usr/bin/python3", str(SCRIPT),
         "--box-ids", str(box_id),
         "--contact-x", "0.75",
-        "--base-x", f"{nominal_x + base_dx_m:.6f}",
+        "--base-x", f"{base_x_m:.9f}",
         "--base-y", f"{base_dy_m:.6f}",
         "--base-yaw", f"{yaw_rad:.12f}",
         "--end-effector", "scoop",
@@ -149,6 +154,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yaw-deg", type=float, required=True)
     parser.add_argument("--base-dx-m", type=float, default=0.0)
     parser.add_argument("--base-dy-m", type=float, default=0.0)
+    parser.add_argument("--upper-front-clearance-m", type=float)
+    parser.add_argument("--lower-front-clearance-m", type=float)
     parser.add_argument(
         "--group-indices",
         default="",
@@ -164,12 +171,41 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.upper_front_clearance_m is not None:
+        args.upper_front_clearance_m = quantize_front_clearance(
+            args.upper_front_clearance_m
+        )
+    if args.lower_front_clearance_m is not None:
+        args.lower_front_clearance_m = quantize_front_clearance(
+            args.lower_front_clearance_m
+        )
     if not math.isfinite(args.yaw_deg) or not -15.0 <= args.yaw_deg <= 15.0:
         raise SystemExit("--yaw-deg must be finite and in [-15, 15]")
     if not math.isfinite(args.base_dx_m) or not -0.40 <= args.base_dx_m <= 0.40:
         raise SystemExit("--base-dx-m must be finite and in [-0.40, 0.40]")
     if not math.isfinite(args.base_dy_m) or not -0.50 <= args.base_dy_m <= 0.50:
         raise SystemExit("--base-dy-m must be finite and in [-0.50, 0.50]")
+    clearance_mode = (
+        args.upper_front_clearance_m is not None
+        or args.lower_front_clearance_m is not None
+    )
+    if clearance_mode:
+        if args.upper_front_clearance_m is None or args.lower_front_clearance_m is None:
+            raise SystemExit("both front-clearance arguments are required")
+        if not 0.40 <= args.upper_front_clearance_m <= 1.30:
+            raise SystemExit("upper front clearance must be in [0.40, 1.30] m")
+        if not 0.30 <= args.lower_front_clearance_m <= 1.00:
+            raise SystemExit("lower front clearance must be in [0.30, 1.00] m")
+        if any(abs(value) > 1e-12 for value in (
+            args.base_dx_m, args.base_dy_m, args.yaw_deg
+        )):
+            raise SystemExit("front-clearance experiments require dx=dy=yaw=0")
+        try:
+            x_clearance_variable(
+                args.upper_front_clearance_m, args.lower_front_clearance_m
+            )
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     if args.timeout_s <= 0.0:
         raise SystemExit("--timeout-s must be positive")
 
@@ -257,7 +293,14 @@ def main() -> int:
                             height=height,
                             mode=mode,
                             removed=removed,
-                            base_dx_m=args.base_dx_m,
+                            base_x_m=(
+                                base_x_for_front_clearance(
+                                    args.upper_front_clearance_m
+                                    if box_id <= 15 else args.lower_front_clearance_m
+                                )
+                                if clearance_mode else
+                                (-0.60 if box_id <= 15 else -0.35) + args.base_dx_m
+                            ),
                             base_dy_m=args.base_dy_m,
                             yaw_rad=yaw_rad,
                             ik_seed=seed,

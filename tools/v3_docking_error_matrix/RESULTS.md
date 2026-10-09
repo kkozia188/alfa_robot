@@ -97,13 +97,32 @@ classified if this occurs; no synthetic tilt failure is reported.
 The task remains `In Progress` until the independent sweeps and optimization
 comparison are complete.
 
-## Aggressive Single-Axis Range Search: 2026-10-09
+## Historical Common-dx Range Search: 2026-10-09 (Superseded)
 
-Complete single-axis functional ranges have been bounded to:
+These historical common-base-X results were:
 
 - X: `-0.150 .. +0.0875 m`, with nearest failures at `-0.175/+0.100 m`;
 - Y: `-0.120 .. +0.0875 m`, with nearest failures at `-0.130/+0.100 m`;
 - Yaw: `-5.0 .. +5.0 deg`, with nearest failures at
   `-5.15625/+5.3125 deg`.
 
-Details are in `SINGLE_AXIS_RANGE.md` and `SINGLE_AXIS_RANGE.json`.
+They are retained only as provenance and are not part of the current official X
+claim. The current report is in `SINGLE_AXIS_RANGE.md` and
+`SINGLE_AXIS_RANGE.json`.
+
+## X Definition Correction: 2026-10-09
+
+The previous common-`dx` X result is superseded. X now means physical clearance
+from the vehicle-front contact plane to the box-front contact plane, with the two
+row families varied independently.
+
+- rows 1-3, rows 4-5 fixed at 0.60 m: complete at `0.74..1.02 m`; adjacent
+  failures at `0.73/1.03 m`;
+- rows 4-5, rows 1-3 fixed at 0.85 m: complete at `0.36..0.79 m`; adjacent
+  failures at `0.35/0.80 m`;
+- the original `0.80..0.90 m` and `0.55..0.65 m` ranges remain the strongest
+  cross-grid certificate and the recommended operating inputs.
+
+The extension was executed in one-centimeter increments. Details and quality
+layers are in `X_CLEARANCE_RANGE.md`. `Y_ASYMMETRY.md` records why the measured
+Y limits are not symmetric.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the staged X/Y/Yaw experiment matrix as JSON and CSV."""
+"""Generate physical X-clearance and independent Y/Yaw experiment matrices."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from matrix_common import SCHEMA, case_slug, read_json, write_json
+from matrix_common import SCHEMA, case_slug, clearance_slug, read_json, write_json
 
 
 def add_case(
@@ -41,12 +41,6 @@ def add_case(
 
 def build_matrix(spec: dict[str, Any]) -> list[dict[str, Any]]:
     cases: dict[tuple[float, float, float], dict[str, Any]] = {}
-    x = spec["certified_x_baseline"]
-    for dx_m in x["dx_values_m"]:
-        add_case(
-            cases, dx_m, x["dy_m"], x["yaw_deg"],
-            "certified_x_baseline", "import", x["source"],
-        )
     y = spec["y_baseline"]
     for dy_m in y["dy_values_m"]:
         add_case(
@@ -60,14 +54,49 @@ def build_matrix(spec: dict[str, Any]) -> list[dict[str, Any]]:
             "yaw_baseline", "import", yaw["source"],
         )
     boundary = spec["boundary_probe"]
-    for dx_m in boundary["x_values_m"]:
-        add_case(cases, dx_m, 0.0, 0.0, "boundary_probe_x", "screen")
     for dy_m in boundary["y_values_m"]:
         add_case(cases, 0.0, dy_m, 0.0, "boundary_probe_y", "screen")
     for yaw_deg in boundary["yaw_values_deg"]:
         add_case(cases, 0.0, 0.0, yaw_deg, "boundary_probe_yaw", "screen")
     return sorted(cases.values(), key=lambda item: (
         float(item["yaw_deg"]), float(item["dy_m"]), float(item["dx_m"])
+    ))
+
+
+def build_x_clearance_matrix(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    config = spec["x_clearance_sweeps"]
+    cases: list[dict[str, Any]] = []
+    for family in ("upper_rows_1_to_3", "lower_rows_4_to_5"):
+        sweep = config[family]
+        values = [
+            (value, "certified_seed", "import")
+            for value in sweep["certified_values_m"]
+        ] + [
+            (value, "one_centimeter_extension", "full")
+            for value in sweep["extension_values_m"]
+        ]
+        for value, phase, mode in values:
+            upper = (
+                float(value) if family == "upper_rows_1_to_3"
+                else float(sweep["fixed_upper_clearance_m"])
+            )
+            lower = (
+                float(sweep["fixed_lower_clearance_m"])
+                if family == "upper_rows_1_to_3" else float(value)
+            )
+            cases.append({
+                "case_id": clearance_slug(upper, lower),
+                "family": family,
+                "upper_front_clearance_m": upper,
+                "lower_front_clearance_m": lower,
+                "phase": phase,
+                "recommended_mode": mode,
+                "runner": "run_x_clearance_sweep.py",
+                "prior_evidence": config["source"] if mode == "import" else "",
+            })
+    return sorted(cases, key=lambda item: (
+        item["family"], float(item["upper_front_clearance_m"]),
+        float(item["lower_front_clearance_m"]),
     ))
 
 
@@ -87,6 +116,7 @@ def main() -> int:
     if spec.get("schema") != "alfa.v322_docking_error_matrix_spec.v1":
         raise SystemExit("unexpected matrix specification schema")
     cases = build_matrix(spec)
+    x_cases = build_x_clearance_matrix(spec)
     output_dir = args.output_dir.resolve()
     payload = {
         "schema": SCHEMA,
@@ -94,11 +124,13 @@ def main() -> int:
         "thresholds": spec["thresholds"],
         "boundary_probe_group_indices": spec["boundary_probe"]["group_indices"],
         "case_count": len(cases),
+        "x_clearance_case_count": len(x_cases),
         "counts_by_mode": {
             mode: sum(case["recommended_mode"] == mode for case in cases)
             for mode in ("import", "screen", "screen_then_full", "full")
         },
         "cases": cases,
+        "x_clearance_cases": x_cases,
     }
     write_json(output_dir / "matrix-cases.json", payload)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -117,8 +149,27 @@ def main() -> int:
                 "phases": ";".join(case["phases"]),
                 "prior_evidence": ";".join(case["prior_evidence"]),
             })
+    write_json(output_dir / "x-clearance-cases.json", {
+        "schema": "alfa.v322_x_clearance_matrix.v1",
+        "reference": spec["x_clearance_sweeps"]["reference"],
+        "input_resolution_m": spec["x_clearance_sweeps"]["input_resolution_m"],
+        "case_count": len(x_cases),
+        "cases": x_cases,
+    })
+    with (output_dir / "x-clearance-cases.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as stream:
+        fields = [
+            "case_id", "family", "upper_front_clearance_m",
+            "lower_front_clearance_m", "phase", "recommended_mode",
+            "runner", "prior_evidence",
+        ]
+        writer = csv.DictWriter(stream, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(x_cases)
     print(
-        f"MATRIX cases={len(cases)} modes={payload['counts_by_mode']} "
+        f"MATRIX y_yaw_cases={len(cases)} x_clearance_cases={len(x_cases)} "
+        f"modes={payload['counts_by_mode']} "
         f"output={output_dir}",
         flush=True,
     )

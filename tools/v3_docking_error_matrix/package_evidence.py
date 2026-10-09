@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the compact preliminary matrix evidence with SHA-256 metadata."""
+"""Package compact physical-X, Y, and Yaw evidence with SHA-256 metadata."""
 
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ from matrix_common import is_single_axis_error, read_json, sha256, write_json
 PATTERNS = (
     "design/matrix-cases.json",
     "design/matrix-cases.csv",
+    "design/x-clearance-cases.json",
+    "design/x-clearance-cases.csv",
     "baselines/imported-baselines.json",
     "baselines/imported-baselines.csv",
     "y-baseline-screen/screen-matrix-run.json",
@@ -27,12 +29,20 @@ PATTERNS = (
     "aggressive-refine/**/probe-result.json",
     "aggressive-full/**/case-result.json",
     "aggressive-full/**/v322-pose-conveyor-validation.json",
+    "x-clearance-upper/*/case-result.json",
+    "x-clearance-upper/*/v322-pose-conveyor-validation.json",
+    "x-clearance-lower/*/case-result.json",
+    "x-clearance-lower/*/v322-pose-conveyor-validation.json",
     "release/matrix-summary.json",
     "release/matrix-results.csv",
     "release/REPORT.md",
     "release/y-boundaries.json",
     "release/SINGLE_AXIS_RANGE.json",
     "release/SINGLE_AXIS_RANGE.md",
+    "release/X_CLEARANCE_RANGE.json",
+    "release/X_CLEARANCE_RANGE.md",
+    "release/X_CLEARANCE_RESULTS.csv",
+    "release/Y_ASYMMETRY.md",
 )
 
 
@@ -53,13 +63,17 @@ def collect(root: Path) -> list[Path]:
         )
         if result_path is not None:
             result = read_json(result_path)
-            error = result.get("error", {})
-            if not is_single_axis_error(
-                float(error.get("dx_m", 0.0)),
-                float(error.get("dy_m", 0.0)),
-                float(error.get("yaw_deg", 0.0)),
-            ):
-                continue
+            if "front_clearance" not in result:
+                error = result.get("error", {})
+                if (
+                    abs(float(error.get("dx_m", 0.0))) > 1e-12
+                    or not is_single_axis_error(
+                        float(error.get("dx_m", 0.0)),
+                        float(error.get("dy_m", 0.0)),
+                        float(error.get("yaw_deg", 0.0)),
+                    )
+                ):
+                    continue
         output.append(path)
     return output
 
@@ -78,7 +92,9 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     release_dir = root / "release"
     release_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("SINGLE_AXIS_RANGE.json", "SINGLE_AXIS_RANGE.md"):
+    for name in (
+        "SINGLE_AXIS_RANGE.json", "SINGLE_AXIS_RANGE.md", "Y_ASYMMETRY.md"
+    ):
         shutil.copyfile(Path(__file__).resolve().parent / name, release_dir / name)
     files = collect(root)
     entries: list[dict[str, Any]] = [{
@@ -87,15 +103,15 @@ def main() -> int:
         "sha256": sha256(path),
     } for path in files]
     manifest = {
-        "schema": "alfa.v322_docking_error_single_axis_evidence.v1",
-        "scope": "independent X, Y, and Yaw sweeps with other variables fixed at zero",
+        "schema": "alfa.v322_docking_error_physical_x_evidence.v1",
+        "scope": "physical row-family X clearance plus independent Y and Yaw sweeps",
         "data_root": "v3_docking_error_matrix",
         "file_count": len(entries),
         "files": entries,
     }
-    manifest_path = output / "PRELIMINARY_MANIFEST.json"
+    manifest_path = output / "PHYSICAL_X_MANIFEST.json"
     write_json(manifest_path, manifest)
-    archive = output / "v322-docking-error-single-axis-2026.10.09.tar.gz"
+    archive = output / "v322-docking-error-physical-x-single-axis-2026.10.09.tar.gz"
     with tarfile.open(archive, "w:gz") as stream:
         stream.add(manifest_path, arcname=manifest_path.name)
         for path in files:
@@ -104,7 +120,7 @@ def main() -> int:
                 arcname=str(Path("v3_docking_error_matrix") / path.relative_to(root)),
             )
     write_json(output / "ARCHIVE.json", {
-        "schema": "alfa.v322_docking_error_single_axis_archive.v1",
+        "schema": "alfa.v322_docking_error_physical_x_archive.v1",
         "name": archive.name,
         "size": archive.stat().st_size,
         "sha256": sha256(archive),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute selected docking-error matrix cases without stopping on failures."""
+"""Execute selected independent Y/Yaw matrix cases without stopping on failures."""
 
 from __future__ import annotations
 
@@ -45,6 +45,10 @@ def select_cases(matrix: dict[str, Any], args: argparse.Namespace) -> list[dict[
     ids = {value for value in args.case_ids.split(",") if value}
     selected = []
     for case in matrix["cases"]:
+        if abs(float(case["dx_m"])) > 1e-12:
+            raise ValueError(
+                "official Y/Yaw matrix contains common base dx; use X clearance matrix"
+            )
         if not is_single_axis_error(
             float(case["dx_m"]), float(case["dy_m"]), float(case["yaw_deg"])
         ):

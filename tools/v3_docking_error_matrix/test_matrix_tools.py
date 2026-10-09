@@ -6,14 +6,18 @@ import math
 import unittest
 from pathlib import Path
 
-from generate_matrix import build_matrix
+from generate_matrix import build_matrix, build_x_clearance_matrix
 from matrix_common import (
+    base_x_for_front_clearance,
     case_slug,
     classify_failure,
+    clearance_slug,
     evaluate_quality,
     local_shuttle_poses,
+    quantize_front_clearance,
     is_single_axis_error,
     read_json,
+    x_clearance_variable,
 )
 
 
@@ -26,6 +30,18 @@ class MatrixToolTests(unittest.TestCase):
             case_slug(-0.05, 0.1, -2.5),
             "dx-m050mm_dy-p100mm_yaw-m025d10",
         )
+
+    def test_x_clearance_contract_uses_vehicle_front_plane(self) -> None:
+        self.assertAlmostEqual(
+            base_x_for_front_clearance(0.85), -0.600000002779484, places=12
+        )
+        self.assertEqual(clearance_slug(0.79, 0.60), "front-u0790mm_l0600mm")
+        self.assertEqual(x_clearance_variable(0.79, 0.60), "upper_rows_1_to_3")
+        self.assertEqual(x_clearance_variable(0.85, 0.66), "lower_rows_4_to_5")
+        with self.assertRaises(ValueError):
+            x_clearance_variable(0.79, 0.66)
+        self.assertEqual(quantize_front_clearance(0.854), 0.85)
+        self.assertEqual(quantize_front_clearance(0.855), 0.86)
 
     def test_failure_classification(self) -> None:
         self.assertEqual(classify_failure("precontact_ik", "no solution"), "ik_or_reachability")
@@ -63,13 +79,20 @@ class MatrixToolTests(unittest.TestCase):
     def test_default_matrix_is_strictly_single_axis(self) -> None:
         spec = read_json(ROOT / "default_matrix.json")
         cases = build_matrix(spec)
-        self.assertEqual(len(cases), 73)
+        self.assertEqual(len(cases), 49)
         self.assertTrue(all(
             is_single_axis_error(case["dx_m"], case["dy_m"], case["yaw_deg"])
             for case in cases
         ))
         self.assertTrue(any("y_baseline" in case["phases"] for case in cases))
         self.assertTrue(any("boundary_probe_y" in case["phases"] for case in cases))
+        x_cases = build_x_clearance_matrix(spec)
+        self.assertEqual(len(x_cases), 77)
+        self.assertTrue(all(
+            case["upper_front_clearance_m"] == 0.85
+            or case["lower_front_clearance_m"] == 0.60
+            for case in x_cases
+        ))
 
     def test_shuttle_route_is_relative_to_robot_yaw(self) -> None:
         backed, conveyor = local_shuttle_poses(

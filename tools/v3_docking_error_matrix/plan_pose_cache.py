@@ -18,6 +18,12 @@ SCRIPT_DIR = (
 sys.path.insert(0, str(SCRIPT_DIR))
 import scan_v3_single_arm_box_wall as scan  # noqa: E402
 
+from matrix_common import (
+    base_x_for_front_clearance,
+    quantize_front_clearance,
+    x_clearance_variable,
+)
+
 
 GROUPS = [
     (1, 5), (2, 4), (3,), (6, 10), (7, 9), (8,), (11, 15),
@@ -158,6 +164,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yaw-deg", type=float, required=True)
     parser.add_argument("--base-dx-m", type=float, default=0.0)
     parser.add_argument("--base-dy-m", type=float, default=0.0)
+    parser.add_argument("--upper-front-clearance-m", type=float)
+    parser.add_argument("--lower-front-clearance-m", type=float)
     parser.add_argument("--pickups-dir", type=Path, required=True)
     parser.add_argument("--baseline-cache", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -168,12 +176,41 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.upper_front_clearance_m is not None:
+        args.upper_front_clearance_m = quantize_front_clearance(
+            args.upper_front_clearance_m
+        )
+    if args.lower_front_clearance_m is not None:
+        args.lower_front_clearance_m = quantize_front_clearance(
+            args.lower_front_clearance_m
+        )
     if not math.isfinite(args.yaw_deg) or not -15.0 <= args.yaw_deg <= 15.0:
         raise SystemExit("--yaw-deg must be finite and in [-15, 15]")
     if not math.isfinite(args.base_dx_m) or not -0.40 <= args.base_dx_m <= 0.40:
         raise SystemExit("--base-dx-m must be finite and in [-0.40, 0.40]")
     if not math.isfinite(args.base_dy_m) or not -0.50 <= args.base_dy_m <= 0.50:
         raise SystemExit("--base-dy-m must be finite and in [-0.50, 0.50]")
+    clearance_mode = (
+        args.upper_front_clearance_m is not None
+        or args.lower_front_clearance_m is not None
+    )
+    if clearance_mode:
+        if args.upper_front_clearance_m is None or args.lower_front_clearance_m is None:
+            raise SystemExit("both front-clearance arguments are required")
+        if not 0.40 <= args.upper_front_clearance_m <= 1.30:
+            raise SystemExit("upper front clearance must be in [0.40, 1.30] m")
+        if not 0.30 <= args.lower_front_clearance_m <= 1.00:
+            raise SystemExit("lower front clearance must be in [0.30, 1.00] m")
+        if any(abs(value) > 1e-12 for value in (
+            args.base_dx_m, args.base_dy_m, args.yaw_deg
+        )):
+            raise SystemExit("front-clearance experiments require dx=dy=yaw=0")
+        try:
+            x_clearance_variable(
+                args.upper_front_clearance_m, args.lower_front_clearance_m
+            )
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     if args.timeout_s <= 0.0:
         raise SystemExit("--timeout-s must be positive")
     yaw_rad = math.radians(args.yaw_deg)
@@ -200,8 +237,16 @@ def main() -> int:
         bridge = read_json(bridge_path) if args.resume and bridge_path.is_file() else None
         if not bridge or not bridge.get("success"):
             first_box = group[0]
+            base_x = (
+                base_x_for_front_clearance(
+                    args.upper_front_clearance_m
+                    if first_box <= 15 else args.lower_front_clearance_m
+                )
+                if clearance_mode else
+                (-0.60 if first_box <= 15 else -0.35) + args.base_dx_m
+            )
             planner_args = args_for(
-                (-0.60 if first_box <= 15 else -0.35) + args.base_dx_m,
+                base_x,
                 args.base_dy_m,
                 yaw_rad,
                 args.timeout_s,
@@ -325,6 +370,16 @@ def main() -> int:
             "dy_m": args.base_dy_m,
             "yaw_deg": args.yaw_deg,
         },
+        "front_clearance": (
+            {
+                "upper_rows_1_to_3_m": args.upper_front_clearance_m,
+                "lower_rows_4_to_5_m": args.lower_front_clearance_m,
+                "varied": x_clearance_variable(
+                    args.upper_front_clearance_m, args.lower_front_clearance_m
+                ),
+            }
+            if clearance_mode else None
+        ),
         "station_config": station_config,
         "completed_boxes": 25,
         "tasks": tasks,

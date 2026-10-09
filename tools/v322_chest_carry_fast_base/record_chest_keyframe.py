@@ -46,6 +46,8 @@ def main() -> int:
         name: float(value) for name, value in zip(names, frame["joints"])
     }
     recorder.base_transform = dual.frame_base_transform(operation, frame)
+    paths = recorder.build_tcp_paths(operation, names)
+    recorder.show_tcp_path_phase(paths, "pullback")
     recorder.set_time()
     rr.log(
         "world/robot",

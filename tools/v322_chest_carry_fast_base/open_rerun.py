@@ -24,15 +24,16 @@ def main() -> int:
         "--spawn", action=argparse.BooleanOptionalAction, default=True
     )
     args = parser.parse_args()
-    report_path = RESULTS / "acceptance-report.json"
+    report_path = RESULTS / "optimized-acceptance-report.json"
     if not report_path.is_file():
         parser.error(f"missing acceptance report: {report_path}")
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if not report.get("success"):
         parser.error("acceptance report is not successful")
     recording = RESULTS / (
-        "v322-chest-carry-ready-keyframe.rrd"
-        if args.keyframe else "v322-chest-carry-fast-base-production-shell.rrd"
+        "v322-chest-carry-ready-optimized-keyframe.rrd"
+        if args.keyframe
+        else "v322-chest-carry-fast-base-optimized-production-shell.rrd"
     )
     subprocess.run(["rerun", "rrd", "verify", str(recording)], check=True)
     print(

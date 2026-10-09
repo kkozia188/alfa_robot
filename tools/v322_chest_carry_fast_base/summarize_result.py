@@ -184,6 +184,40 @@ def main() -> int:
         },
         "cases": cases,
     }
+    optimization = replay.get("golden_curve_optimization")
+    if optimization:
+        cycles = list(optimization.get("cycles", []))
+        source_cost = sum(
+            float(item["source_joint_travel_cost"]) for item in cycles
+        )
+        optimized_cost = sum(
+            float(item["optimized_joint_travel_cost"]) for item in cycles
+        )
+        report["optimization"] = {
+            "strategy": "golden curves + representative shortcut graph + local RRT",
+            "cache_loading_counted": False,
+            "boxes_within_3s": int(optimization["boxes_within_3s"]),
+            "maximum_task_core_ms": float(
+                optimization["maximum_task_core_ms"]
+            ),
+            "source_joint_travel_cost": source_cost,
+            "optimized_joint_travel_cost": optimized_cost,
+            "joint_travel_reduction_percent": (
+                1.0 - optimized_cost / source_cost
+            ) * 100.0,
+            "local_rrt_attempted_cycles": sum(
+                bool(item.get("local_rrt_attempted")) for item in cycles
+            ),
+            "local_rrt_selected_cycles": sum(
+                bool(item.get("local_rrt_success")) for item in cycles
+            ),
+            "cycles": cycles,
+        }
+        report["success"] = (
+            report["success"]
+            and report["optimization"]["boxes_within_3s"] == 25
+            and report["optimization"]["maximum_task_core_ms"] < 3000.0
+        )
     write_json(args.output_json.resolve(), report)
     lines = [
         "# V3.2.2 Chest Carry + Fast Base Result",
@@ -200,6 +234,19 @@ def main() -> int:
         f"- Ideal base-motion time reduction: **{report['base']['ideal_motion_time_reduction_percent']:.1f}%**",
         "- Ordering: **chest carry ready before every base backoff**",
     ]
+    if "optimization" in report:
+        optimized = report["optimization"]
+        lines.extend([
+            "",
+            "## Golden-Curve Optimization",
+            "",
+            "- Strategy: **golden curves + representative shortcut graph + local RRT**",
+            f"- Task cores below 3 s: **{optimized['boxes_within_3s']}/25**",
+            f"- Maximum task core: **{optimized['maximum_task_core_ms'] / 1000.0:.3f} s**",
+            f"- Chest joint-travel reduction: **{optimized['joint_travel_reduction_percent']:.1f}%**",
+            f"- Local RRT attempted/selected cycles: **{optimized['local_rrt_attempted_cycles']}/{optimized['local_rrt_selected_cycles']}**",
+            "- Cache loading counted as planning time: **false**",
+        ])
     args.output_md.resolve().write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(
         f"RESULT success={report['success']} clearance={minimum_front_clearance:.3f}m "

@@ -29,6 +29,19 @@ The certified result contains 25/25 boxes, 15/15 cycles, 37,529 MoveIt/FCL
 frames, and 14,442 extra 1 degree / 1 cm edge samples. See
 `results/v322_chest_carry_fast_base/acceptance-report.md`.
 
+The optimized result uses the validated chest paths as golden curves, builds
+an 80-node FCL visibility graph, applies local shortcuts, and retains the
+original local-RRT windows where no direct edge is valid. A bounded local RRT
+is also attempted, but approximate solutions are rejected. Final results:
+
+- 25/25 selected task cores below 3 seconds;
+- maximum selected task core 2.502 seconds;
+- chest joint-travel cost reduced 6.5%;
+- 43,366 frames plus 5,901 extra 1 degree / 1 cm edge samples pass MoveIt/FCL;
+- cache loading is not counted as planning time.
+
+See `results/v322_chest_carry_fast_base/optimized-acceptance-report.md`.
+
 ## Open Rerun
 
 ```bash
@@ -36,7 +49,8 @@ cd /home/tim/alfa_robot-v322-chest-carry-fast-base
 /usr/bin/python3 tools/v322_chest_carry_fast_base/open_rerun.py
 ```
 
-Use `--keyframe` to inspect the first dual chest-carry-ready pose. Both entry
+Use `--keyframe` to inspect the first optimized dual chest-carry-ready pose and
+its pullback curves. Both entry
 points verify the RRD before opening it.
 
 ## Reproduce

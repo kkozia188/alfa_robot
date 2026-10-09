@@ -16,13 +16,13 @@ class ChestCarryContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.replay = json.loads(
-            (RESULTS / "v322-chest-carry-fast-base-replay.json").read_text()
+            (RESULTS / "v322-chest-carry-fast-base-optimized-replay.json").read_text()
         )
         cls.validation = json.loads(
-            (RESULTS / "v322-chest-carry-fast-base-validation.json").read_text()
+            (RESULTS / "v322-chest-carry-fast-base-optimized-validation.json").read_text()
         )
         cls.report = json.loads(
-            (RESULTS / "acceptance-report.json").read_text()
+            (RESULTS / "optimized-acceptance-report.json").read_text()
         )
 
     def test_acceptance(self) -> None:
@@ -30,6 +30,10 @@ class ChestCarryContractTest(unittest.TestCase):
         self.assertTrue(self.report["success"])
         self.assertEqual(self.report["completed_boxes"], 25)
         self.assertEqual(self.report["group_count"], 15)
+        self.assertEqual(self.report["optimization"]["boxes_within_3s"], 25)
+        self.assertLess(
+            self.report["optimization"]["maximum_task_core_ms"], 3000.0
+        )
 
     def test_chest_precedes_base_motion(self) -> None:
         cycles = [
@@ -47,7 +51,14 @@ class ChestCarryContractTest(unittest.TestCase):
             for frame in operation["frames"][base:]:
                 if frame["stage"] == "release_at_right_conveyor":
                     break
-                self.assertEqual(frame["joints"], chest_joints, operation["label"])
+                self.assertLessEqual(
+                    max(
+                        abs(float(actual) - float(expected))
+                        for actual, expected in zip(frame["joints"], chest_joints)
+                    ),
+                    1e-12,
+                    operation["label"],
+                )
 
     def test_dual_attachment_is_simultaneous(self) -> None:
         dual_cycles = [

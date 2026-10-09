@@ -2129,3 +2129,9 @@
 - 验证结果：25/25箱、15/15循环通过；10/10双箱循环同步吸附且无单边携箱帧。完整`37,529`帧与`14,442`个1度/1厘米边样本通过MoveIt/FCL，最大关节步长`2.998428°`、翻转0，左右携箱最大倾角`7.997372°/7.999501°`。底盘理想运动时间下降`71.4%`。
 - 改了哪里：新增独立`v3_chest_carry_single_arm_box_planner`可执行文件/launch和`tools/v322_chest_carry_fast_base/`工具链；生产`v3_single_arm_box_extract_demo`保持原样。产物位于`results/v322_chest_carry_fast_base/`，完整生产外壳RRD与胸前关键帧RRD均通过verify。
 - 留给下个AI：这是规划/仿真证书，不是底盘导航或实机速度许可；实机速度仍需导航与安全域单独限速验收。MOTION-261/MOTION-257工作树、缓存、Release和证书均未修改。
+
+## 2026-10-09 运控 / Codex / 胸前取回黄金曲线局部优化
+- 做了什么：针对胸前取回段的长规划与绕行，新增独立`v3_chest_carry_shortcut_optimizer`。以已通过FCL的胸前轨迹为黄金曲线，构建80代表节点FCL可见图，以关节行程为代价做shortcut；不可直连区保留原局部RRT窗口，并额外运行有限包络local RRT，近似解一律拒绝。
+- 性能：25/25箱选中任务核心均低于3秒，最大`2.501649s`，不计缓存加载。严格8度携箱倾角下胸前段关节行程代价下降`6.49%`；10度候选可到`8.98%`但最大核心`2.763s`且稳定裕量较小，正式结果保留8度版本。
+- 验证：优化后完整25箱15循环共`43,366`帧和`5,901`个额外1度/1厘米边样本通过MoveIt/FCL；最大关节步长`2.998428°`、翻转0、左右携箱最大倾角`7.997372°/7.999501°`。胸前最小车头净距`0.100m`、双箱间隙`0.240m`保持不变。
+- 产物：`results/v322_chest_carry_fast_base/v322-chest-carry-fast-base-optimized-production-shell.rrd`、`optimized-acceptance-report.json/.md`、优化报告及SHA256SUMS；默认`open_rerun.py`已切换到优化版。

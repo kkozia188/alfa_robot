@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import tarfile
 from pathlib import Path
 from typing import Any
@@ -22,10 +23,15 @@ PATTERNS = (
     "probes/*/probe-result.json",
     "full/*/case-result.json",
     "full/*/v322-pose-conveyor-validation.json",
+    "aggressive-*/**/probe-result.json",
+    "aggressive-*/**/case-result.json",
+    "aggressive-*/**/v322-pose-conveyor-validation.json",
     "release/matrix-summary.json",
     "release/matrix-results.csv",
     "release/REPORT.md",
     "release/y-boundaries.json",
+    "release/MAXIMUM_RANGE.json",
+    "release/MAXIMUM_RANGE.md",
 )
 
 
@@ -48,6 +54,10 @@ def main() -> int:
     root = args.data_root.resolve()
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    release_dir = root / "release"
+    release_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("MAXIMUM_RANGE.json", "MAXIMUM_RANGE.md"):
+        shutil.copyfile(Path(__file__).resolve().parent / name, release_dir / name)
     files = collect(root)
     entries: list[dict[str, Any]] = [{
         "path": str(Path("v3_docking_error_matrix") / path.relative_to(root)),
@@ -55,15 +65,15 @@ def main() -> int:
         "sha256": sha256(path),
     } for path in files]
     manifest = {
-        "schema": "alfa.v322_docking_error_preliminary_evidence.v1",
-        "scope": "preliminary baselines, screens, complete-case outcomes and validations",
+        "schema": "alfa.v322_docking_error_maximum_range_evidence.v1",
+        "scope": "baselines, aggressive screens, complete-case boundaries and joint-box validation",
         "data_root": "v3_docking_error_matrix",
         "file_count": len(entries),
         "files": entries,
     }
     manifest_path = output / "PRELIMINARY_MANIFEST.json"
     write_json(manifest_path, manifest)
-    archive = output / "v322-docking-error-matrix-preliminary-2026.10.08.tar.gz"
+    archive = output / "v322-docking-error-maximum-range-2026.10.09.tar.gz"
     with tarfile.open(archive, "w:gz") as stream:
         stream.add(manifest_path, arcname=manifest_path.name)
         for path in files:
@@ -72,7 +82,7 @@ def main() -> int:
                 arcname=str(Path("v3_docking_error_matrix") / path.relative_to(root)),
             )
     write_json(output / "ARCHIVE.json", {
-        "schema": "alfa.v322_docking_error_preliminary_archive.v1",
+        "schema": "alfa.v322_docking_error_maximum_range_archive.v1",
         "name": archive.name,
         "size": archive.stat().st_size,
         "sha256": sha256(archive),

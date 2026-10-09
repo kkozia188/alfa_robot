@@ -30,8 +30,8 @@ The default specification contains four distinct datasets:
    `dx={-5,0,+5} cm`, `dy={-10,-5,0,+5,+10} cm`, and
    `yaw={-5,-2.5,0,+2.5,+5} deg`.
 
-A wider boundary probe covers up to `dx +/-20 cm`, `dy +/-40 cm`, and
-`yaw +/-12 deg`. It is deliberately outside the intended certification domain
+A wider boundary probe covers the current experiment limits of `dx +/-40 cm`,
+`dy +/-50 cm`, and `yaw +/-15 deg`. It is deliberately outside the intended certification domain
 so that the experiment records real reachability, collision, and timeout
 failures. Boundary points use eight high-risk groups first; a pass there is not
 reported as a complete-task success.
@@ -115,3 +115,7 @@ or successful validation reports, and a SHA-256 manifest.
 This project evaluates planning robustness. It does not certify localization,
 navigation execution, suction hardware, or the physical accuracy of a docking
 controller.
+
+The latest empirically bounded result is documented in `MAXIMUM_RANGE.md` and
+`MAXIMUM_RANGE.json`. Keep single-axis limits separate from the smaller joint
+box whose eight corners were all validated.

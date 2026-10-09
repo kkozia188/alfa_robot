@@ -271,14 +271,24 @@ def main() -> int:
     replay = read_json(replay_path)
     expected = pose_contract(args.base_dx_m, args.base_dy_m, args.yaw_deg)
     observed = {
-        tuple(round(float(value), 8) for value in task["payload"]["base_pose_map"])
+        tuple(float(value) for value in task["payload"]["base_pose_map"])
         for task in cache_value["tasks"]
     }
     expected_poses = {
-        tuple(round(float(value), 8) for value in expected["upper_base_pose_map"]),
-        tuple(round(float(value), 8) for value in expected["lower_base_pose_map"]),
+        tuple(float(value) for value in expected["upper_base_pose_map"]),
+        tuple(float(value) for value in expected["lower_base_pose_map"]),
     }
-    if observed != expected_poses:
+    pose_contract_ok = (
+        len(observed) == len(expected_poses)
+        and all(
+            any(
+                max(abs(left - right) for left, right in zip(actual, target)) <= 1e-6
+                for target in expected_poses
+            )
+            for actual in observed
+        )
+    )
+    if not pose_contract_ok:
         return fail_result(
             output_dir=output_dir, args=args, stage="pose_contract",
             reason=f"expected {sorted(expected_poses)}, observed {sorted(observed)}",

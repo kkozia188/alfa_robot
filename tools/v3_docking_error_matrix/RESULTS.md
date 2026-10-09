@@ -6,7 +6,7 @@ it is not yet the final 75-case complete joint-matrix certificate.
 
 ## Dataset State
 
-- Designed unique poses: `131`.
+- Designed unique poses after aggressive expansion: `141`.
 - Imported complete baselines: `11` aligned X cases from MOTION-261 and `11`
   Yaw cases from MOTION-257.
 - Newly screened Y cases: `21`, from `-0.20 m` to `+0.20 m` in `0.02 m`
@@ -112,3 +112,22 @@ classified if this occurs; no synthetic tilt failure is reported.
 
 The task remains `In Progress` until the full joint matrix and optimization
 comparison are complete.
+
+## Aggressive Maximum-Range Search: 2026-10-09
+
+Complete single-axis functional ranges have been bounded to:
+
+- X: `-0.150 .. +0.0875 m`, with nearest failures at `-0.175/+0.100 m`;
+- Y: `-0.120 .. +0.0875 m`, with nearest failures at `-0.130/+0.100 m`;
+- Yaw: `-5.0 .. +5.0 deg`, with nearest failures at
+  `-5.15625/+5.3125 deg`.
+
+All eight corners of the joint box below complete 25/25 and MoveIt/FCL:
+
+```text
+|dx| <= 7.5 mm, |dy| <= 12.5 mm, |yaw| <= 0.75 deg
+```
+
+The next nested box (`8.75 mm / 16.25 mm / 0.875 deg`) fails on all four
+positive-Yaw corners because the left carried box collides with box 23 during
+base backoff. Details are in `MAXIMUM_RANGE.md` and `MAXIMUM_RANGE.json`.

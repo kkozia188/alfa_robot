@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Full dual-arm inner-column pair placed at the vehicle rear before release."""
-import argparse, fcntl, json
+import argparse, fcntl, json, time
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,7 +25,7 @@ def main():
  with open('/tmp/sevenova-curobo-gpu.lock','a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);occupied=gpu_processes();
   if occupied:raise RuntimeError('GPU occupied: '+'; '.join(occupied))
-  planner=FullCyclePlanner(PlannerAssets());snapshot=local_snapshot(planner,a.column)
+  started=time.perf_counter();planner=FullCyclePlanner(PlannerAssets());snapshot=local_snapshot(planner,a.column)
   if a.start_pose!='home':
    poses=yaml.safe_load(planner.args.named_poses.read_text())['named_poses']
    pose=dict(poses['second_home'])
@@ -50,5 +50,5 @@ def main():
   except Exception as error:
    task.report.setdefault('error',{'code':'PROBE_FAILED','stage':task.phase,'message':str(error)});task.report['success']=False
   finally:
-   task.close_stage_timing();task.report.update(seed=a.seed,column=a.column,start_pose=a.start_pose,final_snapshot=task.store.snapshot().to_dict());a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps({'result':task.report},indent=2)+'\n');print(json.dumps({'column':a.column,'success':task.report['success'],'stage':task.phase,'error':task.report.get('error'),'events':[(x['phase'],x['object_id']) for x in task.report['predicted_scene_events']]},indent=2));raise SystemExit(0 if task.report['success'] else 1)
+   task.close_stage_timing();task.report.update(seed=a.seed,column=a.column,start_pose=a.start_pose,measured_wall_ms=(time.perf_counter()-started)*1000,final_snapshot=task.store.snapshot().to_dict());a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps({'result':task.report},indent=2)+'\n');print(json.dumps({'column':a.column,'success':task.report['success'],'stage':task.phase,'error':task.report.get('error'),'events':[(x['phase'],x['object_id']) for x in task.report['predicted_scene_events']]},indent=2));raise SystemExit(0 if task.report['success'] else 1)
 if __name__=='__main__':main()

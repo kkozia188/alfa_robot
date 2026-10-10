@@ -5,6 +5,7 @@ import copy
 import fcntl
 import json
 import math
+import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -71,7 +72,7 @@ def main():
     with open("/tmp/sevenova-curobo-gpu.lock","a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);occupied=gpu_processes()
         if occupied:raise RuntimeError("GPU occupied: "+"; ".join(occupied))
-        planner=FullCyclePlanner(PlannerAssets());snapshot=local_snapshot(planner,args.column,base_y);item=snapshot.object(f"wall_box_{upper:02d}");planner.set_snapshot(snapshot)
+        started=time.perf_counter();planner=FullCyclePlanner(PlannerAssets());snapshot=local_snapshot(planner,args.column,base_y);item=snapshot.object(f"wall_box_{upper:02d}");planner.set_snapshot(snapshot)
         target=np.eye(4);target[:3,3]=(item.pose.position[0]-item.dimensions_m[0]/2,item.pose.position[1],1.7673550912141804);from scipy.spatial.transform import Rotation;target[:3,:3]=Rotation.from_quat(np.roll(canonical_side_suction_quaternion_wxyz(side),-1)).as_matrix()
         proof=mesh_contact_proof(tool_mesh_vertices(planner,side),np.linalg.inv(pose_matrix(item.pose))@target,item.dimensions_m,.001,tolerance=.0001)
         contact_snapshot=replace(snapshot,objects=tuple(x for x in snapshot.objects if x.object_id!=item.object_id))
@@ -148,6 +149,6 @@ def main():
                     required=False
             report["attempts"].append(attempt)
             if required:report["selected_candidate"]=index;report["success"]=True;break
-        report.setdefault("success",False);args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2)+"\n");print(json.dumps({"column":args.column,"stage":args.stage,"contact_candidates":len(candidates),"success":report["success"],"selected":report.get("selected_candidate"),"last":report["attempts"][-1] if report["attempts"] else None},indent=2))
+        report.setdefault("success",False);report["measured_wall_ms"]=(time.perf_counter()-started)*1000;args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2)+"\n");print(json.dumps({"column":args.column,"stage":args.stage,"contact_candidates":len(candidates),"success":report["success"],"selected":report.get("selected_candidate"),"last":report["attempts"][-1] if report["attempts"] else None},indent=2))
 
 if __name__=="__main__":main()

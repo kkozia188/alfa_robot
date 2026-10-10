@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Direct extraction probe for an outer lower box after its upper box vanished."""
-import argparse, copy, fcntl, json, math
+import argparse, copy, fcntl, json, math, time
 from dataclasses import asdict, replace
 from pathlib import Path
 import numpy as np, torch, yaml
@@ -24,7 +24,7 @@ def main():
  with open('/tmp/sevenova-curobo-gpu.lock','a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);occupied=gpu_processes();
   if occupied:raise RuntimeError('GPU occupied: '+'; '.join(occupied))
-  start_document=json.loads(a.start_result.read_text());selected=next(x for x in start_document["attempts"] if x.get("candidate")==start_document["selected_candidate"] and x.get("final_q") is not None);start_q=np.asarray(selected["final_q"],dtype=float)
+  started=time.perf_counter();start_document=json.loads(a.start_result.read_text());selected=next(x for x in start_document["attempts"] if x.get("candidate")==start_document["selected_candidate"] and x.get("final_q") is not None);start_q=np.asarray(selected["final_q"],dtype=float)
   planner=FullCyclePlanner(PlannerAssets());snapshot=local_snapshot(planner,a.column,base_y);snapshot=replace(snapshot,objects=tuple(x for x in snapshot.objects if x.object_id!=f'wall_box_{upper:02d}'));item=snapshot.object(f'wall_box_{lower:02d}');planner.set_snapshot(snapshot)
   active=['updown']+[f'{side}_joint{i}' for i in range(1,8)];reference=dict(planner.home);idle='left' if side=='right' else 'right';parked=yaml.safe_load(planner.args.named_poses.read_text())['named_poses']['second_home'];reference.update({f'{idle}_joint{i}':parked[f'{idle}_joint{i}'] for i in range(1,8)})
   robot=reduced_robot(planner,active,reference);kin=robot.get('robot_cfg',robot)['kinematics'];kin['tool_frames']=[side+'_tool0'];contact_snapshot=replace(snapshot,objects=tuple(x for x in snapshot.objects if x.object_id!=item.object_id));solver=InverseKinematics(InverseKinematicsCfg.create(robot=robot,scene_model=to_curobo_scene(contact_snapshot),collision_cache={'cuboid':max(40,len(snapshot.objects)),'mesh':0},num_seeds=512,self_collision_check=True,use_cuda_graph=False,position_tolerance=.002,orientation_tolerance=math.radians(1),override_iters_for_multi_link_ik=500,optimizer_collision_activation_distance=.005,random_seed=a.seed));state=JointState.from_position(torch.tensor([[reference[n] for n in active]],device='cuda',dtype=torch.float32),joint_names=active);attempts=[]
@@ -59,7 +59,7 @@ def main():
       else:attempt['approach_success']=False
      attempt['success']=bool(attempt.get('extract_success') and attempt.get('approach_success'));attempts.append(attempt)
      if attempt['success']:
-      output={'seed':a.seed,'column':a.column,'side':side,'base_y_m':base_y,'success':True,'selected':attempt,'attempts':attempts};a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(output,indent=2)+'\n');print(json.dumps(output,indent=2));return
+      output={'seed':a.seed,'column':a.column,'side':side,'base_y_m':base_y,'success':True,'measured_wall_ms':(time.perf_counter()-started)*1000,'selected':attempt,'attempts':attempts};a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(output,indent=2)+'\n');print(json.dumps(output,indent=2));return
   finally:solver.destroy()
-  output={'seed':a.seed,'column':a.column,'side':side,'base_y_m':base_y,'success':False,'attempts':attempts};a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(output,indent=2)+'\n');print(json.dumps(output,indent=2));raise SystemExit(1)
+  output={'seed':a.seed,'column':a.column,'side':side,'base_y_m':base_y,'success':False,'measured_wall_ms':(time.perf_counter()-started)*1000,'attempts':attempts};a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(output,indent=2)+'\n');print(json.dumps(output,indent=2));raise SystemExit(1)
 if __name__=='__main__':main()

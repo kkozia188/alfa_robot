@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Compose one continuous five-column top-pair run from validated components."""
-import argparse, fcntl, json, math
+import argparse, fcntl, json, math, time
 from dataclasses import replace
 from pathlib import Path
 import numpy as np, torch, yaml
@@ -67,20 +67,24 @@ def component(root,column,seed):
    if event['phase'].endswith('_attach'):
     row['attachment']=next(x for x in event['snapshot']['attachments'] if x['object_id']==event['object_id'])
    events.append(row)
-  return np.asarray(r['frames']),list(r['phases']),np.asarray(r['frames'][0]),np.asarray(r['frames'][-1]),[15+column,20+column],events
- u=json.loads((root/f'outer{column}-upper-rear-s{seed}-20261010.json').read_text());ua=next(x for x in u['attempts'] if x.get('candidate')==u['selected_candidate'] and x.get('trajectory_frames'));l=json.loads((root/f'outer{column}-pair-rear-s{seed}-20261010.json').read_text());la=l['selected'];frames=np.asarray(ua['trajectory_frames']+la['trajectory_frames']);phases=list(ua['trajectory_phases']+la['trajectory_phases']);upper_n=len(ua['trajectory_frames']);upper_id=f'wall_box_{20+column:02d}';lower_id=f'wall_box_{15+column:02d}';upper_attach=next(i for i,x in enumerate(ua['trajectory_phases']) if x.endswith('_lateral'));lower_attach=next(i for i,x in enumerate(la['trajectory_phases']) if x.endswith('_lower_extract'));upper_release=upper_n-len(ua['rear_place']['frames'])+ua['rear_place']['events'][-1]['frame_index'];lower_release=len(frames)-len(la['rear_place']['frames'])+la['rear_place']['events'][-1]['frame_index'];events=[{'phase':ua['trajectory_phases'][upper_attach],'object_id':upper_id,'frame_index':upper_attach,'attachment':ua['attachment']},{**{key:value for key,value in ua['rear_place']['events'][-1].items() if key!='snapshot'},'frame_index':upper_release},{'phase':la['trajectory_phases'][lower_attach],'object_id':lower_id,'frame_index':upper_n+lower_attach,'attachment':la['attachment']},{**{key:value for key,value in la['rear_place']['events'][-1].items() if key!='snapshot'},'frame_index':lower_release}];return frames,phases,np.asarray(ua['approach_start_q']),np.asarray(la['final_q']),[15+column,20+column],events
+  measured=r.get('measured_wall_ms',sum(r.get('stage_timing_ms',{}).values()))
+  method='双臂顺序：cuRobo IK + GPU RRTConnect + 1cm解析笛卡尔 + 左右车后放置'
+  return np.asarray(r['frames']),list(r['phases']),np.asarray(r['frames'][0]),np.asarray(r['frames'][-1]),[15+column,20+column],events,measured,method
+ u=json.loads((root/f'outer{column}-upper-rear-s{seed}-20261010.json').read_text());ua=next(x for x in u['attempts'] if x.get('candidate')==u['selected_candidate'] and x.get('trajectory_frames'));l=json.loads((root/f'outer{column}-pair-rear-s{seed}-20261010.json').read_text());la=l['selected'];frames=np.asarray(ua['trajectory_frames']+la['trajectory_frames']);phases=list(ua['trajectory_phases']+la['trajectory_phases']);upper_n=len(ua['trajectory_frames']);upper_id=f'wall_box_{20+column:02d}';lower_id=f'wall_box_{15+column:02d}';upper_attach=next(i for i,x in enumerate(ua['trajectory_phases']) if x.endswith('_lateral'));lower_attach=next(i for i,x in enumerate(la['trajectory_phases']) if x.endswith('_lower_extract'));upper_release=upper_n-len(ua['rear_place']['frames'])+ua['rear_place']['events'][-1]['frame_index'];lower_release=len(frames)-len(la['rear_place']['frames'])+la['rear_place']['events'][-1]['frame_index'];events=[{'phase':ua['trajectory_phases'][upper_attach],'object_id':upper_id,'frame_index':upper_attach,'attachment':ua['attachment']},{**{key:value for key,value in ua['rear_place']['events'][-1].items() if key!='snapshot'},'frame_index':upper_release},{'phase':la['trajectory_phases'][lower_attach],'object_id':lower_id,'frame_index':upper_n+lower_attach,'attachment':la['attachment']},{**{key:value for key,value in la['rear_place']['events'][-1].items() if key!='snapshot'},'frame_index':lower_release}];measured=u.get('measured_wall_ms',0.)+l.get('measured_wall_ms',0.)
+ method='近侧单臂：RRTConnect接近 + 内移/下降/抽离 + 两次车后放置'
+ return frames,phases,np.asarray(ua['approach_start_q']),np.asarray(la['final_q']),[15+column,20+column],events,measured,method
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--components',type=Path,required=True);p.add_argument('--seed',type=int,default=11);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
  with open('/tmp/sevenova-curobo-gpu.lock','a') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);occupied=gpu_processes();
   if occupied:raise RuntimeError('GPU occupied: '+'; '.join(occupied))
-  planner=FullCyclePlanner(PlannerAssets());base=sequential_request(planner);world=replace(base.snapshot,objects=tuple(x for x in base.snapshot.objects if x.object_id not in ('left_wall','right_wall')));poses=yaml.safe_load(planner.args.named_poses.read_text())['named_poses'];transit=np.asarray([poses['second_home'][n] for n in ACTIVE_JOINTS]);q=np.asarray([planner.home[n] for n in ACTIVE_JOINTS]);base_y=0.;joint_names=['base_x','base_y','base_yaw',*ACTIVE_JOINTS];frames=[];phases=[];segments=[];lifecycle=[]
+  planner=FullCyclePlanner(PlannerAssets());base=sequential_request(planner);world=replace(base.snapshot,objects=tuple(x for x in base.snapshot.objects if x.object_id not in ('left_wall','right_wall')));poses=yaml.safe_load(planner.args.named_poses.read_text())['named_poses'];transit=np.asarray([poses['second_home'][n] for n in ACTIVE_JOINTS]);q=np.asarray([planner.home[n] for n in ACTIVE_JOINTS]);base_y=0.;joint_names=['base_x','base_y','base_yaw',*ACTIVE_JOINTS];frames=[];phases=[];segments=[];lifecycle=[];timing_rows=[]
   def append15(rows,phase,y):
    for row in rows:
     frames.append([0.,y,0.,*map(float,row)]);phases.append(phase)
   for order_index,column in enumerate(ORDER):
-   target_y=STATIONS[column]
+   transition_started=time.perf_counter();target_y=STATIONS[column]
    if abs(target_y-base_y)>1e-9:
     local=local_snapshot(world,base_y,q);park_path,stats=move_posture(planner,q,transit,local,a.seed*100+order_index*20)
     if park_path is None:raise RuntimeError(f'column {column}: cannot reach transit posture: {stats}')
@@ -88,7 +92,7 @@ def main():
     route,mobile_names=mobile_route(planner,world,q,base_y,target_y)
     if route is None:raise RuntimeError(f'column {column}: base route invalid')
     frames.extend(route.tolist());phases.extend(['base_translate']*len(route));base_y=target_y
-   part,part_phases,start,end,removed,part_events=component(a.components,column,a.seed);local=local_snapshot(world,base_y,q);to_start,stats=move_posture(planner,q,start,local,a.seed*100+10+order_index*20);join_index=0
+   part,part_phases,start,end,removed,part_events,component_ms,method=component(a.components,column,a.seed);local=local_snapshot(world,base_y,q);to_start,stats=move_posture(planner,q,start,local,a.seed*100+10+order_index*20);join_index=0
    if to_start is None:
     first_approach_phase=next((phase for phase in part_phases if 'precontact' in phase or 'approach' in phase),None)
     approach_indices=[i for i,phase in enumerate(part_phases) if phase==first_approach_phase]
@@ -101,11 +105,14 @@ def main():
     join_index=sampled[int(connection_stats['selected_goal'])];to_start=connection
    append15(to_start,'prepare_column',base_y);q=to_start[-1]
    if np.max(np.abs(q-part[join_index]))>1e-5:raise RuntimeError(f'column {column}: join mismatch')
+   transition_ms=(time.perf_counter()-transition_started)*1000
+   timing_rows.append({'column':column,'transition_ms':transition_ms,'component_ms':component_ms,
+                       'total_ms':transition_ms+component_ms,'method':method})
    component_start=len(frames);append15(part[join_index:],'column_'+str(column),base_y)
    for event in part_events:
     if event['frame_index']<join_index:raise RuntimeError(f'column {column}: join skipped lifecycle event {event}')
     lifecycle.append({**event,'column':column,'global_frame_index':component_start+event['frame_index']-join_index})
    q=end.copy();world=replace(world,objects=tuple(x for x in world.objects if x.object_id not in {f'wall_box_{i:02d}' for i in removed}));segments.append({'column':column,'base_y_m':base_y,'component_frames':len(part)-join_index,'component_join_index':join_index,'removed_boxes':removed})
-  output={'success':True,'seed':a.seed,'kind':'composed_five_column_top_pairs','order':list(ORDER),'joint_names':joint_names,'frames':frames,'phases':phases,'segments':segments,'lifecycle':lifecycle,'final_q15':q.tolist(),'final_base_y_m':base_y,'remaining_wall_boxes':sorted(x.object_id for x in world.objects if x.object_id.startswith('wall_box_'))}
+  output={'success':True,'seed':a.seed,'kind':'composed_five_column_top_pairs','order':list(ORDER),'joint_names':joint_names,'frames':frames,'phases':phases,'segments':segments,'lifecycle':lifecycle,'planning_timing':{'total_ms':sum(x['total_ms'] for x in timing_rows),'transition_ms':sum(x['transition_ms'] for x in timing_rows),'component_ms':sum(x['component_ms'] for x in timing_rows),'rows':timing_rows,'note':'累计规划计算墙钟，不是播放或动力学执行时间'},'final_q15':q.tolist(),'final_base_y_m':base_y,'remaining_wall_boxes':sorted(x.object_id for x in world.objects if x.object_id.startswith('wall_box_'))}
   a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(output,indent=2)+'\n');print(json.dumps({'success':True,'frames':len(frames),'order':list(ORDER),'segments':segments,'remaining_boxes':len(output['remaining_wall_boxes'])},indent=2))
 if __name__=='__main__':main()

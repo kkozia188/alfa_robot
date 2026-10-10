@@ -37,9 +37,52 @@
       "max_joint_step_deg": 0.4998646100284832,
       "max_base_step_m": 0.010000000000000009,
       "compressed_result": "artifacts/five-column-rear/five-column-rear-s11-r1.json.gz",
-      "compressed_sha256": "1e72c23b65df3c0ecb165eba12f5125cfd9b4f7c90e858b046cb208e180ead97",
+      "compressed_sha256": "4390e8ab87dca53db0b244f19c553d68bf535fba428d5aa489774f70b9e91693",
       "audit": "artifacts/five-column-rear/five-column-rear-s11-audit.json",
-      "audit_sha256": "fb92b2dda1c1aee8845ab709ca316fcbd7f7837147809851390e751216c74c4c"
+      "audit_sha256": "fb92b2dda1c1aee8845ab709ca316fcbd7f7837147809851390e751216c74c4c",
+      "planning_timing": {
+        "total_ms": 208375.5397319983,
+        "transition_ms": 56863.65228899922,
+        "component_ms": 151511.88744299908,
+        "rows": [
+          {
+            "column": 2,
+            "transition_ms": 21.61717499984661,
+            "component_ms": 34674.45712500012,
+            "total_ms": 34696.074299999964,
+            "method": "\u53cc\u81c2\u987a\u5e8f\uff1acuRobo IK + GPU RRTConnect + 1cm\u89e3\u6790\u7b1b\u5361\u5c14 + \u5de6\u53f3\u8f66\u540e\u653e\u7f6e"
+          },
+          {
+            "column": 1,
+            "transition_ms": 15508.510546000252,
+            "component_ms": 35518.41189100014,
+            "total_ms": 51026.922437000394,
+            "method": "\u53cc\u81c2\u987a\u5e8f\uff1acuRobo IK + GPU RRTConnect + 1cm\u89e3\u6790\u7b1b\u5361\u5c14 + \u5de6\u53f3\u8f66\u540e\u653e\u7f6e"
+          },
+          {
+            "column": 3,
+            "transition_ms": 14595.323413999722,
+            "component_ms": 31380.548391000048,
+            "total_ms": 45975.87180499977,
+            "method": "\u53cc\u81c2\u987a\u5e8f\uff1acuRobo IK + GPU RRTConnect + 1cm\u89e3\u6790\u7b1b\u5361\u5c14 + \u5de6\u53f3\u8f66\u540e\u653e\u7f6e"
+          },
+          {
+            "column": 4,
+            "transition_ms": 12185.801761999755,
+            "component_ms": 26638.644589999785,
+            "total_ms": 38824.44635199954,
+            "method": "\u8fd1\u4fa7\u5355\u81c2\uff1aRRTConnect\u63a5\u8fd1 + \u5185\u79fb/\u4e0b\u964d/\u62bd\u79bb + \u4e24\u6b21\u8f66\u540e\u653e\u7f6e"
+          },
+          {
+            "column": 0,
+            "transition_ms": 14552.399391999643,
+            "component_ms": 23299.825445998977,
+            "total_ms": 37852.22483799862,
+            "method": "\u8fd1\u4fa7\u5355\u81c2\uff1aRRTConnect\u63a5\u8fd1 + \u5185\u79fb/\u4e0b\u964d/\u62bd\u79bb + \u4e24\u6b21\u8f66\u540e\u653e\u7f6e"
+          }
+        ],
+        "note": "\u7d2f\u8ba1\u89c4\u5212\u8ba1\u7b97\u5899\u949f\uff0c\u4e0d\u662f\u64ad\u653e\u6216\u52a8\u529b\u5b66\u6267\u884c\u65f6\u95f4"
+      }
     },
     {
       "seed": 11,

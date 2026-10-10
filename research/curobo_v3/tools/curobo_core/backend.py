@@ -1,4 +1,5 @@
 import copy
+from contextlib import contextmanager
 import gc
 import json
 import math
@@ -12,6 +13,7 @@ import yaml
 
 from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
 from curobo.inverse_kinematics import InverseKinematics, InverseKinematicsCfg
+from curobo.trajectory_optimizer import TrajectoryOptimizer, TrajectoryOptimizerCfg
 from curobo.types import GoalToolPose, JointState, Pose
 
 from v3_batched_loaded_search import (
@@ -26,10 +28,24 @@ from v3_wall_ik_benchmark import (
 from .fixtures import WallLayout, tasks
 from .adapter import from_curobo_scene, task_attachments, to_curobo_scene, task_contact_positions, suction_quaternion, pose_matrix
 from .scene import RobotState, SceneSnapshot, digest
+from .trajectory import joint_state_trajectory, resample_path
+from .distance_metric import joint_distance_weights
 from .cache import resource_key
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGET_POSES = WORKSPACE_ROOT / 'generated/current_carry_target_6d.json'
+
+
+@contextmanager
+def preserve_torch_rng():
+    """Keep optional TrajOpt calls from perturbing later IK randomness."""
+    cpu_state = torch.random.get_rng_state()
+    cuda_state = torch.cuda.get_rng_state_all()
+    try:
+        yield
+    finally:
+        torch.random.set_rng_state(cpu_state)
+        torch.cuda.set_rng_state_all(cuda_state)
 
 
 def goal(poses):
@@ -54,6 +70,10 @@ class CuroboBackend:
         self.args = args
         self.robot = yaml.safe_load(args.robot_config.read_text())
         self.mobile_robot = yaml.safe_load(args.mobile_robot_config.read_text())
+        for robot in (self.robot, self.mobile_robot):
+            cspace = robot.get("robot_cfg", robot)["kinematics"]["cspace"]
+            cspace["cspace_distance_weight"] = joint_distance_weights(
+                cspace["joint_names"], cspace.get("cspace_distance_weight"))
         self.box_fit = json.loads(args.box_fit.read_text())
         self.home = yaml.safe_load(args.named_poses.read_text())["named_poses"]["home"]
         self.front = chassis_front_x(args.urdf, self.home)
@@ -93,6 +113,7 @@ class CuroboBackend:
         self._cached_task = None
         self._cached_solver = None
         self._cached_checkers = {}
+        self._cached_trajectory_optimizers = {}
 
     def motion_weights(self, boxes):
         weights = np.ones(len(ACTIVE_JOINTS), dtype=np.float32)
@@ -143,6 +164,8 @@ class CuroboBackend:
         if key != self._cached_task:
             self._cached_solver = None
             self._cached_checkers.clear()
+            if not hasattr(self, "_cached_trajectory_optimizers"):
+                self._cached_trajectory_optimizers = {}
             self._cached_task = key
             gc.collect()
 
@@ -205,6 +228,107 @@ class CuroboBackend:
     def scene(self, boxes, mobile=False):
         return to_curobo_scene(self.snapshot,
                                (f"wall_box_{box_id:02d}" for box_id in boxes.values()), mobile)
+
+    def trajectory_optimizer(self, boxes, payload=False):
+        """Return a cached kinematic TrajOpt solver; dynamics stay disabled until calibrated."""
+        self.prepare_task(boxes)
+        key = (("loaded", tuple(sorted(boxes)), self.suction_mode,
+                digest(self.contact_offsets), digest(self.box_fit)) if payload else ("empty",))
+        if key not in self._cached_trajectory_optimizers:
+            robot = loaded_robot(
+                self.robot, self.box_fit, active_sides=tuple(boxes),
+                attachments=self.attachments(boxes),
+            ) if payload else copy.deepcopy(self.robot)
+            robot.get("robot_cfg", robot)["load_dynamics"] = False
+            with preserve_torch_rng():
+                config = TrajectoryOptimizerCfg.create(
+                    robot=robot,
+                    scene_model=self.scene(boxes),
+                    collision_cache={"cuboid": max(40, len(self.snapshot.objects)),
+                                     "mesh": len(self.snapshot.meshes)},
+                    num_seeds=1,
+                    self_collision_check=True,
+                    use_cuda_graph=True,
+                    optimizer_collision_activation_distance=0.0,
+                    interpolation_dt=float(getattr(self.args, "trajopt_interpolation_dt", 0.025)),
+                    interpolation_buffer_size=1000,
+                )
+                self._cached_trajectory_optimizers[key] = TrajectoryOptimizer(config)
+        else:
+            self._cached_trajectory_optimizers[key].scene_collision_checker.load_collision_model(
+                self.scene(boxes))
+        return self._cached_trajectory_optimizers[key]
+
+    def optimize_rrt_path(self, path, validity, boxes, payload=False):
+        """Optimize one 15-DoF RRT path and retain the original path on failure."""
+        optimizer = self.trajectory_optimizer(boxes, payload=payload)
+        seed = resample_path(path, optimizer.action_horizon, validity.weights.detach().cpu().numpy())
+        seed = torch.tensor(seed, device="cuda", dtype=torch.float32).reshape(
+            1, 1, optimizer.action_horizon, len(ACTIVE_JOINTS))
+        state = lambda row: JointState.from_position(
+            torch.tensor(np.asarray(row).reshape(1, -1), device="cuda", dtype=torch.float32),
+            joint_names=ACTIVE_JOINTS,
+        )
+        torch.cuda.synchronize()
+        started = time.perf_counter()
+        with preserve_torch_rng():
+            result = optimizer.solve_cspace(
+                goal_state=state(path[-1]), current_state=state(path[0]), seed_traj=seed,
+                num_seeds=1, return_seeds=1, finetune_attempts=2,
+            )
+        torch.cuda.synchronize()
+        wall_ms = (time.perf_counter() - started) * 1000.0
+        telemetry = {
+            "attempted": True,
+            "accepted": False,
+            "wall_ms": wall_ms,
+            "solve_time_ms": float(result.solve_time) * 1000.0,
+            "source_waypoints": len(path),
+            "seed_waypoints": optimizer.action_horizon,
+            "payload_collision_model": bool(payload),
+            "dynamics_enabled": False,
+            "torque_constraints_enabled": False,
+        }
+        solver_success = bool(result.success.reshape(-1)[0].item())
+        constraint_residual = max(
+            (float(value.detach().max().cpu())
+             for metrics in (result.metrics, result.interpolated_metrics) if metrics is not None
+             for collection in (metrics.costs_and_constraints.constraints,
+                                metrics.costs_and_constraints.hybrid_costs_constraints)
+             for value in collection.values),
+            default=0.0,
+        )
+        telemetry["solver_success"] = solver_success
+        telemetry["maximum_constraint_residual"] = constraint_residual
+        if not solver_success and constraint_residual > 1e-6:
+            telemetry["fallback_reason"] = "cuRobo TrajOpt constraints did not converge"
+            return None, telemetry
+        trajectory = result.get_interpolated_plan()
+        if trajectory is None:
+            telemetry["fallback_reason"] = "cuRobo TrajOpt returned no interpolated trajectory"
+            return None, telemetry
+        timed = joint_state_trajectory(trajectory, ACTIVE_JOINTS)
+        positions = np.asarray(timed["positions"], dtype=np.float32)
+        if (not np.allclose(positions[0], path[0], atol=1e-5, rtol=0) or
+                not np.allclose(positions[-1], path[-1], atol=1e-5, rtol=0)):
+            telemetry["fallback_reason"] = "optimized trajectory changed an endpoint"
+            return None, telemetry
+        positions[0] = np.asarray(path[0], dtype=np.float32)
+        positions[-1] = np.asarray(path[-1], dtype=np.float32)
+        timed["positions"] = positions.tolist()
+        values = torch.tensor(positions, device="cuda", dtype=torch.float32)
+        node_mask = validity.mask(values)
+        edge_mask = (torch.ones(0, dtype=torch.bool, device="cuda") if len(values) < 2 else
+                     validity.edges(values[:-1], values[1:], resolution=math.radians(0.5)))
+        invalid_nodes = torch.nonzero(~node_mask, as_tuple=False).reshape(-1).cpu().tolist()
+        invalid_edges = torch.nonzero(~edge_mask, as_tuple=False).reshape(-1).cpu().tolist()
+        telemetry["project_invalid_nodes"] = invalid_nodes[:20]
+        telemetry["project_invalid_edges"] = invalid_edges[:20]
+        if invalid_nodes or invalid_edges:
+            telemetry["fallback_reason"] = "project collision/stability gate rejected optimized trajectory"
+            return None, telemetry
+        telemetry.update(accepted=True, output_frames=len(positions), trajectory=timed)
+        return positions, telemetry
 
     def random_extract_start(self, boxes):
         started_all = time.perf_counter()
@@ -391,7 +515,22 @@ class CuroboBackend:
         started_assembly = time.perf_counter()
         if path is None:
             raise RuntimeError("2秒内未找到搬运路径")
-        transport = densify(path, [5.0] + [1.0] * 14)
+        transport = None
+        if getattr(self.args, "trajopt_rrt", False):
+            try:
+                transport, trajectory_optimization = self.optimize_rrt_path(
+                    path, validity, boxes, payload=True)
+            except (RuntimeError, ValueError) as error:
+                trajectory_optimization = {
+                    "attempted": True, "accepted": False, "payload_collision_model": True,
+                    "dynamics_enabled": False, "torque_constraints_enabled": False,
+                    "fallback_reason": f"{type(error).__name__}: {error}",
+                }
+            stats["trajectory_optimization"] = trajectory_optimization
+        if transport is None:
+            transport = densify(path, [5.0] + [1.0] * 14)
+            if getattr(self.args, "trajopt_rrt", False):
+                stats["trajectory_fallback_frames"] = transport
         mobile_names = list(
             self.mobile_robot.get("robot_cfg", self.mobile_robot)["kinematics"]["cspace"]["joint_names"]
         )

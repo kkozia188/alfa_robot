@@ -152,3 +152,11 @@ L03/R01顶吸完整周期实跑通过；整墙自动模式仍24/25，L02侧吸�
 `PlanRequest.search_seed`及CLI `--search-seed`控制RRT采样，不更换规划器、IK策略或2秒搜索预算。省略字段保持旧请求ID和阶段种子；接近用base+候选索引，搬运用base，回程用base+1，结果逐段记录。输入限制为uint32；碰撞资源缓存不因搜索种子重建，因为其几何没有变化。
 
 原PR的8公开种子清单逐字节保留于`tests/fixtures/OMPL_SEEDS.json`，名称仅表示来源，当前仍是Informed RRT。8例独立进程各一次完整25箱、运行时哈希前后一致；同seed暖重复不保证逐点一致，不能继承旧C/D位级轨迹结论或时延门槛。独立CPU网格抽查又发现球模型与网格判断差异，当前通过范围仍仅研究球模型。要求映射、差异证据和命令见`../../docs/motion233_migration_requirements.md`。
+
+## RRT种子TrajOpt实验（2026-10-10）
+
+CLI显式加`--trajopt-rrt`时，空载接近、携箱运输和空载回Home的15维RRT路径会按加权弧长重采样，作为固定官方cuRobo main@78fd485的`TrajectoryOptimizer.solve_cspace()`种子。只有cuRobo约束残差与现有`GpuValidity`节点/边门禁同时通过才采纳，否则保留原dense RRT。结果的`timed_segments`记录局部`time/q/qdot/qddot/jerk`；Viser显示当前关节表、选中关节曲线及按速度上限归一化的关节轴矢量。
+
+该入口默认关闭，当前仅加载碰撞负载球，明确设置`load_dynamics=false`；未使用箱体质量、惯量、RNEA或torque约束，不可解释为实机动力学验收。
+
+启用该入口后，解析抽离和两段底盘yaw保留原几何节点，使用C2关节样条和五次时间律生成rest-to-rest导数；样条密采样重新经过项目碰撞/稳定性门禁，extract另验笛卡尔走廊。结果同时输出完整周期`time_from_start_s/velocities/accelerations/jerks/motion_duration_s/timed_validation`。Viser优先按该真实时间轴回放，旧JSON继续采用明确标注的帧步进。

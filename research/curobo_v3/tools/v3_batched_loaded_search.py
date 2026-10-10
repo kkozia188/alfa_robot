@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import yaml
 
+from curobo_core.distance_metric import joint_distance_weights
+
 from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
 from curobo.motion_planner import MotionPlanner, MotionPlannerCfg
 from curobo.types import JointState
@@ -79,7 +81,7 @@ class GpuValidity:
         self.ground_z = ground_z
         self.joint_names = list(joint_names or ACTIVE_JOINTS)
         self.weights = torch.tensor(
-            weights or ([5.0] + [1.0] * (len(self.joint_names) - 1)),
+            joint_distance_weights(self.joint_names, weights),
             device="cuda", dtype=torch.float32,
         )
         self.ground_exempt_sphere_indices = set()
@@ -125,7 +127,6 @@ class GpuValidity:
             collision_cost = (
                 self.checker.get_self_collision(spheres).reshape(1, horizon, -1).sum(-1)
                 + self.checker.collision_constraint.forward(state).reshape(1, horizon, -1).sum(-1)
-                + self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1)
             ).reshape(-1)
             base_mesh=getattr(self.checker,'base_mesh_layer',None)
             if base_mesh is not None:
@@ -143,7 +144,9 @@ class GpuValidity:
                 collision_cost = collision_cost + ground_collision.to(collision_cost.dtype)
             stability_cost = self._stability_cost(state, horizon)
             tilt_valid = stability_cost <= 1.0 - self.minimum_box_up_z
-            valid_output.append((collision_cost == 0) & tilt_valid)
+            # Tolerate bound-cost roundoff only; never relax collision costs.
+            bound_cost = self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1).reshape(-1)
+            valid_output.append((collision_cost == 0) & (bound_cost <= 1e-9) & tilt_valid)
             stability_output.append(stability_cost)
             self.states_checked += horizon
         return torch.cat(valid_output), torch.cat(stability_output)

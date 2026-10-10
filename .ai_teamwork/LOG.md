@@ -2314,3 +2314,52 @@
 - 上游回归：L19/R15侧吸1574帧/4.491s，L4/R0顶吸2258帧/3.159s。修复TaskCycle候选索引与专用placement目标被通用入口覆盖的问题。
 - 测试：固定SDK46/46，基础环境46项中6项声明依赖skip；语法检查通过。按用户口径FCL诊断非PR门禁。
 - 下一步：amend单提交，推送bestastesia/motion-233-curobo-4200247并创建对alfa_v3_curobo的非Draft PR；不改原PR43。
+
+## 2026-10-10 运控 / Codex / cuRobo RRT种子轨迹优化首个闭环
+- 做了什么：从PR #53基线bb4ac23新建`feature/motion-233-curobo-trajopt`工作树；为15维空载RRT段增加可选`--trajopt-rrt`，将RRT路径按加权弧长重采样后送入固定cuRobo main@78fd485的`TrajectoryOptimizer.solve_cspace()`，序列化`q/qdot/qddot/jerk/dt/time`，并以现有`GpuValidity`节点和边检查作为最终门禁；动力学与torque显式关闭。
+- 改了哪里：`curobo_core/trajectory.py`、`backend.py`、`planner.py`，两个CLI入口及一个CPU辅助测试；默认不开启，失败保持原dense RRT。
+- 验证结果：CPU辅助测试2/2及py_compile通过。隔离runtime的L19/R15完整周期仍成功；approach/home均实际调用TrajOpt并生成插值轨迹，但项目门禁拒绝优化结果后正确回退，原完整周期仍成功。当前拒绝原因是cuRobo约束残差仅3.55e-11时`success=False`且项目门禁出现少量碰撞/稳定性无效帧，未绕过。
+- 留给下个AI：下一步应调优空载TrajOpt的场景/约束，使至少一条RRT seed通过项目门禁，再将timed trajectory提升到周期级输出和Viser；不要启用RNEA/torque，升降与载荷惯量尚未标定。
+
+## 2026-10-10 运控 / Codex / cuRobo三段RRT时间化与Viser显示
+- 做了什么：消除float32关节边界约1e-14残差造成的假阴性；空载approach、携箱transport、空载return_home三段均以RRT为seed通过cuRobo TrajOpt及项目节点/边门禁。结果新增对齐完整周期帧号的`timed_segments`，保存`time/q/qdot/qddot/jerk`。
+- 改了哪里：TrajOpt缓存与loaded/empty求解接线、命名轨迹扩展/对齐、Viser关节表/uPlot/速度轴箭头、CLI和核心说明。默认关闭，RNEA/torque仍关闭。
+- 验证结果：固定SDK核心49/49；隔离runtime L19/R15成功，原1386帧变为1115帧；时间化段为approach 101帧/2.5s、transport 61帧/1.5s、return_home 41帧/1.0s。三段项目无效节点/边均为0；关闭开关的基线仍成功且1386帧。Viser replay smoke通过。
+- 留给下个AI：extract与两段yaw仍是未时间化解析/确定性帧；下一步应为这些固定几何段补安全时间参数化，并让回放按真实时间推进。动力学资产可信前禁止启用RNEA/torque。
+
+## 2026-10-10 运控 / Codex / 完整周期时间化与真实时间回放
+- 做了什么：在不新增依赖的前提下，用C2关节样条+五次时间律为解析extract和loaded/empty yaw固定几何段生成rest-to-rest `q/qdot/qddot/jerk/time`；沿样条密采样重新执行项目碰撞/稳定性边门禁，并对extract重新检查笛卡尔走廊。六个运动段覆盖完整周期，home/attach/release为零时长事件。
+- 改了哪里：`curobo_core/trajectory.py`增加固定路径时间参数化、完整周期组装及验收；planner/sequence输出完整时间轴和导数；Viser按墙钟时间与倍率播放，旧无时间JSON继续使用帧步进。
+- 验证结果：固定SDK核心52/52。隔离runtime L19/R15成功，1115帧全部对齐；总名义运动37.739s，速度/加速度/jerk上限比例0.952/0.990/0.824，未覆盖运动帧0。extract 8.0s，走廊最大偏差0.282mm/0.059°；两段yaw各12.37s。Viser真实时间replay smoke通过。
+- 留给下个AI：当前时间化满足冻结代理配置而非实机限制；下一阶段应增加版本化硬件限制/载荷动力学合同和离线执行导出，不得用现有updown 10N或未标定箱体惯量开启torque门禁。
+
+## 2026-10-10 运控 / Codex / 当前源码完整0.75m墙最终回归
+- 做了什么：增加TrajOpt调用的CPU/CUDA RNG保存恢复，避免可选后处理改变后续IK随机序列；TrajOpt或C2样条不能通过门禁时，使用严格保留已验碰直边、逐路点停稳的五次时间律兜底。增加独立结果验证器和完整复制命令。
+- 验证结果：当前源码隔离runtime完整0.75m墙15/15轮、25/25箱成功，19848帧，规划197.146s，名义动作986.500s；速度/加速度/jerk上限比例0.952/0.996/0.868，生命周期事件静止、未覆盖运动帧0。结果SHA256 `b626fa031d5c16b6775d05b3df8c7e57bb8d37512ae2e92deaddce2e7061f4f2`，摘要已固化到`generated/trajopt_validation/summary.json`。
+- 留给下个AI：研究级完整产品已闭环，但实机产品仍依赖版本化硬件限制、18→执行关节映射、箱体/升降动力学标定；在这些外部资产到位前继续保持RNEA/torque关闭。
+
+## 2026-10-10 独立审查 / Codex / 隔离限位容差与修复曲线显示
+- 做了什么：修复全局碰撞代价容差回归；仅bound_cost允许1e-9数值残差，世界/自碰撞/地面/底盘网格的collision_cost仍必须为零。Viser改用aligned uPlot、数值秒轴、显式曲线颜色，并补速度单位/s。
+- 改了哪里：`tools/v3_batched_loaded_search.py`、`tools/v3_full_cycle_demo.py`，新增`tests/test_core_collision_tolerance.py`；未修改执行Agent的backend/参数化代码，未提交。
+- 验证结果：真实evaluate方法的4个CPU子例通过，demo_stats 2/2、py_compile、diff检查通过；候选图表浏览器实测能显示q/qdot，截图`/tmp/trajopt-candidate-curves.png`。测试不证明GPU完整规划通过。
+- 留给执行Agent：独立runtime仍需同步这些修复并重新验收；此前25/25使用旧的全局碰撞容差，不能作新源码安全复验。混合轮次时间数组错位、回退轨迹显示中间运动采样及完整性能对照仍未关闭。完整审查快照`/tmp/curobo-trajopt-independent-review.json`。
+
+## 2026-10-10 运控 / Codex / TrajOpt跨轮缓存与最终性能收口
+- 做了什么：空载和相同负载形态的TrajOpt常驻复用CUDA graph，每轮只更新场景；保存/恢复Torch CPU/CUDA RNG，避免可选后处理改变后续IK。几何优化失败时使用严格保留原已验碰直边的停稳时间律。
+- 验证结果：当前最终源码0.75m完整墙再次25/25通过，19869帧；规划由上一版197.146s降至163.013s，名义动作972.081s，冻结限制比例仍为0.952/0.996/0.868。最终结果SHA256 `974b999cc7362f0ca5d945d52cb06780af0350db570706e14f5ed6bb2dff14fc`。
+
+## 2026-10-10 运控 / Codex / 严格碰撞与最终产物哈希
+- 做了什么：将1e-9数值容差仅用于joint-bound浮点残差，self/world/base-mesh/ground碰撞仍严格要求0；新增独立回归证明容差不会放过碰撞。TrajOpt缓存后每轮更新世界模型，最终严格版本重新完整回放。
+- 验证结果：严格当前源码0.75m完整墙25/25，19869帧，规划162.521s，名义动作972.081s；结果SHA256 `df8074e99642dad042ad9752a4711439e6b5bf64c2f125c4374d6224ac8b1095`。固定SDK核心54/54。
+
+## 2026-10-10 独立审查 / Codex / 防止发布错位的整墙时间轴
+- 做了什么：复用原sequence拼接，仅在全部已拼接帧都有时间数据时保留全局时间轴；遇到无时间轮次保留各轮数据、移除不完整全局时钟；单轮导数长度不符显式拒绝。
+- 改了哪里：`tools/curobo_core/sequence.py`、现有`tests/test_core_wall_layout.py`。未改规划算法或正在运行的独立runtime。
+- 验证结果：wall_layout 6/6，覆盖先有后无、先无后有、长度错误；独立mixed timing复现已通过；diff检查通过。
+- 待办：执行Agent同步runtime并最终复验；该修复不替代为缺失运动段生成真实时间轨迹。
+
+## 2026-10-10 运控 / Codex / TrajOpt实时性统计固化
+- 完整墙TrajOpt累计12.733s；warm中位数approach 94.66ms、transport 356.12ms、return-home 94.77ms。15轮采纳8/11/11段，其余安全回退已验碰几何。独立验证器现输出分段采纳率和wall time。
+
+## 2026-10-10 运控 / Codex / 吸收最新alfa_v3_curobo距离合同
+- 上游最新`8e396a3`相对4200247新增updown 0.1m=关节15°代价。当前分支已等价接入`joint_distance_weights`及回归测试；TrajOpt和时间化继续基于同一命名距离合同。

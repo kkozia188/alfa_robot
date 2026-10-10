@@ -12,7 +12,6 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import torch
 import yaml
-
 from curobo_core.distance_metric import joint_distance_weights
 
 from curobo.collision_checking import RobotCollisionChecker, RobotCollisionCheckerCfg
@@ -174,6 +173,10 @@ class GpuValidity:
 
 def densify(path, weights=None, maximum_weighted_step=math.radians(0.5)):
     weights = np.asarray(weights or ([5.0] + [1.0] * (len(path[0]) - 1)))
+    if len(path[0]) in (15, 18):
+        updown_index = 0 if len(path[0]) == 15 else 3
+        weights = weights.copy()
+        weights[updown_index] = max(5.0, weights[updown_index])
     dense = [path[0].tolist()]
     for target in path[1:]:
         start = np.asarray(dense[-1])

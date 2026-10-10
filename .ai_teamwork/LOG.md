@@ -2363,3 +2363,15 @@
 
 ## 2026-10-10 运控 / Codex / 吸收最新alfa_v3_curobo距离合同
 - 上游最新`8e396a3`相对4200247新增updown 0.1m=关节15°代价。当前分支已等价接入`joint_distance_weights`及回归测试；TrajOpt和时间化继续基于同一命名距离合同。
+
+## 2026-10-10 独立审查 / Codex / 回退段导出实际运动采样
+- 原因：真实整墙15个移动回退段只导出零速度停止节点，检碰使用的中间运动样本被丢弃，导致最近节点回放及速度图失真。
+- 修复：复用time_parameterize_stops既有五次时间律及validation位置样本，附带相同采样时刻的解析速度/加速度/jerk；仅在记录刚追加段时用它们替换输出，保留起始事件与payload。未另引插值算法或依赖。
+- 文件：`tools/curobo_core/trajectory.py`、`tools/curobo_core/planner.py`的记录函数、现有`tests/test_core_trajectory.py`。
+- 验证：新增运动非零速度/采样步长/限值/事件帧对齐检查，轨迹7/7；合并最新上游后全部core测试57/57、py_compile及diff检查通过。仍需执行Agent同步独立runtime后GPU整墙与浏览器复验；旧产物不覆盖此次输出采样变更。
+
+## 2026-10-10 运控 / Codex / 最新alfa_v3_curobo最终回归
+- 合并上游`8e396a3`后重新隔离回放：0.75m完整墙15/15轮、25/25箱，20006帧，规划163.256s，名义动作997.665s；冻结限制比例0.952/0.996/0.868。TrajOpt累计12.795s，采纳approach/transport/return 7/12/11段。结果SHA256 `afc48878cc17b51ba9564951ca15d2a332b601999c8efa647a5c4225d93b780d`。
+
+## 2026-10-10 运控 / Codex / 每帧真实导数最终闭环
+- 修复保守回退段仅在原路点记录零速度的问题：现在按25ms或更细的五次时间律重采样，周期frames与q/qdot/qddot/jerk逐帧完全对齐。最新上游基线完整墙25/25，39552真实时间帧，规划164.428s，动作997.665s；SHA256 `4b3e7cba0301ab2dcc34dee898e72426de4457ff6522a8937448528bfe1b099d`。

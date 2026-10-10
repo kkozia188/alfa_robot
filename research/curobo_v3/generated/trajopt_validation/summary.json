@@ -32,40 +32,42 @@
     1,
     2
   ],
-  "frames": 19869,
-  "planning_wall_s": 162.52127511599974,
-  "motion_duration_s": 972.0805485513946,
+  "frames": 39552,
+  "planning_wall_s": 164.42803935600023,
+  "motion_duration_s": 997.6653921717904,
   "maximum_limit_ratios": {
     "velocity": 0.9523811936378479,
     "acceleration": 0.9963088989257812,
-    "jerk": 0.8675798950195313
+    "jerk": 0.8680162353515625
   },
   "uncovered_motion_frames": 0,
   "event_frames_stationary": true,
-  "result_sha256": "df8074e99642dad042ad9752a4711439e6b5bf64c2f125c4374d6224ac8b1095",
+  "result_sha256": "4b3e7cba0301ab2dcc34dee898e72426de4457ff6522a8937448528bfe1b099d",
   "dynamics_enabled": false,
   "torque_constraints_enabled": false,
   "collision_cost_tolerance": 0.0,
   "joint_bound_cost_tolerance": 1e-09,
-  "trajopt_wall_s": 12.732783680998182,
+  "trajopt_wall_s": 13.084185739018722,
   "trajopt_segments": {
     "approach": {
       "attempts": 15,
-      "accepted": 8,
-      "wall_median_ms": 94.66003399938927,
-      "wall_max_ms": 1350.3368369983946
+      "accepted": 7,
+      "wall_median_ms": 94.78780700010248,
+      "wall_max_ms": 1337.545651000255
     },
     "transport": {
       "attempts": 15,
-      "accepted": 11,
-      "wall_median_ms": 356.1187790000986,
-      "wall_max_ms": 1195.5516889993305
+      "accepted": 12,
+      "wall_median_ms": 359.9789689978934,
+      "wall_max_ms": 1275.3296900009445
     },
     "return_home": {
       "attempts": 15,
       "accepted": 11,
-      "wall_median_ms": 94.76740900026925,
-      "wall_max_ms": 101.0704070013162
+      "wall_median_ms": 95.53605600012816,
+      "wall_max_ms": 100.15178000321612
     }
-  }
+  },
+  "upstream_base_commit": "8e396a3f2183913bdbab69fabf16f49040ede4ba",
+  "fallback_samples_include_physical_derivatives": true
 }

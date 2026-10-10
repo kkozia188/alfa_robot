@@ -397,6 +397,16 @@ class FullCyclePlanner(CuroboBackend):
                 end = start + len(positions)
                 if end <= len(report["frames"]) and np.allclose(
                         report["frames"][start:end], positions, atol=1e-5, rtol=0):
+                    if "sampled_trajectory" in trajectory:
+                        if end != len(report["frames"]):
+                            raise ValueError("resampling must target the just-appended segment")
+                        expanded = expand_timed_trajectory(trajectory["sampled_trajectory"], mobile_names)
+                        count = len(expanded["positions"])
+                        for field in ("phases", "payload"):
+                            labels = report[field][start:end]
+                            report[field][start:end] = [labels[0]] + [labels[-1]] * (count - 1)
+                        report["frames"][start:end] = expanded["positions"]
+                        end = start + count
                     report["timed_segments"].append({
                         "name": name, "frame_start": start, "frame_end": end - 1, **expanded,
                     })

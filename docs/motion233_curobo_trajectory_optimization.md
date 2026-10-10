@@ -58,6 +58,4 @@ PYTHONPATH=/home/astesia/Sevenova/golden_curobo_adapter/mentor-repro-20261006/cu
 
 ## 当前完整墙证据
 
-2026-10-10当前严格源码在0.75m墙完成15/15轮、25/25箱：19869帧，规划162.521s，名义动作972.081s。TrajOpt累计12.733s；warm中位数为approach 94.66ms、transport 356.12ms、return-home 94.77ms。15轮中分别采纳8/11/11段，未采纳段保持原已验碰几何并使用保守停稳时间律。速度、加速度、jerk冻结限制最大比例为0.952、0.996、0.868。结果哈希见`generated/trajopt_validation/summary.json`。
-
-本分支还吸收上游`8e396a3`的关节距离合同：`updown`移动0.1m与普通旋转关节15°等代价；轨迹密化仍保持至少5 rad/m采样权重，距离代价和检查精度不混用。
+2026-10-10当前严格源码已合入上游`alfa_v3_curobo@8e396a3`的距离合同，并在0.75m墙完成15/15轮、25/25箱：39552个真实时间采样帧，规划164.428s，名义动作997.665s。TrajOpt累计13.084s；warm中位数为approach 94.79ms、transport 359.98ms、return-home 95.54ms。15轮中分别采纳7/12/11段，未采纳段保持原已验碰直边，并以25ms或更细的五次时间律输出每帧真实`q/qdot/qddot/jerk`。速度、加速度、jerk冻结限制最大比例为0.952、0.996、0.868。结果SHA256 `4b3e7cba0301ab2dcc34dee898e72426de4457ff6522a8937448528bfe1b099d`，完整索引见`generated/trajopt_validation/summary.json`。

@@ -1,0 +1,73 @@
+{
+  "success": true,
+  "validated_at": "2026-10-10",
+  "baseline_commit": "bb4ac233f2d3e05b3ab63588cdd09d00f0abae9d",
+  "curobo_commit": "78fd485fa82d9b9a063fb4985e371814587e666a",
+  "wall_distance_m": 0.75,
+  "rounds": 15,
+  "completed_box_ids": [
+    24,
+    20,
+    23,
+    21,
+    22,
+    19,
+    15,
+    18,
+    16,
+    17,
+    14,
+    10,
+    13,
+    11,
+    12,
+    9,
+    5,
+    8,
+    6,
+    7,
+    4,
+    0,
+    3,
+    1,
+    2
+  ],
+  "frames": 39552,
+  "planning_wall_s": 164.42803935600023,
+  "motion_duration_s": 997.6653921717904,
+  "maximum_limit_ratios": {
+    "velocity": 0.9523811936378479,
+    "acceleration": 0.9963088989257812,
+    "jerk": 0.8680162353515625
+  },
+  "uncovered_motion_frames": 0,
+  "event_frames_stationary": true,
+  "result_sha256": "4b3e7cba0301ab2dcc34dee898e72426de4457ff6522a8937448528bfe1b099d",
+  "dynamics_enabled": false,
+  "torque_constraints_enabled": false,
+  "collision_cost_tolerance": 0.0,
+  "joint_bound_cost_tolerance": 1e-09,
+  "trajopt_wall_s": 13.084185739018722,
+  "trajopt_segments": {
+    "approach": {
+      "attempts": 15,
+      "accepted": 7,
+      "wall_median_ms": 94.78780700010248,
+      "wall_max_ms": 1337.545651000255
+    },
+    "transport": {
+      "attempts": 15,
+      "accepted": 12,
+      "wall_median_ms": 359.9789689978934,
+      "wall_max_ms": 1275.3296900009445
+    },
+    "return_home": {
+      "attempts": 15,
+      "accepted": 11,
+      "wall_median_ms": 95.53605600012816,
+      "wall_max_ms": 100.15178000321612
+    }
+  },
+  "upstream_base_commit": "8e396a3f2183913bdbab69fabf16f49040ede4ba",
+  "fallback_samples_include_physical_derivatives": true
+}

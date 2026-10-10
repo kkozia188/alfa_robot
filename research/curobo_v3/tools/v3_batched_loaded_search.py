@@ -63,10 +63,17 @@ def loaded_robot(robot, box_fit, active_sides=("left", "right"), attachments=Non
 class GpuValidity:
     def __init__(self, checker, active_sides=(), max_box_tilt_deg=30.0,
                  stability_weight=10.0, check_ground=False, ground_z=0.0,
-                 joint_names=None, weights=None):
+                 joint_names=None, weights=None, attachments=None):
         self.checker = checker
         self.states_checked = 0
         self.active_sides = tuple(active_sides)
+        from curobo_core.adapter import pose_matrix
+        fallback = getattr(self.checker, "task_tool_to_box", {})
+        self.payload_up = {side: fallback.get(
+            side, canonical_side_tool_to_box(side))[:3, 2] for side in self.active_sides}
+        if attachments is not None:
+            transforms = {item.parent_link: pose_matrix(item.tool_to_object) for item in attachments}
+            self.payload_up = {side: transforms[side + "_tool0"][:3, 2] for side in self.active_sides}
         self.minimum_box_up_z = math.cos(math.radians(max_box_tilt_deg))
         self.stability_weight = stability_weight
         self.check_ground = check_ground
@@ -91,7 +98,7 @@ class GpuValidity:
         for side in self.active_sides:
             quaternion = tool_poses[f"{side}_tool0"].quaternion.reshape(-1, 4)
             local_up = torch.tensor(
-                getattr(self.checker, 'task_tool_to_box', {}).get(side, canonical_side_tool_to_box(side))[:3, 2],
+                self.payload_up[side],
                 device=quaternion.device, dtype=quaternion.dtype,
             ).expand(len(quaternion), -1)
             vector = quaternion[:, 1:]
@@ -119,7 +126,6 @@ class GpuValidity:
             collision_cost = (
                 self.checker.get_self_collision(spheres).reshape(1, horizon, -1).sum(-1)
                 + self.checker.collision_constraint.forward(state).reshape(1, horizon, -1).sum(-1)
-                + self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1)
             ).reshape(-1)
             base_mesh=getattr(self.checker,'base_mesh_layer',None)
             if base_mesh is not None:
@@ -137,7 +143,9 @@ class GpuValidity:
                 collision_cost = collision_cost + ground_collision.to(collision_cost.dtype)
             stability_cost = self._stability_cost(state, horizon)
             tilt_valid = stability_cost <= 1.0 - self.minimum_box_up_z
-            valid_output.append((collision_cost == 0) & tilt_valid)
+            # Tolerate bound-cost roundoff only; never relax collision costs.
+            bound_cost = self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1).reshape(-1)
+            valid_output.append((collision_cost == 0) & (bound_cost <= 1e-9) & tilt_valid)
             stability_output.append(stability_cost)
             self.states_checked += horizon
         return torch.cat(valid_output), torch.cat(stability_output)

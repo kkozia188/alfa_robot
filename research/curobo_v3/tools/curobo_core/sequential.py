@@ -790,9 +790,13 @@ class _SequentialTask:
         candidates = self.ik(side, target, active)
         if not len(candidates):
             self.fail("rear unloading target has no valid online IK")
-        path = self.search(candidates, active)
+        path = None
+        for _attempt in range(4):
+            path = self.search(candidates, active)
+            if path is not None:
+                break
         if path is None:
-            self.fail("rear unloading search exhausted its 2 s budget")
+            self.fail("rear unloading search exhausted four 2 s attempts")
         self.audit(path, active, self.q, target=(side, target))
         self.append(path)
         item = next(item for item in self.store.snapshot().attachments if item.parent_link == side+"_tool0")

@@ -457,6 +457,25 @@ class SequentialTests(unittest.TestCase):
         self.assertLess(details["max_line_error_mm"], 2.)
         self.assertLess(details["max_orientation_error_deg"], 1.)
 
+    def test_rear_place_retries_same_candidates_with_finite_budget(self):
+        task = object.__new__(_SequentialTask)
+        task.request = type("Request", (), {"targets": (("left_tool0", Pose()),)})()
+        task.q = np.zeros(15)
+        task.enter = lambda _phase: None
+        candidates = np.ones((2, 15))
+        task.ik = lambda _side, _target, _active: candidates
+        responses = iter((None, None, np.ones((2, 15))))
+        calls = []
+        def search(goals, active):
+            calls.append((goals, active))
+            return next(responses)
+        task.search = search
+        task.audit = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("stop after search"))
+        with self.assertRaisesRegex(RuntimeError, "stop after search"):
+            task.place("left", list(range(1, 8)))
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(call[0] is candidates for call in calls))
+
     def test_nine_run_acceptance_rejects_any_partial_or_missing_run(self):
         rows = [{"success": True, "measured_wall_ms": float(i)} for i in range(9)]
         self.assertTrue(summarize(rows, 9)["passed"])

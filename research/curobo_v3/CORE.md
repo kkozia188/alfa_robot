@@ -124,3 +124,7 @@ ROS Action，不做时间参数化，也不删除历史MoveIt包。现有规划�
 显式 `support_elbow_rise_m` / CLI `--support-elbow-rise-m` 是软偏好，不是精确肘高约束；旧 `dual_cycle` 默认仍为0。
 
 2026-10-08新基线恢复 f044 IK 配置（512种子、500迭代、return32、2 mm/1°和缓存）及1 cm正向解析桥，只增加顺序任务所需的终点分支选择、0.18 m软抬肘、上箱8维终点IK和失败段局部冗余续解。当前默认seed11完整成功并通过独立FK；11/29/41各2次为4/6，seed41两次停在下箱放置路径最终验收，因此不能声明多种子验收通过。证据见 `artifacts/sequential-unload/baseline-restore-20261007/BASELINE_COMPARISON.md` 与 `CURRENT_DEFAULT_SIX_RUNS.md`。
+
+## 五列顶部两层车后卸载
+
+2026-10-10修正版在固定yaw/base_x下，仅沿桥面横移base_y，连续处理五列顶部两层10箱。每个箱体必须在线规划到当前车辆默认`unloading`后方目标、记录实际位姿后释放；抽离即消失不计成功。外列上箱先向内横移0.4m、下降0.4m再抽离，随后由同一近侧臂处理下箱。seed 11/29/41各2次从头重规划6/6通过，证据见`artifacts/five-column-rear/FIVE_COLUMN_REAR_ACCEPTANCE.md`。范围不含底部三层、动力学或实机。

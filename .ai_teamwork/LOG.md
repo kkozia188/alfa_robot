@@ -2135,3 +2135,10 @@
 - 性能：25/25箱选中任务核心均低于3秒，最大`2.501649s`，不计缓存加载。严格8度携箱倾角下胸前段关节行程代价下降`6.49%`；10度候选可到`8.98%`但最大核心`2.763s`且稳定裕量较小，正式结果保留8度版本。
 - 验证：优化后完整25箱15循环共`43,366`帧和`5,901`个额外1度/1厘米边样本通过MoveIt/FCL；最大关节步长`2.998428°`、翻转0、左右携箱最大倾角`7.997372°/7.999501°`。胸前最小车头净距`0.100m`、双箱间隙`0.240m`保持不变。
 - 产物：`results/v322_chest_carry_fast_base/v322-chest-carry-fast-base-optimized-production-shell.rrd`、`optimized-acceptance-report.json/.md`、优化报告及SHA256SUMS；默认`open_rerun.py`已切换到优化版。
+
+## 2026-10-10 运控 / Codex / 胸前取回直拉与局部规划收口
+- 根因：旧胸前目标`(0.75,±0.32,0.95)m`过低过近，且多数箱复用共享关节目标，导致不同抽离末态被全空间RRT强制换肘并产生大环绕；工具空间路点搜索此前也未接入正式`planRrt()`路径。
+- 改动：每箱从自身抽离末态重新求解TCP目标，禁用共享胸前关节模板；优先直接笛卡尔，失败后仅使用向后/向内TCP路点和局部shortcut修补。普通正吸目标为`(1.00,±0.60,1.20)m`，3号为`(1.00,-0.45,1.20)m`，21/25号为`(1.05,±0.45,1.10)m`，顶吸保持`(0.90,±0.40,0.85)m`。23号固定使用上游已验证的对侧臂安全姿态，避免随机桥接超时。
+- 性能：全新输出目录无缓存命中，25/25箱平均`1.042s`、最大`2.227516s`，全部低于3秒；21条直接笛卡尔、2条短TCP路点、2条近直线关节shortcut。最大TCP路径/端点直线比`1.214376`，最大偏离`7.1575cm`，旧版约5～6.6倍绕行已消除。
+- 验证：15/15循环、29,299帧和3,554个1度/1厘米边样本通过MoveIt/FCL；最大关节步长`2.999916°`、翻转0、左右最大携箱倾角`7.892477°/7.892324°`。生产Rerun确认21 links/49 meshes/Tool0 `+Z 0.151m`并通过`rerun rrd verify`；关键帧1600×900画面检查正常。
+- 产物：`results/v322_chest_carry_fast_base/v322-chest-carry-direct-pull-v2-production-shell.rrd`、`v322-chest-carry-direct-pull-v2-replay.json`、`v322-chest-carry-direct-pull-v2-validation.json`、`direct-pull-v2-path-analysis.json`和`direct-pull-v2-acceptance-report.md`。默认`open_rerun.py`已切换到直拉版；MOTION-261/MOTION-257及旧胸前产物未修改。

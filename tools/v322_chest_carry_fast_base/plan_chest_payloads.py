@@ -37,14 +37,19 @@ DEFAULT_MODEL = Path(
 )
 LEFT_HOME = "155,-105,20,90,-90,-40,0"
 RIGHT_HOME = "-155,105,-20,-90,90,40,0"
-CHEST_BOX_X_BASE_M = 0.75
-CHEST_BOX_Y_BASE_M = 0.32
-CHEST_BOX_Z_BASE_M = 0.95
+CHEST_BOX_X_BASE_M = 1.00
+CHEST_BOX_Y_BASE_M = 0.60
+CHEST_BOX_Z_BASE_M = 1.20
+TOP_CENTER_CHEST_BOX_Y_BASE_M = 0.45
+BOTTOM_CHEST_BOX_X_BASE_M = 1.05
+BOTTOM_CHEST_BOX_Y_BASE_M = 0.45
+BOTTOM_CHEST_BOX_Z_BASE_M = 1.10
 TOP_CHEST_BOX_X_BASE_M = 0.90
 TOP_CHEST_BOX_Y_BASE_M = 0.40
 TOP_CHEST_BOX_Z_BASE_M = 0.85
 CHEST_UPDOWN_M = -0.30
 GUIDE_BOXES = {18: 13, 20: 19}
+FIXED_OPPOSITE_ARM_BOXES = {23}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -118,15 +123,25 @@ def contact_tool_transform(robot: UrdfRobot, payload: dict[str, Any]) -> np.ndar
 
 def chest_box_center_base(payload: dict[str, Any]) -> np.ndarray:
     side_sign = 1.0 if payload["side"] == "left" else -1.0
+    box_id = int(payload["target_box_id"])
     if payload["grasp_mode"] == "top_suction":
         return np.asarray([
             TOP_CHEST_BOX_X_BASE_M,
             side_sign * TOP_CHEST_BOX_Y_BASE_M,
             TOP_CHEST_BOX_Z_BASE_M,
         ])
+    if box_id > 20:
+        return np.asarray([
+            BOTTOM_CHEST_BOX_X_BASE_M,
+            side_sign * BOTTOM_CHEST_BOX_Y_BASE_M,
+            BOTTOM_CHEST_BOX_Z_BASE_M,
+        ])
     return np.asarray([
         CHEST_BOX_X_BASE_M,
-        side_sign * CHEST_BOX_Y_BASE_M,
+        side_sign * (
+            TOP_CENTER_CHEST_BOX_Y_BASE_M if box_id == 3
+            else CHEST_BOX_Y_BASE_M
+        ),
         CHEST_BOX_Z_BASE_M,
     ])
 
@@ -186,6 +201,16 @@ def active_arm_degrees(payload: dict[str, Any], frame: dict[str, Any]) -> str:
     )
 
 
+def arm_degrees(
+    payload: dict[str, Any], frame: dict[str, Any], side: str
+) -> str:
+    joints = frame_joint_map(payload, frame)
+    return ",".join(
+        f"{math.degrees(joints[f'{side}_joint{index}']):.12f}"
+        for index in range(1, 8)
+    )
+
+
 def profile_key(payload: dict[str, Any]) -> str:
     contract = {
         "side": payload["side"],
@@ -205,9 +230,22 @@ def planner_args(
     place_pose: list[float],
     profile_degrees: list[float] | None,
     guide_payload: dict[str, Any] | None,
+    fast_probe: bool = False,
 ) -> SimpleNamespace:
     if not task.get("transition_frames"):
         raise ValueError(f"box {task['box_id']} has no validated entry bridge")
+    box_id = int(payload["target_box_id"])
+    source_precontact = next(
+        frame for frame in payload["frames"] if frame["stage"] == "precontact"
+    )
+    fixed_opposite = box_id in FIXED_OPPOSITE_ARM_BOXES
+    initial_left = LEFT_HOME
+    initial_right = RIGHT_HOME
+    if fixed_opposite:
+        if payload["side"] == "left":
+            initial_right = arm_degrees(payload, source_precontact, "right")
+        else:
+            initial_left = arm_degrees(payload, source_precontact, "left")
     return SimpleNamespace(
         base_x=float(payload["base_pose_map"][0]),
         base_y=float(payload["base_pose_map"][1]),
@@ -242,14 +280,14 @@ def planner_args(
         warehouse_height=2.35,
         warehouse_wall_thickness=0.05,
         initial_arm_pose="zero",
-        initial_left_arm_joints_deg=LEFT_HOME,
-        initial_right_arm_joints_deg=RIGHT_HOME,
-        top_initial_right_arm_joints_deg=RIGHT_HOME,
+        initial_left_arm_joints_deg=initial_left,
+        initial_right_arm_joints_deg=initial_right,
+        top_initial_right_arm_joints_deg=initial_right,
         psi_step_deg=5.0,
         maximum_cartesian_joint_step_deg=180.0,
-        precontact_candidate_limit=8,
-        rrt_planning_time=12.0,
-        rrt_planning_attempts=8,
+        precontact_candidate_limit=1 if fast_probe else 2,
+        rrt_planning_time=0.25 if fast_probe else 1.0,
+        rrt_planning_attempts=1,
         edge_joint_resolution_deg=1.0,
         natural_seed_swivel_sampling=False,
         natural_seed_swivel_step_deg=1.0,
@@ -264,18 +302,20 @@ def planner_args(
         cartesian_transfer_search_enabled=True,
         cartesian_transfer_translation_step=0.02,
         cartesian_transfer_rotation_step_deg=2.0,
-        cartesian_transfer_max_search_attempts=24,
+        cartesian_transfer_max_search_attempts=2 if fast_probe else 12,
         shortcut_repair_rrt_enabled=True,
-        shortcut_repair_rrt_budget_ms=5000.0,
-        shortcut_repair_rrt_max_samples=1200,
+        shortcut_repair_rrt_budget_ms=300.0 if fast_probe else 1000.0,
+        shortcut_repair_rrt_max_samples=120 if fast_probe else 400,
         shortcut_repair_max_joint_offset_deg=35.0,
         place_updown_enabled=True,
         place_updown_m=CHEST_UPDOWN_M,
         top_loaded_transfer_direct_only=False,
         loaded_transfer_defer_place_updown=True,
         auto_safe_opposite_arm=(
-            int(payload["target_box_id"]) in {3, 8, 13, 18, 23}
-            or float(payload["initial_updown"]) < CHEST_UPDOWN_M - 1e-9
+            not fixed_opposite and (
+                box_id in {3, 8, 13, 18, 23}
+                or float(payload["initial_updown"]) < CHEST_UPDOWN_M - 1e-9
+            )
         ),
         natural_max_proximal_step_deg=180.0,
         natural_max_wrist_step_deg=180.0,
@@ -300,7 +340,7 @@ def planner_args(
         transition_waypoint_start="",
         transition_whole_body_waypoints="",
         transition_whole_body_waypoint_start="",
-        timeout=900.0,
+        timeout=20.0 if fast_probe else 90.0,
     )
 
 
@@ -369,12 +409,54 @@ def ordered_box_ids(selected: list[int], tasks: dict[int, dict[str, Any]]) -> li
 
 
 def main() -> int:
+    global CHEST_BOX_X_BASE_M, CHEST_BOX_Y_BASE_M, CHEST_BOX_Z_BASE_M
+    global TOP_CENTER_CHEST_BOX_Y_BASE_M
+    global BOTTOM_CHEST_BOX_X_BASE_M, BOTTOM_CHEST_BOX_Y_BASE_M
+    global BOTTOM_CHEST_BOX_Z_BASE_M
+    global TOP_CHEST_BOX_X_BASE_M, TOP_CHEST_BOX_Y_BASE_M, TOP_CHEST_BOX_Z_BASE_M
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline-cache", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--model-urdf", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--box-ids", default="")
+    parser.add_argument("--front-chest-x", type=float, default=CHEST_BOX_X_BASE_M)
+    parser.add_argument("--front-chest-y", type=float, default=CHEST_BOX_Y_BASE_M)
+    parser.add_argument("--front-chest-z", type=float, default=CHEST_BOX_Z_BASE_M)
+    parser.add_argument(
+        "--top-center-front-chest-y",
+        type=float,
+        default=TOP_CENTER_CHEST_BOX_Y_BASE_M,
+    )
+    parser.add_argument(
+        "--bottom-front-chest-x", type=float, default=BOTTOM_CHEST_BOX_X_BASE_M
+    )
+    parser.add_argument(
+        "--bottom-front-chest-y", type=float, default=BOTTOM_CHEST_BOX_Y_BASE_M
+    )
+    parser.add_argument(
+        "--bottom-front-chest-z", type=float, default=BOTTOM_CHEST_BOX_Z_BASE_M
+    )
+    parser.add_argument("--top-chest-x", type=float, default=TOP_CHEST_BOX_X_BASE_M)
+    parser.add_argument("--top-chest-y", type=float, default=TOP_CHEST_BOX_Y_BASE_M)
+    parser.add_argument("--top-chest-z", type=float, default=TOP_CHEST_BOX_Z_BASE_M)
+    parser.add_argument("--fast-probe", action="store_true")
+    parser.add_argument(
+        "--fresh-pose-goals",
+        action="store_true",
+        help="solve each chest TCP pose from its own retreat state; do not reuse joint profiles",
+    )
     args = parser.parse_args()
+
+    CHEST_BOX_X_BASE_M = args.front_chest_x
+    CHEST_BOX_Y_BASE_M = args.front_chest_y
+    CHEST_BOX_Z_BASE_M = args.front_chest_z
+    TOP_CENTER_CHEST_BOX_Y_BASE_M = args.top_center_front_chest_y
+    BOTTOM_CHEST_BOX_X_BASE_M = args.bottom_front_chest_x
+    BOTTOM_CHEST_BOX_Y_BASE_M = args.bottom_front_chest_y
+    BOTTOM_CHEST_BOX_Z_BASE_M = args.bottom_front_chest_z
+    TOP_CHEST_BOX_X_BASE_M = args.top_chest_x
+    TOP_CHEST_BOX_Y_BASE_M = args.top_chest_y
+    TOP_CHEST_BOX_Z_BASE_M = args.top_chest_z
 
     cache = read_json(args.baseline_cache.resolve())
     tasks = {int(task["box_id"]): task for task in cache["tasks"]}
@@ -391,8 +473,11 @@ def main() -> int:
         place_pose, desired_center = chest_target(robot, source)
         key = profile_key(source)
         profile_path = profiles_dir / f"{key}.json"
-        profile = read_json(profile_path) if profile_path.is_file() else None
-        if profile is None:
+        profile = (
+            None if args.fresh_pose_goals
+            else read_json(profile_path) if profile_path.is_file() else None
+        )
+        if profile is None and not args.fresh_pose_goals:
             mirrored_source = copy.deepcopy(source)
             mirrored_source["side"] = (
                 "right" if source["side"] == "left" else "left"
@@ -439,7 +524,8 @@ def main() -> int:
         if not resumed:
             attempt = scan.run_attempt(
                 planner_args(
-                    tasks[box_id], source, place_pose, profile_degrees, guide_payload
+                    tasks[box_id], source, place_pose, profile_degrees,
+                    guide_payload, args.fast_probe
                 ),
                 box_id,
                 str(source["grasp_mode"]),
@@ -455,7 +541,17 @@ def main() -> int:
                 if planned.get("success") else {"success": False}
             )
         success = bool(planned.get("success")) and bool(geometry["success"])
-        if success and profile is None:
+        desired_center_base = chest_box_center_base(source).tolist()
+        if success:
+            planned["desired_chest_box_center_base"] = desired_center_base
+            planned["desired_chest_box_center_map"] = desired_center
+            planned["chest_pullback_contract"] = {
+                "strategy": "fresh_tcp_goal_cartesian_first",
+                "fallback": "inward_tcp_waypoints_then_local_shortcut",
+                "shared_joint_profile": False,
+            }
+            write_json(result_path, planned)
+        if success and profile is None and not args.fresh_pose_goals:
             profile_degrees = release_arm_degrees(planned)
             write_json(profile_path, {
                 "schema": "alfa.v322_chest_carry_profile.v1",
@@ -473,9 +569,10 @@ def main() -> int:
             "side": source["side"],
             "mode": source["grasp_mode"],
             "desired_box_center_map": desired_center,
+            "desired_box_center_base": desired_center_base,
             "place_tcp_pose_map": place_pose,
             "profile_key": key,
-            "profile_seeded": profile is None,
+            "profile_seeded": profile is None and not args.fresh_pose_goals,
             "resumed": resumed,
             "success": success,
             "failure_stage": planned.get(

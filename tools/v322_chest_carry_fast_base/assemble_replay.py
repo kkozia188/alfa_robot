@@ -459,8 +459,15 @@ def main() -> int:
         },
         "box_planning": box_planning,
         "chest_carry": {
-            "front_box_center_base_m": [0.75, "side_sign*0.32", 0.95],
+            "front_box_center_base_m": [1.00, "side_sign*0.60", 1.20],
+            "top_center_front_box_center_base_m": [1.00, -0.45, 1.20],
+            "bottom_front_box_center_base_m": [1.05, "side_sign*0.45", 1.10],
             "top_box_center_base_m": [0.90, "side_sign*0.40", 0.85],
+            "box_targets_base_m": {
+                str(box_id): payloads[box_id]["desired_chest_box_center_base"]
+                for box_id in range(1, 26)
+            },
+            "pullback_strategy": "fresh TCP goal; Cartesian first; local shortcut fallback",
             "carry_updown_m": -0.30,
             "base_speed_m_s": BASE_SPEED_M_S,
             "base_moves_only_after_chest_ready": True,

@@ -24,16 +24,16 @@ def main() -> int:
         "--spawn", action=argparse.BooleanOptionalAction, default=True
     )
     args = parser.parse_args()
-    report_path = RESULTS / "optimized-acceptance-report.json"
+    report_path = RESULTS / "direct-pull-v2-acceptance-report.json"
     if not report_path.is_file():
         parser.error(f"missing acceptance report: {report_path}")
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if not report.get("success"):
         parser.error("acceptance report is not successful")
     recording = RESULTS / (
-        "v322-chest-carry-ready-optimized-keyframe.rrd"
+        "v322-chest-carry-direct-pull-v2-keyframe.rrd"
         if args.keyframe
-        else "v322-chest-carry-fast-base-optimized-production-shell.rrd"
+        else "v322-chest-carry-direct-pull-v2-production-shell.rrd"
     )
     subprocess.run(["rerun", "rrd", "verify", str(recording)], check=True)
     print(
@@ -41,6 +41,8 @@ def main() -> int:
         f"base_speed={report['base']['new_speed_m_s']:.2f}m/s "
         f"front_clearance={report['minimum_vehicle_front_to_box_clearance_m']:.3f}m "
         f"dual_gap={report['minimum_dual_box_gap_m']:.3f}m "
+        f"max_plan={report['pullback']['maximum_planning_ms'] / 1000.0:.3f}s "
+        f"max_path_ratio={report['pullback']['maximum_path_to_direct_ratio']:.3f} "
         f"rrd={recording}",
         flush=True,
     )

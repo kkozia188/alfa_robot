@@ -14,10 +14,13 @@ The source MOTION-261/MOTION-257 caches and certificates are read-only inputs.
 All generated payloads, replay files, validation reports, and Rerun recordings
 must be written to this project's own result directory.
 
-## Certified Geometry
+## Direct-Pull Geometry
 
-- Front-suction box center in `base_footprint`: `X=0.75 m`,
-  `Y=+/-0.32 m`, `Z=0.95 m`.
+- Normal front-suction box center in `base_footprint`: `X=1.00 m`,
+  `Y=+/-0.60 m`, `Z=1.20 m`.
+- Top-row center box 3 uses `X=1.00 m`, `Y=-0.45 m`, `Z=1.20 m`.
+- Bottom front-suction boxes 21/25 use `X=1.05 m`, `Y=+/-0.45 m`,
+  `Z=1.10 m`.
 - Top-suction box center: `X=0.90 m`, `Y=+/-0.40 m`, `Z=0.85 m`.
 - Shared carry lift: `updown=-0.30 m`.
 - The arm/lift motion finishes before any base backoff frame.
@@ -25,9 +28,10 @@ must be written to this project's own result directory.
 - Base replay speed is `0.35 m/s` instead of `0.10 m/s`; route geometry and
   the 1 cm collision sampling are unchanged.
 
-The certified result contains 25/25 boxes, 15/15 cycles, 37,529 MoveIt/FCL
-frames, and 14,442 extra 1 degree / 1 cm edge samples. See
-`results/v322_chest_carry_fast_base/acceptance-report.md`.
+Each box now solves a fresh TCP pose from its own retreat state. Shared chest
+joint profiles are disabled. The planner tries a direct Cartesian pull first,
+then short inward TCP waypoints, a reduced local repair, and finally a bounded
+joint fallback.
 
 The optimized result uses the validated chest paths as golden curves, builds
 an 80-node FCL visibility graph, applies local shortcuts, and retains the
@@ -40,7 +44,13 @@ is also attempted, but approximate solutions are rejected. Final results:
 - 43,366 frames plus 5,901 extra 1 degree / 1 cm edge samples pass MoveIt/FCL;
 - cache loading is not counted as planning time.
 
-See `results/v322_chest_carry_fast_base/optimized-acceptance-report.md`.
+The direct-pull result contains 25/25 boxes and 15/15 cycles. All 25 fresh box
+plans are below 3 seconds (average `1.042 s`, maximum `2.228 s`). Twenty-one
+pullbacks are direct Cartesian paths, two use short Cartesian waypoints, and
+two use near-straight joint shortcuts. The worst TCP path/direct ratio is
+`1.214`, with `7.16 cm` maximum line deviation. Full validation covers 29,299
+frames plus 3,554 extra 1 degree / 1 cm edge samples. See
+`results/v322_chest_carry_fast_base/direct-pull-v2-acceptance-report.md`.
 
 ## Open Rerun
 
@@ -49,15 +59,16 @@ cd /home/tim/alfa_robot-v322-chest-carry-fast-base
 /usr/bin/python3 tools/v322_chest_carry_fast_base/open_rerun.py
 ```
 
-Use `--keyframe` to inspect the first optimized dual chest-carry-ready pose and
-its pullback curves. Both entry
+Use `--keyframe` to inspect the first direct-pull dual chest-carry-ready pose
+and its pullback curves. Both entry
 points verify the RRD before opening it.
 
 ## Reproduce
 
 Use the isolated build overlay in `install-chest-carry`. The workflow is:
 
-1. `plan_chest_payloads.py` generates 25 fresh pickup-to-chest paths.
+1. `plan_chest_payloads.py --fresh-pose-goals --fast-probe` generates 25 fresh
+   pickup-to-chest paths without shared joint profiles.
 2. `plan_entry_bridges.py` generates 15 fresh whole-body entry bridges.
 3. `assemble_replay.py` adds the chest-before-base task order and 0.35 m/s
    timing metadata.

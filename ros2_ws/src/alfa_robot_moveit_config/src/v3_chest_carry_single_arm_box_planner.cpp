@@ -2074,10 +2074,15 @@ private:
     }
     const double side_sign = side_ == "left" ? 1.0 : -1.0;
     std::vector<std::pair<Eigen::Vector3d, double>> waypoint_specs = {
-      {start_pose.translation() + Eigen::Vector3d(0.20, side_sign * 0.15, 0.0), 0.0},
-      {start_pose.translation() + Eigen::Vector3d(0.25, side_sign * 0.25, 0.0), 0.0},
-      {start_pose.translation() + Eigen::Vector3d(0.20, side_sign * 0.25, -0.05), 0.0},
-      {start_pose.translation() + Eigen::Vector3d(0.25, side_sign * 0.20, 0.10), 0.1},
+      // The wall normal is +X: after suction, pull away along -X and fold
+      // inward toward the body centerline (-side*Y). The legacy signs sent
+      // the carried box back toward the wall and farther outward.
+      {start_pose.translation() + Eigen::Vector3d(-0.10, 0.0, 0.0), 0.0},
+      {start_pose.translation() + Eigen::Vector3d(-0.20, 0.0, 0.0), 0.0},
+      {start_pose.translation() + Eigen::Vector3d(-0.10, -side_sign * 0.10, 0.0), 0.0},
+      {start_pose.translation() + Eigen::Vector3d(-0.20, -side_sign * 0.20, 0.0), 0.0},
+      {start_pose.translation() + Eigen::Vector3d(-0.20, -side_sign * 0.25, -0.05), 0.0},
+      {start_pose.translation() + Eigen::Vector3d(-0.25, -side_sign * 0.20, -0.10), 0.1},
     };
     const std::vector<std::pair<Eigen::Vector3d, double>> goal_waypoint_specs = {
       {goal_pose.translation() + Eigen::Vector3d(-0.20, 0.0, 0.0), 1.0},
@@ -2888,7 +2893,8 @@ private:
       return result;
     }
 
-    if (shortcut_repair_rrt_enabled_ && cartesian_transfer_search_enabled_ && !direct_only) {
+    if (shortcut_repair_rrt_enabled_ && cartesian_transfer_search_enabled_ &&
+        !direct_only && !force_cartesian_search) {
       const auto start_joints = armJoints(start_state);
       const auto goal_joints = armJoints(goal_state);
       const size_t steps = std::max<size_t>(
@@ -2981,6 +2987,62 @@ private:
       }
       cartesian_diagnostic = "direct Cartesian: " + cartesian_reason;
     }
+    if (cartesian_transfer_search_enabled_ && cartesian_search_available()) {
+      const auto waypoint_started = std::chrono::steady_clock::now();
+      std::vector<moveit::core::RobotStatePtr> waypoint_states;
+      std::string waypoint_reason;
+      const bool waypoint_success = searchToolSpaceWaypointPath(
+        scene, start_state, goal_state, loaded, metrics,
+        static_cast<size_t>(cartesian_transfer_max_search_attempts_),
+        &cartesian_search_attempts, &waypoint_states, &waypoint_reason);
+      const double waypoint_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - waypoint_started).count();
+      result.tcp_shortcut_ms += waypoint_ms;
+      if (metrics) metrics->tcp_shortcut_ms += waypoint_ms;
+      if (waypoint_success && !waypoint_states.empty()) {
+        if (metrics) {
+          ++metrics->cartesian_guided_segments;
+          ++metrics->tcp_shortcut_successes;
+        }
+        result.states = std::move(waypoint_states);
+        result.success = true;
+        result.reason = "inward Cartesian waypoint path: " + waypoint_reason;
+        result.strategy = "tcp_waypoint_shortcut";
+        result.wall_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - wall_started).count();
+        return result;
+      }
+      cartesian_diagnostic += "; waypoint Cartesian: " + waypoint_reason;
+    }
+    if (force_cartesian_search && shortcut_repair_rrt_enabled_ && !direct_only) {
+      const auto repair_started = std::chrono::steady_clock::now();
+      if (metrics) ++metrics->reduced_rrt_attempts;
+      const uint64_t samples_before = metrics ? metrics->reduced_rrt_samples : 0U;
+      std::vector<moveit::core::RobotStatePtr> repaired;
+      std::string repair_reason;
+      const bool repair_success = searchShortcutRepairRrt(
+        scene, start_state, goal_state, loaded, metrics, &repaired, &repair_reason,
+        &result.repaired_joint_indices);
+      result.reduced_rrt_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - repair_started).count();
+      result.reduced_rrt_samples = static_cast<size_t>(
+        (metrics ? metrics->reduced_rrt_samples : samples_before) - samples_before);
+      if (metrics) metrics->reduced_rrt_ms += result.reduced_rrt_ms;
+      if (repair_success) {
+        if (metrics) {
+          ++metrics->reduced_rrt_successes;
+          ++metrics->cartesian_guided_segments;
+        }
+        result.states = densifyRrtReplay(repaired);
+        result.success = true;
+        result.strategy = "shortcut_repair_rrt";
+        result.reason = repair_reason + " after " + cartesian_diagnostic;
+        result.wall_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - wall_started).count();
+        return result;
+      }
+      cartesian_diagnostic += "; shortcut repair: " + repair_reason;
+    }
     const auto start_joints = armJoints(start_state);
     const auto goal_joints = armJoints(goal_state);
     const size_t direct_steps = std::max<size_t>(
@@ -3008,7 +3070,7 @@ private:
       }
       direct_states.push_back(std::move(state));
     }
-    if (direct_clear && (!force_cartesian_search || direct_only)) {
+    if (direct_clear) {
       if (metrics) ++metrics->joint_fallback_segments;
       result.wall_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - wall_started).count();
@@ -3229,10 +3291,12 @@ private:
     const moveit::core::RobotState& start_state,
     const moveit::core::RobotState& goal_state,
     bool direct_only,
-    PlanningMetrics* metrics) const
+    PlanningMetrics* metrics,
+    bool prefer_cartesian = false) const
   {
     if (loaded_transfer_joint_waypoints_deg_.empty()) {
-      return planRrt(scene, start_state, goal_state, direct_only, metrics);
+      return planRrt(
+        scene, start_state, goal_state, direct_only, metrics, prefer_cartesian);
     }
 
     const auto started = std::chrono::steady_clock::now();
@@ -3291,7 +3355,8 @@ private:
             std::chrono::steady_clock::now() - started).count();
           return result;
         }
-        auto fallback = planRrt(scene, start_state, goal_state, direct_only, metrics);
+        auto fallback = planRrt(
+          scene, start_state, goal_state, direct_only, metrics, prefer_cartesian);
         fallback.reason += "; validated waypoint edge " +
           std::to_string(waypoint_index + 1U) + " failed: " + edge_reason;
         return fallback;
@@ -3927,7 +3992,7 @@ private:
           to_place = planLoadedTransfer(
             scene, *place_seed, place_state,
             top_loaded_transfer_direct_only_ && grasp_mode_ == "top_suction",
-            &result.metrics);
+            &result.metrics, !place_tcp_pose_.empty());
           record_search("loaded_transfer", to_place);
           result.metrics.rrt_return_ms += to_place.wall_ms;
         }

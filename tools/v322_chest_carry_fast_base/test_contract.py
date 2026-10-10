@@ -16,13 +16,13 @@ class ChestCarryContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.replay = json.loads(
-            (RESULTS / "v322-chest-carry-fast-base-optimized-replay.json").read_text()
+            (RESULTS / "v322-chest-carry-direct-pull-v2-replay.json").read_text()
         )
         cls.validation = json.loads(
-            (RESULTS / "v322-chest-carry-fast-base-optimized-validation.json").read_text()
+            (RESULTS / "v322-chest-carry-direct-pull-v2-validation.json").read_text()
         )
         cls.report = json.loads(
-            (RESULTS / "optimized-acceptance-report.json").read_text()
+            (RESULTS / "direct-pull-v2-acceptance-report.json").read_text()
         )
 
     def test_acceptance(self) -> None:
@@ -30,9 +30,21 @@ class ChestCarryContractTest(unittest.TestCase):
         self.assertTrue(self.report["success"])
         self.assertEqual(self.report["completed_boxes"], 25)
         self.assertEqual(self.report["group_count"], 15)
-        self.assertEqual(self.report["optimization"]["boxes_within_3s"], 25)
+        self.assertEqual(self.report["pullback"]["boxes_within_3s"], 25)
         self.assertLess(
-            self.report["optimization"]["maximum_task_core_ms"], 3000.0
+            self.report["pullback"]["maximum_planning_ms"], 3000.0
+        )
+
+    def test_pullback_is_direct(self) -> None:
+        self.assertLessEqual(
+            self.report["pullback"]["maximum_path_to_direct_ratio"], 1.25
+        )
+        self.assertLessEqual(
+            self.report["pullback"]["maximum_line_deviation_m"], 0.075
+        )
+        self.assertEqual(
+            self.report["pullback"]["strategy_counts"],
+            {"joint_shortcut": 2, "tcp_shortcut": 21, "tcp_waypoint_shortcut": 2},
         )
 
     def test_chest_precedes_base_motion(self) -> None:

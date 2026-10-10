@@ -81,6 +81,12 @@ def main() -> int:
     parser.add_argument("--baseline-cache", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--payload-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--only-group",
+        action="append",
+        default=[],
+        help="plan only the exact dash-separated group label, for example 23 or 22-24",
+    )
     args = parser.parse_args()
 
     cache = read_json(args.baseline_cache.resolve())
@@ -91,11 +97,24 @@ def main() -> int:
     removed: set[int] = set()
     summary: list[dict[str, Any]] = []
 
+    selected_labels = set(args.only_group)
+    selected_groups = [
+        group for group in GROUPS
+        if not selected_labels
+        or "-".join(str(box_id) for box_id in group) in selected_labels
+    ]
+    if not selected_groups:
+        raise ValueError(f"no groups match --only-group={args.only_group}")
+
     for group in GROUPS:
+        label = "-".join(str(box_id) for box_id in group)
+        if selected_labels and label not in selected_labels:
+            removed.update(group)
+            continue
         payloads = [read_json(payload_dir / f"box-{box_id:02d}.json") for box_id in group]
         goal = group_goal(payloads)
-        label = "-".join(f"{box_id:02d}" for box_id in group)
-        path = output_dir / f"group-{label}.json"
+        file_label = "-".join(f"{box_id:02d}" for box_id in group)
+        path = output_dir / f"group-{file_label}.json"
         bridge = read_json(path) if path.is_file() else {}
         resumed = (
             bridge.get("success") is True
@@ -146,7 +165,7 @@ def main() -> int:
             flush=True,
         )
 
-    print(f"RESULT success={len(summary)}/{len(GROUPS)}")
+    print(f"RESULT success={len(summary)}/{len(selected_groups)}")
     return 0
 
 

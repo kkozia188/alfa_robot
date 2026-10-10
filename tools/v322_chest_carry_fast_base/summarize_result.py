@@ -61,6 +61,7 @@ def main() -> int:
     parser.add_argument("--validation", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     parser.add_argument("--model-urdf", type=Path, required=True)
+    parser.add_argument("--path-analysis", type=Path)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
     args = parser.parse_args()
@@ -111,9 +112,7 @@ def main() -> int:
                 if int(item["box_id"]) == box_id
             )
             target = np.asarray(
-                [0.90, 0.40 if side == "left" else -0.40, 0.85]
-                if mode == "top_suction" else
-                [0.75, 0.32 if side == "left" else -0.32, 0.95],
+                replay["chest_carry"]["box_targets_base_m"][str(box_id)],
                 dtype=float,
             )
             center_error = float(np.linalg.norm(center - target))
@@ -184,6 +183,34 @@ def main() -> int:
         },
         "cases": cases,
     }
+    if args.path_analysis:
+        path_analysis = read_json(args.path_analysis.resolve())
+        strategy_counts: dict[str, int] = {}
+        for item in path_analysis["cases"]:
+            strategy = str(item["strategy"])
+            strategy_counts[strategy] = strategy_counts.get(strategy, 0) + 1
+        report["pullback"] = {
+            "boxes_within_3s": sum(
+                float(item["planning_ms"]) < 3000.0
+                for item in path_analysis["cases"]
+            ),
+            "maximum_planning_ms": float(path_analysis["maximum_planning_ms"]),
+            "maximum_path_to_direct_ratio": float(
+                path_analysis["maximum_path_to_direct_ratio"]
+            ),
+            "maximum_line_deviation_m": float(
+                path_analysis["maximum_line_deviation_m"]
+            ),
+            "strategy_counts": strategy_counts,
+        }
+        report["success"] = (
+            report["success"]
+            and int(path_analysis["case_count"]) == 25
+            and report["pullback"]["boxes_within_3s"] == 25
+            and report["pullback"]["maximum_planning_ms"] < 3000.0
+            and report["pullback"]["maximum_path_to_direct_ratio"] <= 1.25
+            and report["pullback"]["maximum_line_deviation_m"] <= 0.075
+        )
     optimization = replay.get("golden_curve_optimization")
     if optimization:
         cycles = list(optimization.get("cycles", []))
@@ -245,6 +272,20 @@ def main() -> int:
             f"- Maximum task core: **{optimized['maximum_task_core_ms'] / 1000.0:.3f} s**",
             f"- Chest joint-travel reduction: **{optimized['joint_travel_reduction_percent']:.1f}%**",
             f"- Local RRT attempted/selected cycles: **{optimized['local_rrt_attempted_cycles']}/{optimized['local_rrt_selected_cycles']}**",
+            "- Cache loading counted as planning time: **false**",
+        ])
+    if "pullback" in report:
+        pullback = report["pullback"]
+        lines.extend([
+            "",
+            "## Direct Pullback",
+            "",
+            f"- Fresh box plans below 3 s: **{pullback['boxes_within_3s']}/25**",
+            f"- Maximum / average box planning: **{pullback['maximum_planning_ms'] / 1000.0:.3f} s / {rerun_summary['selected_task_core_s'] / 25.0:.3f} s**",
+            f"- Maximum TCP path/direct ratio: **{pullback['maximum_path_to_direct_ratio']:.3f}**",
+            f"- Maximum TCP line deviation: **{100.0 * pullback['maximum_line_deviation_m']:.2f} cm**",
+            f"- Strategies: **{pullback['strategy_counts']}**",
+            "- Shared chest joint profiles: **disabled**",
             "- Cache loading counted as planning time: **false**",
         ])
     args.output_md.resolve().write_text("\n".join(lines) + "\n", encoding="utf-8")

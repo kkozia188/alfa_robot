@@ -25,11 +25,15 @@ left/right mirror experiment.
   validation.
 - At `Y=+0.100 m`, pickup planning completes, but full edge validation fails in
   group 22+24: `dual_carried_box_left <-> wall_box_23`.
+- A later on-demand run at `Y=+0.080 m` observed the same group 22+24 carried-box
+  collision even though the separately planned `+0.075 m` and `+0.0875 m`
+  cases pass. The planner's sampled solution branch is therefore non-monotonic;
+  the two passing extrema do not certify every interior Y value.
 - At `Y=+0.120 m`, the sentinel screen reaches box 23 and then reports
   `base_link <-> left_link5` during Cartesian retreat.
 
 The positive and negative boundaries therefore fail in different operations and
 with different mechanisms. A symmetric numeric Y interval would discard real
-task evidence. Any future claim of symmetric Y tolerance requires a mirrored
-arm-allocation and mirrored conveyor-route experiment, not just symmetric input
-samples.
+task evidence, and a continuous Y guarantee requires a dense fixed-grid rerun
+with deterministic route selection. Any future claim of symmetric Y tolerance
+also requires mirrored arm allocation and a mirrored conveyor route.

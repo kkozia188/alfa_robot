@@ -33,6 +33,8 @@ PATTERNS = (
     "x-clearance-upper/*/v322-pose-conveyor-validation.json",
     "x-clearance-lower/*/case-result.json",
     "x-clearance-lower/*/v322-pose-conveyor-validation.json",
+    "on-demand-full/*/case-result.json",
+    "on-demand-full/*/v322-pose-conveyor-validation.json",
     "release/matrix-summary.json",
     "release/matrix-results.csv",
     "release/REPORT.md",

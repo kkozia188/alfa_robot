@@ -20,7 +20,14 @@ from matrix_common import (
     read_json,
     x_clearance_variable,
 )
-from open_single_axis_rerun import exact_y_case, parse_yaw, selected_axis
+from open_single_axis_rerun import (
+    certified_integer_yaw,
+    exact_y_case,
+    round_y,
+    round_yaw,
+    selected_axis,
+    x_case_mode,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -121,9 +128,28 @@ class MatrixToolTests(unittest.TestCase):
         self.assertEqual(path, expected)
         with self.assertRaises(ValueError):
             exact_y_case(0.08, {0.0875: expected})
-        self.assertEqual(parse_yaw(-5.0), -5)
+        self.assertEqual(certified_integer_yaw(-5.0), -5)
+        self.assertIsNone(certified_integer_yaw(2.5))
+
+    def test_unified_rerun_accepts_maximum_independent_ranges(self) -> None:
+        self.assertEqual(x_case_mode(0.80, 0.55), "strong_grid")
+        self.assertEqual(x_case_mode(0.74, 0.60), "upper_extension")
+        self.assertEqual(x_case_mode(1.02, 0.60), "upper_extension")
+        self.assertEqual(x_case_mode(0.85, 0.36), "lower_extension")
+        self.assertEqual(x_case_mode(0.85, 0.79), "lower_extension")
         with self.assertRaises(ValueError):
-            parse_yaw(2.5)
+            x_case_mode(0.74, 0.36)
+        with self.assertRaises(ValueError):
+            x_case_mode(0.73, 0.60)
+        with self.assertRaises(ValueError):
+            x_case_mode(0.85, 0.80)
+
+    def test_unified_rerun_rounds_y_and_yaw_to_stable_case_ids(self) -> None:
+        self.assertEqual(round_y(0.08749), 0.0875)
+        self.assertEqual(round_y(0.0866), 0.087)
+        self.assertEqual(round_y(0.09), 0.09)
+        self.assertEqual(round_yaw(2.46), 2.5)
+        self.assertEqual(round_yaw(-2.45), -2.5)
 
 
 if __name__ == "__main__":

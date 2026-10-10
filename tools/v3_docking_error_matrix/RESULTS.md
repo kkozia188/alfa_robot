@@ -126,3 +126,17 @@ row families varied independently.
 The extension was executed in one-centimeter increments. Details and quality
 layers are in `X_CLEARANCE_RANGE.md`. `Y_ASYMMETRY.md` records why the measured
 Y limits are not symmetric.
+
+## Maximum Interactive Input Envelope: 2026-10-10
+
+The unified terminal entry now accepts the full independent bounds: rows 1-3 X
+`0.74..1.02 m`, rows 4-5 X `0.36..0.79 m`, Y
+`-0.120..+0.0875 m`, and Yaw `-5..+5 deg`. X extension points reuse complete
+one-centimeter results. Uncached Y and non-integer Yaw inputs run the complete
+25-box planner and MoveIt/FCL validator before Rerun opens.
+
+This is an accepted attempt envelope, not a continuous Y/Yaw certificate. A
+fresh `Y=+0.080 m` on-demand run failed group 22+24 full edge validation with
+`dual_carried_box_left <-> wall_box_23`, although separately planned
+`+0.075 m` and `+0.0875 m` cases pass. Failed inputs are recorded and Rerun is
+not opened.

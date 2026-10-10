@@ -1,6 +1,7 @@
 {
   "schema": "alfa.v322_docking_error_single_axis_range.v2",
   "date": "2026-10-09",
+  "last_updated": "2026-10-10",
   "model_revision": "robot_v3.2.2-suction",
   "tool0_offset_local_z_m": 0.151,
   "experiment_contract": {
@@ -46,6 +47,11 @@
   "complete_functional_ranges": {
     "y_m": {
       "passed": [-0.12, 0.0875],
+      "continuous_range_certified": false,
+      "interior_failure": {
+        "value_m": 0.08,
+        "failure": "group 22+24 carried left box collided with wall box 23 during full edge validation"
+      },
       "nearest_failed": [-0.13, 0.10],
       "negative_failure": "box 18 right-arm Cartesian approach failure",
       "positive_failure": "group 22+24 carried left box collided with wall box 23",
@@ -83,6 +89,12 @@
     "common_dx_x_rows": 0,
     "combined_error_rows": 0,
     "checked_frames": 2456559,
-    "checked_edge_samples": 94670
+    "checked_edge_samples": 94670,
+    "runtime_on_demand_rows": 1,
+    "runtime_on_demand_checked_frames": 24392,
+    "runtime_on_demand_checked_edge_samples": 906,
+    "evidence_rows_including_runtime_probe": 153,
+    "evidence_checked_frames_including_runtime_probe": 2480951,
+    "evidence_checked_edges_including_runtime_probe": 95576
   }
 }

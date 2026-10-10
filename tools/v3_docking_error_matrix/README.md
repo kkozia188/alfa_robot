@@ -126,9 +126,24 @@ cd /home/tim/alfa_robot-motion257-docking-matrix
 
 It prompts for rows 1-3 X clearance, rows 4-5 X clearance, Y, and Yaw, then
 opens the matching complete Rerun. Only one of physical X, Y, or Yaw may differ
-from nominal in one run. X accepts the 121-pair strong-certificate ranges; Y
-accepts only complete locally validated values listed by the prompt; Yaw accepts
-integer degrees from -5 through +5. Use CLI arguments to skip the prompts:
+from nominal in one run. The maximum accepted ranges are:
+
+- rows 1-3 X: `0.74..1.02 m`; rows 4-5 must remain `0.60 m` outside the
+  `0.80..0.90 x 0.55..0.65 m` 121-pair strong grid;
+- rows 4-5 X: `0.36..0.79 m`; rows 1-3 must remain `0.85 m` outside the strong
+  grid;
+- Y: `-0.120..+0.0875 m`, rounded to the stable 1 mm case-ID grid while
+  preserving the measured `+0.0875 m` boundary;
+- Yaw: `-5..+5 deg`, rounded to `0.1 deg`.
+
+Existing complete cases open immediately. A Y or non-integer Yaw point without
+a cache first runs the complete 25-box planner and MoveIt/FCL validator and only
+opens Rerun after it passes. These bounds are therefore the maximum **accepted
+attempt envelope**, not a continuous success certificate. For example, a fresh
+`Y=+0.080 m` run reached full replay validation but collided
+`dual_carried_box_left <-> wall_box_23`; the entry point records that failure
+and does not open its Rerun. Use `--retry-failed` only when a fresh randomized
+replan is explicitly desired. Use CLI arguments to skip the prompts:
 
 ```bash
 /usr/bin/python3 tools/v3_docking_error_matrix/open_single_axis_rerun.py \

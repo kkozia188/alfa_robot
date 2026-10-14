@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from open_pair_rerun import pair_result, selected_paths  # noqa: E402
+from open_pair_rerun import pair_result, safe_turn_paths, selected_paths  # noqa: E402
 
 
 class OpenPairRerunTest(unittest.TestCase):
@@ -52,6 +52,16 @@ class OpenPairRerunTest(unittest.TestCase):
                     root / "pair-01-06/candidate-190/validation-rescue-1.json",
                 ),
             )
+
+    def test_safe_turn_paths_are_pair_scoped(self) -> None:
+        root = Path("/tmp/safe-turn")
+        self.assertEqual(
+            safe_turn_paths(root, [4, 19]),
+            (
+                root / "pair-04-19/replay.json",
+                root / "pair-04-19/validation.json",
+            ),
+        )
 
 
 if __name__ == "__main__":

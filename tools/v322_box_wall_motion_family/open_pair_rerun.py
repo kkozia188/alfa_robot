@@ -17,7 +17,8 @@ SOURCE_DIR = Path(__file__).resolve().parent
 DEFAULT_SUMMARY = RESULTS / "all-pair-matrix-yaw-summary.json"
 DEFAULT_ACCEPTANCE = RESULTS / "all-pair-matrix-acceptance.json"
 DEFAULT_MATRIX_ROOT = RESULTS / "all-pair-matrix-yaw"
-DEFAULT_CACHE = RESULTS / "pair-rerun-cache"
+DEFAULT_SAFE_TURN_ROOT = RESULTS / "safe-turn-unload/all-pair-matrix"
+DEFAULT_CACHE = RESULTS / "safe-turn-unload/pair-rerun-cache"
 DEFAULT_SCRIPT_DIR = WORKSPACE / "src/alfa_robot_moveit_config/scripts"
 DEFAULT_URDF = RESULTS / "v322-production-shell.urdf"
 DEFAULT_RERUN = Path("/home/tim/.local/bin/rerun")
@@ -85,8 +86,16 @@ def selected_paths(matrix_root: Path, result: dict[str, Any]) -> tuple[Path, Pat
     return candidate / "replay.json", candidate / "validation.json"
 
 
+def safe_turn_paths(safe_turn_root: Path, pair: list[int]) -> tuple[Path, Path]:
+    pair_dir = safe_turn_root / f"pair-{pair[0]:02d}-{pair[1]:02d}"
+    return pair_dir / "replay.json", pair_dir / "validation.json"
+
+
 def report_markdown(
-    result: dict[str, Any], acceptance: dict[str, Any], validation: dict[str, Any] | None
+    result: dict[str, Any],
+    acceptance: dict[str, Any],
+    validation: dict[str, Any] | None,
+    replay: dict[str, Any] | None = None,
 ) -> str:
     left, right = result["pair"]
     if result.get("success"):
@@ -97,6 +106,20 @@ def report_markdown(
             selected.get("base_y_m", 0.0),
             selected.get("base_yaw_rad", 0.0),
         ]
+        route_lines: list[str] = []
+        if replay and replay.get("route_revision") == "safe_exit_turn_unload_v1":
+            route = replay["route_contract"]
+            selected_operation = next(
+                item
+                for item in replay["operations"]
+                if item.get("kind") != "base_transition"
+            )
+            route_lines = [
+                f"- Exit before turn: **{float(route['backoff_before_turn_m']):.2f} m**",
+                f"- Unload turn: **180 deg {selected_operation['turn_direction']}**",
+                "- Lateral shuttle: **disabled (0.00 m)**",
+                f"- Base translation speed: **{float(route['base_speed_m_s']):.2f} m/s**",
+            ]
         return "\n".join([
             f"# Pair {left} + {right}",
             "",
@@ -112,6 +135,7 @@ def report_markdown(
             f"- Edge samples: **{int((validation or {}).get('checked_edge_samples', 0))}**",
             f"- Operation result: **{'PASS' if operation.get('success') else 'UNKNOWN'}**",
             f"- One-sided attachment frames: **{selected.get('one_sided_attachment_frames', 0)}**",
+            *route_lines,
         ]) + "\n"
     failed = next(
         (item for item in acceptance["failed_pairs"] if item["pair"] == [left, right]),
@@ -229,11 +253,13 @@ def main() -> int:
     parser.add_argument("--summary", type=Path, default=DEFAULT_SUMMARY)
     parser.add_argument("--acceptance", type=Path, default=DEFAULT_ACCEPTANCE)
     parser.add_argument("--matrix-root", type=Path, default=DEFAULT_MATRIX_ROOT)
+    parser.add_argument("--safe-turn-root", type=Path, default=DEFAULT_SAFE_TURN_ROOT)
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--script-dir", type=Path, default=DEFAULT_SCRIPT_DIR)
     parser.add_argument("--urdf", type=Path, default=DEFAULT_URDF)
     parser.add_argument("--rerun", type=Path, default=DEFAULT_RERUN)
     parser.add_argument("--playback-speed", type=float, default=3.0)
+    parser.add_argument("--route", choices=("safe-turn", "original"), default="safe-turn")
     parser.add_argument("--rebuild", action="store_true")
     parser.add_argument("--no-open", action="store_true")
     args = parser.parse_args()
@@ -250,19 +276,23 @@ def main() -> int:
     pair_cache = args.cache_dir / pair_name
     pair_cache.mkdir(parents=True, exist_ok=True)
     output = pair_cache / (
-        f"{pair_name}-full.rrd" if result.get("success")
+        f"{pair_name}-{args.route}-full.rrd" if result.get("success")
         else f"{pair_name}-failure-diagnostic.rrd"
     )
-    markdown_path = pair_cache / f"{pair_name}-report.md"
+    markdown_path = pair_cache / f"{pair_name}-{args.route}-report.md"
 
     if result.get("success"):
-        replay_path, validation_path = selected_paths(args.matrix_root, result)
+        if args.route == "safe-turn":
+            replay_path, validation_path = safe_turn_paths(args.safe_turn_root, pair)
+        else:
+            replay_path, validation_path = selected_paths(args.matrix_root, result)
         if not replay_path.is_file() or not validation_path.is_file():
             raise RuntimeError(
                 f"selected evidence is missing: {replay_path} / {validation_path}"
             )
         validation = read_json(validation_path)
-        markdown = report_markdown(result, acceptance, validation)
+        replay = read_json(replay_path)
+        markdown = report_markdown(result, acceptance, validation, replay)
         markdown_path.write_text(markdown, encoding="utf-8")
         if args.rebuild or not output.is_file():
             ensure_urdf(args.urdf, environment)

@@ -40,8 +40,11 @@ Two initial templates are implemented:
   with 0.30/0.25/0.20 m space-constrained fallbacks;
 - `top_face_extract`: top approach and 0.20 m vertical loaded retreat.
 
-Both continue with the certified mobile-base policy: back off 2.35 m, move 1.50
-m to robot-right, release, stow outside the warehouse, and return.
+Both continue with the safe-exit mobile-base policy: reverse 2.35 m, rotate the
+loaded base 180 degrees, release at that safe-exit pose, stow the arms, rotate
+the empty base back to the pickup heading, and return. The former 1.50 m
+robot-right shuttle is disabled. Base translation uses a 0.25 m/s contract
+instead of the historical 0.10 m/s setting.
 
 ## Cross-Row Result
 
@@ -49,7 +52,8 @@ The exhaustive `25 choose 2` matrix is complete under the strict scene where
 all 23 non-target boxes remain present:
 
 - Certified pairs: `292/300` (`97.33%`)
-- Independent MoveIt/FCL: `563,353` frames plus `24,692` edge samples
+- Safe-turn full-cycle MoveIt/FCL: `503,924` frames plus `81,894` edge samples
+- Safe-turn result among previously supported pairs: `292/292`; route failures: `0`
 - One-sided attachment frames: `0`
 - Maximum joint step: `2.993892 deg`; joint flips: `0`
 - Maximum carried-box tilt, left/right: `6.093544 / 6.092935 deg`
@@ -83,7 +87,7 @@ Results:
 - Cross-row requests: `3/3`; boxes: `6/6`
 - One-sided attachment frames: `0`
 - Continuous operation boundaries: `3/3`
-- MoveIt/FCL: `5722` frames plus `366` 1-degree/1-centimetre edge samples
+- MoveIt/FCL: `5101` frames plus `954` 1-degree/1-centimetre edge samples
 - Maximum joint step: `2.953128 deg`; joint flips: `0`
 - Maximum carried-box tilt, left/right: `2.295180 / 0.065597 deg`
 - Production shell: `21` links and `49` visual meshes
@@ -122,7 +126,7 @@ Open the complete production-shell Rerun:
 
 ```bash
 rerun --new \
-  /home/tim/alfa_robot-v322-box-wall-motion-family-validation/results/v322-cross-row-pair-full.rrd
+  /home/tim/alfa_robot-v322-box-wall-motion-family-validation/results/safe-turn-unload/v322-safe-turn-unload-full.rrd
 ```
 
 Open any pair by ID (order does not matter):
@@ -133,13 +137,15 @@ cd /home/tim/alfa_robot-v322-box-wall-motion-family
 ```
 
 The first request generates and caches a production-shell RRD; later requests
-open the cache directly. Use `--rebuild` to regenerate it or `--no-open` to
-only generate and verify. For one of the 8 unsupported pairs, such as `1 21`,
-the same command opens a failure-diagnostic RRD instead of a fabricated motion
-replay.
+open the cache directly. The safe-turn route is the default. Pass
+`--route original` only to inspect the historical conveyor-shuttle replay. Use
+`--rebuild` to regenerate the RRD or `--no-open` to only generate and verify.
+For one of the 8 unsupported pairs, such as `1 21`, the same command opens a
+failure-diagnostic RRD instead of a fabricated motion replay.
 
 The full matrix report is `results/all-pair-matrix-acceptance.json/.md`. The
 three-pair Rerun report remains `results/cross-row-pair-acceptance.json/.md`,
+the safe-turn matrix is `results/safe-turn-unload/all-pair-matrix-summary.json`,
 and the earlier single-Pose result remains `results/acceptance-report.json/.md`.
 
 ## Limits

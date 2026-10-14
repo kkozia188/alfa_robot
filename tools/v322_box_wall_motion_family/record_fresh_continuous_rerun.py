@@ -116,7 +116,8 @@ def main() -> int:
                         f"- Stage: `{stage}`",
                         f"- Path phase: **{path_phase}**",
                         f"- Completed boxes: **{self.completed_boxes}/{self.total_boxes}**",
-                        f"- Base Y: `{self.base_transform[1, 3]:.3f} m`",
+                        f"- Base X / Y: `{self.base_transform[0, 3]:.3f} / {self.base_transform[1, 3]:.3f} m`",
+                        f"- Base speed contract: `{float(operation.get('base_speed_m_s', 0.10)):.2f} m/s`",
                         f"- Fresh task core: **{float(metrics['selected_task_core_s']):.3f}s**",
                         f"- Fresh entry bridge: **{float(metrics['selected_transition_core_s']):.3f}s**",
                         "- Validation: `MoveIt/FCL, 1 deg / 1 cm edges`",
@@ -125,6 +126,38 @@ def main() -> int:
                 ),
             )
 
+        def play_operation(
+            self,
+            operation: dict[str, Any],
+            group_index: int,
+            joint_names: list[str],
+        ) -> dict[str, Any]:
+            if operation.get("kind") == "base_transition":
+                return self.play_base_transition(operation, joint_names)
+            base_speed_m_s = float(operation.get("base_speed_m_s", 0.10))
+            if base_speed_m_s <= 0.0:
+                raise ValueError("base_speed_m_s must be positive")
+            original_advance = self.advance
+
+            # The upstream recorder derives translation timing from a fixed 0.10 m/s.
+            # Scale only frames that move the base so arm timing remains unchanged.
+            previous_position = self.base_transform[:3, 3].copy()
+
+            def route_advance(seconds: float) -> None:
+                nonlocal previous_position
+                position = self.base_transform[:3, 3].copy()
+                distance = float(np.linalg.norm(position - previous_position))
+                if distance > 1.0e-9:
+                    seconds = min(seconds, distance / base_speed_m_s)
+                previous_position = position
+                original_advance(seconds)
+
+            self.advance = route_advance
+            try:
+                return super().play_operation(operation, group_index, joint_names)
+            finally:
+                self.advance = original_advance
+
         def play_base_transition(
             self, operation: dict[str, Any], joint_names: list[str]
         ) -> dict[str, Any]:
@@ -132,6 +165,9 @@ def main() -> int:
             frames = list(operation["frames"])
             previous_position: np.ndarray | None = None
             previous_joints = self.last_joints
+            speed = float(operation.get("base_speed_m_s", 0.10))
+            if speed <= 0.0:
+                raise ValueError("base_speed_m_s must be positive")
             for frame_index, frame in enumerate(frames, start=1):
                 joints = {
                     name: float(value)
@@ -167,7 +203,7 @@ def main() -> int:
                 )
                 delay = self.minimum_frame_interval_s
                 if previous_position is not None:
-                    delay = max(delay, float(np.linalg.norm(position - previous_position)) / 0.10)
+                    delay = max(delay, float(np.linalg.norm(position - previous_position)) / speed)
                 if previous_joints is not None:
                     delay = max(
                         delay,

@@ -330,10 +330,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         urdf_text: str,
     ) -> None:
         self.is_dual_sequence = any(
-            operation.get("kind") in {
-                "dual", "dual_conveyor_cycle",
-                "dual_chest_carry_conveyor_cycle",
-            }
+            str(operation.get("kind", "")).startswith("dual")
             for operation in operations
         )
         self.has_conveyor_shuttle = any(
@@ -344,14 +341,26 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             "chest_carry" in str(operation.get("kind", ""))
             for operation in operations
         )
+        self.has_turn_place = any(
+            str(operation.get("kind", "")).endswith("turn_place_cycle")
+            for operation in operations
+        )
+        self.has_safe_turn_unload = any(
+            str(operation.get("kind", "")) == "dual_safe_turn_unload_cycle"
+            for operation in operations
+        )
         sequence_title = (
+            "Dual-arm 5x5 chest carry + safe-backoff 180deg unload"
+            if self.has_safe_turn_unload else (
+            "Dual-arm 5x5 chest carry + 180deg turn-place"
+            if self.has_turn_place else (
             "Dual-arm 5x5 chest carry + fast-base shuttle"
             if self.has_chest_carry else (
             "Dual-arm 5x5 right-conveyor shuttle"
             if self.has_conveyor_shuttle else (
                 "Dual-arm 5x5 row-wise grasp" if self.is_dual_sequence
                 else "Vehicle-front clearance sequential 5x5 grasp"
-            ))
+            ))))
         )
         super().__init__(
             save,
@@ -368,6 +377,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         )
         self.base_transform = np.eye(4)
         self.completed_boxes = 0
+        self.placed_boxes: dict[int, dict[str, Any]] = {}
         self.group_count = sum(
             operation.get("kind") != "base_transition" for operation in operations
         )
@@ -429,6 +439,30 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                 ),
                 static=True,
             )
+        if self.has_turn_place or self.has_safe_turn_unload:
+            unload_poses = [
+                operation.get("unload_pose_map")
+                or operation.get("placement_pose_map")
+                for operation in operations
+                if operation.get("unload_pose_map")
+                or operation.get("placement_pose_map")
+            ]
+            zone_x = (
+                sum(float(pose[0]) for pose in unload_poses) / len(unload_poses)
+                - 0.95
+                if unload_poses else -1.25
+            )
+            rr.log(
+                "world/rear_placement/reference",
+                rr.Boxes3D(
+                    centers=[[zone_x, 0.0, 0.03]],
+                    half_sizes=[[0.75, 1.0, 0.03]],
+                    colors=[[70, 78, 86, 210]],
+                    labels=["rear unload area (visual reference)"],
+                    show_labels=True,
+                ),
+                static=True,
+            )
 
     def log_boxes(self, target_ids: list[int] | None = None) -> None:
         targets = set(target_ids or []) & self.remaining
@@ -471,14 +505,30 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             )
         else:
             rr.log("world/boxes/targets", rr.Clear(recursive=True))
+        if self.placed_boxes:
+            placed = [self.placed_boxes[box_id] for box_id in sorted(self.placed_boxes)]
+            rr.log(
+                "world/boxes/placed",
+                rr.Boxes3D(
+                    centers=[item["center"] for item in placed],
+                    half_sizes=[item["half_size"] for item in placed],
+                    quaternions=[item["quaternion"] for item in placed],
+                    colors=[[120, 205, 135, 210] for _ in placed],
+                    labels=[
+                        f"placed box {item['box_id']} z={item['center'][2]:.3f}m"
+                        for item in placed
+                    ],
+                    show_labels=True,
+                ),
+            )
+        else:
+            rr.log("world/boxes/placed", rr.Clear(recursive=True))
 
-    def log_carried_box(
+    def carried_box_geometry(
         self,
-        side: str,
-        box_id: int,
         attachment: dict[str, Any],
         joints: dict[str, float],
-    ) -> None:
+    ) -> tuple[np.ndarray, np.ndarray]:
         transforms = self.robot.fk(joints)
         tool_link = str(attachment["tool_link"])
         tool_transform = transforms.get(tool_link)
@@ -486,7 +536,6 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             raise RuntimeError(f"missing FK for {tool_link}")
         offset = np.asarray(attachment["center_in_tool"], dtype=float)
         rotation = np.asarray(attachment["rotation_in_tool"], dtype=float)
-        size = np.asarray(attachment["size"], dtype=float)
         transform = self.base_transform @ tool_transform
         transform[:3, 3] = (
             self.base_transform @ np.asarray([
@@ -496,6 +545,32 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         transform[:3, :3] = (
             self.base_transform[:3, :3] @ tool_transform[:3, :3] @ rotation
         )
+        return transform, np.asarray(attachment["size"], dtype=float)
+
+    def remember_placed_box(
+        self,
+        side: str,
+        box_id: int,
+        attachment: dict[str, Any],
+        joints: dict[str, float],
+    ) -> None:
+        transform, size = self.carried_box_geometry(attachment, joints)
+        self.placed_boxes[box_id] = {
+            "box_id": box_id,
+            "side": side,
+            "center": transform[:3, 3].tolist(),
+            "half_size": (size * 0.5).tolist(),
+            "quaternion": sequence.matrix_to_quaternion(transform[:3, :3]),
+        }
+
+    def log_carried_box(
+        self,
+        side: str,
+        box_id: int,
+        attachment: dict[str, Any],
+        joints: dict[str, float],
+    ) -> None:
+        transform, size = self.carried_box_geometry(attachment, joints)
         color = [45, 205, 125, 235] if side == "left" else [40, 170, 245, 235]
         rr.log(
             f"world/boxes/carried/{side}",
@@ -598,6 +673,15 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
             "single_chest_carry_conveyor_cycle": (
                 "single pickup + chest carry + fast conveyor shuttle"
             ),
+            "dual_chest_carry_turn_place_cycle": (
+                "dual pickup + compact chest carry + 180deg turn-place"
+            ),
+            "single_chest_carry_turn_place_cycle": (
+                "single pickup + compact chest carry + 180deg turn-place"
+            ),
+            "dual_safe_turn_unload_cycle": (
+                "chest carry + 2.35m safe backoff + 180deg unload"
+            ),
         }
         kind = kinds.get(str(operation["kind"]), str(operation["kind"]))
         bridge_seconds = float(metrics["bridge_planning_s"])
@@ -621,8 +705,9 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                 f"- Remaining: **{len(self.remaining)}**\n"
                 f"- Shared lift: `{float(operation['frames'][0]['joints'][0]):.2f} m`\n"
                 f"- Base Y: `{self.base_transform[1, 3]:.3f} m`\n"
-                f"- Conveyor route: `back {float(operation.get('backoff_distance_m', 0.0)):.3f} m, "
-                f"right {float(operation.get('right_shuttle_distance_m', 0.0)):.3f} m`\n"
+                f"- Base route: `backoff {float(operation.get('backoff_distance_m', 0.0)):.3f} m, "
+                f"lateral {float(operation.get('right_shuttle_distance_m', 0.0)):.3f} m, "
+                f"turn {float(operation.get('turn_angle_deg', 0.0)):.1f} deg`\n"
                 f"- Base speed: **{float(operation.get('base_speed_m_s', 0.10)):.2f} m/s**\n"
                 f"- Transition: `{metrics['transition_strategy']}`\n"
                 f"- Bridge search: **{bridge_text}**\n"
@@ -692,6 +777,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
         previous_stage = ""
         previous = self.last_joints
         previous_base_position = self.base_transform[:3, 3].copy()
+        previous_attached = {"left": False, "right": False}
         for frame in operation["frames"]:
             joints = {
                 name: float(value)
@@ -727,6 +813,21 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                 ),
             )
             log_robot_state(self.robot, joints, "world/robot")
+            current_attached = {
+                "left": left_attached,
+                "right": right_attached,
+            }
+            for side in ("left", "right"):
+                box_id = int(operation.get(f"{side}_box_id", 0))
+                if (
+                    (self.has_safe_turn_unload or self.has_turn_place)
+                    and previous_attached[side]
+                    and not current_attached[side]
+                    and box_id > 0
+                ):
+                    self.remember_placed_box(
+                        side, box_id, operation[f"{side}_attachment"], joints
+                    )
             pending_ids = [
                 int(operation.get(f"{side}_box_id", 0))
                 for side in ("left", "right")
@@ -744,6 +845,7 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                     )
                 else:
                     rr.log(f"world/boxes/carried/{side}", rr.Clear(recursive=True))
+            previous_attached = current_attached
             self.log_status(operation, group_index, stage, metrics, path_phase)
 
             maximum_delta_deg = 0.0

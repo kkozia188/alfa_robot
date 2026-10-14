@@ -2142,3 +2142,10 @@
 - 性能：全新输出目录无缓存命中，25/25箱平均`1.042s`、最大`2.227516s`，全部低于3秒；21条直接笛卡尔、2条短TCP路点、2条近直线关节shortcut。最大TCP路径/端点直线比`1.214376`，最大偏离`7.1575cm`，旧版约5～6.6倍绕行已消除。
 - 验证：15/15循环、29,299帧和3,554个1度/1厘米边样本通过MoveIt/FCL；最大关节步长`2.999916°`、翻转0、左右最大携箱倾角`7.892477°/7.892324°`。生产Rerun确认21 links/49 meshes/Tool0 `+Z 0.151m`并通过`rerun rrd verify`；关键帧1600×900画面检查正常。
 - 产物：`results/v322_chest_carry_fast_base/v322-chest-carry-direct-pull-v2-production-shell.rrd`、`v322-chest-carry-direct-pull-v2-replay.json`、`v322-chest-carry-direct-pull-v2-validation.json`、`direct-pull-v2-path-analysis.json`和`direct-pull-v2-acceptance-report.md`。默认`open_rerun.py`已切换到直拉版；MOTION-261/MOTION-257及旧胸前产物未修改。
+
+## 2026-10-14 运控 / Codex / 胸前携箱后安全退后180度等高卸载
+- 依据Linear `MOTION-258@fb5cf97`复用已完成292/292组合验证的安全路线，不采用仓内原地旋转实验：每组吸附/抽离并先到胸前停稳，沿-X后退`2.35m`到仓外安全位，携箱旋转`180°`后释放；取消原`1.50m`横移，释放后空载收臂、转回并返回。
+- 胸前段保持`09c1de0`直拉版本：25/25新鲜任务核心低于3秒，最大`2.227515s`。安全路线完整25箱/15循环共`26,194`帧和`6,494`个1度/1厘米边样本通过MoveIt/FCL，关节翻转0。
+- 新增FK等高门禁：10/10双箱组在释放前计算左右箱心世界Z，最大误差`1.06998e-10m`（`0.000000107mm`），门限`1e-6m`；同时硬校验胸前先于后退、后退`2.35m`、横移0、转角180度和释放后脱附。
+- Rerun释放后持续显示箱体FK放置位与中心Z标签；生产外壳`21 links/49 meshes/Tool0 +Z 0.151m`。完整RRD和等高关键帧均通过`rerun rrd verify`，产物位于`results/v322_chest_turn_place/`。
+- 独立工作树`/home/tim/alfa_robot-v322-chest-turn-place`，分支`feature/v322-chest-turn-place`；原MOTION-258、MOTION-261、MOTION-257和胸前直拉工作树均未修改。

@@ -9,7 +9,16 @@ from pathlib import Path
 
 
 WORKSPACE = Path(__file__).resolve().parents[2]
-RESULTS = WORKSPACE / "results/v322_chest_carry_fast_base"
+LOCAL_RESULTS = WORKSPACE / "results/v322_chest_carry_fast_base"
+SOURCE_RESULTS = Path(
+    "/home/tim/alfa_robot-v322-chest-carry-fast-base/"
+    "results/v322_chest_carry_fast_base"
+)
+RESULTS = (
+    LOCAL_RESULTS
+    if (LOCAL_RESULTS / "direct-pull-v2-acceptance-report.json").is_file()
+    else SOURCE_RESULTS
+)
 
 
 class ChestCarryContractTest(unittest.TestCase):

@@ -1,0 +1,24 @@
+{
+  "schema": "alfa.v322_box_wall_dual_id_request.v1",
+  "wall": {
+    "frame": "map", "rows": 5, "columns": 5, "center_x_m": 0.90,
+    "bottom_z_m": 0.0, "center_y_m": 0.0,
+    "box_size_m": [0.30, 0.40, 0.40],
+    "gap_y_m": 0.0, "gap_z_m": 0.0, "orientation_tolerance_deg": 5.0
+  },
+  "current_state": {
+    "joint_positions": [
+      -0.3,
+      2.70526034059121, -1.832595714594046, 0.34906585039887,
+      1.5707963267949, -1.5707963267949, -0.69813170079773, 0.0,
+      -2.70526034059121, 1.832595714594046, -0.34906585039887,
+      -1.5707963267949, 1.5707963267949, 0.69813170079773, 0.0,
+      0.0, 0.0
+    ]
+  },
+  "requests": [
+    {"request_id": "same-side-01-02", "box_ids": [1, 2], "removed_box_ids": [], "candidate_limit": 200},
+    {"request_id": "same-column-01-06", "box_ids": [1, 6], "removed_box_ids": [], "candidate_limit": 200},
+    {"request_id": "same-side-24-25", "box_ids": [24, 25], "removed_box_ids": [], "candidate_limit": 200}
+  ]
+}

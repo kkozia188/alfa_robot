@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alfa.local/schemas/v322-box-wall-motion-family-v1.json",
+  "title": "ALFA V3.2.2 pose-driven box-wall motion family",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "wall", "current_state", "tasks"],
+  "properties": {
+    "schema": {"const": "alfa.v322_box_wall_motion_family.v1"},
+    "wall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "rows", "columns", "bottom_z_m", "center_y_m", "box_size_m"],
+      "properties": {
+        "frame": {"type": "string", "minLength": 1},
+        "rows": {"type": "integer", "minimum": 1},
+        "columns": {"type": "integer", "minimum": 1},
+        "bottom_z_m": {"type": "number"},
+        "center_y_m": {"type": "number"},
+        "box_size_m": {
+          "type": "array", "minItems": 3, "maxItems": 3,
+          "items": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "gap_y_m": {"type": "number", "minimum": 0},
+        "gap_z_m": {"type": "number", "minimum": 0},
+        "orientation_tolerance_deg": {"type": "number", "minimum": 0}
+      }
+    },
+    "current_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["joint_positions"],
+      "properties": {
+        "joint_positions": {
+          "type": "array", "minItems": 17, "maxItems": 17,
+          "items": {"type": "number"}
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "box_pose", "available_space", "allowed_arms"],
+        "properties": {
+          "request_id": {"type": "string", "minLength": 1},
+          "box_pose": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["position_m", "orientation_xyzw"],
+            "properties": {
+              "position_m": {
+                "type": "array", "minItems": 3, "maxItems": 3,
+                "items": {"type": "number"}
+              },
+              "orientation_xyzw": {
+                "type": "array", "minItems": 4, "maxItems": 4,
+                "items": {"type": "number"}
+              }
+            }
+          },
+          "available_space": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "front_clearance_m", "top_clearance_m",
+              "left_clearance_m", "right_clearance_m"
+            ],
+            "properties": {
+              "front_clearance_m": {"type": "number", "minimum": 0},
+              "top_clearance_m": {"type": "number", "minimum": 0},
+              "left_clearance_m": {"type": "number", "minimum": 0},
+              "right_clearance_m": {"type": "number", "minimum": 0}
+            }
+          },
+          "clearance_channels": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"enum": ["top", "bottom", "left", "right"]}
+          },
+          "clearance_radius_cells": {"type": "integer", "minimum": 1},
+          "allowed_arms": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": {"enum": ["left", "right"]}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,304 @@
+<div id="vamp-before-after" aria-label="VAMP并发搜索前后数据对比">
+  <style>
+    #vamp-before-after {
+      width: 100%;
+      color: var(--foreground);
+      font-size: var(--font-size-base);
+      letter-spacing: 0;
+    }
+    #vamp-before-after .viz-heading {
+      margin: 0 0 4px;
+      font-weight: 500;
+    }
+    #vamp-before-after .viz-subtitle,
+    #vamp-before-after .viz-footnote {
+      margin: 0;
+      color: var(--muted-foreground);
+    }
+    #vamp-before-after .viz-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px 28px;
+      margin-top: 18px;
+    }
+    #vamp-before-after figure {
+      min-width: 0;
+      margin: 0;
+    }
+    #vamp-before-after figure:last-child {
+      grid-column: 1 / -1;
+    }
+    #vamp-before-after figcaption {
+      margin-bottom: 7px;
+      font-weight: 500;
+    }
+    #vamp-before-after .viz-chart {
+      width: 100%;
+      min-height: 250px;
+    }
+    #vamp-before-after .viz-chart-composition {
+      min-height: 185px;
+    }
+    #vamp-before-after svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    #vamp-before-after svg text {
+      fill: var(--foreground);
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+    #vamp-before-after .axis path,
+    #vamp-before-after .axis line,
+    #vamp-before-after rect[data-chart-frame] {
+      stroke: var(--border);
+    }
+    #vamp-before-after .axis .tick line {
+      opacity: 0.45;
+    }
+    #vamp-before-after .value-label {
+      font-weight: 500;
+    }
+    #vamp-before-after .delta-good {
+      fill: var(--viz-series-1);
+      font-weight: 500;
+    }
+    #vamp-before-after .delta-bad {
+      fill: var(--viz-series-4);
+      font-weight: 500;
+    }
+    #vamp-before-after .composition-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      margin-top: 8px;
+    }
+    #vamp-before-after .composition-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #vamp-before-after .composition-legend i {
+      width: 12px;
+      height: 12px;
+      display: inline-block;
+    }
+    #vamp-before-after .viz-footnote {
+      margin-top: 16px;
+    }
+    @media (max-width: 700px) {
+      #vamp-before-after .viz-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+      }
+      #vamp-before-after figure:last-child {
+        grid-column: auto;
+      }
+    }
+  </style>
+
+  <h2 class="viz-heading">并发搜索：框架吞吐提高，V3任务未提速</h2>
+  <p class="viz-subtitle">官方 Panda/VAMP 吞吐与 ALFA V3 box 2 实测分开展示；规划时间越低越好。</p>
+
+  <div class="viz-grid">
+    <figure>
+      <figcaption>官方 VAMP RRT-Connect 吞吐</figcaption>
+      <div id="vamp-throughput-chart" class="viz-chart"></div>
+    </figure>
+    <figure>
+      <figcaption>ALFA V3 box 2 任务核心</figcaption>
+      <div id="v3-time-chart" class="viz-chart"></div>
+    </figure>
+    <figure>
+      <figcaption>V3基线任务核心耗时构成</figcaption>
+      <div id="v3-composition-chart" class="viz-chart viz-chart-composition"></div>
+      <div class="composition-legend" aria-label="耗时构成图例">
+        <span><i style="background:var(--viz-series-1)"></i>解析 IK 93.98%</span>
+        <span><i style="background:var(--viz-series-2)"></i>FCL 碰撞 3.78%</span>
+        <span><i style="background:var(--viz-series-3)"></i>其他 2.24%</span>
+      </div>
+    </figure>
+  </div>
+
+  <p class="viz-footnote">完整任务成功率保持 25/25；认证基线最大 2.228s，默认单 worker 回归最大 2.460s。4-worker 模式保持实验开关，不进入默认路径。</p>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script>
+    (() => {
+      const root = document.getElementById("vamp-before-after");
+      const chartSpecs = [
+        {
+          id: "vamp-throughput-chart",
+          values: [
+            { label: "先前：串行", value: 1398.619, text: "1,398.6", color: "var(--viz-series-2)" },
+            { label: "以后：4进程", value: 2528.054, text: "2,528.1", color: "var(--viz-series-1)" }
+          ],
+          unit: "吞吐量 (plans/s)",
+          delta: "+80.8% / 1.81x",
+          deltaClass: "delta-good"
+        },
+        {
+          id: "v3-time-chart",
+          values: [
+            { label: "先前：1 worker", value: 1.842856, text: "1.843s", color: "var(--viz-series-2)" },
+            { label: "以后：4 workers", value: 2.004065, text: "2.004s", color: "var(--viz-series-4)" }
+          ],
+          unit: "规划时间 (s，越低越好)",
+          delta: "+8.7% / 0.920x",
+          deltaClass: "delta-bad"
+        }
+      ];
+
+      function drawBarChart(spec) {
+        const host = root.querySelector(`#${spec.id}`);
+        const width = Math.max(320, Math.floor(host.getBoundingClientRect().width));
+        const height = 250;
+        const margin = { top: 30, right: 56, bottom: 48, left: width < 430 ? 104 : 120 };
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+        const domainMax = d3.max(spec.values, d => d.value) * 1.18;
+        const x = d3.scaleLinear().domain([0, domainMax]).range([0, innerWidth]);
+        const y = d3.scaleBand()
+          .domain(spec.values.map(d => d.label))
+          .range([0, innerHeight])
+          .padding(0.34);
+
+        d3.select(host).selectAll("*").remove();
+        const svg = d3.select(host)
+          .append("svg")
+          .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("role", "img")
+          .attr("aria-label", `${spec.unit}前后对比`);
+        svg.append("rect")
+          .attr("data-chart-frame", "")
+          .attr("x", margin.left)
+          .attr("y", margin.top)
+          .attr("width", innerWidth)
+          .attr("height", innerHeight)
+          .attr("fill", "none")
+          .attr("stroke-width", 1);
+        const plot = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+        plot.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(0,${innerHeight})`)
+          .call(d3.axisBottom(x).ticks(width < 430 ? 3 : 4).tickSize(-innerHeight));
+        plot.append("g")
+          .attr("class", "axis")
+          .call(d3.axisLeft(y).tickSize(0).tickPadding(8));
+        plot.selectAll("rect.measure")
+          .data(spec.values)
+          .join("rect")
+          .attr("class", "measure")
+          .attr("x", 0)
+          .attr("y", d => y(d.label))
+          .attr("width", d => x(d.value))
+          .attr("height", y.bandwidth())
+          .attr("fill", d => d.color);
+        plot.selectAll("text.value-label")
+          .data(spec.values)
+          .join("text")
+          .attr("class", "value-label")
+          .attr("x", d => Math.min(innerWidth - 4, x(d.value) + 7))
+          .attr("y", d => y(d.label) + y.bandwidth() / 2 + 4)
+          .attr("text-anchor", d => x(d.value) + 48 > innerWidth ? "end" : "start")
+          .text(d => d.text);
+        svg.append("text")
+          .attr("class", "axis-title")
+          .attr("data-axis", "x")
+          .attr("x", margin.left + innerWidth / 2)
+          .attr("y", height - 7)
+          .attr("text-anchor", "middle")
+          .text(spec.unit);
+        svg.append("text")
+          .attr("class", spec.deltaClass)
+          .attr("x", margin.left + innerWidth)
+          .attr("y", 17)
+          .attr("text-anchor", "end")
+          .text(spec.delta);
+        svg.append("text")
+          .attr("class", "axis-title")
+          .attr("data-axis", "y")
+          .attr("transform", `translate(13,${margin.top + innerHeight / 2}) rotate(-90)`)
+          .attr("text-anchor", "middle")
+          .text("配置");
+      }
+
+      function drawComposition() {
+        const host = root.querySelector("#v3-composition-chart");
+        const width = Math.max(320, Math.floor(host.getBoundingClientRect().width));
+        const height = 185;
+        const margin = { top: 38, right: 18, bottom: 44, left: 64 };
+        const innerWidth = width - margin.left - margin.right;
+        const items = [
+          { label: "解析 IK", value: 93.9845, color: "var(--viz-series-1)" },
+          { label: "FCL", value: 3.7819, color: "var(--viz-series-2)" },
+          { label: "其他", value: 2.2336, color: "var(--viz-series-3)" }
+        ];
+        const x = d3.scaleLinear().domain([0, 100]).range([0, innerWidth]);
+        d3.select(host).selectAll("*").remove();
+        const svg = d3.select(host)
+          .append("svg")
+          .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("role", "img")
+          .attr("aria-label", "V3基线任务核心耗时构成：解析IK百分之93.98，FCL碰撞百分之3.78，其他百分之2.24");
+        svg.append("rect")
+          .attr("data-chart-frame", "")
+          .attr("x", margin.left)
+          .attr("y", margin.top)
+          .attr("width", innerWidth)
+          .attr("height", 58)
+          .attr("fill", "none")
+          .attr("stroke-width", 1);
+        let offset = 0;
+        items.forEach(item => {
+          svg.append("rect")
+            .attr("x", margin.left + x(offset))
+            .attr("y", margin.top)
+            .attr("width", x(item.value))
+            .attr("height", 58)
+            .attr("fill", item.color);
+          offset += item.value;
+        });
+        svg.append("text")
+          .attr("class", "value-label")
+          .attr("x", margin.left + x(items[0].value / 2))
+          .attr("y", margin.top + 34)
+          .attr("text-anchor", "middle")
+          .text("IK 93.98%");
+        svg.append("g")
+          .attr("class", "axis")
+          .attr("transform", `translate(${margin.left},${margin.top + 58})`)
+          .call(d3.axisBottom(x).ticks(width < 430 ? 4 : 5).tickFormat(d => `${d}%`));
+        svg.append("text")
+          .attr("class", "axis-title")
+          .attr("data-axis", "x")
+          .attr("x", margin.left + innerWidth / 2)
+          .attr("y", height - 7)
+          .attr("text-anchor", "middle")
+          .text("任务核心耗时占比 (%)");
+        svg.append("text")
+          .attr("class", "axis-title")
+          .attr("data-axis", "y")
+          .attr("transform", `translate(13,${margin.top + 29}) rotate(-90)`)
+          .attr("text-anchor", "middle")
+          .text("阶段");
+      }
+
+      function drawAll() {
+        chartSpecs.forEach(drawBarChart);
+        drawComposition();
+      }
+      drawAll();
+      let lastWidth = Math.round(root.getBoundingClientRect().width);
+      const observer = new ResizeObserver(entries => {
+        const nextWidth = Math.round(entries[0].contentRect.width);
+        if (nextWidth === lastWidth) return;
+        lastWidth = nextWidth;
+        drawAll();
+      });
+      observer.observe(root);
+    })();
+  </script>
+</div>

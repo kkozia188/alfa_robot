@@ -2156,3 +2156,4 @@
 - 新增可选`parallel_rrt_workers`：局部shortcut repair可在独立PlanningScene上并发多seed，首个成功触发其余worker停止，最终轨迹继续使用MoveIt/FCL门禁；planner和胸前工具默认均保持`1`，只有显式`--parallel-rrt-workers 4`才启用实验。
 - 实测当前25箱基线任务核心中IK占`93.98%`、FCL碰撞占`3.78%`。可比box2 fast-probe串行/4-worker分别为`1.842856s/2.004065s`，并发仅`0.920x`且最终132帧SHA一致，因此不把4-worker设为生产默认。默认单worker全新25箱复验`25/25`成功、`25/25<3s`、最大`2.460374s`；这是回归探针，不替换`8cf118b`完整FCL证书。
 - 结果与复现入口位于`tools/v322_vamp_parallel/`和`results/v322_vamp_parallel/`。后续真正值得优化的是IK候选/笛卡尔beam并发；VAMP只有在V3专用内核完成并证明无FCL假阴性后才适合做候选前筛。
+- 新增`before-after-comparison.html`可视化，分开展示官方VAMP吞吐`1.81x`提升、V3 box2实测`0.920x`负收益和V3任务核心`93.98%`的IK耗时占比，避免把Panda框架基准误解为V3已提速。

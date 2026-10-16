@@ -37,6 +37,17 @@ find_package(robot_motion_core REQUIRED)
 find_package(alfa_robot_analytic_ik REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(ompl REQUIRED)
+find_package(vamp QUIET)
+if(vamp_FOUND AND DEFINED vamp_DIR)
+  get_filename_component(_alfa_vamp_prefix "${vamp_DIR}/../../.." ABSOLUTE)
+  if(NOT TARGET nigh::nigh AND EXISTS "${_alfa_vamp_prefix}/lib/cmake/nigh/nighTargets.cmake")
+    include("${_alfa_vamp_prefix}/lib/cmake/nigh/nighTargets.cmake")
+  endif()
+  if(NOT TARGET pdqsort::pdqsort AND EXISTS "${_alfa_vamp_prefix}/lib/cmake/pdqsort/pdqsortTargets.cmake")
+    include("${_alfa_vamp_prefix}/lib/cmake/pdqsort/pdqsortTargets.cmake")
+  endif()
+  unset(_alfa_vamp_prefix)
+endif()
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ConfigureExtractMonitor.srv"
@@ -364,6 +375,11 @@ target_link_libraries(v3_chest_carry_shortcut_optimizer
   ${OMPL_LIBRARIES}
   alfa_robot_motion_scene_adapter
 )
+
+if(vamp_FOUND)
+  target_link_libraries(v3_chest_carry_shortcut_optimizer vamp::vamp)
+  target_compile_definitions(v3_chest_carry_shortcut_optimizer PRIVATE ALFA_HAS_VAMP=1)
+endif()
 
 ament_target_dependencies(v3_chest_carry_shortcut_optimizer
   geometry_msgs

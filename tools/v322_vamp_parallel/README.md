@@ -52,3 +52,27 @@ and cuts total planning core time from `26.150 s` to `14.079 s`. Its selected
 replay matches all 16 operation frame hashes from the certified optimized
 replay and passes 43,366 MoveIt/FCL frames plus 5,901 edge samples. This is a
 VAMP-ready state-space reduction, not yet a VAMP collision backend.
+
+### Real VAMP backend
+
+`local_rrt_mode:=golden_vamp` is the real VAMP path. It uses VAMP's AVX2
+RRT-Connect in the reduced `(progress, alpha)` space with four concurrent
+Halton workers. A MoveIt/FCL-generated occupancy map is converted to VAMP
+cuboid obstacles; the winning path is mapped back to all 16 replay joints and
+must pass a second full MoveIt/FCL validation before it can compete with the
+visibility-graph path.
+
+Build with the installed VAMP CMake package:
+
+```bash
+colcon build --packages-select alfa_robot_moveit_config \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  -Dvamp_DIR=/home/tim/.cache/alfa-vamp/prefix/share/cmake/vamp
+```
+
+The latest direct-pull run solved 60/60 workers. Pure VAMP search took
+`5.648 ms` across all 15 cycles; FCL map construction took `210.020 ms` and
+winning-candidate FCL confirmation took `107.132 ms`. The final safe-turn
+replay passes 25,731 frames and 4,011 edge samples. The visibility graph still
+wins the joint-travel quality gate; VAMP is a validated concurrent fallback,
+not a forced replacement for a better path.

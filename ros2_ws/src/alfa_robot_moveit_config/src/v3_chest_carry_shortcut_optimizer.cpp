@@ -12,6 +12,14 @@
 #include <rclcpp/rclcpp.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
 
+#ifdef ALFA_HAS_VAMP
+#include <vamp/collision/factory.hh>
+#include <vamp/collision/validity.hh>
+#include <vamp/planning/rrtc.hh>
+#include <vamp/random/halton.hh>
+#include <vamp/robots/sphere.hh>
+#endif
+
 #include <Eigen/Geometry>
 
 #include <algorithm>
@@ -23,6 +31,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <map>
@@ -38,6 +47,11 @@ namespace og = ompl::geometric;
 constexpr double kPi = 3.14159265358979323846;
 constexpr char kLeftBoxId[] = "dual_carried_box_left";
 constexpr char kRightBoxId[] = "dual_carried_box_right";
+#ifdef ALFA_HAS_VAMP
+constexpr bool kVampCompiled = true;
+#else
+constexpr bool kVampCompiled = false;
+#endif
 
 struct AttachmentSpec {
   std::string id;
@@ -46,6 +60,24 @@ struct AttachmentSpec {
   Eigen::Vector3d center_in_tool = Eigen::Vector3d::Zero();
   Eigen::Matrix3d rotation_in_tool = Eigen::Matrix3d::Identity();
   Eigen::Vector3d size = Eigen::Vector3d::Zero();
+};
+
+struct LocalSearchStats {
+  std::string backend;
+  size_t grid_state_checks = 0U;
+  size_t occupied_cells = 0U;
+  double grid_build_ms = 0.0;
+  double search_wall_ms = 0.0;
+  double search_core_ms = 0.0;
+  double candidate_fcl_ms = 0.0;
+  size_t workers = 1U;
+  size_t solved_workers = 0U;
+  int winner_seed = -1;
+  size_t refinements = 0U;
+  size_t rejected_candidates = 0U;
+  std::string last_rejection_reason;
+  double last_rejection_progress = 0.0;
+  double last_rejection_alpha = 0.0;
 };
 
 Eigen::Vector3d vector3(const nlohmann::json &value, const std::string &label) {
@@ -124,6 +156,11 @@ public:
     manifold_alpha_samples_ = getParameter<int>("manifold_alpha_samples", 11);
     manifold_alpha_neighbor_steps_ = getParameter<int>(
       "manifold_alpha_neighbor_steps", 1);
+    vamp_workers_ = getParameter<int>("vamp_workers", 4);
+    vamp_max_iterations_ = getParameter<int>("vamp_max_iterations", 1000);
+    vamp_max_samples_ = getParameter<int>("vamp_max_samples", 2000);
+    vamp_range_ = getParameter<double>("vamp_range", 0.08);
+    vamp_max_refinements_ = getParameter<int>("vamp_max_refinements", 8);
     if (replay_path_.empty() || output_path_.empty() || result_path_.empty()) {
       throw std::invalid_argument(
           "replay_json_path, output_replay_json_path and "
@@ -134,8 +171,11 @@ public:
         local_rrt_time_s_ <= 0.0 || manifold_alpha_max_ < 1.0 ||
         manifold_levels_ < 2 || manifold_alpha_samples_ < 2 ||
         manifold_alpha_neighbor_steps_ < 1 ||
+        vamp_workers_ < 1 || vamp_workers_ > 32 ||
+        vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 || vamp_range_ <= 0.0 ||
+        vamp_max_refinements_ < 0 || vamp_max_refinements_ > 128 ||
         (local_rrt_mode_ != "full" && local_rrt_mode_ != "golden_manifold" &&
-        local_rrt_mode_ != "golden_lattice")) {
+        local_rrt_mode_ != "golden_lattice" && local_rrt_mode_ != "golden_vamp")) {
       throw std::invalid_argument(
           "validation steps, tilt, RRT time, manifold bounds, and mode are invalid");
     }
@@ -170,6 +210,9 @@ public:
         {"output", output_path_},
         {"success", true},
         {"cache_loading_counted", false},
+        {"local_search_mode", local_rrt_mode_},
+        {"vamp_compiled", kVampCompiled},
+        {"vamp_workers", vamp_workers_},
         {"cycles", nlohmann::json::array()},
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
@@ -202,7 +245,8 @@ public:
         const int box_id = item.at("box_id").get<int>();
         item["golden_source_search_ms"] = item.value("selected_task_core_ms", 0.0);
         item["selected_task_core_ms"] = task_times.at(box_id);
-        item["source"] = "golden_chest_curve_local_shortcut";
+        item["source"] = local_rrt_mode_ == "golden_vamp" ?
+          "golden_curve_vamp_parallel_2d" : "golden_chest_curve_local_shortcut";
         if (task_times.at(box_id) < 3000.0) {
           result["boxes_within_3s"] =
             result.at("boxes_within_3s").get<int>() + 1;
@@ -993,6 +1037,257 @@ private:
     return dense;
   }
 
+  nlohmann::json tryGoldenVamp(
+      const planning_scene::PlanningSceneConstPtr &scene,
+      const nlohmann::json &operation,
+      const std::vector<std::string> &joint_names,
+      const nlohmann::json &golden,
+      const AttachmentSpec &left_spec,
+      const AttachmentSpec &right_spec,
+      double *raw_cost,
+      LocalSearchStats *stats) const {
+#ifndef ALFA_HAS_VAMP
+    (void)scene;
+    (void)operation;
+    (void)joint_names;
+    (void)golden;
+    (void)left_spec;
+    (void)right_spec;
+    (void)raw_cost;
+    if (stats) stats->backend = "vamp_unavailable";
+    throw std::runtime_error(
+      "local_rrt_mode=golden_vamp requires building with vamp::vamp");
+#else
+    using Robot = vamp::robots::Sphere;
+    static constexpr size_t kRake = vamp::FloatVectorWidth;
+    using VectorEnvironment = vamp::collision::Environment<vamp::FloatVector<kRake>>;
+    // The occupancy cells are narrower than the stock sphere resolution.
+    using Rrt = vamp::planning::RRTC<Robot, kRake, 256U>;
+    struct Trial {
+      bool solved = false;
+      size_t seed = 0U;
+      size_t nanoseconds = 0U;
+      size_t iterations = 0U;
+      float cost = std::numeric_limits<float>::infinity();
+      std::vector<std::array<float, 3>> path;
+    };
+    if (golden.size() < 2U) return nlohmann::json::array();
+    if (stats) {
+      stats->backend = "vamp_sphere_rrtc_avx2";
+      stats->workers = static_cast<size_t>(vamp_workers_);
+    }
+    const size_t levels = std::min<size_t>(
+      static_cast<size_t>(manifold_levels_), golden.size());
+    const size_t alpha_samples = static_cast<size_t>(manifold_alpha_samples_);
+    const bool left_attached = golden.front().value("left_attached", false);
+    const bool right_attached = golden.front().value("right_attached", false);
+    const auto progress_at = [levels](size_t level) {
+        return static_cast<double>(level) / static_cast<double>(levels - 1U);
+      };
+    const auto alpha_at = [this, alpha_samples](size_t sample) {
+        return manifold_alpha_max_ * static_cast<double>(sample) /
+          static_cast<double>(alpha_samples - 1U);
+      };
+
+    const auto grid_started = std::chrono::steady_clock::now();
+    std::vector<std::vector<bool>> valid(
+      levels, std::vector<bool>(alpha_samples, false));
+    for (size_t level = 0U; level < levels; ++level) {
+      for (size_t sample = 0U; sample < alpha_samples; ++sample) {
+        const auto frame = manifoldFrame(
+          golden, joint_names, progress_at(level), alpha_at(sample));
+        auto state = makeState(
+          joint_names, frame, operation, left_spec, right_spec);
+        nlohmann::json aggregate = {
+          {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0}};
+        std::string reason;
+        valid[level][sample] = validateState(
+          scene, *state, left_attached, right_attached,
+          left_spec, right_spec, &reason, &aggregate);
+        if (stats) ++stats->grid_state_checks;
+      }
+    }
+
+    vamp::collision::Environment<float> scalar_environment;
+    const float progress_step = 1.0F / static_cast<float>(levels - 1U);
+    const float alpha_step = static_cast<float>(manifold_alpha_max_) /
+      static_cast<float>(alpha_samples - 1U);
+    for (size_t level = 1U; level + 1U < levels; ++level) {
+      for (size_t sample = 0U; sample < alpha_samples; ++sample) {
+        if (valid[level][sample]) continue;
+        scalar_environment.z_aligned_cuboids.emplace_back(
+          vamp::collision::factory::cuboid::flat(
+            static_cast<float>(progress_at(level)),
+            static_cast<float>(alpha_at(sample)), 0.5F,
+            0.0F, 0.0F, 0.0F,
+            0.45F * progress_step, 0.45F * alpha_step, 1.0F));
+        if (stats) ++stats->occupied_cells;
+      }
+    }
+    if (stats) {
+      stats->grid_build_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - grid_started).count();
+    }
+
+    Robot::set_lows({0.0F, 0.0F, 0.5F});
+    Robot::set_highs({1.0F, static_cast<float>(manifold_alpha_max_), 0.5F});
+    Robot::set_radius(0.005F);
+    vamp::planning::RRTCSettings settings;
+    settings.range = static_cast<float>(vamp_range_);
+    settings.dynamic_domain = false;
+    settings.max_iterations = static_cast<size_t>(vamp_max_iterations_);
+    settings.max_samples = static_cast<size_t>(vamp_max_samples_);
+
+    for (int refinement = 0; refinement <= vamp_max_refinements_; ++refinement) {
+      scalar_environment.sort();
+      const VectorEnvironment environment(scalar_environment);
+      const auto batch_started = std::chrono::steady_clock::now();
+      std::vector<std::future<Trial>> futures;
+      futures.reserve(static_cast<size_t>(vamp_workers_));
+      for (int worker = 0; worker < vamp_workers_; ++worker) {
+        futures.push_back(std::async(
+          std::launch::async,
+          [worker, refinement, this, &environment, &settings]() {
+            Trial trial;
+            trial.seed = static_cast<size_t>(worker);
+            const float endpoint_alpha = vamp_workers_ == 1 ? 0.0F :
+              static_cast<float>(manifold_alpha_max_) *
+              static_cast<float>(worker) / static_cast<float>(vamp_workers_ - 1);
+            const Robot::Configuration worker_start(
+              Robot::ConfigurationArray{0.0F, endpoint_alpha, 0.5F});
+            const Robot::Configuration worker_goal(
+              Robot::ConfigurationArray{1.0F, endpoint_alpha, 0.5F});
+            const float offset = static_cast<float>(worker * 6 + refinement * 24);
+            auto rng = std::make_shared<vamp::rng::Halton<Robot>>(
+              std::initializer_list<float>{
+                3.0F + offset, 5.0F + offset, 7.0F + offset});
+            auto result = Rrt::solve(
+              worker_start, worker_goal, environment, settings, rng);
+            trial.solved = result.path.size() >= 2U;
+            trial.nanoseconds = result.nanoseconds;
+            trial.iterations = result.iterations;
+            trial.cost = result.cost;
+            for (const auto &configuration : result.path) {
+              const auto values = configuration.to_array();
+              trial.path.push_back({values[0], values[1], values[2]});
+            }
+            return trial;
+          }));
+      }
+      std::vector<Trial> trials;
+      trials.reserve(futures.size());
+      for (auto &future : futures) trials.push_back(future.get());
+      if (stats) {
+        stats->search_wall_ms += std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - batch_started).count();
+        for (const auto &trial : trials) {
+          stats->search_core_ms += static_cast<double>(trial.nanoseconds) / 1.0e6;
+          if (trial.solved) ++stats->solved_workers;
+        }
+      }
+      const auto winner = std::min_element(
+        trials.begin(), trials.end(), [](const Trial &left, const Trial &right) {
+          if (left.solved != right.solved) return left.solved > right.solved;
+          if (left.cost != right.cost) return left.cost < right.cost;
+          return left.nanoseconds < right.nanoseconds;
+        });
+      if (winner == trials.end() || !winner->solved) break;
+      if (stats) stats->winner_seed = static_cast<int>(winner->seed);
+
+      nlohmann::json dense = nlohmann::json::array();
+      std::vector<std::array<double, 2>> dense_coordinates;
+      for (size_t edge = 0U; edge + 1U < winner->path.size(); ++edge) {
+        const auto &from = winner->path[edge];
+        const auto &to = winner->path[edge + 1U];
+        const size_t steps = std::max<size_t>({
+          1U,
+          static_cast<size_t>(std::ceil(
+            std::abs(to[0] - from[0]) * static_cast<double>(golden.size() - 1U))),
+          static_cast<size_t>(std::ceil(std::abs(to[1] - from[1]) / 0.02)),
+        });
+        for (size_t step = edge == 0U ? 0U : 1U; step <= steps; ++step) {
+          const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+          const double progress = from[0] + (to[0] - from[0]) * ratio;
+          const double alpha = from[1] + (to[1] - from[1]) * ratio;
+          dense.push_back(manifoldFrame(golden, joint_names, progress, alpha));
+          dense_coordinates.push_back({progress, alpha});
+        }
+      }
+      if (dense.empty()) break;
+      dense.front() = golden.front();
+      dense.back() = golden.back();
+      nlohmann::json candidate = operation;
+      candidate["frames"] = dense;
+      nlohmann::json validation = {
+        {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0},
+        {"checked_frames", 0}, {"checked_edge_samples", 0}};
+      nlohmann::json validation_result;
+      const auto candidate_validation_started = std::chrono::steady_clock::now();
+      if (validateOperation(
+            candidate, joint_names, &validation_result, &validation)) {
+        *raw_cost = 0.0;
+        for (size_t index = 1U; index < dense.size(); ++index) {
+          const auto a = dense.at(index - 1U).at("joints").get<std::vector<double>>();
+          const auto b = dense.at(index).at("joints").get<std::vector<double>>();
+          *raw_cost += std::abs(b.at(0) - a.at(0)) * 100.0;
+          for (size_t joint = 2U; joint < a.size(); ++joint)
+            *raw_cost += std::abs(b[joint] - a[joint]) * 180.0 / kPi;
+        }
+        if (stats) {
+          stats->refinements = static_cast<size_t>(refinement);
+          stats->candidate_fcl_ms += std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - candidate_validation_started).count();
+        }
+        return dense;
+      }
+
+      if (stats) {
+        stats->candidate_fcl_ms += std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - candidate_validation_started).count();
+        ++stats->rejected_candidates;
+      }
+      const size_t failed_frame = std::min<size_t>(
+        validation_result.value("failure_frame", dense_coordinates.size() / 2U),
+        dense_coordinates.size() - 1U);
+      auto failed = dense_coordinates[failed_frame];
+      if (failed_frame > 0U && validation_result.contains("failure_edge_step")) {
+        auto from_state = makeState(
+          joint_names, dense.at(failed_frame - 1U), operation, left_spec, right_spec);
+        auto to_state = makeState(
+          joint_names, dense.at(failed_frame), operation, left_spec, right_spec);
+        const size_t steps = edgeSteps(*from_state, *to_state);
+        const size_t failed_step = std::min<size_t>(
+          validation_result.at("failure_edge_step").get<size_t>(), steps);
+        const double ratio = static_cast<double>(failed_step) /
+          static_cast<double>(std::max<size_t>(1U, steps));
+        failed[0] = dense_coordinates[failed_frame - 1U][0] +
+          (dense_coordinates[failed_frame][0] -
+          dense_coordinates[failed_frame - 1U][0]) * ratio;
+        failed[1] = dense_coordinates[failed_frame - 1U][1] +
+          (dense_coordinates[failed_frame][1] -
+          dense_coordinates[failed_frame - 1U][1]) * ratio;
+      }
+      if (stats) {
+        stats->last_rejection_reason = validation_result.value(
+          "failure_reason", "unknown FCL rejection");
+        stats->last_rejection_progress = failed[0];
+        stats->last_rejection_alpha = failed[1];
+      }
+      if (failed[0] <= 1e-6 || failed[0] >= 1.0 - 1e-6) break;
+      scalar_environment.z_aligned_cuboids.emplace_back(
+        vamp::collision::factory::cuboid::flat(
+          static_cast<float>(failed[0]), static_cast<float>(failed[1]), 0.5F,
+          0.0F, 0.0F, 0.0F,
+          0.75F * progress_step, 0.75F * alpha_step, 1.0F));
+      if (stats) {
+        ++stats->occupied_cells;
+        stats->refinements = static_cast<size_t>(refinement + 1);
+      }
+    }
+    return nlohmann::json::array();
+#endif
+  }
+
   nlohmann::json optimizeOperation(
       const nlohmann::json &operation,
       const std::vector<std::string> &joint_names,
@@ -1106,6 +1401,9 @@ private:
     double selected_cost = graph_cost;
     double local_rrt_cost = std::numeric_limits<double>::infinity();
     bool local_rrt_success = false;
+    bool local_candidate_fcl_valid = false;
+    LocalSearchStats local_search_stats;
+    local_search_stats.backend = local_rrt_mode_;
     const auto local_rrt_started = std::chrono::steady_clock::now();
     nlohmann::json local_rrt;
     if (local_rrt_mode_ == "golden_manifold") {
@@ -1116,6 +1414,10 @@ private:
       local_rrt = tryGoldenManifoldLattice(
         scene, operation, joint_names, golden, left_spec, right_spec,
         &local_rrt_cost);
+    } else if (local_rrt_mode_ == "golden_vamp") {
+      local_rrt = tryGoldenVamp(
+        scene, operation, joint_names, golden, left_spec, right_spec,
+        &local_rrt_cost, &local_search_stats);
     } else {
       local_rrt = tryLocalRrt(
         scene, operation, joint_names, golden, left_spec, right_spec,
@@ -1123,15 +1425,16 @@ private:
     }
     const double local_rrt_wall_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - local_rrt_started).count();
-    if (!local_rrt.empty() && local_rrt_cost < selected_cost - 1e-9) {
+    if (!local_rrt.empty()) {
       nlohmann::json rrt_candidate = operation;
       rrt_candidate["frames"] = local_rrt;
       nlohmann::json rrt_validation = {
         {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0},
         {"checked_frames", 0}, {"checked_edge_samples", 0}};
       nlohmann::json rrt_result;
-      if (validateOperation(
-            rrt_candidate, joint_names, &rrt_result, &rrt_validation)) {
+      local_candidate_fcl_valid = validateOperation(
+        rrt_candidate, joint_names, &rrt_result, &rrt_validation);
+      if (local_candidate_fcl_valid && local_rrt_cost < selected_cost - 1e-9) {
         optimized = std::move(local_rrt);
         selected_cost = local_rrt_cost;
         local_rrt_success = true;
@@ -1155,7 +1458,9 @@ private:
       {"strategy", local_rrt_success ? "bounded_local_rrt_with_shortcut" :
         (golden_windows == 0U && shortcut_edges == 1U ?
         "direct_local_shortcut" :
-        "representative_graph_shortcut_with_golden_local_rrt")},
+        (local_rrt_mode_ == "golden_vamp" ?
+        "representative_graph_shortcut_with_golden_vamp" :
+        "representative_graph_shortcut_with_golden_local_rrt"))},
       {"cache_loading_counted", false},
       {"source_frame_count", golden.size()},
       {"optimized_frame_count", optimized.size()},
@@ -1171,6 +1476,22 @@ private:
       {"local_rrt_state_dimension", local_rrt_mode_ != "full" ? 2 :
         static_cast<int>(joint_names.size() - 1U)},
       {"local_rrt_wall_ms", local_rrt_wall_ms},
+      {"local_candidate_fcl_valid", local_candidate_fcl_valid},
+      {"local_search_backend", local_search_stats.backend},
+      {"local_search_grid_state_checks", local_search_stats.grid_state_checks},
+      {"local_search_occupied_cells", local_search_stats.occupied_cells},
+      {"local_search_grid_build_ms", local_search_stats.grid_build_ms},
+      {"local_search_planner_wall_ms", local_search_stats.search_wall_ms},
+      {"local_search_planner_core_ms", local_search_stats.search_core_ms},
+      {"local_search_candidate_fcl_ms", local_search_stats.candidate_fcl_ms},
+      {"local_search_workers", local_search_stats.workers},
+      {"local_search_solved_workers", local_search_stats.solved_workers},
+      {"local_search_winner_seed", local_search_stats.winner_seed},
+      {"local_search_refinements", local_search_stats.refinements},
+      {"local_search_rejected_candidates", local_search_stats.rejected_candidates},
+      {"local_search_last_rejection_reason", local_search_stats.last_rejection_reason},
+      {"local_search_last_rejection_progress", local_search_stats.last_rejection_progress},
+      {"local_search_last_rejection_alpha", local_search_stats.last_rejection_alpha},
       {"local_rrt_success", local_rrt_success},
       {"local_rrt_joint_travel_cost",
         std::isfinite(local_rrt_cost) ? nlohmann::json(local_rrt_cost) :
@@ -1284,6 +1605,11 @@ private:
   int manifold_levels_ = 64;
   int manifold_alpha_samples_ = 11;
   int manifold_alpha_neighbor_steps_ = 1;
+  int vamp_workers_ = 4;
+  int vamp_max_iterations_ = 1000;
+  int vamp_max_samples_ = 2000;
+  double vamp_range_ = 0.08;
+  int vamp_max_refinements_ = 8;
   double edge_base_translation_step_ = 0.01;
   double edge_base_yaw_step_ = kPi / 180.0;
   std::shared_ptr<robot_model_loader::RobotModelLoader> robot_model_loader_;

@@ -2164,3 +2164,11 @@
 - A/B结果：15循环规划核心合计`26.150229s→14.078619s`（`1.857x`），最大`2.501649s→1.607928s`；25/25仍低于3秒。最终16/16 operation帧哈希与旧认证优化回放一致，独立MoveIt/FCL复核`43,366`帧+`5,901`边全部通过，左右最大携箱倾角`7.997372°/7.999501°`。
 - 边界：这次验证的是“二维黄金流形+FCL”，不是VAMP后端。该二维格点已经形成适合VAMP批量状态/边验证的接口；只有完成V3.2.2球化模型、Cricket SIMD内核和FCL零假阴性对照后，才可把validator替换为VAMP并声明VAMP收益。
 - 按用户要求保持Rerun原布局不变，只在`Spatial3DView`增加`EyeControls3D.look_target=(0,0,0)`，让鼠标旋转/拖动默认围绕仓库与机器人世界原点；不设置相机位置，不改变面板比例、图表或时间轴。新关键帧RRD通过verify，`rrd print -vvv`回读look_target为`[0,0,0]`；旧认证RRD未重写。
+
+## 2026-10-16 运控 / Codex / 二维黄金流形正式接入VAMP并发搜索
+- `v3_chest_carry_shortcut_optimizer`新增可选`local_rrt_mode:=golden_vamp`，CMake以`find_package(vamp QUIET)`可选接入VAMP-MR fork `184bb856`；VAMP不可用时旧默认`full`仍可构建/运行。二维状态为`(s,alpha)`，FCL先生成`32×9`保守占据图，转为VAMP cuboid环境；VAMP以AVX2、256边采样和4路独立Halton worker并发RRT-Connect。worker端点覆盖`alpha`上限的`0/1/3/2/3/1`比例，由采样器并行探索完整二维域。
+- 安全闭环：VAMP获胜路径映射回完整16轴回放状态后必须再次通过MoveIt/FCL；FCL反例可回填二维障碍并重搜。最新直拉任务60/60 worker求解、15/15获胜候选完整FCL通过；质量门禁仍选择关节行程更短的80节点可见图，VAMP作为真实执行过且验证过的并发fallback，不强制替换更优路径。
+- 公平A/B（相同旧黄金输入、同样完整候选FCL）：14维全空间RRT`26.150229s`，二维格点`14.556619s`，二维VAMP`14.294928s`；VAMP相对14维`1.829x`，相对二维格点`1.018x`。最新直拉输入下15循环规划核心总计/最大`3.428172/1.142955s`；纯VAMP并发墙钟合计`5.647786ms`，FCL建图`210.020322ms`，获胜候选FCL复核`107.131678ms`。
+- 最终safe-turn组合保持胸前直拉、退后`2.35m`、转身`180°`、等高释放；完整`25,731`帧+`4,011`边样本通过MoveIt/FCL，左右最大倾角`5.901349°/7.993910°`，最大双箱等高误差`1.06998e-10m`。新Rerun右侧25箱蓝色柱使用VAMP混合规划时间，25/25低于3秒、最大`1.143s`；原UI布局不变，orbit center仍为世界原点`[0,0,0]`。
+- 兼容回归：`vamp_DIR-NOTFOUND`的隔离构建成功，证明VAMP仍是可选依赖；带VAMP构建的默认`local_rrt_mode=full`复验25/25成功、最大任务核心`1.430353s`。胸前和安全转身合同测试9/9通过，RRD verify、SHA-256和`git diff --check`通过。
+- 产物：小型报告/验证位于`results/v322_vamp_parallel/vamp2d/`；完整本地RRD为`v322-direct-pull-vamp-safe-turn-production-shell.rrd`，SHA-256为`8607dd81406f627318567c235bd233cd7ee03726b06cccf9dbbf99c40a3b31e3`。原胸前、安全转身工作树和认证RRD未覆盖。

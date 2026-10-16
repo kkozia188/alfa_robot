@@ -29,6 +29,11 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "manifold_alpha_neighbor_steps", default_value="1"
             ),
+            DeclareLaunchArgument("vamp_workers", default_value="4"),
+            DeclareLaunchArgument("vamp_max_iterations", default_value="1000"),
+            DeclareLaunchArgument("vamp_max_samples", default_value="2000"),
+            DeclareLaunchArgument("vamp_range", default_value="0.08"),
+            DeclareLaunchArgument("vamp_max_refinements", default_value="8"),
             Node(
                 package="alfa_robot_moveit_config",
                 executable="v3_chest_carry_shortcut_optimizer",
@@ -80,6 +85,26 @@ def generate_launch_description():
                         ),
                         "manifold_alpha_neighbor_steps": ParameterValue(
                             LaunchConfiguration("manifold_alpha_neighbor_steps"),
+                            value_type=int,
+                        ),
+                        "vamp_workers": ParameterValue(
+                            LaunchConfiguration("vamp_workers"),
+                            value_type=int,
+                        ),
+                        "vamp_max_iterations": ParameterValue(
+                            LaunchConfiguration("vamp_max_iterations"),
+                            value_type=int,
+                        ),
+                        "vamp_max_samples": ParameterValue(
+                            LaunchConfiguration("vamp_max_samples"),
+                            value_type=int,
+                        ),
+                        "vamp_range": ParameterValue(
+                            LaunchConfiguration("vamp_range"),
+                            value_type=float,
+                        ),
+                        "vamp_max_refinements": ParameterValue(
+                            LaunchConfiguration("vamp_max_refinements"),
                             value_type=int,
                         ),
                     },

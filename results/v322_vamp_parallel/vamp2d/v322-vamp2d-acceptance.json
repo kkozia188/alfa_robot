@@ -1,0 +1,103 @@
+{
+  "schema": "alfa.v322_vamp2d_acceptance.v1",
+  "success": true,
+  "backend": {
+    "planner": "VAMP RRT-Connect",
+    "configuration_space": "2-D golden manifold (progress, alpha)",
+    "simd": "AVX2, edge resolution 256",
+    "parallel_workers": 4,
+    "vamp_source_commit": "184bb856f79b5c1d9e06ded94b74414c59c0ce47",
+    "safety_gate": "MoveIt/FCL map plus full winning-candidate revalidation"
+  },
+  "same_input_ab": {
+    "old_14d_full_rrt": {
+      "cycles": 15,
+      "total_planning_core_ms": 26150.228725,
+      "maximum_planning_core_ms": 2501.648716,
+      "exact_candidates": 2,
+      "fcl_valid_candidates": null,
+      "selected_candidates": 0,
+      "vamp_wall_ms": 0.0,
+      "vamp_core_ms": 0.0,
+      "grid_build_ms": 0.0,
+      "candidate_fcl_ms": 0.0,
+      "workers": 0,
+      "solved_workers": 0
+    },
+    "two_d_lattice": {
+      "cycles": 15,
+      "total_planning_core_ms": 14556.619115000001,
+      "maximum_planning_core_ms": 1668.688855,
+      "exact_candidates": 15,
+      "fcl_valid_candidates": 14,
+      "selected_candidates": 0,
+      "vamp_wall_ms": 0.0,
+      "vamp_core_ms": 0.0,
+      "grid_build_ms": 0.0,
+      "candidate_fcl_ms": 0.0,
+      "workers": 15,
+      "solved_workers": 0
+    },
+    "two_d_vamp": {
+      "cycles": 15,
+      "total_planning_core_ms": 14294.928358000001,
+      "maximum_planning_core_ms": 1665.088606,
+      "exact_candidates": 15,
+      "fcl_valid_candidates": 15,
+      "selected_candidates": 0,
+      "vamp_wall_ms": 13.194696999999998,
+      "vamp_core_ms": 24.638822999999995,
+      "grid_build_ms": 82.686274,
+      "candidate_fcl_ms": 574.26226,
+      "workers": 60,
+      "solved_workers": 44
+    },
+    "vamp_speedup_vs_14d": 1.8293361162852775,
+    "vamp_speedup_vs_lattice": 1.0183065455416254
+  },
+  "latest_direct_pull_vamp": {
+    "cycles": 15,
+    "total_planning_core_ms": 3428.172368,
+    "maximum_planning_core_ms": 1142.954801,
+    "exact_candidates": 15,
+    "fcl_valid_candidates": 15,
+    "selected_candidates": 0,
+    "vamp_wall_ms": 5.647786000000001,
+    "vamp_core_ms": 2.776868,
+    "grid_build_ms": 210.020322,
+    "candidate_fcl_ms": 107.13167800000001,
+    "workers": 60,
+    "solved_workers": 60
+  },
+  "rerun_bar_chart": {
+    "definition": "cycle planning core assigned to each active box",
+    "box_count": 25,
+    "assigned_total_s": 5.955484502000001,
+    "maximum_s": 1.1429548010000001,
+    "boxes_under_3s": 25
+  },
+  "safe_turn_validation": {
+    "checked_frames": 25731,
+    "checked_edge_samples": 4011,
+    "maximum_left_tilt_deg": 5.901348619436878,
+    "maximum_right_tilt_deg": 7.993909648508579,
+    "maximum_equal_height_error_m": 1.0699796604285439e-10,
+    "cycle_count": 15,
+    "box_count": 25
+  },
+  "rerun": {
+    "path": "/home/tim/alfa_robot-v322-vamp-parallel/results/v322_vamp_parallel/vamp2d/v322-direct-pull-vamp-safe-turn-production-shell.rrd",
+    "sha256": "8607dd81406f627318567c235bd233cd7ee03726b06cccf9dbbf99c40a3b31e3",
+    "orbit_center_world_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ui_layout_changed": false
+  },
+  "path_selection": {
+    "vamp_candidates_fcl_valid": 15,
+    "vamp_candidates_selected": 0,
+    "reason": "visibility graph had lower joint-travel cost; VAMP remains the validated concurrent fallback"
+  }
+}

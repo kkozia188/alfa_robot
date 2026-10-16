@@ -33,6 +33,7 @@ V322_MODEL_REVISION = "robot_v3.2.2-suction"
 V322_LINK_COUNT = 21
 V322_VISUAL_MESH_COUNT = 49
 V322_TOOL0_OFFSET_LOCAL_Z_M = 0.151
+RERUN_ORBIT_CENTER_WORLD_M = (0.0, 0.0, 0.0)
 
 
 def load_model_urdf(path: Path | None, asset_root: Path | None) -> str:
@@ -388,6 +389,9 @@ class DualSequenceRecorder(sequence.SequenceRecorder):
                         origin="/world",
                         contents=["/world/**"],
                         name=f"V3 scoop {sequence_title}",
+                        eye_controls=rrb.EyeControls3D(
+                            look_target=RERUN_ORBIT_CENTER_WORLD_M,
+                        ),
                     ),
                     rrb.Vertical(
                         rrb.TextDocumentView(

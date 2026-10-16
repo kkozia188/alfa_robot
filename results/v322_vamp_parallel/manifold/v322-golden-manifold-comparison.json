@@ -1,0 +1,50 @@
+{
+  "schema": "alfa.v322_golden_manifold_comparison.v1",
+  "success": true,
+  "old_full_space_rrt": {
+    "cycle_count": 15,
+    "boxes_within_3s": 25,
+    "total_planning_core_ms": 26150.228725,
+    "maximum_planning_core_ms": 2501.648716,
+    "exact_candidate_cycles": 2,
+    "selected_candidate_cycles": 0,
+    "total_local_search_ms": null,
+    "maximum_local_search_ms": null,
+    "state_dimension": 14,
+    "mode": "full dual-arm local RRT"
+  },
+  "new_golden_lattice": {
+    "cycle_count": 15,
+    "boxes_within_3s": 25,
+    "total_planning_core_ms": 14078.618519,
+    "maximum_planning_core_ms": 1607.928185,
+    "exact_candidate_cycles": 15,
+    "selected_candidate_cycles": 0,
+    "total_local_search_ms": 1011.9687510000001,
+    "maximum_local_search_ms": 227.879322,
+    "state_dimension": 2,
+    "mode": "32 x 9 progress/alpha lattice"
+  },
+  "improvement": {
+    "total_planning_core_speedup": 1.8574428087321628,
+    "maximum_planning_core_speedup": 1.5558211736925305,
+    "exact_candidate_gain": 13
+  },
+  "trajectory_identity": {
+    "matching_operation_frame_hashes": 16,
+    "operation_count": 16
+  },
+  "moveit_fcl_validation": {
+    "success": true,
+    "checked_frames": 43366,
+    "checked_edge_samples": 5901,
+    "maximum_left_tilt_deg": 7.997371889198287,
+    "maximum_right_tilt_deg": 7.999501399857927
+  },
+  "decision": {
+    "selected_path": "80-node visibility graph",
+    "fallback": "2-D golden lattice",
+    "vamp_backend_enabled": false,
+    "reason": "The lattice makes the search batchable and deterministic, but stock VAMP still lacks a validated V3.2.2 sphere collision kernel."
+  }
+}

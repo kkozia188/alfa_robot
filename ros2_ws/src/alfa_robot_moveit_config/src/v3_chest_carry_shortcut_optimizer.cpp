@@ -117,15 +117,27 @@ public:
     collision_inset_ = getParameter<double>("collision_inset", 0.002);
     maximum_tilt_ = getParameter<double>("maximum_carried_box_tilt_deg", 95.0) *
                     kPi / 180.0;
+    local_rrt_mode_ = getParameter<std::string>("local_rrt_mode", "full");
+    local_rrt_time_s_ = getParameter<double>("local_rrt_time_s", 0.95);
+    manifold_alpha_max_ = getParameter<double>("manifold_alpha_max", 1.25);
+    manifold_levels_ = getParameter<int>("manifold_levels", 64);
+    manifold_alpha_samples_ = getParameter<int>("manifold_alpha_samples", 11);
+    manifold_alpha_neighbor_steps_ = getParameter<int>(
+      "manifold_alpha_neighbor_steps", 1);
     if (replay_path_.empty() || output_path_.empty() || result_path_.empty()) {
       throw std::invalid_argument(
           "replay_json_path, output_replay_json_path and "
           "optimization_report_json_path are required");
     }
     if (edge_joint_step_ <= 0.0 || edge_updown_step_ <= 0.0 ||
-        maximum_tilt_ <= 0.0 || maximum_tilt_ > kPi) {
+        maximum_tilt_ <= 0.0 || maximum_tilt_ > kPi ||
+        local_rrt_time_s_ <= 0.0 || manifold_alpha_max_ < 1.0 ||
+        manifold_levels_ < 2 || manifold_alpha_samples_ < 2 ||
+        manifold_alpha_neighbor_steps_ < 1 ||
+        (local_rrt_mode_ != "full" && local_rrt_mode_ != "golden_manifold" &&
+        local_rrt_mode_ != "golden_lattice")) {
       throw std::invalid_argument(
-          "validation steps and tilt limit must be positive");
+          "validation steps, tilt, RRT time, manifold bounds, and mode are invalid");
     }
   }
 
@@ -660,7 +672,7 @@ private:
     auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
     planner->setRange(0.15);
     setup.setPlanner(planner);
-    const auto status = setup.solve(0.95);
+    const auto status = setup.solve(local_rrt_time_s_);
     if (status != ob::PlannerStatus::EXACT_SOLUTION)
       return nlohmann::json::array();
     setup.simplifySolution(0.08);
@@ -692,6 +704,292 @@ private:
       for (size_t joint = 2U; joint < a.size(); ++joint)
         *raw_cost += std::abs(b[joint] - a[joint]) * 180.0 / kPi;
     }
+    return dense;
+  }
+
+  // alpha=0 follows the endpoint chord; alpha=1 reproduces the golden curve.
+  nlohmann::json manifoldFrame(
+      const nlohmann::json &golden,
+      const std::vector<std::string> &joint_names,
+      double progress,
+      double alpha) const {
+    if (golden.size() < 2U) return golden.front();
+    progress = std::clamp(progress, 0.0, 1.0);
+    const double scaled = progress * static_cast<double>(golden.size() - 1U);
+    const size_t from_index = std::min(
+      golden.size() - 2U, static_cast<size_t>(std::floor(scaled)));
+    const size_t to_index = from_index + 1U;
+    const double local_ratio = scaled - static_cast<double>(from_index);
+    const auto start = golden.front().at("joints").get<std::vector<double>>();
+    const auto goal = golden.back().at("joints").get<std::vector<double>>();
+    const auto from = golden.at(from_index).at("joints").get<std::vector<double>>();
+    const auto to = golden.at(to_index).at("joints").get<std::vector<double>>();
+    if (start.size() != joint_names.size() || goal.size() != joint_names.size() ||
+        from.size() != joint_names.size() || to.size() != joint_names.size()) {
+      throw std::invalid_argument("golden manifold joint count mismatch");
+    }
+    std::vector<double> joints(joint_names.size(), 0.0);
+    for (size_t index = 0U; index < joints.size(); ++index) {
+      const double golden_value = from[index] + (to[index] - from[index]) * local_ratio;
+      const double chord_value = start[index] + (goal[index] - start[index]) * progress;
+      joints[index] = chord_value + alpha * (golden_value - chord_value);
+    }
+    auto frame = golden.at(from_index);
+    frame["joints"] = joints;
+    if (golden.at(from_index).contains("base_pose_map") &&
+        golden.at(to_index).contains("base_pose_map")) {
+      const auto from_base = golden.at(from_index).at("base_pose_map")
+        .get<std::vector<double>>();
+      const auto to_base = golden.at(to_index).at("base_pose_map")
+        .get<std::vector<double>>();
+      if (from_base.size() == 3U && to_base.size() == 3U) {
+        frame["base_pose_map"] = {
+          from_base[0] + (to_base[0] - from_base[0]) * local_ratio,
+          from_base[1] + (to_base[1] - from_base[1]) * local_ratio,
+          from_base[2] + shortestAngleDelta(from_base[2], to_base[2]) * local_ratio,
+        };
+      }
+    }
+    frame["stage"] = progress >= 1.0 - 1e-9 ?
+      "chest_carry_ready" : "chest_carry_retract";
+    return frame;
+  }
+
+  nlohmann::json tryGoldenManifoldRrt(
+      const planning_scene::PlanningSceneConstPtr &scene,
+      const nlohmann::json &operation,
+      const std::vector<std::string> &joint_names,
+      const nlohmann::json &golden,
+      const AttachmentSpec &left_spec,
+      const AttachmentSpec &right_spec,
+      double *raw_cost) const {
+    if (golden.size() < 2U) return nlohmann::json::array();
+    auto space = std::make_shared<ob::RealVectorStateSpace>(2U);
+    ob::RealVectorBounds bounds(2U);
+    bounds.setLow(0U, 0.0);
+    bounds.setHigh(0U, 1.0);
+    bounds.setLow(1U, 0.0);
+    bounds.setHigh(1U, manifold_alpha_max_);
+    space->setBounds(bounds);
+    og::SimpleSetup setup(space);
+    const bool left_attached = golden.front().value("left_attached", false);
+    const bool right_attached = golden.front().value("right_attached", false);
+    setup.setStateValidityChecker(
+      [&](const ob::State *state) {
+        const auto *values = state->as<ob::RealVectorStateSpace::StateType>();
+        const auto frame = manifoldFrame(
+          golden, joint_names, values->values[0], values->values[1]);
+        auto probe = makeState(
+          joint_names, frame, operation, left_spec, right_spec);
+        nlohmann::json aggregate = {
+          {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0}};
+        std::string reason;
+        return validateState(
+          scene, *probe, left_attached, right_attached,
+          left_spec, right_spec, &reason, &aggregate);
+      });
+    setup.getSpaceInformation()->setStateValidityCheckingResolution(0.001);
+    ob::ScopedState<> start(space);
+    ob::ScopedState<> goal_state(space);
+    start[0] = 0.0;
+    start[1] = 0.0;
+    goal_state[0] = 1.0;
+    goal_state[1] = 0.0;
+    setup.setStartAndGoalStates(start, goal_state);
+    auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
+    planner->setRange(0.08);
+    setup.setPlanner(planner);
+    const auto status = setup.solve(local_rrt_time_s_);
+    if (status != ob::PlannerStatus::EXACT_SOLUTION)
+      return nlohmann::json::array();
+    setup.simplifySolution(std::min(0.08, 0.25 * local_rrt_time_s_));
+    const auto &path = setup.getSolutionPath();
+    if (path.getStateCount() < 2U) return nlohmann::json::array();
+
+    nlohmann::json dense = nlohmann::json::array();
+    for (size_t edge = 0U; edge + 1U < path.getStateCount(); ++edge) {
+      const auto *from = path.getState(edge)->as<ob::RealVectorStateSpace::StateType>();
+      const auto *to = path.getState(edge + 1U)->as<ob::RealVectorStateSpace::StateType>();
+      const double progress_delta = std::abs(to->values[0] - from->values[0]);
+      const double alpha_delta = std::abs(to->values[1] - from->values[1]);
+      const size_t steps = std::max<size_t>({
+        1U,
+        static_cast<size_t>(std::ceil(
+          progress_delta * static_cast<double>(golden.size() - 1U))),
+        static_cast<size_t>(std::ceil(alpha_delta / 0.02)),
+      });
+      for (size_t step = edge == 0U ? 0U : 1U; step <= steps; ++step) {
+        const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+        dense.push_back(manifoldFrame(
+          golden, joint_names,
+          from->values[0] + (to->values[0] - from->values[0]) * ratio,
+          from->values[1] + (to->values[1] - from->values[1]) * ratio));
+      }
+    }
+    if (dense.empty()) return dense;
+    dense.front() = golden.front();
+    dense.back() = golden.back();
+    *raw_cost = 0.0;
+    for (size_t index = 1U; index < dense.size(); ++index) {
+      const auto a = dense.at(index - 1U).at("joints").get<std::vector<double>>();
+      const auto b = dense.at(index).at("joints").get<std::vector<double>>();
+      *raw_cost += std::abs(b.at(0) - a.at(0)) * 100.0;
+      for (size_t joint = 2U; joint < a.size(); ++joint)
+        *raw_cost += std::abs(b[joint] - a[joint]) * 180.0 / kPi;
+    }
+    return dense;
+  }
+
+  nlohmann::json manifoldEdgeFrames(
+      const nlohmann::json &golden,
+      const std::vector<std::string> &joint_names,
+      double from_progress,
+      double from_alpha,
+      double to_progress,
+      double to_alpha,
+      bool include_start) const {
+    const size_t steps = std::max<size_t>({
+      1U,
+      static_cast<size_t>(std::ceil(
+        std::abs(to_progress - from_progress) *
+        static_cast<double>(golden.size() - 1U))),
+      static_cast<size_t>(std::ceil(std::abs(to_alpha - from_alpha) / 0.05)),
+    });
+    nlohmann::json frames = nlohmann::json::array();
+    for (size_t step = include_start ? 0U : 1U; step <= steps; ++step) {
+      const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+      frames.push_back(manifoldFrame(
+        golden, joint_names,
+        from_progress + (to_progress - from_progress) * ratio,
+        from_alpha + (to_alpha - from_alpha) * ratio));
+    }
+    return frames;
+  }
+
+  nlohmann::json tryGoldenManifoldLattice(
+      const planning_scene::PlanningSceneConstPtr &scene,
+      const nlohmann::json &operation,
+      const std::vector<std::string> &joint_names,
+      const nlohmann::json &golden,
+      const AttachmentSpec &left_spec,
+      const AttachmentSpec &right_spec,
+      double *raw_cost) const {
+    if (golden.size() < 2U) return nlohmann::json::array();
+    const size_t levels = std::min<size_t>(
+      static_cast<size_t>(manifold_levels_), golden.size());
+    const size_t alpha_samples = static_cast<size_t>(manifold_alpha_samples_);
+    const bool left_attached = golden.front().value("left_attached", false);
+    const bool right_attached = golden.front().value("right_attached", false);
+    const double infinity = std::numeric_limits<double>::infinity();
+    std::vector<std::vector<bool>> valid(
+      levels, std::vector<bool>(alpha_samples, false));
+    std::vector<std::vector<double>> costs(
+      levels, std::vector<double>(alpha_samples, infinity));
+    std::vector<std::vector<size_t>> previous(
+      levels, std::vector<size_t>(alpha_samples, 0U));
+    const auto progress_at = [levels](size_t level) {
+        return static_cast<double>(level) / static_cast<double>(levels - 1U);
+      };
+    const auto alpha_at = [this, alpha_samples](size_t sample) {
+        return manifold_alpha_max_ * static_cast<double>(sample) /
+          static_cast<double>(alpha_samples - 1U);
+      };
+    const auto state_valid = [&](size_t level, size_t sample) {
+        const auto frame = manifoldFrame(
+          golden, joint_names, progress_at(level), alpha_at(sample));
+        auto state = makeState(
+          joint_names, frame, operation, left_spec, right_spec);
+        nlohmann::json aggregate = {
+          {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0}};
+        std::string reason;
+        return validateState(
+          scene, *state, left_attached, right_attached,
+          left_spec, right_spec, &reason, &aggregate);
+      };
+    const auto frame_cost = [](const nlohmann::json &from, const nlohmann::json &to) {
+        const auto a = from.at("joints").get<std::vector<double>>();
+        const auto b = to.at("joints").get<std::vector<double>>();
+        double cost = std::abs(b.at(0) - a.at(0)) * 100.0;
+        for (size_t joint = 2U; joint < a.size(); ++joint)
+          cost += std::abs(b[joint] - a[joint]) * 180.0 / kPi;
+        return cost;
+      };
+    const auto edge_cost = [&](size_t from_level, size_t from_sample,
+        size_t to_level, size_t to_sample, double *cost) {
+        const auto edge = manifoldEdgeFrames(
+          golden, joint_names,
+          progress_at(from_level), alpha_at(from_sample),
+          progress_at(to_level), alpha_at(to_sample), true);
+        *cost = 0.0;
+        nlohmann::json previous_frame;
+        for (const auto &frame : edge) {
+          auto state = makeState(
+            joint_names, frame, operation, left_spec, right_spec);
+          nlohmann::json aggregate = {
+            {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0}};
+          std::string reason;
+          if (!validateState(
+                scene, *state, left_attached, right_attached,
+                left_spec, right_spec, &reason, &aggregate)) {
+            return false;
+          }
+          if (!previous_frame.is_null()) *cost += frame_cost(previous_frame, frame);
+          previous_frame = frame;
+        }
+        return true;
+      };
+
+    for (size_t level = 0U; level < levels; ++level) {
+      for (size_t sample = 0U; sample < alpha_samples; ++sample)
+        valid[level][sample] = state_valid(level, sample);
+    }
+    for (size_t sample = 0U; sample < alpha_samples; ++sample) {
+      if (valid.front()[sample]) costs.front()[sample] = 0.0;
+    }
+    for (size_t level = 1U; level < levels; ++level) {
+      for (size_t to_sample = 0U; to_sample < alpha_samples; ++to_sample) {
+        if (!valid[level][to_sample]) continue;
+        const size_t first = to_sample > static_cast<size_t>(manifold_alpha_neighbor_steps_) ?
+          to_sample - static_cast<size_t>(manifold_alpha_neighbor_steps_) : 0U;
+        const size_t last = std::min(
+          alpha_samples - 1U,
+          to_sample + static_cast<size_t>(manifold_alpha_neighbor_steps_));
+        for (size_t from_sample = first; from_sample <= last; ++from_sample) {
+          if (!std::isfinite(costs[level - 1U][from_sample])) continue;
+          double transition_cost = 0.0;
+          if (!edge_cost(
+                level - 1U, from_sample, level, to_sample, &transition_cost)) {
+            continue;
+          }
+          const double candidate = costs[level - 1U][from_sample] + transition_cost;
+          if (candidate < costs[level][to_sample]) {
+            costs[level][to_sample] = candidate;
+            previous[level][to_sample] = from_sample;
+          }
+        }
+      }
+    }
+    const auto best = std::min_element(costs.back().begin(), costs.back().end());
+    if (best == costs.back().end() || !std::isfinite(*best))
+      return nlohmann::json::array();
+    std::vector<size_t> route(levels, 0U);
+    route.back() = static_cast<size_t>(std::distance(costs.back().begin(), best));
+    for (size_t level = levels - 1U; level > 0U; --level)
+      route[level - 1U] = previous[level][route[level]];
+
+    nlohmann::json dense = nlohmann::json::array();
+    for (size_t level = 1U; level < levels; ++level) {
+      const auto edge = manifoldEdgeFrames(
+        golden, joint_names,
+        progress_at(level - 1U), alpha_at(route[level - 1U]),
+        progress_at(level), alpha_at(route[level]), level == 1U);
+      for (const auto &frame : edge) dense.push_back(frame);
+    }
+    dense.front() = golden.front();
+    dense.back() = golden.back();
+    *raw_cost = 0.0;
+    for (size_t index = 1U; index < dense.size(); ++index)
+      *raw_cost += frame_cost(dense.at(index - 1U), dense.at(index));
     return dense;
   }
 
@@ -808,9 +1106,23 @@ private:
     double selected_cost = graph_cost;
     double local_rrt_cost = std::numeric_limits<double>::infinity();
     bool local_rrt_success = false;
-    auto local_rrt = tryLocalRrt(
-      scene, operation, joint_names, golden, left_spec, right_spec,
-      &local_rrt_cost);
+    const auto local_rrt_started = std::chrono::steady_clock::now();
+    nlohmann::json local_rrt;
+    if (local_rrt_mode_ == "golden_manifold") {
+      local_rrt = tryGoldenManifoldRrt(
+        scene, operation, joint_names, golden, left_spec, right_spec,
+        &local_rrt_cost);
+    } else if (local_rrt_mode_ == "golden_lattice") {
+      local_rrt = tryGoldenManifoldLattice(
+        scene, operation, joint_names, golden, left_spec, right_spec,
+        &local_rrt_cost);
+    } else {
+      local_rrt = tryLocalRrt(
+        scene, operation, joint_names, golden, left_spec, right_spec,
+        &local_rrt_cost);
+    }
+    const double local_rrt_wall_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - local_rrt_started).count();
     if (!local_rrt.empty() && local_rrt_cost < selected_cost - 1e-9) {
       nlohmann::json rrt_candidate = operation;
       rrt_candidate["frames"] = local_rrt;
@@ -855,6 +1167,10 @@ private:
       {"source_joint_travel_cost", golden_cost(0U, goal)},
       {"graph_joint_travel_cost", graph_cost},
       {"local_rrt_attempted", true},
+      {"local_rrt_mode", local_rrt_mode_},
+      {"local_rrt_state_dimension", local_rrt_mode_ != "full" ? 2 :
+        static_cast<int>(joint_names.size() - 1U)},
+      {"local_rrt_wall_ms", local_rrt_wall_ms},
       {"local_rrt_success", local_rrt_success},
       {"local_rrt_joint_travel_cost",
         std::isfinite(local_rrt_cost) ? nlohmann::json(local_rrt_cost) :
@@ -962,6 +1278,12 @@ private:
   double edge_updown_step_ = 0.01;
   double collision_inset_ = 0.002;
   double maximum_tilt_ = 95.0 * kPi / 180.0;
+  std::string local_rrt_mode_ = "full";
+  double local_rrt_time_s_ = 0.95;
+  double manifold_alpha_max_ = 1.25;
+  int manifold_levels_ = 64;
+  int manifold_alpha_samples_ = 11;
+  int manifold_alpha_neighbor_steps_ = 1;
   double edge_base_translation_step_ = 0.01;
   double edge_base_yaw_step_ = kPi / 180.0;
   std::shared_ptr<robot_model_loader::RobotModelLoader> robot_model_loader_;

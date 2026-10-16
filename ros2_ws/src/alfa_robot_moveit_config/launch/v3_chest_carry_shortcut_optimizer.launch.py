@@ -21,6 +21,14 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "maximum_carried_box_tilt_deg", default_value="8.0"
             ),
+            DeclareLaunchArgument("local_rrt_mode", default_value="full"),
+            DeclareLaunchArgument("local_rrt_time_s", default_value="0.95"),
+            DeclareLaunchArgument("manifold_alpha_max", default_value="1.25"),
+            DeclareLaunchArgument("manifold_levels", default_value="64"),
+            DeclareLaunchArgument("manifold_alpha_samples", default_value="11"),
+            DeclareLaunchArgument(
+                "manifold_alpha_neighbor_steps", default_value="1"
+            ),
             Node(
                 package="alfa_robot_moveit_config",
                 executable="v3_chest_carry_shortcut_optimizer",
@@ -52,6 +60,27 @@ def generate_launch_description():
                         "maximum_carried_box_tilt_deg": ParameterValue(
                             LaunchConfiguration("maximum_carried_box_tilt_deg"),
                             value_type=float,
+                        ),
+                        "local_rrt_mode": LaunchConfiguration("local_rrt_mode"),
+                        "local_rrt_time_s": ParameterValue(
+                            LaunchConfiguration("local_rrt_time_s"),
+                            value_type=float,
+                        ),
+                        "manifold_alpha_max": ParameterValue(
+                            LaunchConfiguration("manifold_alpha_max"),
+                            value_type=float,
+                        ),
+                        "manifold_levels": ParameterValue(
+                            LaunchConfiguration("manifold_levels"),
+                            value_type=int,
+                        ),
+                        "manifold_alpha_samples": ParameterValue(
+                            LaunchConfiguration("manifold_alpha_samples"),
+                            value_type=int,
+                        ),
+                        "manifold_alpha_neighbor_steps": ParameterValue(
+                            LaunchConfiguration("manifold_alpha_neighbor_steps"),
+                            value_type=int,
                         ),
                     },
                 ],

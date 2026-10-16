@@ -35,3 +35,20 @@ generator for the explicit A/B experiment. The VAMP source and custom-robot
 workflow are documented by the
 [official project](https://github.com/KavrakiLab/vamp) and
 [VAMP-MR](https://github.com/vamp-mr/vamp-mr).
+
+## Golden-curve manifold search
+
+The shortcut optimizer also has two opt-in reduced search modes:
+
+- `local_rrt_mode:=golden_manifold` runs a two-dimensional OMPL RRT over
+  `(progress, alpha)`.
+- `local_rrt_mode:=golden_lattice` runs a monotonic layered search over the
+  same two-dimensional manifold. `alpha=0` is the endpoint chord and
+  `alpha=1` is the certified golden curve.
+
+The `32 x 9` lattice is the current experiment baseline. It returns an exact
+candidate for all 15 cycles, keeps the visibility graph as the selected path,
+and cuts total planning core time from `26.150 s` to `14.079 s`. Its selected
+replay matches all 16 operation frame hashes from the certified optimized
+replay and passes 43,366 MoveIt/FCL frames plus 5,901 edge samples. This is a
+VAMP-ready state-space reduction, not yet a VAMP collision backend.

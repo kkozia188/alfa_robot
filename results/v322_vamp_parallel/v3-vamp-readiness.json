@@ -1,0 +1,47 @@
+{
+  "schema": "alfa.v322_vamp_readiness.v1",
+  "model": "/home/tim/alfa_robot-alfa_v3_dev/data/ik_benchmark/v3_scoop_5x5/range_certification_v322_tool0151/model/alfa-robot-v322-tool0151.urdf",
+  "movable_joint_count": 17,
+  "movable_joints": [
+    "updown",
+    "head_joint",
+    "head_pitch_joint",
+    "left_joint1",
+    "left_joint2",
+    "left_joint3",
+    "left_joint4",
+    "left_joint5",
+    "left_joint6",
+    "left_joint7",
+    "right_joint1",
+    "right_joint2",
+    "right_joint3",
+    "right_joint4",
+    "right_joint5",
+    "right_joint6",
+    "right_joint7"
+  ],
+  "collision_geometry": {
+    "mesh": 49,
+    "sphere": 0,
+    "box": 0,
+    "cylinder": 0
+  },
+  "stock_vamp_robots": [
+    "sphere",
+    "ur5",
+    "panda",
+    "fetch",
+    "baxter"
+  ],
+  "stock_vamp_supports_v3": false,
+  "production_ready": false,
+  "required_before_v3_use": [
+    "Generate and visually inspect a sphere-only V3.2.2 collision URDF.",
+    "Compile the V3 kinematics/collision kernel with Cricket.",
+    "Represent the mirrored dual arms, fixed opposite arm, and attached box.",
+    "Compare every VAMP state/edge decision against MoveIt/FCL on certified tasks.",
+    "Retain MoveIt/FCL as the final acceptance gate until zero false negatives are shown."
+  ],
+  "decision": "Stock VAMP cannot load this mesh-based V3.2.2 model directly; use it only for framework throughput experiments until the custom kernel is validated."
+}

@@ -10,7 +10,15 @@ from pathlib import Path
 
 
 WORKSPACE = Path(__file__).resolve().parents[2]
-RESULTS = WORKSPACE / "results/v322_chest_turn_place"
+LOCAL_RESULTS = WORKSPACE / "results/v322_chest_turn_place"
+SOURCE_RESULTS = Path(
+    "/home/tim/alfa_robot-v322-chest-turn-place/results/v322_chest_turn_place"
+)
+RESULTS = (
+    LOCAL_RESULTS
+    if (LOCAL_RESULTS / "v322-chest-pull-safe-turn-unload-replay.json").is_file()
+    else SOURCE_RESULTS
+)
 
 
 class SafeTurnContractTest(unittest.TestCase):

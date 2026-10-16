@@ -121,6 +121,7 @@ def generate_launch_description():
             DeclareLaunchArgument("shortcut_repair_rrt_enabled", default_value="false"),
             DeclareLaunchArgument("shortcut_repair_rrt_budget_ms", default_value="1800.0"),
             DeclareLaunchArgument("shortcut_repair_rrt_max_samples", default_value="240"),
+            DeclareLaunchArgument("parallel_rrt_workers", default_value="1"),
             DeclareLaunchArgument("shortcut_repair_max_joint_offset_deg", default_value="35.0"),
             DeclareLaunchArgument("place_updown_enabled", default_value="false"),
             DeclareLaunchArgument("place_updown", default_value="0.0"),
@@ -413,6 +414,9 @@ def generate_launch_description():
                         ),
                         "shortcut_repair_rrt_max_samples": ParameterValue(
                             LaunchConfiguration("shortcut_repair_rrt_max_samples"), value_type=int
+                        ),
+                        "parallel_rrt_workers": ParameterValue(
+                            LaunchConfiguration("parallel_rrt_workers"), value_type=int
                         ),
                         "shortcut_repair_max_joint_offset_deg": ParameterValue(
                             LaunchConfiguration("shortcut_repair_max_joint_offset_deg"),

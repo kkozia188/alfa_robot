@@ -1,0 +1,77 @@
+{
+  "schema": "alfa.v322_vamp_parallel_benchmark.v1",
+  "success": true,
+  "scope": {
+    "robot": "official_precompiled_panda",
+    "planner": "VAMP RRT-Connect",
+    "environment": "official sphere-cage geometry",
+    "note": "This validates VAMP/AVX2 throughput, not V3.2.2 collision fidelity."
+  },
+  "host": {
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "logical_cpus": 20,
+    "python": "3.10.12",
+    "vamp_planner": "0.6.4"
+  },
+  "serial": {
+    "worker": 0,
+    "trials": 10000,
+    "solved": 10000,
+    "wall_seconds": 7.149908237000091,
+    "throughput_plans_s": 1398.619348462538,
+    "internal_us_median": 377.70500000000004,
+    "internal_us_p95": 1056.502,
+    "internal_us_max": 2394.937
+  },
+  "parallel": {
+    "workers": 4,
+    "trials": 10000,
+    "solved": 10000,
+    "wall_seconds": 3.9556121420000636,
+    "throughput_plans_s": 2528.0537224116547,
+    "speedup_vs_serial": 1.8075352133449831,
+    "worker_results": [
+      {
+        "worker": 0,
+        "trials": 2500,
+        "solved": 2500,
+        "wall_seconds": 3.7924489510000967,
+        "throughput_plans_s": 659.2046543805768,
+        "internal_us_median": 402.841,
+        "internal_us_p95": 1079.493,
+        "internal_us_max": 2322.682
+      },
+      {
+        "worker": 1,
+        "trials": 2500,
+        "solved": 2500,
+        "wall_seconds": 3.7750320669999837,
+        "throughput_plans_s": 662.2460301341887,
+        "internal_us_median": 404.058,
+        "internal_us_p95": 1068.649,
+        "internal_us_max": 2326.461
+      },
+      {
+        "worker": 2,
+        "trials": 2500,
+        "solved": 2500,
+        "wall_seconds": 3.7679418130001068,
+        "throughput_plans_s": 663.4921992092687,
+        "internal_us_median": 406.83799999999997,
+        "internal_us_p95": 1081.292,
+        "internal_us_max": 2323.839
+      },
+      {
+        "worker": 3,
+        "trials": 2500,
+        "solved": 2500,
+        "wall_seconds": 3.7825444160000643,
+        "throughput_plans_s": 660.9307717379511,
+        "internal_us_median": 403.1765,
+        "internal_us_p95": 1071.971,
+        "internal_us_max": 3247.402
+      }
+    ]
+  }
+}

@@ -40,6 +40,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <limits>
 #include <memory>
@@ -286,6 +287,9 @@ struct RrtPlanResult
   double reduced_rrt_ms = 0.0;
   double joint_rrt_ms = 0.0;
   size_t reduced_rrt_samples = 0U;
+  size_t parallel_workers_launched = 0U;
+  size_t parallel_workers_completed = 0U;
+  int parallel_winner_seed = -1;
   std::vector<size_t> repaired_joint_indices;
   std::string reason;
   std::string strategy;
@@ -315,6 +319,9 @@ struct PlanningMetrics
   uint64_t reduced_rrt_attempts = 0;
   uint64_t reduced_rrt_samples = 0;
   uint64_t reduced_rrt_successes = 0;
+  uint64_t parallel_rrt_workers_launched = 0;
+  uint64_t parallel_rrt_workers_completed = 0;
+  uint64_t parallel_rrt_wins = 0;
   uint64_t joint_rrt_fallbacks = 0;
 };
 
@@ -455,6 +462,8 @@ public:
       "shortcut_repair_rrt_budget_ms", 1800.0);
     shortcut_repair_rrt_max_samples_ = getParameter<int>(
       "shortcut_repair_rrt_max_samples", 240);
+    parallel_rrt_workers_ = std::max(
+      1, getParameter<int>("parallel_rrt_workers", 1));
     shortcut_repair_max_joint_offset_ = degToRad(getParameter<double>(
       "shortcut_repair_max_joint_offset_deg", 35.0));
     place_updown_enabled_ = getParameter<bool>("place_updown_enabled", false);
@@ -537,9 +546,11 @@ public:
     }
     if (!std::isfinite(shortcut_repair_rrt_budget_ms_) ||
         shortcut_repair_rrt_budget_ms_ <= 0.0 || shortcut_repair_rrt_max_samples_ < 1 ||
+        parallel_rrt_workers_ > 32 ||
         !std::isfinite(shortcut_repair_max_joint_offset_) ||
         shortcut_repair_max_joint_offset_ <= 0.0) {
-      throw std::invalid_argument("shortcut repair RRT limits must be positive");
+      throw std::invalid_argument(
+        "shortcut repair RRT limits must be positive and workers must be <= 32");
     }
     if (place_updown_enabled_ &&
         (!std::isfinite(place_updown_) || place_updown_ < -1.0 || place_updown_ > 0.0)) {
@@ -2464,7 +2475,9 @@ private:
     PlanningMetrics* metrics,
     std::vector<moveit::core::RobotStatePtr>* states,
     std::string* reason,
-    std::vector<size_t>* repaired_joint_indices = nullptr) const
+    std::vector<size_t>* repaired_joint_indices = nullptr,
+    uint32_t seed_offset = 0U,
+    std::atomic_bool* stop_requested = nullptr) const
   {
     struct RepairNode
     {
@@ -2485,6 +2498,13 @@ private:
       return std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - started).count();
     };
+    const auto cancelled = [&]() {
+      return stop_requested && stop_requested->load(std::memory_order_acquire);
+    };
+    if (cancelled()) {
+      if (reason) *reason = "parallel shortcut repair cancelled before start";
+      return false;
+    }
     const auto nominal_joints = [&](double progress) {
       std::array<double, 7> joints{};
       for (size_t index = 0U; index < joints.size(); ++index) {
@@ -2606,6 +2626,10 @@ private:
     for (size_t joint = 0U; joint < start_joints.size(); ++joint) {
       for (const double magnitude : probe_magnitudes) {
         for (const double sign : {-1.0, 1.0}) {
+          if (cancelled()) {
+            if (reason) *reason = "parallel shortcut repair cancelled during joint probes";
+            return false;
+          }
           if (elapsed_ms() >= shortcut_repair_rrt_budget_ms_) {
             if (reason) *reason = "shortcut repair budget exhausted during joint probes";
             return false;
@@ -2632,6 +2656,12 @@ private:
             for (const double second_magnitude : pair_magnitudes) {
               for (const double first_sign : {-1.0, 1.0}) {
                 for (const double second_sign : {-1.0, 1.0}) {
+                  if (cancelled()) {
+                    if (reason) {
+                      *reason = "parallel shortcut repair cancelled during joint probes";
+                    }
+                    return false;
+                  }
                   if (elapsed_ms() >= shortcut_repair_rrt_budget_ms_) {
                     if (reason) *reason = "shortcut repair budget exhausted during joint probes";
                     return false;
@@ -2667,6 +2697,7 @@ private:
       random_seed ^= static_cast<uint32_t>(std::llround((value + 4.0) * 10000.0));
       random_seed = random_seed * 1664525U + 1013904223U;
     }
+    random_seed ^= 0x9E3779B9U * seed_offset;
     std::mt19937 random_engine(random_seed);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     std::uniform_real_distribution<double> signed_unit(-1.0, 1.0);
@@ -2691,6 +2722,11 @@ private:
           1U, static_cast<size_t>(std::ceil(remaining / progress_step)));
         moveit::core::RobotStatePtr current = node.state;
         for (size_t step = 1U; step <= steps; ++step) {
+          if (cancelled()) {
+            last_reason = "parallel shortcut repair cancelled during goal connection";
+            terminal->clear();
+            return false;
+          }
           if (elapsed_ms() >= shortcut_repair_rrt_budget_ms_) {
             last_reason = "repair budget exhausted during goal connection";
             terminal->clear();
@@ -2726,6 +2762,10 @@ private:
       };
 
     for (int iteration = 0; iteration < shortcut_repair_rrt_max_samples_; ++iteration) {
+      if (cancelled()) {
+        last_reason = "parallel shortcut repair cancelled by another seed";
+        break;
+      }
       if (elapsed_ms() >= shortcut_repair_rrt_budget_ms_) break;
       ++attempted_samples;
       if (metrics) ++metrics->reduced_rrt_samples;
@@ -2799,6 +2839,10 @@ private:
       std::reverse(route.begin(), route.end());
       std::vector<moveit::core::RobotStatePtr> repaired_path{tree[route.front()].state};
       for (size_t from = 0U; from + 1U < route.size();) {
+        if (cancelled()) {
+          if (reason) *reason = "parallel shortcut repair cancelled during path shortcutting";
+          return false;
+        }
         size_t selected = from + 1U;
         for (size_t to = route.size() - 1U; to > from; --to) {
           std::string shortcut_reason;
@@ -2828,6 +2872,9 @@ private:
           std::to_string(attempted_samples) + " nodes=" + std::to_string(tree.size()) +
           " elapsed_ms=" + std::to_string(elapsed_ms());
       }
+      if (stop_requested) {
+        stop_requested->store(true, std::memory_order_release);
+      }
       return true;
     }
     if (reason) {
@@ -2843,6 +2890,124 @@ private:
         " elapsed_ms=" + std::to_string(elapsed_ms()) + ": " + last_reason;
     }
     return false;
+  }
+
+  bool searchShortcutRepairRrtParallel(
+    const planning_scene::PlanningSceneConstPtr& scene,
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    bool attached,
+    PlanningMetrics* metrics,
+    std::vector<moveit::core::RobotStatePtr>* states,
+    std::string* reason,
+    std::vector<size_t>* repaired_joint_indices,
+    size_t* workers_launched,
+    size_t* workers_completed,
+    int* winner_seed) const
+  {
+    const size_t worker_count = static_cast<size_t>(parallel_rrt_workers_);
+    if (workers_launched) *workers_launched = worker_count;
+    if (workers_completed) *workers_completed = 0U;
+    if (winner_seed) *winner_seed = -1;
+    if (metrics) metrics->parallel_rrt_workers_launched += worker_count;
+    if (worker_count == 1U) {
+      const bool success = searchShortcutRepairRrt(
+        scene, start_state, goal_state, attached, metrics, states, reason,
+        repaired_joint_indices);
+      if (workers_completed) *workers_completed = 1U;
+      if (winner_seed && success) *winner_seed = 0;
+      if (metrics) {
+        ++metrics->parallel_rrt_workers_completed;
+        if (success) ++metrics->parallel_rrt_wins;
+      }
+      return success;
+    }
+
+    struct TrialResult
+    {
+      bool success = false;
+      size_t seed = 0U;
+      double completion_ms = 0.0;
+      PlanningMetrics metrics;
+      std::vector<moveit::core::RobotStatePtr> states;
+      std::vector<size_t> repaired_joint_indices;
+      std::string reason;
+    };
+
+    const auto started = std::chrono::steady_clock::now();
+    std::atomic_bool stop_requested{false};
+    std::vector<planning_scene::PlanningScenePtr> worker_scenes;
+    worker_scenes.reserve(worker_count);
+    for (size_t worker = 0U; worker < worker_count; ++worker) {
+      auto worker_scene = planning_scene::PlanningScene::clone(scene);
+      worker_scene->setCurrentState(start_state);
+      worker_scenes.push_back(std::move(worker_scene));
+    }
+    std::vector<std::future<TrialResult>> futures;
+    futures.reserve(worker_count);
+    for (size_t worker = 0U; worker < worker_count; ++worker) {
+      auto worker_scene = worker_scenes[worker];
+      futures.push_back(std::async(
+        std::launch::async,
+        [this, worker_scene, &start_state, &goal_state, attached, worker,
+        started, &stop_requested]() {
+          TrialResult trial;
+          trial.seed = worker;
+          trial.success = searchShortcutRepairRrt(
+            worker_scene, start_state, goal_state, attached, &trial.metrics,
+            &trial.states, &trial.reason, &trial.repaired_joint_indices,
+            static_cast<uint32_t>(worker), &stop_requested);
+          trial.completion_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started).count();
+          return trial;
+        }));
+    }
+
+    std::vector<TrialResult> trials;
+    trials.reserve(worker_count);
+    for (auto& future : futures) {
+      trials.push_back(future.get());
+    }
+    if (workers_completed) *workers_completed = trials.size();
+    if (metrics) {
+      metrics->parallel_rrt_workers_completed += trials.size();
+      for (const auto& trial : trials) {
+        metrics->collision_checks += trial.metrics.collision_checks;
+        metrics->collision_ms += trial.metrics.collision_ms;
+        metrics->reduced_rrt_samples += trial.metrics.reduced_rrt_samples;
+      }
+    }
+
+    const auto winner = std::min_element(
+      trials.begin(), trials.end(),
+      [](const TrialResult& left, const TrialResult& right) {
+        if (left.success != right.success) return left.success > right.success;
+        return left.completion_ms < right.completion_ms;
+      });
+    if (winner == trials.end() || !winner->success) {
+      if (reason) {
+        std::ostringstream stream;
+        stream << "parallel shortcut repair exhausted " << worker_count << " seeds";
+        for (const auto& trial : trials) {
+          stream << "; seed" << trial.seed << "=" << trial.reason;
+        }
+        *reason = stream.str();
+      }
+      return false;
+    }
+
+    if (states) *states = winner->states;
+    if (repaired_joint_indices) {
+      *repaired_joint_indices = winner->repaired_joint_indices;
+    }
+    if (winner_seed) *winner_seed = static_cast<int>(winner->seed);
+    if (metrics) ++metrics->parallel_rrt_wins;
+    if (reason) {
+      *reason = "parallel_seed=" + std::to_string(winner->seed) + "/" +
+        std::to_string(worker_count) + " completion_ms=" +
+        std::to_string(winner->completion_ms) + "; " + winner->reason;
+    }
+    return true;
   }
 
   RrtPlanResult planRrt(
@@ -2937,9 +3102,10 @@ private:
       const uint64_t samples_before = metrics ? metrics->reduced_rrt_samples : 0U;
       std::vector<moveit::core::RobotStatePtr> repaired;
       std::string repair_reason;
-      const bool repair_success = searchShortcutRepairRrt(
+      const bool repair_success = searchShortcutRepairRrtParallel(
         scene, start_state, goal_state, loaded, metrics, &repaired, &repair_reason,
-        &result.repaired_joint_indices);
+        &result.repaired_joint_indices, &result.parallel_workers_launched,
+        &result.parallel_workers_completed, &result.parallel_winner_seed);
       result.reduced_rrt_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - repair_started).count();
       result.reduced_rrt_samples = static_cast<size_t>(
@@ -3020,9 +3186,10 @@ private:
       const uint64_t samples_before = metrics ? metrics->reduced_rrt_samples : 0U;
       std::vector<moveit::core::RobotStatePtr> repaired;
       std::string repair_reason;
-      const bool repair_success = searchShortcutRepairRrt(
+      const bool repair_success = searchShortcutRepairRrtParallel(
         scene, start_state, goal_state, loaded, metrics, &repaired, &repair_reason,
-        &result.repaired_joint_indices);
+        &result.repaired_joint_indices, &result.parallel_workers_launched,
+        &result.parallel_workers_completed, &result.parallel_winner_seed);
       result.reduced_rrt_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - repair_started).count();
       result.reduced_rrt_samples = static_cast<size_t>(
@@ -3598,6 +3765,9 @@ private:
         {"tcp_shortcut_ms", plan.tcp_shortcut_ms},
         {"shortcut_repair_rrt_ms", plan.reduced_rrt_ms},
         {"shortcut_repair_samples", plan.reduced_rrt_samples},
+        {"parallel_rrt_workers_launched", plan.parallel_workers_launched},
+        {"parallel_rrt_workers_completed", plan.parallel_workers_completed},
+        {"parallel_rrt_winner_seed", plan.parallel_winner_seed},
         {"repaired_joints", repaired_joints},
         {"joint_rrt_ms", plan.joint_rrt_ms},
         {"diagnostic", plan.reason},
@@ -4662,6 +4832,7 @@ private:
       {"shortcut_repair_rrt_enabled", shortcut_repair_rrt_enabled_},
       {"shortcut_repair_rrt_budget_ms", shortcut_repair_rrt_budget_ms_},
       {"shortcut_repair_rrt_max_samples", shortcut_repair_rrt_max_samples_},
+      {"parallel_rrt_workers", parallel_rrt_workers_},
       {"shortcut_repair_max_joint_offset_deg", radToDeg(shortcut_repair_max_joint_offset_)},
       {"place_updown_enabled", place_updown_enabled_},
       {"place_updown_m", place_updown_},
@@ -4793,6 +4964,9 @@ private:
       {"shortcut_repair_rrt_successes", result.metrics.reduced_rrt_successes},
       {"shortcut_repair_rrt_samples", result.metrics.reduced_rrt_samples},
       {"shortcut_repair_rrt_ms", result.metrics.reduced_rrt_ms},
+      {"parallel_rrt_workers_launched", result.metrics.parallel_rrt_workers_launched},
+      {"parallel_rrt_workers_completed", result.metrics.parallel_rrt_workers_completed},
+      {"parallel_rrt_wins", result.metrics.parallel_rrt_wins},
       {"joint_rrt_fallbacks", result.metrics.joint_rrt_fallbacks},
       {"joint_rrt_ms", result.metrics.joint_rrt_ms},
     };
@@ -5150,6 +5324,7 @@ private:
   bool shortcut_repair_rrt_enabled_ = false;
   double shortcut_repair_rrt_budget_ms_ = 1800.0;
   int shortcut_repair_rrt_max_samples_ = 240;
+  int parallel_rrt_workers_ = 1;
   double shortcut_repair_max_joint_offset_ = degToRad(35.0);
   bool place_updown_enabled_ = false;
   double place_updown_ = 0.0;

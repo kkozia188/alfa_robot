@@ -2149,3 +2149,10 @@
 - 新增FK等高门禁：10/10双箱组在释放前计算左右箱心世界Z，最大误差`1.06998e-10m`（`0.000000107mm`），门限`1e-6m`；同时硬校验胸前先于后退、后退`2.35m`、横移0、转角180度和释放后脱附。
 - Rerun释放后持续显示箱体FK放置位与中心Z标签；生产外壳`21 links/49 meshes/Tool0 +Z 0.151m`。完整RRD和等高关键帧均通过`rerun rrd verify`，产物位于`results/v322_chest_turn_place/`。
 - 独立工作树`/home/tim/alfa_robot-v322-chest-turn-place`，分支`feature/v322-chest-turn-place`；原MOTION-258、MOTION-261、MOTION-257和胸前直拉工作树均未修改。
+
+## 2026-10-16 运控 / Codex / VAMP并发搜索可行性实验
+- 从已验收`8cf118b`建立独立工作树`/home/tim/alfa_robot-v322-vamp-parallel`和分支`feature/v322-vamp-parallel`；原胸前转身工作树、RRD和认证结果均未修改。官方`vamp-planner==0.6.4`在本机AVX2上完成10,000次Panda sphere-cage RRT-Connect：串行`1398.6 plans/s`，4进程`2528.1 plans/s`，吞吐提升`1.81x`，10,000/10,000成功；该数字不是V3性能。
+- V3接入检查确认权威模型为17个可动关节、49个mesh碰撞体、0个sphere；stock VAMP仅预编译Sphere/UR5/Panda/Fetch/Baxter，不能直接加载V3。正式接入前必须生成并审查球化URDF、用Cricket编译V3 SIMD内核、覆盖镜像双臂/固定对侧臂/附着箱，并逐状态逐边与MoveIt/FCL比对到零漏碰撞。
+- 新增可选`parallel_rrt_workers`：局部shortcut repair可在独立PlanningScene上并发多seed，首个成功触发其余worker停止，最终轨迹继续使用MoveIt/FCL门禁；planner和胸前工具默认均保持`1`，只有显式`--parallel-rrt-workers 4`才启用实验。
+- 实测当前25箱基线任务核心中IK占`93.98%`、FCL碰撞占`3.78%`。可比box2 fast-probe串行/4-worker分别为`1.842856s/2.004065s`，并发仅`0.920x`且最终132帧SHA一致，因此不把4-worker设为生产默认。默认单worker全新25箱复验`25/25`成功、`25/25<3s`、最大`2.460374s`；这是回归探针，不替换`8cf118b`完整FCL证书。
+- 结果与复现入口位于`tools/v322_vamp_parallel/`和`results/v322_vamp_parallel/`。后续真正值得优化的是IK候选/笛卡尔beam并发；VAMP只有在V3专用内核完成并证明无FCL假阴性后才适合做候选前筛。

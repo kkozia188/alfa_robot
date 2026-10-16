@@ -212,6 +212,9 @@ def run_attempt(
         "shortcut_repair_rrt_max_samples:=" + str(
             getattr(args, "shortcut_repair_rrt_max_samples", 240)
         ),
+        "parallel_rrt_workers:=" + str(
+            getattr(args, "parallel_rrt_workers", 1)
+        ),
         f"shortcut_repair_max_joint_offset_deg:={getattr(args, 'shortcut_repair_max_joint_offset_deg', 35.0):.3f}",
         "place_updown_enabled:=" + (
             "true" if getattr(args, "place_updown_enabled", False) else "false"
@@ -448,6 +451,7 @@ def main() -> int:
     parser.add_argument("--precontact-candidate-limit", type=int, default=8)
     parser.add_argument("--rrt-planning-time", type=float, default=1.0)
     parser.add_argument("--rrt-planning-attempts", type=int, default=1)
+    parser.add_argument("--parallel-rrt-workers", type=int, default=1)
     parser.add_argument("--front-retreat-distance-m", type=float, default=0.35)
     parser.add_argument("--top-retreat-distance-m", type=float, default=0.35)
     parser.add_argument(

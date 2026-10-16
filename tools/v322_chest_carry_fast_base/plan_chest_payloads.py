@@ -231,6 +231,7 @@ def planner_args(
     profile_degrees: list[float] | None,
     guide_payload: dict[str, Any] | None,
     fast_probe: bool = False,
+    parallel_rrt_workers: int = 1,
 ) -> SimpleNamespace:
     if not task.get("transition_frames"):
         raise ValueError(f"box {task['box_id']} has no validated entry bridge")
@@ -306,6 +307,7 @@ def planner_args(
         shortcut_repair_rrt_enabled=True,
         shortcut_repair_rrt_budget_ms=300.0 if fast_probe else 1000.0,
         shortcut_repair_rrt_max_samples=120 if fast_probe else 400,
+        parallel_rrt_workers=parallel_rrt_workers,
         shortcut_repair_max_joint_offset_deg=35.0,
         place_updown_enabled=True,
         place_updown_m=CHEST_UPDOWN_M,
@@ -440,12 +442,15 @@ def main() -> int:
     parser.add_argument("--top-chest-y", type=float, default=TOP_CHEST_BOX_Y_BASE_M)
     parser.add_argument("--top-chest-z", type=float, default=TOP_CHEST_BOX_Z_BASE_M)
     parser.add_argument("--fast-probe", action="store_true")
+    parser.add_argument("--parallel-rrt-workers", type=int, default=1)
     parser.add_argument(
         "--fresh-pose-goals",
         action="store_true",
         help="solve each chest TCP pose from its own retreat state; do not reuse joint profiles",
     )
     args = parser.parse_args()
+    if not 1 <= args.parallel_rrt_workers <= 32:
+        parser.error("--parallel-rrt-workers must be in [1, 32]")
 
     CHEST_BOX_X_BASE_M = args.front_chest_x
     CHEST_BOX_Y_BASE_M = args.front_chest_y
@@ -525,7 +530,7 @@ def main() -> int:
             attempt = scan.run_attempt(
                 planner_args(
                     tasks[box_id], source, place_pose, profile_degrees,
-                    guide_payload, args.fast_probe
+                    guide_payload, args.fast_probe, args.parallel_rrt_workers
                 ),
                 box_id,
                 str(source["grasp_mode"]),

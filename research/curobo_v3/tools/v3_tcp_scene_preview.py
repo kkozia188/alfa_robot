@@ -10,7 +10,6 @@ import yaml
 
 from alfa_motion_viser import ReadOnlyScene, default_visual_assets
 from curobo_core.scene import SceneSnapshot
-from v3_interactive_60_tasks import DEFAULT_MOBILE_ROBOT_CONFIG
 from curobo_core.fixtures import tasks
 from v3_tcp_scene_contract import GraspInput, reconstruct_scene, random_parking, tool_to_box
 from v3_visualization_dependency import verify_frontend_package
@@ -23,7 +22,8 @@ def main():
     args=parser.parse_args()
     args.evidence_dir.mkdir(parents=True,exist_ok=True)
     verify_frontend_package()
-    config=yaml.safe_load(DEFAULT_MOBILE_ROBOT_CONFIG.read_text())['kinematics']
+    mobile_config=Path(__file__).resolve().parents[1]/'generated/v3_analytic_071cb95/mobile18/alfa_v322_suction_mobile18.yml'
+    config=yaml.safe_load(mobile_config.read_text())['kinematics']
     robot_urdf=Path(config['urdf_path'])
     frozen=json.loads((Path(__file__).resolve().parents[1]/'config/tcp_scene_preview.json').read_text())
     home=frozen['home']

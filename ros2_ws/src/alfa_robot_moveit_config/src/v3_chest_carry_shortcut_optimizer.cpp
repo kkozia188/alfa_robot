@@ -35,6 +35,8 @@
 #include <iostream>
 #include <memory>
 #include <map>
+#include <numeric>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -47,6 +49,7 @@ namespace og = ompl::geometric;
 constexpr double kPi = 3.14159265358979323846;
 constexpr char kLeftBoxId[] = "dual_carried_box_left";
 constexpr char kRightBoxId[] = "dual_carried_box_right";
+constexpr size_t kFullStateDimension = 18U;
 #ifdef ALFA_HAS_VAMP
 constexpr bool kVampCompiled = true;
 #else
@@ -64,12 +67,25 @@ struct AttachmentSpec {
 
 struct LocalSearchStats {
   std::string backend;
+  size_t state_dimension = 0U;
   size_t grid_state_checks = 0U;
   size_t occupied_cells = 0U;
   double grid_build_ms = 0.0;
   double search_wall_ms = 0.0;
   double search_core_ms = 0.0;
+  double search_fcl_ms = 0.0;
   double candidate_fcl_ms = 0.0;
+  size_t validity_batches = 0U;
+  size_t validity_states = 0U;
+  size_t search_iterations = 0U;
+  size_t search_tree_nodes = 0U;
+  size_t candidate_sparse_states = 0U;
+  double candidate_base_path_m = 0.0;
+  double candidate_base_yaw_path_deg = 0.0;
+  double candidate_max_base_offset_m = 0.0;
+  double candidate_max_base_yaw_offset_deg = 0.0;
+  double candidate_updown_path_m = 0.0;
+  double candidate_arm_path_deg = 0.0;
   size_t workers = 1U;
   size_t solved_workers = 0U;
   int winner_seed = -1;
@@ -79,6 +95,149 @@ struct LocalSearchStats {
   double last_rejection_progress = 0.0;
   double last_rejection_alpha = 0.0;
 };
+
+#ifdef ALFA_HAS_VAMP
+struct FullStateVampContext {
+  std::function<bool(const std::array<float, kFullStateDimension> &)> validator;
+  size_t validity_batches = 0U;
+  size_t validity_states = 0U;
+  double fcl_ms = 0.0;
+};
+
+thread_local FullStateVampContext *g_full_state_vamp_context = nullptr;
+
+struct FullStateVampRobot {
+  static constexpr char name[] = "alfa_v322_full_state_fcl";
+  static constexpr size_t dimension = kFullStateDimension;
+  static constexpr size_t n_spheres = 0U;
+  static constexpr size_t resolution = 8U;
+  static constexpr float min_radius = 0.0F;
+  static constexpr float max_radius = 0.0F;
+
+  using Configuration = vamp::FloatVector<dimension>;
+  using ConfigurationArray = std::array<vamp::FloatT, dimension>;
+  template <size_t rake>
+  using ConfigurationBlock = vamp::FloatVector<rake, dimension>;
+  struct alignas(vamp::FloatVectorAlignment) ConfigurationBuffer
+    : std::array<float, Configuration::num_scalars_rounded> {};
+
+  inline static std::array<float, dimension> lows{};
+  inline static std::array<float, dimension> highs{};
+
+  static void setBounds(const std::array<float, dimension> &new_lows,
+                        const std::array<float, dimension> &new_highs) noexcept {
+    lows = new_lows;
+    highs = new_highs;
+  }
+
+  static void scale_configuration(Configuration &configuration) noexcept {
+    const Configuration lower(lows);
+    const Configuration upper(highs);
+    configuration = configuration * (upper - lower) + lower;
+  }
+
+  static void descale_configuration(Configuration &configuration) noexcept {
+    const Configuration lower(lows);
+    const Configuration upper(highs);
+    configuration = (configuration - lower) / (upper - lower);
+  }
+
+  template <size_t rake>
+  static void scale_configuration_block(
+      ConfigurationBlock<rake> &configuration) noexcept {
+    for (size_t index = 0U; index < dimension; ++index) {
+      configuration[index] = lows[index] +
+        configuration[index] * (highs[index] - lows[index]);
+    }
+  }
+
+  template <size_t rake>
+  static void descale_configuration_block(
+      ConfigurationBlock<rake> &configuration) noexcept {
+    for (size_t index = 0U; index < dimension; ++index) {
+      configuration[index] =
+        (configuration[index] - lows[index]) / (highs[index] - lows[index]);
+    }
+  }
+
+  static float space_measure() noexcept {
+    float squared = 0.0F;
+    for (size_t index = 0U; index < dimension; ++index) {
+      const float extent = highs[index] - lows[index];
+      squared += extent * extent;
+    }
+    return std::sqrt(squared);
+  }
+
+  template <size_t rake>
+  static bool fkcc(
+      const vamp::collision::Environment<vamp::FloatVector<rake>> &,
+      const ConfigurationBlock<rake> &block) noexcept {
+    if (!g_full_state_vamp_context ||
+        !g_full_state_vamp_context->validator) {
+      return false;
+    }
+    const auto started = std::chrono::steady_clock::now();
+    ++g_full_state_vamp_context->validity_batches;
+    std::array<std::array<float, rake>, dimension> rows{};
+    for (size_t axis = 0U; axis < dimension; ++axis) {
+      rows[axis] = block[axis].to_array();
+    }
+    try {
+      for (size_t lane = 0U; lane < rake; ++lane) {
+        std::array<float, dimension> state{};
+        for (size_t axis = 0U; axis < dimension; ++axis) {
+          state[axis] = rows[axis][lane];
+        }
+        ++g_full_state_vamp_context->validity_states;
+        if (!g_full_state_vamp_context->validator(state)) {
+          g_full_state_vamp_context->fcl_ms +=
+            std::chrono::duration<double, std::milli>(
+              std::chrono::steady_clock::now() - started).count();
+          return false;
+        }
+      }
+    } catch (...) {
+      g_full_state_vamp_context->fcl_ms +=
+        std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - started).count();
+      return false;
+    }
+    g_full_state_vamp_context->fcl_ms +=
+      std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    return true;
+  }
+
+  template <size_t rake>
+  static bool fkcc_attach(
+      const vamp::collision::Environment<vamp::FloatVector<rake>> &environment,
+      const ConfigurationBlock<rake> &block) noexcept {
+    return fkcc(environment, block);
+  }
+};
+
+struct FullStateVampSampler : public vamp::rng::RNG<FullStateVampRobot> {
+  explicit FullStateVampSampler(uint32_t seed) noexcept
+      : initial_seed(seed), engine(seed) {}
+
+  void reset() noexcept override {
+    engine.seed(initial_seed);
+  }
+
+  FullStateVampRobot::Configuration next() noexcept override {
+    std::array<float, kFullStateDimension> values{};
+    for (auto &value : values) value = distribution(engine);
+    FullStateVampRobot::Configuration configuration(values);
+    FullStateVampRobot::scale_configuration(configuration);
+    return configuration;
+  }
+
+  uint32_t initial_seed;
+  std::mt19937 engine;
+  std::uniform_real_distribution<float> distribution{0.0F, 1.0F};
+};
+#endif
 
 Eigen::Vector3d vector3(const nlohmann::json &value, const std::string &label) {
   if (!value.is_array() || value.size() != 3U) {
@@ -161,6 +320,14 @@ public:
     vamp_max_samples_ = getParameter<int>("vamp_max_samples", 2000);
     vamp_range_ = getParameter<double>("vamp_range", 0.08);
     vamp_max_refinements_ = getParameter<int>("vamp_max_refinements", 8);
+    full_vamp_base_xy_margin_ =
+      getParameter<double>("full_vamp_base_xy_margin_m", 0.15);
+    full_vamp_base_yaw_margin_ = getParameter<double>(
+      "full_vamp_base_yaw_margin_deg", 5.0) * kPi / 180.0;
+    full_vamp_updown_margin_ =
+      getParameter<double>("full_vamp_updown_margin_m", 0.08);
+    full_vamp_arm_margin_ = getParameter<double>(
+      "full_vamp_arm_margin_deg", 35.0) * kPi / 180.0;
     if (replay_path_.empty() || output_path_.empty() || result_path_.empty()) {
       throw std::invalid_argument(
           "replay_json_path, output_replay_json_path and "
@@ -174,8 +341,12 @@ public:
         vamp_workers_ < 1 || vamp_workers_ > 32 ||
         vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 || vamp_range_ <= 0.0 ||
         vamp_max_refinements_ < 0 || vamp_max_refinements_ > 128 ||
+        full_vamp_base_xy_margin_ <= 0.0 ||
+        full_vamp_base_yaw_margin_ <= 0.0 ||
+        full_vamp_updown_margin_ <= 0.0 || full_vamp_arm_margin_ <= 0.0 ||
         (local_rrt_mode_ != "full" && local_rrt_mode_ != "golden_manifold" &&
-        local_rrt_mode_ != "golden_lattice" && local_rrt_mode_ != "golden_vamp")) {
+        local_rrt_mode_ != "golden_lattice" && local_rrt_mode_ != "golden_vamp" &&
+        local_rrt_mode_ != "full_vamp")) {
       throw std::invalid_argument(
           "validation steps, tilt, RRT time, manifold bounds, and mode are invalid");
     }
@@ -217,6 +388,20 @@ public:
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
     };
+    if (local_rrt_mode_ == "full_vamp") {
+      result["full_state_contract"] = {
+        {"dimension", kFullStateDimension},
+        {"axes", {
+          "base_x", "base_y", "base_yaw", "updown",
+          "left_joint1", "left_joint2", "left_joint3", "left_joint4",
+          "left_joint5", "left_joint6", "left_joint7",
+          "right_joint1", "right_joint2", "right_joint3", "right_joint4",
+          "right_joint5", "right_joint6", "right_joint7"}},
+        {"fixed_replay_axes", {"head_joint"}},
+        {"collision_backend", "MoveIt/FCL callback per VAMP edge sample"},
+        {"vamp_tree_backend", "VAMP RRT-Connect"},
+      };
+    }
     try {
       validateInput(output);
       const auto joint_names = output.at("joint_names").get<std::vector<std::string>>();
@@ -246,7 +431,10 @@ public:
         item["golden_source_search_ms"] = item.value("selected_task_core_ms", 0.0);
         item["selected_task_core_ms"] = task_times.at(box_id);
         item["source"] = local_rrt_mode_ == "golden_vamp" ?
-          "golden_curve_vamp_parallel_2d" : "golden_chest_curve_local_shortcut";
+          "golden_curve_vamp_parallel_2d" :
+          (local_rrt_mode_ == "full_vamp" ?
+          "full_state_vamp_parallel_18d" :
+          "golden_chest_curve_local_shortcut");
         if (task_times.at(box_id) < 3000.0) {
           result["boxes_within_3s"] =
             result.at("boxes_within_3s").get<int>() + 1;
@@ -594,6 +782,10 @@ private:
           joints[index] = probe.getVariablePosition(joint_names[index]);
         }
         frame["joints"] = joints;
+        if (from.contains("base_pose_map") || to.contains("base_pose_map")) {
+          const double *base = probe.getJointPositions(planar_root_);
+          frame["base_pose_map"] = {base[0], base[1], base[2]};
+        }
         frame["stage"] =
           edge + 2U == anchors.size() && step == steps ?
           "chest_carry_ready" : "chest_carry_retract";
@@ -1037,6 +1229,313 @@ private:
     return dense;
   }
 
+  nlohmann::json tryFullStateVamp(
+      const planning_scene::PlanningSceneConstPtr &scene,
+      const nlohmann::json &operation,
+      const std::vector<std::string> &joint_names,
+      const nlohmann::json &golden,
+      const AttachmentSpec &left_spec,
+      const AttachmentSpec &right_spec,
+      double *raw_cost,
+      LocalSearchStats *stats) const {
+#ifndef ALFA_HAS_VAMP
+    (void)scene;
+    (void)operation;
+    (void)joint_names;
+    (void)golden;
+    (void)left_spec;
+    (void)right_spec;
+    (void)raw_cost;
+    if (stats) stats->backend = "vamp_unavailable";
+    throw std::runtime_error(
+      "local_rrt_mode=full_vamp requires building with vamp::vamp");
+#else
+    using Robot = FullStateVampRobot;
+    static constexpr size_t kRake = vamp::FloatVectorWidth;
+    using Rrt = vamp::planning::RRTC<Robot, kRake, Robot::resolution>;
+    using VectorEnvironment =
+      vamp::collision::Environment<vamp::FloatVector<kRake>>;
+    struct Trial {
+      bool solved = false;
+      size_t seed = 0U;
+      size_t nanoseconds = 0U;
+      size_t iterations = 0U;
+      size_t tree_nodes = 0U;
+      size_t validity_batches = 0U;
+      size_t validity_states = 0U;
+      double fcl_ms = 0.0;
+      double task_cost = std::numeric_limits<double>::infinity();
+      std::vector<std::array<float, kFullStateDimension>> path;
+    };
+    if (golden.size() < 2U) return nlohmann::json::array();
+    if (joint_names.size() != 16U) {
+      throw std::invalid_argument(
+        "full-state VAMP expects the 16-axis replay contract");
+    }
+    const auto find_joint = [&joint_names](const std::string &name) {
+        const auto found = std::find(joint_names.begin(), joint_names.end(), name);
+        if (found == joint_names.end()) {
+          throw std::invalid_argument("full-state VAMP missing replay joint " + name);
+        }
+        return static_cast<size_t>(std::distance(joint_names.begin(), found));
+      };
+    const size_t updown_index = find_joint("updown");
+    std::vector<std::string> arm_names = left_arm_->getVariableNames();
+    const auto right_names = right_arm_->getVariableNames();
+    arm_names.insert(arm_names.end(), right_names.begin(), right_names.end());
+    if (arm_names.size() != 14U) {
+      throw std::runtime_error("full-state VAMP requires two seven-axis arms");
+    }
+    std::array<size_t, 14U> arm_indices{};
+    for (size_t index = 0U; index < arm_names.size(); ++index) {
+      arm_indices[index] = find_joint(arm_names[index]);
+    }
+
+    const auto frame_state = [&](const nlohmann::json &frame) {
+        std::array<float, kFullStateDimension> state{};
+        const auto base = basePose(operation, &frame);
+        state[0] = static_cast<float>(base[0]);
+        state[1] = static_cast<float>(base[1]);
+        state[2] = static_cast<float>(base[2]);
+        state[3] = frame.at("joints").at(updown_index).get<float>();
+        for (size_t index = 0U; index < arm_indices.size(); ++index) {
+          state[index + 4U] =
+            frame.at("joints").at(arm_indices[index]).get<float>();
+        }
+        return state;
+      };
+    const auto task_cost = [](const auto &path) {
+        double cost = 0.0;
+        for (size_t index = 1U; index < path.size(); ++index) {
+          const auto &from = path[index - 1U];
+          const auto &to = path[index];
+          cost += std::hypot(
+            static_cast<double>(to[0] - from[0]),
+            static_cast<double>(to[1] - from[1])) * 100.0;
+          cost += std::abs(shortestAngleDelta(from[2], to[2])) * 180.0 / kPi;
+          cost += std::abs(static_cast<double>(to[3] - from[3])) * 100.0;
+          for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+            cost += std::abs(static_cast<double>(to[axis] - from[axis])) *
+              180.0 / kPi;
+          }
+        }
+        return cost;
+      };
+
+    std::array<float, kFullStateDimension> lows{};
+    std::array<float, kFullStateDimension> highs{};
+    lows.fill(std::numeric_limits<float>::infinity());
+    highs.fill(-std::numeric_limits<float>::infinity());
+    for (const auto &frame : golden) {
+      const auto state = frame_state(frame);
+      for (size_t axis = 0U; axis < kFullStateDimension; ++axis) {
+        lows[axis] = std::min(lows[axis], state[axis]);
+        highs[axis] = std::max(highs[axis], state[axis]);
+      }
+    }
+    for (size_t axis = 0U; axis < 2U; ++axis) {
+      lows[axis] -= static_cast<float>(full_vamp_base_xy_margin_);
+      highs[axis] += static_cast<float>(full_vamp_base_xy_margin_);
+    }
+    lows[2] -= static_cast<float>(full_vamp_base_yaw_margin_);
+    highs[2] += static_cast<float>(full_vamp_base_yaw_margin_);
+    lows[3] -= static_cast<float>(full_vamp_updown_margin_);
+    highs[3] += static_cast<float>(full_vamp_updown_margin_);
+    for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+      lows[axis] -= static_cast<float>(full_vamp_arm_margin_);
+      highs[axis] += static_cast<float>(full_vamp_arm_margin_);
+    }
+    const auto clamp_to_bounds = [&](size_t axis, const std::string &name) {
+        const auto &bounds = robot_model_->getVariableBounds(name);
+        if (bounds.position_bounded_) {
+          lows[axis] = std::max(lows[axis], static_cast<float>(bounds.min_position_));
+          highs[axis] = std::min(highs[axis], static_cast<float>(bounds.max_position_));
+        }
+        if (!(lows[axis] < highs[axis])) {
+          throw std::runtime_error("empty full-state VAMP bound for " + name);
+        }
+      };
+    clamp_to_bounds(3U, "updown");
+    for (size_t index = 0U; index < arm_names.size(); ++index) {
+      clamp_to_bounds(index + 4U, arm_names[index]);
+    }
+    Robot::setBounds(lows, highs);
+
+    const auto start_values = frame_state(golden.front());
+    const auto goal_values = frame_state(golden.back());
+    const Robot::Configuration start(start_values);
+    const Robot::Configuration goal(goal_values);
+    vamp::planning::RRTCSettings settings;
+    settings.range = static_cast<float>(vamp_range_);
+    settings.dynamic_domain = false;
+    settings.max_iterations = static_cast<size_t>(vamp_max_iterations_);
+    settings.max_samples = static_cast<size_t>(vamp_max_samples_);
+    const VectorEnvironment environment;
+    const bool left_attached = golden.front().value("left_attached", false);
+    const bool right_attached = golden.front().value("right_attached", false);
+
+    const auto batch_started = std::chrono::steady_clock::now();
+    std::vector<std::future<Trial>> futures;
+    futures.reserve(static_cast<size_t>(vamp_workers_));
+    for (int worker = 0; worker < vamp_workers_; ++worker) {
+      auto worker_scene = planning_scene::PlanningScene::clone(scene);
+      auto worker_state = makeState(
+        joint_names, golden.front(), operation, left_spec, right_spec);
+      futures.push_back(std::async(
+        std::launch::async,
+        [this, worker, worker_scene, worker_state, start, goal, environment,
+        settings, arm_names, left_attached, right_attached, left_spec,
+        right_spec, task_cost]() mutable {
+          Trial trial;
+          trial.seed = static_cast<size_t>(worker);
+          FullStateVampContext context;
+          context.validator = [this, worker_scene, worker_state, arm_names,
+            left_attached, right_attached, left_spec, right_spec](
+              const std::array<float, kFullStateDimension> &state) {
+              const std::array<double, 3> base{
+                state[0], state[1], state[2]};
+              setPlanarRoot(*worker_state, base);
+              worker_state->setVariablePosition("updown", state[3]);
+              for (size_t index = 0U; index < arm_names.size(); ++index) {
+                worker_state->setVariablePosition(
+                  arm_names[index], state[index + 4U]);
+              }
+              worker_state->update(true);
+              if (!worker_state->satisfiesBounds()) return false;
+              if (left_attached && boxTilt(*worker_state, left_spec) >
+                  maximum_tilt_ + 1e-9) return false;
+              if (right_attached && boxTilt(*worker_state, right_spec) >
+                  maximum_tilt_ + 1e-9) return false;
+              return alfa_robot::motion::scene_collision_reason(
+                worker_scene, *worker_state, nullptr).empty();
+            };
+          g_full_state_vamp_context = &context;
+          auto rng = std::make_shared<FullStateVampSampler>(
+            static_cast<uint32_t>(0xA17FA11U + worker * 0x9E3779B9U));
+          const auto result = Rrt::solve(
+            start, goal, environment, settings, rng);
+          g_full_state_vamp_context = nullptr;
+          trial.solved = result.path.size() >= 2U;
+          trial.nanoseconds = result.nanoseconds;
+          trial.iterations = result.iterations;
+          trial.tree_nodes = std::accumulate(
+            result.size.begin(), result.size.end(), size_t{0U});
+          trial.validity_batches = context.validity_batches;
+          trial.validity_states = context.validity_states;
+          trial.fcl_ms = context.fcl_ms;
+          for (const auto &configuration : result.path) {
+            const auto values = configuration.to_array();
+            std::array<float, kFullStateDimension> state{};
+            std::copy_n(values.begin(), kFullStateDimension, state.begin());
+            trial.path.push_back(state);
+          }
+          if (trial.solved) trial.task_cost = task_cost(trial.path);
+          return trial;
+        }));
+    }
+    std::vector<Trial> trials;
+    trials.reserve(futures.size());
+    for (auto &future : futures) trials.push_back(future.get());
+    if (stats) {
+      stats->backend = "vamp_rrtc_full_state_18d_fcl_callback";
+      stats->state_dimension = kFullStateDimension;
+      stats->workers = trials.size();
+      stats->search_wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - batch_started).count();
+      for (const auto &trial : trials) {
+        stats->search_core_ms +=
+          static_cast<double>(trial.nanoseconds) / 1.0e6;
+        stats->search_fcl_ms += trial.fcl_ms;
+        stats->validity_batches += trial.validity_batches;
+        stats->validity_states += trial.validity_states;
+        stats->search_iterations += trial.iterations;
+        stats->search_tree_nodes += trial.tree_nodes;
+        if (trial.solved) ++stats->solved_workers;
+      }
+    }
+    const auto winner = std::min_element(
+      trials.begin(), trials.end(), [](const Trial &left, const Trial &right) {
+        if (left.solved != right.solved) return left.solved > right.solved;
+        if (left.task_cost != right.task_cost)
+          return left.task_cost < right.task_cost;
+        return left.nanoseconds < right.nanoseconds;
+      });
+    if (winner == trials.end() || !winner->solved) {
+      return nlohmann::json::array();
+    }
+    if (stats) {
+      stats->winner_seed = static_cast<int>(winner->seed);
+      stats->candidate_sparse_states = winner->path.size();
+      const auto &origin = winner->path.front();
+      for (size_t index = 1U; index < winner->path.size(); ++index) {
+        const auto &from = winner->path[index - 1U];
+        const auto &to = winner->path[index];
+        stats->candidate_base_path_m += std::hypot(
+          static_cast<double>(to[0] - from[0]),
+          static_cast<double>(to[1] - from[1]));
+        stats->candidate_base_yaw_path_deg +=
+          std::abs(shortestAngleDelta(from[2], to[2])) * 180.0 / kPi;
+        stats->candidate_updown_path_m +=
+          std::abs(static_cast<double>(to[3] - from[3]));
+        for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+          stats->candidate_arm_path_deg +=
+            std::abs(static_cast<double>(to[axis] - from[axis])) *
+            180.0 / kPi;
+        }
+      }
+      for (const auto &state : winner->path) {
+        stats->candidate_max_base_offset_m = std::max(
+          stats->candidate_max_base_offset_m,
+          std::hypot(
+            static_cast<double>(state[0] - origin[0]),
+            static_cast<double>(state[1] - origin[1])));
+        stats->candidate_max_base_yaw_offset_deg = std::max(
+          stats->candidate_max_base_yaw_offset_deg,
+          std::abs(shortestAngleDelta(origin[2], state[2])) * 180.0 / kPi);
+      }
+    }
+
+    nlohmann::json sparse = nlohmann::json::array();
+    for (const auto &state : winner->path) {
+      auto frame = golden.front();
+      auto joints = frame.at("joints").get<std::vector<double>>();
+      joints[updown_index] = state[3];
+      for (size_t index = 0U; index < arm_indices.size(); ++index) {
+        joints[arm_indices[index]] = state[index + 4U];
+      }
+      frame["joints"] = std::move(joints);
+      frame["base_pose_map"] = {state[0], state[1], state[2]};
+      frame["stage"] = "chest_carry_retract";
+      sparse.push_back(std::move(frame));
+    }
+    sparse.front() = golden.front();
+    sparse.back() = golden.back();
+    std::vector<size_t> anchors(sparse.size(), 0U);
+    std::iota(anchors.begin(), anchors.end(), 0U);
+    *raw_cost = 0.0;
+    for (size_t index = 1U; index < sparse.size(); ++index) {
+      const auto from_joints = sparse.at(index - 1U).at("joints")
+        .get<std::vector<double>>();
+      const auto to_joints = sparse.at(index).at("joints")
+        .get<std::vector<double>>();
+      const auto from_base = basePose(operation, &sparse.at(index - 1U));
+      const auto to_base = basePose(operation, &sparse.at(index));
+      *raw_cost += std::hypot(
+        to_base[0] - from_base[0], to_base[1] - from_base[1]) * 100.0;
+      *raw_cost += std::abs(shortestAngleDelta(from_base[2], to_base[2])) *
+        180.0 / kPi;
+      *raw_cost += std::abs(
+        to_joints[updown_index] - from_joints[updown_index]) * 100.0;
+      for (const size_t arm_index : arm_indices) {
+        *raw_cost += std::abs(
+          to_joints[arm_index] - from_joints[arm_index]) * 180.0 / kPi;
+      }
+    }
+    return densifyShortcut(
+      sparse, anchors, operation, joint_names, left_spec, right_spec);
+#endif
+  }
+
   nlohmann::json tryGoldenVamp(
       const planning_scene::PlanningSceneConstPtr &scene,
       const nlohmann::json &operation,
@@ -1418,6 +1917,10 @@ private:
       local_rrt = tryGoldenVamp(
         scene, operation, joint_names, golden, left_spec, right_spec,
         &local_rrt_cost, &local_search_stats);
+    } else if (local_rrt_mode_ == "full_vamp") {
+      local_rrt = tryFullStateVamp(
+        scene, operation, joint_names, golden, left_spec, right_spec,
+        &local_rrt_cost, &local_search_stats);
     } else {
       local_rrt = tryLocalRrt(
         scene, operation, joint_names, golden, left_spec, right_spec,
@@ -1432,8 +1935,19 @@ private:
         {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0},
         {"checked_frames", 0}, {"checked_edge_samples", 0}};
       nlohmann::json rrt_result;
+      const auto candidate_fcl_started = std::chrono::steady_clock::now();
       local_candidate_fcl_valid = validateOperation(
         rrt_candidate, joint_names, &rrt_result, &rrt_validation);
+      if (local_rrt_mode_ == "full_vamp") {
+        local_search_stats.candidate_fcl_ms +=
+          std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - candidate_fcl_started).count();
+        if (!local_candidate_fcl_valid) {
+          ++local_search_stats.rejected_candidates;
+          local_search_stats.last_rejection_reason = rrt_result.value(
+            "failure_reason", "full-state candidate failed FCL validation");
+        }
+      }
       if (local_candidate_fcl_valid && local_rrt_cost < selected_cost - 1e-9) {
         optimized = std::move(local_rrt);
         selected_cost = local_rrt_cost;
@@ -1460,7 +1974,9 @@ private:
         "direct_local_shortcut" :
         (local_rrt_mode_ == "golden_vamp" ?
         "representative_graph_shortcut_with_golden_vamp" :
-        "representative_graph_shortcut_with_golden_local_rrt"))},
+        (local_rrt_mode_ == "full_vamp" ?
+        "representative_graph_shortcut_with_full_state_vamp" :
+        "representative_graph_shortcut_with_golden_local_rrt")))},
       {"cache_loading_counted", false},
       {"source_frame_count", golden.size()},
       {"optimized_frame_count", optimized.size()},
@@ -1473,8 +1989,10 @@ private:
       {"graph_joint_travel_cost", graph_cost},
       {"local_rrt_attempted", true},
       {"local_rrt_mode", local_rrt_mode_},
-      {"local_rrt_state_dimension", local_rrt_mode_ != "full" ? 2 :
-        static_cast<int>(joint_names.size() - 1U)},
+      {"local_rrt_state_dimension", local_rrt_mode_ == "full_vamp" ?
+        static_cast<int>(kFullStateDimension) :
+        (local_rrt_mode_ != "full" ? 2 :
+        static_cast<int>(joint_names.size() - 1U))},
       {"local_rrt_wall_ms", local_rrt_wall_ms},
       {"local_candidate_fcl_valid", local_candidate_fcl_valid},
       {"local_search_backend", local_search_stats.backend},
@@ -1483,7 +2001,26 @@ private:
       {"local_search_grid_build_ms", local_search_stats.grid_build_ms},
       {"local_search_planner_wall_ms", local_search_stats.search_wall_ms},
       {"local_search_planner_core_ms", local_search_stats.search_core_ms},
+      {"local_search_fcl_ms", local_search_stats.search_fcl_ms},
       {"local_search_candidate_fcl_ms", local_search_stats.candidate_fcl_ms},
+      {"local_search_validity_batches", local_search_stats.validity_batches},
+      {"local_search_validity_states", local_search_stats.validity_states},
+      {"local_search_iterations", local_search_stats.search_iterations},
+      {"local_search_tree_nodes", local_search_stats.search_tree_nodes},
+      {"local_search_candidate_sparse_states",
+        local_search_stats.candidate_sparse_states},
+      {"local_search_candidate_base_path_m",
+        local_search_stats.candidate_base_path_m},
+      {"local_search_candidate_base_yaw_path_deg",
+        local_search_stats.candidate_base_yaw_path_deg},
+      {"local_search_candidate_max_base_offset_m",
+        local_search_stats.candidate_max_base_offset_m},
+      {"local_search_candidate_max_base_yaw_offset_deg",
+        local_search_stats.candidate_max_base_yaw_offset_deg},
+      {"local_search_candidate_updown_path_m",
+        local_search_stats.candidate_updown_path_m},
+      {"local_search_candidate_arm_path_deg",
+        local_search_stats.candidate_arm_path_deg},
       {"local_search_workers", local_search_stats.workers},
       {"local_search_solved_workers", local_search_stats.solved_workers},
       {"local_search_winner_seed", local_search_stats.winner_seed},
@@ -1610,6 +2147,10 @@ private:
   int vamp_max_samples_ = 2000;
   double vamp_range_ = 0.08;
   int vamp_max_refinements_ = 8;
+  double full_vamp_base_xy_margin_ = 0.15;
+  double full_vamp_base_yaw_margin_ = 5.0 * kPi / 180.0;
+  double full_vamp_updown_margin_ = 0.08;
+  double full_vamp_arm_margin_ = 35.0 * kPi / 180.0;
   double edge_base_translation_step_ = 0.01;
   double edge_base_yaw_step_ = kPi / 180.0;
   std::shared_ptr<robot_model_loader::RobotModelLoader> robot_model_loader_;

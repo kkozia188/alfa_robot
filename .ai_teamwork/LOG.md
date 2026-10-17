@@ -2172,3 +2172,10 @@
 - 最终safe-turn组合保持胸前直拉、退后`2.35m`、转身`180°`、等高释放；完整`25,731`帧+`4,011`边样本通过MoveIt/FCL，左右最大倾角`5.901349°/7.993910°`，最大双箱等高误差`1.06998e-10m`。新Rerun右侧25箱蓝色柱使用VAMP混合规划时间，25/25低于3秒、最大`1.143s`；原UI布局不变，orbit center仍为世界原点`[0,0,0]`。
 - 兼容回归：`vamp_DIR-NOTFOUND`的隔离构建成功，证明VAMP仍是可选依赖；带VAMP构建的默认`local_rrt_mode=full`复验25/25成功、最大任务核心`1.430353s`。胸前和安全转身合同测试9/9通过，RRD verify、SHA-256和`git diff --check`通过。
 - 产物：小型报告/验证位于`results/v322_vamp_parallel/vamp2d/`；完整本地RRD为`v322-direct-pull-vamp-safe-turn-production-shell.rrd`，SHA-256为`8607dd81406f627318567c235bd233cd7ee03726b06cccf9dbbf99c40a3b31e3`。原胸前、安全转身工作树和认证RRD未覆盖。
+
+## 2026-10-17 运控 / Codex / 底盘与双臂18维VAMP并发搜索实验
+- 从已保存并推送的二维VAMP提交`9e44379`建立独立工作树`/home/tim/alfa_robot-v322-vamp-fullstate`和分支`feature/v322-vamp-fullstate`；二维分支、原胸前/转身产物均未修改。新增可选`local_rrt_mode:=full_vamp`，状态为底盘`x/y/yaw`、`updown`和双臂14轴共18维；`head_joint`因胸前段始终为0而固定。
+- VAMP执行RRT-Connect、最近邻、状态运算与8状态边批次；每个状态回映V3.2.2整机并由独立PlanningScene上的MoveIt/FCL验证。该实验不是Cricket生成的V3 SIMD球碰撞核，报告明确区分VAMP树开销与FCL回调耗时。
+- 相同直拉输入各顺序重复3次：原OMPL全空间15维搜索/规划核心中位`3.989/7.038s`；18维VAMP单worker为`0.328/3.377s`，搜索和端到端分别提升`12.16x/2.08x`，15/15循环求解、15/15候选FCL通过。4 worker为`0.387/3.475s`，58/60 seed成功，验证状态吞吐`53.7k/s`，相对单worker`18.4k/s`提升`2.92x`，但延迟高`17.9%`且CPU工作量`3.93x`，所以单worker是当前低延迟默认。
+- MoveIt/FCL占单worker搜索核心时间`99.88%`，下一步加速重点应是V3球化/专用SIMD碰撞核或安全的批量碰撞前筛，不是继续堆RRT worker。复杂候选真实使用底盘自由度，例如21+25最大平移偏移`2.972cm`、航向偏移`1.580deg`；共同双精度行程门禁下15条候选均未优于可见图，最终动作帧保持不变。
+- 最终回放通过`28,836`帧+`1,071`边；安全转身组合通过`25,731`帧+`4,011`边和等高合同。报告、3轮原始小型JSON、对比图和SHA位于`results/v322_vamp_fullstate/`；完整本地RRD为`full18d-4w-safe-turn-production-shell.rrd`，SHA-256为`f0a27c92c290d93844de3a820aba9aa4600bf653fe005b220ebe5482c25f0fae`。

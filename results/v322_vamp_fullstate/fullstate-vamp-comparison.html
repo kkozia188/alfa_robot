@@ -1,0 +1,212 @@
+<div id="fullstate-vamp-viz">
+  <h2>V3.2.2 full-state planning comparison</h2>
+  <div class="fullstate-vamp-legend" aria-label="Planner legend">
+    <span><i class="ompl"></i>OMPL full 15-D</span>
+    <span><i class="vamp1"></i>VAMP full 18-D, 1 worker</span>
+    <span><i class="vamp4"></i>VAMP full 18-D, 4 workers</span>
+  </div>
+  <div class="fullstate-vamp-plots">
+    <section>
+      <h3>Planning core</h3>
+      <div class="plot" data-metric="planning"></div>
+    </section>
+    <section>
+      <h3>Search wall time</h3>
+      <div class="plot" data-metric="search"></div>
+    </section>
+    <section>
+      <h3>Validated-state throughput</h3>
+      <div class="plot" data-metric="throughput"></div>
+    </section>
+  </div>
+  <p class="text-small text-muted fullstate-vamp-note">
+    Three-run medians · 15/15 cycles solved · MoveIt/FCL is 99.88% of VAMP search core time
+  </p>
+</div>
+
+<style>
+  #fullstate-vamp-viz {
+    width: 100%;
+    color: var(--foreground);
+  }
+  #fullstate-vamp-viz h2,
+  #fullstate-vamp-viz h3 {
+    font-weight: 500;
+  }
+  #fullstate-vamp-viz h2 {
+    margin: 0 0 10px;
+  }
+  #fullstate-vamp-viz h3 {
+    margin: 0 0 4px;
+  }
+  .fullstate-vamp-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-bottom: 14px;
+    color: var(--muted-foreground);
+  }
+  .fullstate-vamp-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fullstate-vamp-legend i {
+    width: 10px;
+    height: 10px;
+    display: inline-block;
+  }
+  .fullstate-vamp-legend .ompl { background: var(--viz-series-3); }
+  .fullstate-vamp-legend .vamp1 { background: var(--viz-series-1); }
+  .fullstate-vamp-legend .vamp4 { background: var(--viz-series-2); }
+  .fullstate-vamp-plots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    gap: 18px;
+  }
+  .fullstate-vamp-plots section {
+    min-width: 0;
+  }
+  .fullstate-vamp-plots .plot {
+    min-height: 238px;
+  }
+  .fullstate-vamp-plots svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .fullstate-vamp-plots .axis text,
+  .fullstate-vamp-plots .value,
+  .fullstate-vamp-plots .axis-title {
+    fill: var(--foreground);
+    font-size: 12px;
+  }
+  .fullstate-vamp-plots .axis path,
+  .fullstate-vamp-plots .axis line,
+  .fullstate-vamp-plots .frame {
+    stroke: var(--border);
+  }
+  .fullstate-vamp-plots .grid line {
+    stroke: var(--border);
+    stroke-opacity: 0.55;
+  }
+  .fullstate-vamp-plots .grid path { display: none; }
+  .fullstate-vamp-note {
+    margin: 10px 0 0;
+  }
+  @media (max-width: 780px) {
+    .fullstate-vamp-plots { grid-template-columns: 1fr; }
+    .fullstate-vamp-plots .plot { min-height: 210px; }
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+(() => {
+  const root = document.getElementById("fullstate-vamp-viz");
+  const planners = [
+    { id: "ompl", short: "OMPL", color: "var(--viz-series-3)" },
+    { id: "vamp1", short: "VAMP 1w", color: "var(--viz-series-1)" },
+    { id: "vamp4", short: "VAMP 4w", color: "var(--viz-series-2)" }
+  ];
+  const charts = {
+    planning: {
+      title: "Planning core time in seconds; lower is better",
+      unit: "s",
+      values: { ompl: 7.038, vamp1: 3.377, vamp4: 3.475 }
+    },
+    search: {
+      title: "Full-space search wall time in seconds; lower is better",
+      unit: "s",
+      values: { ompl: 3.989, vamp1: 0.328, vamp4: 0.387 }
+    },
+    throughput: {
+      title: "MoveIt/FCL validated states per second in thousands; higher is better",
+      unit: "k states/s",
+      values: { vamp1: 18.4, vamp4: 53.7 }
+    }
+  };
+
+  function draw(container) {
+    const metric = container.dataset.metric;
+    const config = charts[metric];
+    const data = planners
+      .filter(planner => Object.hasOwn(config.values, planner.id))
+      .map(planner => ({ ...planner, value: config.values[planner.id] }));
+    const width = Math.max(300, Math.floor(container.getBoundingClientRect().width));
+    const height = 238;
+    const margin = { top: 28, right: 12, bottom: 48, left: 58 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+    container.replaceChildren();
+    const svg = d3.select(container)
+      .append("svg")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("role", "img")
+      .attr("aria-label", config.title);
+    svg.append("title").text(config.title);
+    svg.append("desc").text(
+      data.map(item => `${item.short}: ${item.value} ${config.unit}`).join("; ")
+    );
+    const plot = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+    const x = d3.scaleBand()
+      .domain(data.map(item => item.short))
+      .range([0, innerWidth])
+      .padding(0.32);
+    const maxValue = d3.max(data, item => item.value);
+    const y = d3.scaleLinear()
+      .domain([0, maxValue * 1.18])
+      .nice(4)
+      .range([innerHeight, 0]);
+    plot.append("g")
+      .attr("class", "grid")
+      .call(d3.axisLeft(y).ticks(4).tickSize(-innerWidth).tickFormat(""));
+    plot.append("rect")
+      .attr("class", "frame")
+      .attr("data-chart-frame", "")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", innerWidth)
+      .attr("height", innerHeight)
+      .attr("fill", "none");
+    plot.selectAll("rect.bar")
+      .data(data)
+      .join("rect")
+      .attr("class", "bar")
+      .attr("x", item => x(item.short))
+      .attr("y", item => y(item.value))
+      .attr("width", x.bandwidth())
+      .attr("height", item => innerHeight - y(item.value))
+      .attr("fill", item => item.color);
+    plot.selectAll("text.value")
+      .data(data)
+      .join("text")
+      .attr("class", "value")
+      .attr("text-anchor", "middle")
+      .attr("x", item => x(item.short) + x.bandwidth() / 2)
+      .attr("y", item => Math.max(13, y(item.value) - 7))
+      .text(item => `${item.value.toFixed(metric === "throughput" ? 1 : 3)}`);
+    plot.append("g")
+      .attr("class", "axis")
+      .attr("transform", `translate(0,${innerHeight})`)
+      .call(d3.axisBottom(x).tickSizeOuter(0));
+    plot.append("g")
+      .attr("class", "axis")
+      .call(d3.axisLeft(y).ticks(4));
+    svg.append("text")
+      .attr("class", "axis-title")
+      .attr("data-axis", "y")
+      .attr("text-anchor", "middle")
+      .attr("transform", `translate(15,${margin.top + innerHeight / 2}) rotate(-90)`)
+      .text(config.unit);
+  }
+
+  const plots = [...root.querySelectorAll(".plot")];
+  plots.forEach(draw);
+  const observer = new ResizeObserver(entries => {
+    for (const entry of entries) draw(entry.target);
+  });
+  plots.forEach(plot => observer.observe(plot));
+})();
+</script>

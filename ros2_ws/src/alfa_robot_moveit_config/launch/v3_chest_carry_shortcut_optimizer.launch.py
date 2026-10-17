@@ -34,6 +34,18 @@ def generate_launch_description():
             DeclareLaunchArgument("vamp_max_samples", default_value="2000"),
             DeclareLaunchArgument("vamp_range", default_value="0.08"),
             DeclareLaunchArgument("vamp_max_refinements", default_value="8"),
+            DeclareLaunchArgument(
+                "full_vamp_base_xy_margin_m", default_value="0.15"
+            ),
+            DeclareLaunchArgument(
+                "full_vamp_base_yaw_margin_deg", default_value="5.0"
+            ),
+            DeclareLaunchArgument(
+                "full_vamp_updown_margin_m", default_value="0.08"
+            ),
+            DeclareLaunchArgument(
+                "full_vamp_arm_margin_deg", default_value="35.0"
+            ),
             Node(
                 package="alfa_robot_moveit_config",
                 executable="v3_chest_carry_shortcut_optimizer",
@@ -106,6 +118,22 @@ def generate_launch_description():
                         "vamp_max_refinements": ParameterValue(
                             LaunchConfiguration("vamp_max_refinements"),
                             value_type=int,
+                        ),
+                        "full_vamp_base_xy_margin_m": ParameterValue(
+                            LaunchConfiguration("full_vamp_base_xy_margin_m"),
+                            value_type=float,
+                        ),
+                        "full_vamp_base_yaw_margin_deg": ParameterValue(
+                            LaunchConfiguration("full_vamp_base_yaw_margin_deg"),
+                            value_type=float,
+                        ),
+                        "full_vamp_updown_margin_m": ParameterValue(
+                            LaunchConfiguration("full_vamp_updown_margin_m"),
+                            value_type=float,
+                        ),
+                        "full_vamp_arm_margin_deg": ParameterValue(
+                            LaunchConfiguration("full_vamp_arm_margin_deg"),
+                            value_type=float,
                         ),
                     },
                 ],

@@ -19,6 +19,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--port',type=int,default=8152)
     parser.add_argument('--evidence-dir',type=Path,default=Path('/tmp/tcp_scene_preview_20261018'))
+    parser.add_argument('--smoke-test',action='store_true')
     args=parser.parse_args()
     args.evidence_dir.mkdir(parents=True,exist_ok=True)
     verify_frontend_package()
@@ -35,6 +36,7 @@ def main():
         options[f'单臂 {side} {box:02d}']={side:box}
     server=viser.ViserServer(host='127.0.0.1',port=args.port,label='TCP输入合同 · 随机停车与箱墙生成预览')
     renderer=ReadOnlyScene(server,robot_urdf,default_visual_assets())
+    cartons={side:renderer.carton_object('/preview/box_'+side,(.3,.4,.4)) for side in ('left','right')}
     renderer.reference_conveyors()
     renderer.assembled_container(environment)
     for item in environment:renderer.snapshot_object(item)
@@ -51,11 +53,13 @@ def main():
     current_axes=[]
     revision=0
 
-    def update():
+    def update(task_label=None):
         nonlocal revision
+        task_label=task_label or selector.value
         revision+=1
         for node in nodes:node.remove()
         nodes.clear();current_fills.clear();current_axes.clear()
+        for carton in cartons.values():carton.visible=False
         world_from_footprint,yaw=random_parking(rng)
         values=home.copy()
         values.update({name:values.get(name,0.) for name in renderer.model.actuated_joint_names})
@@ -65,7 +69,7 @@ def main():
         grasps=[];perturbations={};truth={}
         front=max(item.pose.position[0]-item.dimensions_m[0]/2 for item in environment if item.object_id=='front_wall')
         wall_center_x=front-.20
-        selected=options[selector.value]
+        selected=options[task_label]
         for side,box_id in selected.items():
             angles=np.array([rng.uniform(-2,2),rng.uniform(-2,2),rng.uniform(-5,5)])
             box=np.eye(4)
@@ -79,8 +83,8 @@ def main():
         scene=reconstruct_scene(grasps,world_from_footprint)
         for side,matrix in scene['boxes'].items():
             assert np.allclose(matrix,truth[side],atol=1e-10)
-            carton=renderer.carton_object('/preview/box_'+side,(.3,.4,.4))
-            carton.position=matrix[:3,3];carton.wxyz=np.roll(Rotation.from_matrix(matrix[:3,:3]).as_quat(),1);nodes.append(carton)
+            carton=cartons[side]
+            carton.position=matrix[:3,3];carton.wxyz=np.roll(Rotation.from_matrix(matrix[:3,:3]).as_quat(),1);carton.visible=True
             tcp=world_from_footprint@next(grasp.tcp_in_footprint for grasp in grasps if grasp.side==side)
             axes=server.scene.add_frame('/preview/tcp_'+side,position=tcp[:3,3],wxyz=np.roll(Rotation.from_matrix(tcp[:3,:3]).as_quat(),1),axes_length=.12,axes_radius=.003,visible=show_axes.value)
             nodes.append(axes);current_axes.append(axes)
@@ -94,13 +98,13 @@ def main():
             angles=record['roll_pitch_yaw_deg'];text+=f"{side} · {record['grasp_mode']}：箱体 Roll={angles[0]:+.2f}° / Pitch={angles[1]:+.2f}° / Yaw={angles[2]:+.2f}°\n\n"
         text+=f"橙色实心块 {len(scene['fills'])} 个；旋转箱体左右最远边界各空开2mm。世界抽离方向在footprint中为 {np.round(scene['outward_footprint'],4).tolist()}。"
         info.content=text
-        evidence=dict(revision=revision,task_label=selector.value,parking_world_from_footprint=world_from_footprint.tolist(),parking_yaw_deg=yaw,
+        evidence=dict(revision=revision,task_label=task_label,parking_world_from_footprint=world_from_footprint.tolist(),parking_yaw_deg=yaw,
             inputs=perturbations,fills=scene['fills'],outward_world=scene['outward_world'].tolist(),outward_footprint=scene['outward_footprint'].tolist())
         (args.evidence_dir/'latest.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2))
 
     @selector.on_update
     @reroll.on_click
-    def regenerate(_event):renderer.submit(update)
+    def regenerate(_event):renderer.submit(lambda:update())
 
     @fill_visible.on_update
     def visibility(_event):
@@ -117,6 +121,13 @@ def main():
     def connected(client):
         client.camera.position=(-2.8,-3.8,2.5);client.camera.look_at=(.8,0.,1.0);client.camera.up_direction=(0.,0.,1.)
     update()
+    if args.smoke_test:
+        for task_label in list(options)*2:
+            update(task_label)
+        assert revision==1+2*len(options)
+        print(f'SMOKE PASS: {revision} scene updates, all {len(options)} tasks twice; persistent cartons reused',flush=True)
+        server.stop()
+        return
     print(f'Ready http://127.0.0.1:{args.port} · {len(options)} task choices',flush=True)
     while True:renderer.drain();time.sleep(.01)
 

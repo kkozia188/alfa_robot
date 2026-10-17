@@ -1,6 +1,6 @@
 # TCP任务输入与随机停车箱墙预览
 
-本轮只验证输入反推/场景几何与可视化，不运行抓取规划。基于alfa_v3_curobo的codex/tcp-scene-contract-preview；旧完整任务链和后续实验保留，不在本阶段合并未经视觉验收的任务重构。
+本轮只验证输入反推/场景几何与可视化，不运行抓取规划。基于alfa_v3_curobo的feature/tcp-scene-contract-preview；旧完整任务链和后续实验保留，不在本阶段合并未经视觉验收的任务重构。
 
 ## 输入合同
 
@@ -28,3 +28,5 @@ cd /mnt/mydisk/ALFA/alfa_robot_v3
 模型与外观仍使用当前冻结模型/前端包；已知集装箱/初始状态在config/tcp_scene_preview.json，不依赖临时历史轨迹。最新生成样本保存在/tmp/tcp_scene_preview_20261018/latest.json，不把完整模拟箱号传入重建器。
 
 test_tcp_scene_contract.py检查500个随机混合侧/顶吸输入的Pose反推、填充与目标分离、停车边界及世界抽离方向不变，另核对左右2mm留缝。视觉验收由用户在8152进行；通过前不继续把该场景生成器替换完整规划链路。
+
+任务切换回归：启动命令增加--smoke-test，会用真实Viser/ReadOnlyScene渲染接口依次生成119任务各两次再退出。箱体SizedVisual保持常驻，切换只修改位姿与visible，不对其调用不存在的remove；普通辅助节点仍按其标准remove接口清理。

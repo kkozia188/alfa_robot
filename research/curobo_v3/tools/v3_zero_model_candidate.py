@@ -13,6 +13,7 @@ ROOT=Path(__file__).resolve().parents[1]
 OLD=ROOT/'generated/v3_analytic_071cb95/model/robot_meter_meshes.urdf'
 COLLEAGUE=Path('/mnt/mydisk/ALFA/backpack/real2sim_v3.3.1/urdf/robot.urdf')
 OFFSETS_DEG={'left':[-90.,15.,0.,0.,90.,0.,90.], 'right':[90.,-15.,0.,0.,-90.,0.,-90.]}
+J2_LIMITS_DEG={'left':(-90.,120.),'right':(-120.,90.)}
 
 
 def legacy_angles(side,new_angles):
@@ -41,7 +42,8 @@ def build(output,source=OLD):
             origin.set('rpy',' '.join(f'{value:.17g}' for value in rpy))
             if index==1:
                 axis.set('xyz',' '.join(f'{value:.17g}' for value in -vector))
-                joint.find('limit').set('lower',str(-np.pi/2));joint.find('limit').set('upper',str(np.pi/2))
+                joint.find('limit').set('lower',str(np.deg2rad(J2_LIMITS_DEG[side][0])))
+                joint.find('limit').set('upper',str(np.deg2rad(J2_LIMITS_DEG[side][1])))
     for mesh in root.findall('.//mesh'):
         filename=mesh.get('filename')
         if not Path(filename).is_absolute():mesh.set('filename',str((source.parent/filename).resolve()))
@@ -51,8 +53,8 @@ def build(output,source=OLD):
     manifest=dict(source=str(source),source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         reference_colleague_urdf=str(COLLEAGUE),offsets_deg=OFFSETS_DEG,
         signs=[1,-1,1,1,1,1,1],mapping='q_legacy = offsets + signs * q_candidate',
-        limits='J2 +/-90; J3 +/-180; all remaining numerical limits preserved',
-        status='candidate: true coordinate redefinition, not Home change; old installation/tool retained pending comparison',
+        limits='left J2 [-90,120]; right J2 [-120,90]; J3 +/-180; other numerical limits unchanged',
+        status='true coordinate redefinition, not Home change; legacy installation and confirmed legacy tool retained',
         rights_source='mirrored legacy configuration; checked against shoulder/elbow/wrist reflection')
     old=yourdfpy.URDF.load(source,load_meshes=False)
     candidate=yourdfpy.URDF.load(path,load_meshes=False)

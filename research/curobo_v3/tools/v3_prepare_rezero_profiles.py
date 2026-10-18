@@ -10,7 +10,7 @@ from curobo.scene import Scene
 import yaml
 import yourdfpy
 
-from v3_zero_model_candidate import ROOT,OLD,build,OFFSETS_DEG
+from v3_zero_model_candidate import ROOT,OLD,build,OFFSETS_DEG,J2_LIMITS_DEG
 from v3_rezero_analytic import RezeroAnalytic
 
 
@@ -33,8 +33,8 @@ def main():
         config=yaml.safe_load(source.read_text())
         config['kinematics']['urdf_path']=str(urdf)
         names=config['kinematics']['cspace']['joint_names']
-        if config['kinematics']['cspace'].get('retract_config') is not None:
-            config['kinematics']['cspace']['retract_config']=convert_row(names,config['kinematics']['cspace']['retract_config']).tolist()
+        if config['kinematics']['cspace'].get('nominal_joint_position') is not None:
+            config['kinematics']['cspace']['nominal_joint_position']=convert_row(names,config['kinematics']['cspace']['nominal_joint_position']).tolist()
         profiles[label]=config
     old_model=yourdfpy.URDF.load(OLD,load_meshes=False)
     solver=RezeroAnalytic()
@@ -43,7 +43,7 @@ def main():
     for name,pose in named['named_poses'].items():
         names=list(pose);converted=convert_row(names,list(pose.values()))
         output=dict(zip(names,converted.tolist()))
-        if any(abs(output[f'{side}_joint2'])>np.pi/2+1e-8 for side in ('left','right')):
+        if any(not np.deg2rad(J2_LIMITS_DEG[side][0])-1e-8<=output[f'{side}_joint2']<=np.deg2rad(J2_LIMITS_DEG[side][1])+1e-8 for side in ('left','right')):
             old_model.update_cfg({joint:pose.get(joint,0.) for joint in old_model.actuated_joint_names})
             inverse=np.linalg.inv(old_model.get_transform('arm_carriage',old_model.base_link))
             arms=[]
@@ -92,7 +92,7 @@ def main():
     (folder/'named_poses.yaml').write_text(yaml.safe_dump(named,sort_keys=False))
     (folder/'named_pose_migration.json').write_text(json.dumps(reports,indent=2))
     for label,config in profiles.items():
-        config['kinematics']['cspace']['retract_config']=[named['named_poses']['home'].get(joint,0.) for joint in config['kinematics']['cspace']['joint_names']]
+        config['kinematics']['cspace'].pop('retract_config',None)
         (folder/f'{label}.yaml').write_text(yaml.safe_dump(config,sort_keys=False))
 
 

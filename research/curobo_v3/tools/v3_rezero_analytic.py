@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from v3_zero_model_candidate import OFFSETS_DEG
+from v3_zero_model_candidate import OFFSETS_DEG,J2_LIMITS_DEG
 
 
 class RezeroAnalytic:
@@ -18,6 +18,9 @@ class RezeroAnalytic:
         self.signs=np.array([1.,-1.,1.,1.,1.,1.,1.])
         self.offsets=np.deg2rad(np.asarray([OFFSETS_DEG['left'],OFFSETS_DEG['right']]))
         self.limits=np.deg2rad([180.,90.,180.,145.,180.,110.,180.])
+        self.lower=np.tile(-self.limits,(2,1));self.upper=np.tile(self.limits,(2,1))
+        for arm,side in enumerate(('left','right')):
+            self.lower[arm,1],self.upper[arm,1]=np.deg2rad(J2_LIMITS_DEG[side])
 
     def legacy(self,side,angles):
         values=self.offsets[side]+self.signs*np.asarray(angles)
@@ -32,5 +35,5 @@ class RezeroAnalytic:
             self.legacy(side,seed),output,16)
         converted=(output[:count]-self.offsets[side])*self.signs
         converted=(converted+np.pi)%(2*np.pi)-np.pi
-        converted=converted[np.all(np.abs(converted)<=self.limits+1e-9,axis=1)]
+        converted=converted[np.all((converted>=self.lower[side]-1e-9)&(converted<=self.upper[side]+1e-9),axis=1)]
         return converted[np.argsort(np.linalg.norm(converted-seed,axis=1))]

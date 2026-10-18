@@ -66,7 +66,7 @@ def main():
     server.gui.add_markdown('新旧模型左右臂共28轴独立修改；升降、头部和底盘关节保持零位。支持滑动或输入数值；不检查碰撞，不连接实机。')
     server.gui.add_markdown('蓝色＝当前cuRobo模型；橙色＝3.3.1。并排仅为显示加Y偏移，重合视图严格对齐footprint，不做肩部平移对齐。红点base_link、绿色footprint；肩/肘/腕为关节轴交点估计，不是CAD link原点。只读离线对比，无SSH/ROS或实机控制。')
     if args.candidate:
-        server.gui.add_markdown('本页蓝色current已切为重零候选URDF：左旧角[-90,15,0,0,90,0,90]及右[90,-15,0,0,-90,0,-90]现在是真正关节0；J2正方向反转、限位±90°，其余数值限位不变。不是改Home。橙色仍是同事原始3.3.1，未改tool0或J3。')
+        server.gui.add_markdown('本页蓝色current已切为重零候选URDF：左旧角[-90,15,0,0,90,0,90]及右[90,-15,0,0,-90,0,-90]现在是真正关节0；J2正方向反转，左限位[-90,120]°、右[-120,90]°，其余数值限位不变。不是改Home。橙色仍是同事原始3.3.1，未改tool0或J3。')
     if args.original_home:
         server.gui.add_markdown('现在蓝色使用未重零的原URDF和文件内第一Home：Updown=-0.3m；左[155,-90,20,90,-90,-40,0]°，右[-155,90,-20,-90,90,40,0]°。没有将J2改成±105或截到±90。橙色保持原3.3.1，可独立拖动比较。')
     status=server.gui.add_markdown('')

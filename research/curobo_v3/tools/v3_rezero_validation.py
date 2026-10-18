@@ -37,7 +37,7 @@ def main():
     for arm,side in enumerate(('left','right')):
         count=0;position_error=0.;rotation_error=0.;failures=[]
         for trial in range(100):
-            angles=rng.uniform(-.8,.8,7)*analytic.limits
+            angles=rng.uniform(.1,.9,7)*(analytic.upper[arm]-analytic.lower[arm])+analytic.lower[arm]
             values={name:0. for name in model.actuated_joint_names}
             values.update({f'{side}_joint{index}':value for index,value in enumerate(angles,1)})
             model.update_cfg(values)

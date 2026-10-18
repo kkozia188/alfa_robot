@@ -753,7 +753,7 @@
     <parent link="left_link1" />
     <child link="left_link2" />
     <axis xyz="-0 -0 -1" />
-    <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="647" velocity="1.309" />
+    <limit lower="-1.5707963267948966" upper="2.0943951023931953" effort="647" velocity="1.309" />
   </joint>
   <joint name="left_joint3" type="revolute">
     <origin xyz="0.23761775 0.063669485 -0.04949" rpy="-1.0358530698496323e-09 -1.5707963000000003 -2.8797932985952555" />
@@ -802,7 +802,7 @@
     <parent link="right_link1" />
     <child link="right_link2" />
     <axis xyz="-0 -0 -1" />
-    <limit lower="-1.5707963267948966" upper="1.5707963267948966" effort="647" velocity="1.309" />
+    <limit lower="-2.0943951023931953" upper="1.5707963267948966" effort="647" velocity="1.309" />
   </joint>
   <joint name="right_joint3" type="revolute">
     <origin xyz="-0.23761775 0.063669485 -0.065" rpy="0 -1.5707963000000003 -0.26179939045932549" />

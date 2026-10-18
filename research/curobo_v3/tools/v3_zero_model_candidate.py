@@ -20,9 +20,9 @@ def legacy_angles(side,new_angles):
     return np.deg2rad(OFFSETS_DEG[side])+signs*np.asarray(new_angles)
 
 
-def build(output):
+def build(output,source=OLD):
     output.mkdir(parents=True,exist_ok=True)
-    root=ET.parse(OLD).getroot()
+    root=ET.parse(source).getroot()
     for joint in root.findall('joint'):
         name=joint.get('name','')
         for side in ('left','right'):
@@ -44,17 +44,17 @@ def build(output):
                 joint.find('limit').set('lower',str(-np.pi/2));joint.find('limit').set('upper',str(np.pi/2))
     for mesh in root.findall('.//mesh'):
         filename=mesh.get('filename')
-        if not Path(filename).is_absolute():mesh.set('filename',str((OLD.parent/filename).resolve()))
+        if not Path(filename).is_absolute():mesh.set('filename',str((source.parent/filename).resolve()))
     ET.indent(root)
     path=output/'robot_rezero_candidate.urdf'
     ET.ElementTree(root).write(path,encoding='utf-8',xml_declaration=True)
-    manifest=dict(source=str(OLD),source_sha256=hashlib.sha256(OLD.read_bytes()).hexdigest(),
+    manifest=dict(source=str(source),source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         reference_colleague_urdf=str(COLLEAGUE),offsets_deg=OFFSETS_DEG,
         signs=[1,-1,1,1,1,1,1],mapping='q_legacy = offsets + signs * q_candidate',
         limits='J2 +/-90; J3 +/-180; all remaining numerical limits preserved',
         status='candidate: true coordinate redefinition, not Home change; old installation/tool retained pending comparison',
         rights_source='mirrored legacy configuration; checked against shoulder/elbow/wrist reflection')
-    old=yourdfpy.URDF.load(OLD,load_meshes=False)
+    old=yourdfpy.URDF.load(source,load_meshes=False)
     candidate=yourdfpy.URDF.load(path,load_meshes=False)
     rng=np.random.default_rng(20261018)
     maximum=0.

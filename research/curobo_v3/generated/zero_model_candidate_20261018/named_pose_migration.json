@@ -1,0 +1,12 @@
+[
+  {
+    "name": "home",
+    "success": false,
+    "reason": "Equivalent TCP candidates all fail native collision/bounds",
+    "checked": 1024,
+    "self_collision_free": 0,
+    "bound_valid": 1024,
+    "minimum_self_cost": 0.0074495580047369,
+    "minimum_bound_cost": 0.0
+  }
+]

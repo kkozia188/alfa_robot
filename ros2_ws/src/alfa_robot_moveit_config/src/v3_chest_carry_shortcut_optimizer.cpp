@@ -324,6 +324,8 @@ public:
       "vamp_secondary_max_iterations", 300);
     vamp_prune_at_metric_lower_bound_ = getParameter<bool>(
       "vamp_prune_at_metric_lower_bound", true);
+    vamp_max_unsearched_improvement_ratio_ = getParameter<double>(
+      "vamp_max_unsearched_improvement_ratio", 0.0);
     vamp_range_ = getParameter<double>("vamp_range", 0.08);
     vamp_max_refinements_ = getParameter<int>("vamp_max_refinements", 8);
     full_vamp_base_xy_margin_ =
@@ -346,6 +348,8 @@ public:
         vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 || vamp_range_ <= 0.0 ||
         vamp_secondary_max_iterations_ < 1 ||
         vamp_secondary_max_iterations_ > vamp_max_iterations_ ||
+        vamp_max_unsearched_improvement_ratio_ < 0.0 ||
+        vamp_max_unsearched_improvement_ratio_ > 1.0 ||
         vamp_max_refinements_ < 0 || vamp_max_refinements_ > 128 ||
         full_vamp_base_xy_margin_ <= 0.0 ||
         full_vamp_base_yaw_margin_ <= 0.0 || full_vamp_arm_margin_ <= 0.0 ||
@@ -394,6 +398,8 @@ public:
         {"vamp_workers", vamp_workers_},
         {"vamp_secondary_max_iterations", vamp_secondary_max_iterations_},
         {"vamp_prune_at_metric_lower_bound", vamp_prune_at_metric_lower_bound_},
+        {"vamp_max_unsearched_improvement_ratio",
+          vamp_max_unsearched_improvement_ratio_},
         {"cycles", nlohmann::json::array()},
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
@@ -2104,9 +2110,15 @@ private:
     local_search_stats.backend = local_rrt_mode_;
     const double metric_lower_bound_gap = std::max(
       0.0, graph_cost - metric_lower_bound);
+    const double maximum_unsearched_improvement_ratio =
+      metric_lower_bound_gap / std::max(graph_cost, 1e-12);
     const bool local_rrt_pruned =
       local_rrt_mode_ == "contract17_vamp" &&
-      vamp_prune_at_metric_lower_bound_ && metric_lower_bound_gap <= 1e-9;
+      vamp_prune_at_metric_lower_bound_ &&
+      (metric_lower_bound_gap <= 1e-9 ||
+      (vamp_max_unsearched_improvement_ratio_ > 0.0 &&
+      maximum_unsearched_improvement_ratio <=
+        vamp_max_unsearched_improvement_ratio_ + 1e-12));
     const auto local_rrt_started = std::chrono::steady_clock::now();
     nlohmann::json local_rrt;
     if (local_rrt_pruned) {
@@ -2197,9 +2209,13 @@ private:
       {"local_rrt_attempted", !local_rrt_pruned},
       {"local_rrt_pruned", local_rrt_pruned},
       {"local_rrt_prune_reason", local_rrt_pruned ?
-        "graph_cost_reached_weighted_l1_lower_bound" : ""},
+        (metric_lower_bound_gap <= 1e-9 ?
+        "graph_cost_reached_weighted_l1_lower_bound" :
+        "bounded_maximum_improvement_ratio") : ""},
       {"metric_lower_bound_cost", metric_lower_bound},
       {"metric_lower_bound_gap", metric_lower_bound_gap},
+      {"maximum_unsearched_improvement_ratio",
+        maximum_unsearched_improvement_ratio},
       {"local_rrt_mode", local_rrt_mode_},
       {"local_rrt_state_dimension", local_rrt_mode_ == "contract17_vamp" ?
         static_cast<int>(kFullStateDimension) :
@@ -2363,6 +2379,7 @@ private:
   int vamp_max_samples_ = 2000;
   int vamp_secondary_max_iterations_ = 300;
   bool vamp_prune_at_metric_lower_bound_ = true;
+  double vamp_max_unsearched_improvement_ratio_ = 0.0;
   double vamp_range_ = 0.08;
   int vamp_max_refinements_ = 8;
   double full_vamp_base_xy_margin_ = 0.15;

@@ -27,10 +27,11 @@ The planning-time fix is independent of the VAMP collision checks. The previous
 
 This matches the previous graph cost for every cycle. The complete audit mode
 solves 57/60 worker seeds and validates 15/15 winning candidates. Production
-mode additionally skips VAMP only when the selected graph path has already
-reached the admissible weighted-L1 endpoint lower bound. Fourteen cycles meet
-that proof; `16+20` retains real four-worker 17-D search. The slow cycles fall
-from `436/130/552/1243/588 ms` to approximately `17/12/6/91/16 ms` for boxes
+mode skips VAMP when the selected graph path reaches the admissible weighted-L1
+endpoint lower bound, or when the maximum theoretical improvement is at most
+2.5%. The complete audit remains reproducible; production applies the bounded
+gate to all 15 cycles. The slow cycles fall from `436/130/552/1243/588 ms` to
+approximately `17/12/6/14/15 ms` for boxes
 `3`, `8`, `11+15`, `16+20`, and `21+25`.
 
 ## Reproduce
@@ -49,6 +50,7 @@ ros2 launch alfa_robot_moveit_config \
   vamp_max_iterations:=1000 \
   vamp_secondary_max_iterations:=300 \
   vamp_prune_at_metric_lower_bound:=true \
+  vamp_max_unsearched_improvement_ratio:=0.025 \
   vamp_max_samples:=2000 \
   vamp_range:=0.25
 ```

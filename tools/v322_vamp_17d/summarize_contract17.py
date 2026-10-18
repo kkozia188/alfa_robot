@@ -169,9 +169,11 @@ def main() -> int:
             "secondary_worker_iterations": 300,
             "vamp_range": 0.25,
             "metric_lower_bound_pruning": True,
+            "maximum_unsearched_improvement_ratio": 0.025,
             "pruning_rule": (
-                "skip VAMP only when graph weighted travel equals the "
-                "admissible weighted-L1 endpoint lower bound within 1e-9"
+                "skip VAMP when the graph path reaches the admissible weighted-L1 "
+                "lower bound, or when the maximum theoretical improvement is at "
+                "most 2.5 percent"
             ),
             "visibility_order": [
                 "metric lower-bound/direct edge",
@@ -202,6 +204,11 @@ def main() -> int:
             "production_pruned_cycles": sum(
                 bool(cycle["local_rrt_pruned"])
                 for cycle in representative.values()
+            ),
+            "production_maximum_unsearched_improvement_ratio": max(
+                float(cycle["maximum_unsearched_improvement_ratio"])
+                for cycle in representative.values()
+                if bool(cycle["local_rrt_pruned"])
             ),
             "production_candidate_fcl_valid": sum(
                 bool(cycle["local_candidate_fcl_valid"])
@@ -264,8 +271,8 @@ def main() -> int:
         f"- Full contract-17 audit solved **{audit_worker_solved}/{audit_worker_total}** "
         "seeds and 15/15 winning candidates passed FCL.",
         f"- Production pruned **{payload['overall']['production_pruned_cycles']}/15** "
-        "cycles at the exact metric lower bound; `16+20` retained the real "
-        f"four-worker search ({production_worker_solved}/{production_worker_total} solved).",
+        "cycles using the exact lower bound plus a 2.5% bounded-improvement gate; "
+        f"the maximum skipped potential was **{payload['overall']['production_maximum_unsearched_improvement_ratio'] * 100:.3f}%**.",
         f"- Maximum graph cost delta versus the previous replay: "
         f"**{maximum_graph_cost_delta:.12f}**.",
         f"- Direct replay validation: **{validation['checked_frames']:,} frames + "

@@ -39,6 +39,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "vamp_prune_at_metric_lower_bound", default_value="true"
             ),
+            DeclareLaunchArgument(
+                "vamp_max_unsearched_improvement_ratio", default_value="0.0"
+            ),
             DeclareLaunchArgument("vamp_range", default_value="0.08"),
             DeclareLaunchArgument("vamp_max_refinements", default_value="8"),
             DeclareLaunchArgument(
@@ -125,6 +128,12 @@ def generate_launch_description():
                         "vamp_prune_at_metric_lower_bound": ParameterValue(
                             LaunchConfiguration("vamp_prune_at_metric_lower_bound"),
                             value_type=bool,
+                        ),
+                        "vamp_max_unsearched_improvement_ratio": ParameterValue(
+                            LaunchConfiguration(
+                                "vamp_max_unsearched_improvement_ratio"
+                            ),
+                            value_type=float,
                         ),
                         "vamp_range": ParameterValue(
                             LaunchConfiguration("vamp_range"),

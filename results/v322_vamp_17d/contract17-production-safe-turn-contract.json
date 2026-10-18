@@ -4,7 +4,7 @@
   "model_revision": "robot_v3.2.2-suction",
   "box_count": 25,
   "cycle_count": 15,
-  "maximum_task_core_ms": 91.263472,
+  "maximum_task_core_ms": 17.94342,
   "boxes_within_3s": 25,
   "checked_frames": 25717,
   "checked_edge_samples": 4027,

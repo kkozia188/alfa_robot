@@ -49,7 +49,7 @@ namespace og = ompl::geometric;
 constexpr double kPi = 3.14159265358979323846;
 constexpr char kLeftBoxId[] = "dual_carried_box_left";
 constexpr char kRightBoxId[] = "dual_carried_box_right";
-constexpr size_t kFullStateDimension = 18U;
+constexpr size_t kFullStateDimension = 17U;
 #ifdef ALFA_HAS_VAMP
 constexpr bool kVampCompiled = true;
 #else
@@ -107,7 +107,7 @@ struct FullStateVampContext {
 thread_local FullStateVampContext *g_full_state_vamp_context = nullptr;
 
 struct FullStateVampRobot {
-  static constexpr char name[] = "alfa_v322_full_state_fcl";
+  static constexpr char name[] = "alfa_v322_contract17_fcl";
   static constexpr size_t dimension = kFullStateDimension;
   static constexpr size_t n_spheres = 0U;
   static constexpr size_t resolution = 8U;
@@ -309,6 +309,8 @@ public:
     maximum_tilt_ = getParameter<double>("maximum_carried_box_tilt_deg", 95.0) *
                     kPi / 180.0;
     local_rrt_mode_ = getParameter<std::string>("local_rrt_mode", "full");
+    visibility_graph_mode_ = getParameter<std::string>(
+      "visibility_graph_mode", "full");
     local_rrt_time_s_ = getParameter<double>("local_rrt_time_s", 0.95);
     manifold_alpha_max_ = getParameter<double>("manifold_alpha_max", 1.25);
     manifold_levels_ = getParameter<int>("manifold_levels", 64);
@@ -318,14 +320,14 @@ public:
     vamp_workers_ = getParameter<int>("vamp_workers", 4);
     vamp_max_iterations_ = getParameter<int>("vamp_max_iterations", 1000);
     vamp_max_samples_ = getParameter<int>("vamp_max_samples", 2000);
+    vamp_secondary_max_iterations_ = getParameter<int>(
+      "vamp_secondary_max_iterations", 300);
     vamp_range_ = getParameter<double>("vamp_range", 0.08);
     vamp_max_refinements_ = getParameter<int>("vamp_max_refinements", 8);
     full_vamp_base_xy_margin_ =
       getParameter<double>("full_vamp_base_xy_margin_m", 0.15);
     full_vamp_base_yaw_margin_ = getParameter<double>(
       "full_vamp_base_yaw_margin_deg", 5.0) * kPi / 180.0;
-    full_vamp_updown_margin_ =
-      getParameter<double>("full_vamp_updown_margin_m", 0.08);
     full_vamp_arm_margin_ = getParameter<double>(
       "full_vamp_arm_margin_deg", 35.0) * kPi / 180.0;
     if (replay_path_.empty() || output_path_.empty() || result_path_.empty()) {
@@ -340,13 +342,16 @@ public:
         manifold_alpha_neighbor_steps_ < 1 ||
         vamp_workers_ < 1 || vamp_workers_ > 32 ||
         vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 || vamp_range_ <= 0.0 ||
+        vamp_secondary_max_iterations_ < 1 ||
+        vamp_secondary_max_iterations_ > vamp_max_iterations_ ||
         vamp_max_refinements_ < 0 || vamp_max_refinements_ > 128 ||
         full_vamp_base_xy_margin_ <= 0.0 ||
-        full_vamp_base_yaw_margin_ <= 0.0 ||
-        full_vamp_updown_margin_ <= 0.0 || full_vamp_arm_margin_ <= 0.0 ||
+        full_vamp_base_yaw_margin_ <= 0.0 || full_vamp_arm_margin_ <= 0.0 ||
+        (visibility_graph_mode_ != "full" &&
+        visibility_graph_mode_ != "fast_families") ||
         (local_rrt_mode_ != "full" && local_rrt_mode_ != "golden_manifold" &&
         local_rrt_mode_ != "golden_lattice" && local_rrt_mode_ != "golden_vamp" &&
-        local_rrt_mode_ != "full_vamp")) {
+        local_rrt_mode_ != "contract17_vamp")) {
       throw std::invalid_argument(
           "validation steps, tilt, RRT time, manifold bounds, and mode are invalid");
     }
@@ -382,22 +387,26 @@ public:
         {"success", true},
         {"cache_loading_counted", false},
         {"local_search_mode", local_rrt_mode_},
+        {"visibility_graph_mode", visibility_graph_mode_},
         {"vamp_compiled", kVampCompiled},
         {"vamp_workers", vamp_workers_},
+        {"vamp_secondary_max_iterations", vamp_secondary_max_iterations_},
         {"cycles", nlohmann::json::array()},
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
     };
-    if (local_rrt_mode_ == "full_vamp") {
+    if (local_rrt_mode_ == "contract17_vamp") {
       result["full_state_contract"] = {
         {"dimension", kFullStateDimension},
         {"axes", {
-          "base_x", "base_y", "base_yaw", "updown",
+          "base_x", "base_y", "base_yaw",
           "left_joint1", "left_joint2", "left_joint3", "left_joint4",
           "left_joint5", "left_joint6", "left_joint7",
           "right_joint1", "right_joint2", "right_joint3", "right_joint4",
           "right_joint5", "right_joint6", "right_joint7"}},
         {"fixed_replay_axes", {"head_joint"}},
+        {"dependent_replay_axes", {"updown"}},
+        {"updown_mapping", "start-goal projection in the 17-D state"},
         {"collision_backend", "MoveIt/FCL callback per VAMP edge sample"},
         {"vamp_tree_backend", "VAMP RRT-Connect"},
       };
@@ -432,8 +441,8 @@ public:
         item["selected_task_core_ms"] = task_times.at(box_id);
         item["source"] = local_rrt_mode_ == "golden_vamp" ?
           "golden_curve_vamp_parallel_2d" :
-          (local_rrt_mode_ == "full_vamp" ?
-          "full_state_vamp_parallel_18d" :
+          (local_rrt_mode_ == "contract17_vamp" ?
+          "contract17_vamp_parallel" :
           "golden_chest_curve_local_shortcut");
         if (task_times.at(box_id) < 3000.0) {
           result["boxes_within_3s"] =
@@ -1229,7 +1238,7 @@ private:
     return dense;
   }
 
-  nlohmann::json tryFullStateVamp(
+  nlohmann::json tryContract17Vamp(
       const planning_scene::PlanningSceneConstPtr &scene,
       const nlohmann::json &operation,
       const std::vector<std::string> &joint_names,
@@ -1248,7 +1257,7 @@ private:
     (void)raw_cost;
     if (stats) stats->backend = "vamp_unavailable";
     throw std::runtime_error(
-      "local_rrt_mode=full_vamp requires building with vamp::vamp");
+      "local_rrt_mode=contract17_vamp requires building with vamp::vamp");
 #else
     using Robot = FullStateVampRobot;
     static constexpr size_t kRake = vamp::FloatVectorWidth;
@@ -1270,7 +1279,7 @@ private:
     if (golden.size() < 2U) return nlohmann::json::array();
     if (joint_names.size() != 16U) {
       throw std::invalid_argument(
-        "full-state VAMP expects the 16-axis replay contract");
+        "contract17 VAMP expects the 16-axis replay contract");
     }
     const auto find_joint = [&joint_names](const std::string &name) {
         const auto found = std::find(joint_names.begin(), joint_names.end(), name);
@@ -1284,7 +1293,7 @@ private:
     const auto right_names = right_arm_->getVariableNames();
     arm_names.insert(arm_names.end(), right_names.begin(), right_names.end());
     if (arm_names.size() != 14U) {
-      throw std::runtime_error("full-state VAMP requires two seven-axis arms");
+      throw std::runtime_error("contract17 VAMP requires two seven-axis arms");
     }
     std::array<size_t, 14U> arm_indices{};
     for (size_t index = 0U; index < arm_names.size(); ++index) {
@@ -1297,14 +1306,41 @@ private:
         state[0] = static_cast<float>(base[0]);
         state[1] = static_cast<float>(base[1]);
         state[2] = static_cast<float>(base[2]);
-        state[3] = frame.at("joints").at(updown_index).get<float>();
         for (size_t index = 0U; index < arm_indices.size(); ++index) {
-          state[index + 4U] =
+          state[index + 3U] =
             frame.at("joints").at(arm_indices[index]).get<float>();
         }
         return state;
       };
-    const auto task_cost = [](const auto &path) {
+    const auto start_values = frame_state(golden.front());
+    const auto goal_values = frame_state(golden.back());
+    const double start_updown =
+      golden.front().at("joints").at(updown_index).get<double>();
+    const double goal_updown =
+      golden.back().at("joints").at(updown_index).get<double>();
+    double projection_norm = 0.0;
+    for (size_t axis = 0U; axis < kFullStateDimension; ++axis) {
+      const double delta = static_cast<double>(goal_values[axis] - start_values[axis]);
+      projection_norm += delta * delta;
+    }
+    if (projection_norm <= 1e-12) {
+      throw std::runtime_error("contract17 start and goal are indistinguishable");
+    }
+    const auto state_progress = [start_values, goal_values, projection_norm](
+        const std::array<float, kFullStateDimension> &state) {
+        double projection = 0.0;
+        for (size_t axis = 0U; axis < kFullStateDimension; ++axis) {
+          projection += static_cast<double>(state[axis] - start_values[axis]) *
+            static_cast<double>(goal_values[axis] - start_values[axis]);
+        }
+        return std::clamp(projection / projection_norm, 0.0, 1.0);
+      };
+    const auto updown_at = [start_updown, goal_updown, state_progress](
+        const std::array<float, kFullStateDimension> &state) {
+        return start_updown +
+          (goal_updown - start_updown) * state_progress(state);
+      };
+    const auto task_cost = [updown_at](const auto &path) {
         double cost = 0.0;
         for (size_t index = 1U; index < path.size(); ++index) {
           const auto &from = path[index - 1U];
@@ -1313,8 +1349,8 @@ private:
             static_cast<double>(to[0] - from[0]),
             static_cast<double>(to[1] - from[1])) * 100.0;
           cost += std::abs(shortestAngleDelta(from[2], to[2])) * 180.0 / kPi;
-          cost += std::abs(static_cast<double>(to[3] - from[3])) * 100.0;
-          for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+          cost += std::abs(updown_at(to) - updown_at(from)) * 100.0;
+          for (size_t axis = 3U; axis < kFullStateDimension; ++axis) {
             cost += std::abs(static_cast<double>(to[axis] - from[axis])) *
               180.0 / kPi;
           }
@@ -1339,9 +1375,7 @@ private:
     }
     lows[2] -= static_cast<float>(full_vamp_base_yaw_margin_);
     highs[2] += static_cast<float>(full_vamp_base_yaw_margin_);
-    lows[3] -= static_cast<float>(full_vamp_updown_margin_);
-    highs[3] += static_cast<float>(full_vamp_updown_margin_);
-    for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+    for (size_t axis = 3U; axis < kFullStateDimension; ++axis) {
       lows[axis] -= static_cast<float>(full_vamp_arm_margin_);
       highs[axis] += static_cast<float>(full_vamp_arm_margin_);
     }
@@ -1352,17 +1386,13 @@ private:
           highs[axis] = std::min(highs[axis], static_cast<float>(bounds.max_position_));
         }
         if (!(lows[axis] < highs[axis])) {
-          throw std::runtime_error("empty full-state VAMP bound for " + name);
+          throw std::runtime_error("empty contract17 VAMP bound for " + name);
         }
       };
-    clamp_to_bounds(3U, "updown");
     for (size_t index = 0U; index < arm_names.size(); ++index) {
-      clamp_to_bounds(index + 4U, arm_names[index]);
+      clamp_to_bounds(index + 3U, arm_names[index]);
     }
     Robot::setBounds(lows, highs);
-
-    const auto start_values = frame_state(golden.front());
-    const auto goal_values = frame_state(golden.back());
     const Robot::Configuration start(start_values);
     const Robot::Configuration goal(goal_values);
     vamp::planning::RRTCSettings settings;
@@ -1385,20 +1415,20 @@ private:
         std::launch::async,
         [this, worker, worker_scene, worker_state, start, goal, environment,
         settings, arm_names, left_attached, right_attached, left_spec,
-        right_spec, task_cost]() mutable {
+        right_spec, task_cost, updown_at]() mutable {
           Trial trial;
           trial.seed = static_cast<size_t>(worker);
           FullStateVampContext context;
           context.validator = [this, worker_scene, worker_state, arm_names,
-            left_attached, right_attached, left_spec, right_spec](
+            left_attached, right_attached, left_spec, right_spec, updown_at](
               const std::array<float, kFullStateDimension> &state) {
               const std::array<double, 3> base{
                 state[0], state[1], state[2]};
               setPlanarRoot(*worker_state, base);
-              worker_state->setVariablePosition("updown", state[3]);
+              worker_state->setVariablePosition("updown", updown_at(state));
               for (size_t index = 0U; index < arm_names.size(); ++index) {
                 worker_state->setVariablePosition(
-                  arm_names[index], state[index + 4U]);
+                  arm_names[index], state[index + 3U]);
               }
               worker_state->update(true);
               if (!worker_state->satisfiesBounds()) return false;
@@ -1412,8 +1442,16 @@ private:
           g_full_state_vamp_context = &context;
           auto rng = std::make_shared<FullStateVampSampler>(
             static_cast<uint32_t>(0xA17FA11U + worker * 0x9E3779B9U));
+          auto worker_settings = settings;
+          if (worker > 0) {
+            worker_settings.max_iterations = static_cast<size_t>(
+              vamp_secondary_max_iterations_);
+            worker_settings.max_samples = std::min(
+              worker_settings.max_samples,
+              static_cast<size_t>(2 * vamp_secondary_max_iterations_));
+          }
           const auto result = Rrt::solve(
-            start, goal, environment, settings, rng);
+            start, goal, environment, worker_settings, rng);
           g_full_state_vamp_context = nullptr;
           trial.solved = result.path.size() >= 2U;
           trial.nanoseconds = result.nanoseconds;
@@ -1437,7 +1475,7 @@ private:
     trials.reserve(futures.size());
     for (auto &future : futures) trials.push_back(future.get());
     if (stats) {
-      stats->backend = "vamp_rrtc_full_state_18d_fcl_callback";
+      stats->backend = "vamp_rrtc_contract17_fcl_callback";
       stats->state_dimension = kFullStateDimension;
       stats->workers = trials.size();
       stats->search_wall_ms = std::chrono::duration<double, std::milli>(
@@ -1476,8 +1514,8 @@ private:
         stats->candidate_base_yaw_path_deg +=
           std::abs(shortestAngleDelta(from[2], to[2])) * 180.0 / kPi;
         stats->candidate_updown_path_m +=
-          std::abs(static_cast<double>(to[3] - from[3]));
-        for (size_t axis = 4U; axis < kFullStateDimension; ++axis) {
+          std::abs(updown_at(to) - updown_at(from));
+        for (size_t axis = 3U; axis < kFullStateDimension; ++axis) {
           stats->candidate_arm_path_deg +=
             std::abs(static_cast<double>(to[axis] - from[axis])) *
             180.0 / kPi;
@@ -1499,9 +1537,9 @@ private:
     for (const auto &state : winner->path) {
       auto frame = golden.front();
       auto joints = frame.at("joints").get<std::vector<double>>();
-      joints[updown_index] = state[3];
+      joints[updown_index] = updown_at(state);
       for (size_t index = 0U; index < arm_indices.size(); ++index) {
-        joints[arm_indices[index]] = state[index + 4U];
+        joints[arm_indices[index]] = state[index + 3U];
       }
       frame["joints"] = std::move(joints);
       frame["base_pose_map"] = {state[0], state[1], state[2]};
@@ -1839,41 +1877,198 @@ private:
       if (representatives.empty() || representatives.back() != source)
         representatives.push_back(source);
     }
-    const double infinity = std::numeric_limits<double>::infinity();
-    std::vector<double> costs(representatives.size(), infinity);
-    std::vector<size_t> previous(representatives.size(), 0U);
-    std::vector<bool> direct_edge(representatives.size(), false);
-    costs.front() = 0.0;
-    for (size_t to = 1U; to < representatives.size(); ++to) {
-      const size_t prior = to - 1U;
-      costs[to] = costs[prior] + golden_cost(
-        representatives[prior], representatives[to]);
-      previous[to] = prior;
-      direct_edge[to] = false;
-      for (size_t from = 0U; from < to; ++from) {
-        const double direct_cost = frame_distance(
-          golden.at(representatives[from]), golden.at(representatives[to]));
-        if (costs[from] + direct_cost >= costs[to] - 1e-9) continue;
-        ++visibility_checks;
-        if (shortcutEdgeValid(
-              scene, operation, joint_names,
-              golden.at(representatives[from]), golden.at(representatives[to]),
-              left_spec, right_spec, &checked_samples)) {
-          costs[to] = costs[from] + direct_cost;
-          previous[to] = from;
-          direct_edge[to] = true;
-        }
-      }
-    }
     struct RouteEdge {size_t from; size_t to; bool direct;};
     std::vector<RouteEdge> route;
-    for (size_t current = representatives.size() - 1U; current > 0U;) {
-      const size_t from = previous[current];
-      route.push_back(RouteEdge{
-        representatives[from], representatives[current], direct_edge[current]});
-      current = from;
+    double graph_cost = golden_cost(0U, goal);
+    size_t visibility_cache_hits = 0U;
+    std::string visibility_strategy = "full_dag";
+    const size_t last_representative = representatives.size() - 1U;
+    const auto golden_representative_route = [&]() {
+        std::vector<RouteEdge> output;
+        for (size_t index = 1U; index < representatives.size(); ++index) {
+          output.push_back(RouteEdge{
+            representatives[index - 1U], representatives[index], false});
+        }
+        return output;
+      };
+    route = golden_representative_route();
+
+    std::map<std::pair<size_t, size_t>, bool> visibility_cache;
+    const auto edge_valid = [&](size_t from, size_t to) {
+        const auto key = std::make_pair(from, to);
+        const auto cached = visibility_cache.find(key);
+        if (cached != visibility_cache.end()) {
+          ++visibility_cache_hits;
+          return cached->second;
+        }
+        ++visibility_checks;
+        const bool valid = shortcutEdgeValid(
+          scene, operation, joint_names,
+          golden.at(representatives[from]), golden.at(representatives[to]),
+          left_spec, right_spec, &checked_samples);
+        visibility_cache.emplace(key, valid);
+        return valid;
+      };
+
+    bool run_full_dag = visibility_graph_mode_ == "full";
+    if (visibility_graph_mode_ == "fast_families") {
+      struct FamilyCandidate {double cost; size_t middle;};
+      const auto by_cost = [last_representative](
+          const FamilyCandidate &left, const FamilyCandidate &right) {
+          if (std::abs(left.cost - right.cost) > 1e-9)
+            return left.cost < right.cost;
+          const auto center = static_cast<double>(last_representative) / 2.0;
+          return std::abs(static_cast<double>(left.middle) - center) <
+            std::abs(static_cast<double>(right.middle) - center);
+        };
+      const auto direct_cost = [&](size_t from, size_t to) {
+          return frame_distance(
+            golden.at(representatives[from]), golden.at(representatives[to]));
+        };
+      const double lower_bound = direct_cost(0U, last_representative);
+      bool family_improved = false;
+      if (lower_bound >= graph_cost - 1e-9) {
+        visibility_strategy = "golden_at_metric_lower_bound";
+        run_full_dag = false;
+      } else if (edge_valid(0U, last_representative)) {
+        graph_cost = lower_bound;
+        route = {RouteEdge{0U, goal, true}};
+        visibility_strategy = "direct_lower_bound";
+        family_improved = true;
+        run_full_dag = false;
+      } else {
+        std::vector<FamilyCandidate> suffixes;
+        std::vector<FamilyCandidate> prefixes;
+        const std::array<int, 7U> center_offsets{0, -1, 1, -2, 2, -3, 3};
+        std::vector<size_t> probed_centers;
+        const int center = static_cast<int>(last_representative / 2U);
+        for (const int offset : center_offsets) {
+          const int probe = center + offset;
+          if (probe <= 0 ||
+              probe >= static_cast<int>(last_representative)) continue;
+          const size_t middle = static_cast<size_t>(probe);
+          if (std::find(probed_centers.begin(), probed_centers.end(), middle) !=
+              probed_centers.end()) continue;
+          probed_centers.push_back(middle);
+          const double cost = direct_cost(0U, middle) +
+            direct_cost(middle, last_representative);
+          if (cost >= graph_cost - 1e-9) continue;
+          if (!edge_valid(0U, middle) ||
+              !edge_valid(middle, last_representative)) continue;
+          graph_cost = cost;
+          route = {
+            RouteEdge{0U, representatives[middle], true},
+            RouteEdge{representatives[middle], goal, true}};
+          visibility_strategy = "center_waypoint";
+          family_improved = true;
+        }
+        if (!family_improved) {
+          for (size_t middle = 1U; middle < last_representative; ++middle) {
+            suffixes.push_back(
+                FamilyCandidate{golden_cost(0U, representatives[middle]) +
+                                    direct_cost(middle, last_representative),
+                                middle});
+            prefixes.push_back(
+                FamilyCandidate{direct_cost(0U, middle) +
+                                    golden_cost(representatives[middle], goal),
+                                middle});
+          }
+          std::sort(suffixes.begin(), suffixes.end(), by_cost);
+          std::sort(prefixes.begin(), prefixes.end(), by_cost);
+          for (const auto &candidate : suffixes) {
+            if (candidate.cost >= graph_cost - 1e-9)
+              break;
+            if (!edge_valid(candidate.middle, last_representative))
+              continue;
+            graph_cost = candidate.cost;
+            route.clear();
+            for (size_t index = 1U; index <= candidate.middle; ++index) {
+              route.push_back(RouteEdge{representatives[index - 1U],
+                                        representatives[index], false});
+            }
+            route.push_back(
+                RouteEdge{representatives[candidate.middle], goal, true});
+            visibility_strategy = "golden_prefix_direct_suffix";
+            family_improved = true;
+            break;
+          }
+          for (const auto &candidate : prefixes) {
+            if (candidate.cost >= graph_cost - 1e-9)
+              break;
+            if (!edge_valid(0U, candidate.middle))
+              continue;
+            graph_cost = candidate.cost;
+            route = {RouteEdge{0U, representatives[candidate.middle], true}};
+            for (size_t index = candidate.middle + 1U;
+                 index <= last_representative; ++index) {
+              route.push_back(RouteEdge{representatives[index - 1U],
+                                        representatives[index], false});
+            }
+            visibility_strategy = "direct_prefix_golden_suffix";
+            family_improved = true;
+            break;
+          }
+          std::vector<FamilyCandidate> one_waypoints;
+          for (size_t middle = 1U; middle < last_representative; ++middle) {
+            one_waypoints.push_back(
+                FamilyCandidate{direct_cost(0U, middle) +
+                                    direct_cost(middle, last_representative),
+                                middle});
+          }
+          std::sort(one_waypoints.begin(), one_waypoints.end(), by_cost);
+          for (const auto &candidate : one_waypoints) {
+            if (candidate.cost >= graph_cost - 1e-9)
+              break;
+            if (!edge_valid(0U, candidate.middle) ||
+                !edge_valid(candidate.middle, last_representative))
+              continue;
+            graph_cost = candidate.cost;
+            route = {RouteEdge{0U, representatives[candidate.middle], true},
+                     RouteEdge{representatives[candidate.middle], goal, true}};
+            visibility_strategy = "one_waypoint";
+            family_improved = true;
+            break;
+          }
+        }
+        run_full_dag = !family_improved;
+      }
     }
-    std::reverse(route.begin(), route.end());
+
+    if (run_full_dag) {
+      const double infinity = std::numeric_limits<double>::infinity();
+      std::vector<double> costs(representatives.size(), infinity);
+      std::vector<size_t> previous(representatives.size(), 0U);
+      std::vector<bool> direct_edge(representatives.size(), false);
+      costs.front() = 0.0;
+      for (size_t to = 1U; to < representatives.size(); ++to) {
+        const size_t prior = to - 1U;
+        costs[to] = costs[prior] + golden_cost(
+          representatives[prior], representatives[to]);
+        previous[to] = prior;
+        direct_edge[to] = false;
+        for (size_t from = 0U; from < to; ++from) {
+          const double direct_cost = frame_distance(
+            golden.at(representatives[from]), golden.at(representatives[to]));
+          if (costs[from] + direct_cost >= costs[to] - 1e-9) continue;
+          if (edge_valid(from, to)) {
+            costs[to] = costs[from] + direct_cost;
+            previous[to] = from;
+            direct_edge[to] = true;
+          }
+        }
+      }
+      graph_cost = costs.back();
+      route.clear();
+      for (size_t current = last_representative; current > 0U;) {
+        const size_t from = previous[current];
+        route.push_back(RouteEdge{
+          representatives[from], representatives[current], direct_edge[current]});
+        current = from;
+      }
+      std::reverse(route.begin(), route.end());
+      visibility_strategy = visibility_graph_mode_ == "fast_families" ?
+        "fast_families_fallback_full_dag" : "full_dag";
+    }
     nlohmann::json optimized = nlohmann::json::array();
     optimized.push_back(golden.at(0));
     std::vector<size_t> anchors{0U};
@@ -1896,7 +2091,6 @@ private:
     }
     for (auto &frame : optimized) frame["stage"] = "chest_carry_retract";
     optimized.back()["stage"] = "chest_carry_ready";
-    const double graph_cost = costs.back();
     double selected_cost = graph_cost;
     double local_rrt_cost = std::numeric_limits<double>::infinity();
     bool local_rrt_success = false;
@@ -1917,8 +2111,8 @@ private:
       local_rrt = tryGoldenVamp(
         scene, operation, joint_names, golden, left_spec, right_spec,
         &local_rrt_cost, &local_search_stats);
-    } else if (local_rrt_mode_ == "full_vamp") {
-      local_rrt = tryFullStateVamp(
+    } else if (local_rrt_mode_ == "contract17_vamp") {
+      local_rrt = tryContract17Vamp(
         scene, operation, joint_names, golden, left_spec, right_spec,
         &local_rrt_cost, &local_search_stats);
     } else {
@@ -1938,7 +2132,7 @@ private:
       const auto candidate_fcl_started = std::chrono::steady_clock::now();
       local_candidate_fcl_valid = validateOperation(
         rrt_candidate, joint_names, &rrt_result, &rrt_validation);
-      if (local_rrt_mode_ == "full_vamp") {
+      if (local_rrt_mode_ == "contract17_vamp") {
         local_search_stats.candidate_fcl_ms +=
           std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - candidate_fcl_started).count();
@@ -1974,8 +2168,8 @@ private:
         "direct_local_shortcut" :
         (local_rrt_mode_ == "golden_vamp" ?
         "representative_graph_shortcut_with_golden_vamp" :
-        (local_rrt_mode_ == "full_vamp" ?
-        "representative_graph_shortcut_with_full_state_vamp" :
+        (local_rrt_mode_ == "contract17_vamp" ?
+        "representative_graph_shortcut_with_contract17_vamp" :
         "representative_graph_shortcut_with_golden_local_rrt")))},
       {"cache_loading_counted", false},
       {"source_frame_count", golden.size()},
@@ -1989,7 +2183,7 @@ private:
       {"graph_joint_travel_cost", graph_cost},
       {"local_rrt_attempted", true},
       {"local_rrt_mode", local_rrt_mode_},
-      {"local_rrt_state_dimension", local_rrt_mode_ == "full_vamp" ?
+      {"local_rrt_state_dimension", local_rrt_mode_ == "contract17_vamp" ?
         static_cast<int>(kFullStateDimension) :
         (local_rrt_mode_ != "full" ? 2 :
         static_cast<int>(joint_names.size() - 1U))},
@@ -2035,6 +2229,9 @@ private:
         nlohmann::json(nullptr)},
       {"optimized_joint_travel_cost", selected_cost},
       {"visibility_checks", visibility_checks},
+      {"visibility_cache_hits", visibility_cache_hits},
+      {"visibility_strategy", visibility_strategy},
+      {"visibility_graph_mode", visibility_graph_mode_},
       {"checked_edge_samples", checked_samples},
       {"planning_core_ms", core_ms},
       {"within_3s", core_ms < 3000.0},
@@ -2137,6 +2334,7 @@ private:
   double collision_inset_ = 0.002;
   double maximum_tilt_ = 95.0 * kPi / 180.0;
   std::string local_rrt_mode_ = "full";
+  std::string visibility_graph_mode_ = "full";
   double local_rrt_time_s_ = 0.95;
   double manifold_alpha_max_ = 1.25;
   int manifold_levels_ = 64;
@@ -2145,11 +2343,11 @@ private:
   int vamp_workers_ = 4;
   int vamp_max_iterations_ = 1000;
   int vamp_max_samples_ = 2000;
+  int vamp_secondary_max_iterations_ = 300;
   double vamp_range_ = 0.08;
   int vamp_max_refinements_ = 8;
   double full_vamp_base_xy_margin_ = 0.15;
   double full_vamp_base_yaw_margin_ = 5.0 * kPi / 180.0;
-  double full_vamp_updown_margin_ = 0.08;
   double full_vamp_arm_margin_ = 35.0 * kPi / 180.0;
   double edge_base_translation_step_ = 0.01;
   double edge_base_yaw_step_ = kPi / 180.0;

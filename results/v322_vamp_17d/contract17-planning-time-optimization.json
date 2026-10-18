@@ -1,0 +1,161 @@
+{
+  "schema": "alfa.v322_contract17_planning_optimization.v1",
+  "success": true,
+  "root_cause": {
+    "primary": "the 80-node visibility graph validated nearly all improving DAG edges with MoveIt/FCL before discovering simple routes",
+    "secondary": "uniform 17-D VAMP sampling for the 21+25 narrow channel dominates its remaining latency",
+    "bar_definition": "one cycle planning-core time is assigned to every active box; paired boxes therefore show the same value"
+  },
+  "fix": {
+    "search_dimension": 17,
+    "independent_axes": [
+      "base_x",
+      "base_y",
+      "base_yaw",
+      "left_joint1",
+      "left_joint2",
+      "left_joint3",
+      "left_joint4",
+      "left_joint5",
+      "left_joint6",
+      "left_joint7",
+      "right_joint1",
+      "right_joint2",
+      "right_joint3",
+      "right_joint4",
+      "right_joint5",
+      "right_joint6",
+      "right_joint7"
+    ],
+    "dependent_axis": "updown from start-goal projection in 17-D state",
+    "parallel_workers": 4,
+    "primary_worker_iterations": 1000,
+    "secondary_worker_iterations": 300,
+    "visibility_order": [
+      "metric lower-bound/direct edge",
+      "center waypoint",
+      "golden prefix plus direct suffix",
+      "direct prefix plus golden suffix",
+      "one waypoint",
+      "fallback full DAG"
+    ],
+    "edge_safety_gate": "MoveIt/FCL at 1 degree and 1 centimeter"
+  },
+  "focus_cycles": [
+    {
+      "label": "Box 3",
+      "boxes": [
+        3
+      ],
+      "before_ms": 435.990854,
+      "after_median_ms": 48.015646,
+      "speedup": 9.080183030339736,
+      "before_visibility_checks": 240,
+      "after_visibility_checks": 3,
+      "before_edge_samples": 5958,
+      "after_edge_samples": 112,
+      "visibility_strategy": "center_waypoint",
+      "graph_cost_before": 305.4852447100126,
+      "graph_cost_after": 305.4852447100126
+    },
+    {
+      "label": "Box 8",
+      "boxes": [
+        8
+      ],
+      "before_ms": 130.090816,
+      "after_median_ms": 21.25484,
+      "speedup": 6.1205267129745495,
+      "before_visibility_checks": 32,
+      "after_visibility_checks": 1,
+      "before_edge_samples": 1758,
+      "after_edge_samples": 81,
+      "visibility_strategy": "direct_lower_bound",
+      "graph_cost_before": 236.28183086236695,
+      "graph_cost_after": 236.28183086236695
+    },
+    {
+      "label": "Box 11 + Box 15",
+      "boxes": [
+        11,
+        15
+      ],
+      "before_ms": 552.240933,
+      "after_median_ms": 10.61929,
+      "speedup": 52.00356455092573,
+      "before_visibility_checks": 330,
+      "after_visibility_checks": 1,
+      "before_edge_samples": 13566,
+      "after_edge_samples": 49,
+      "visibility_strategy": "direct_lower_bound",
+      "graph_cost_before": 360.9790251596294,
+      "graph_cost_after": 360.9790251596294
+    },
+    {
+      "label": "Box 16 + Box 20",
+      "boxes": [
+        16,
+        20
+      ],
+      "before_ms": 1242.952648,
+      "after_median_ms": 114.828076,
+      "speedup": 10.82446637876263,
+      "before_visibility_checks": 1291,
+      "after_visibility_checks": 8,
+      "before_edge_samples": 24185,
+      "after_edge_samples": 205,
+      "visibility_strategy": "center_waypoint",
+      "graph_cost_before": 381.33116500678796,
+      "graph_cost_after": 381.33116500678796
+    },
+    {
+      "label": "Box 21 + Box 25",
+      "boxes": [
+        21,
+        25
+      ],
+      "before_ms": 588.331377,
+      "after_median_ms": 231.075413,
+      "speedup": 2.5460578837091594,
+      "before_visibility_checks": 970,
+      "after_visibility_checks": 9,
+      "before_edge_samples": 4563,
+      "after_edge_samples": 99,
+      "visibility_strategy": "golden_prefix_direct_suffix",
+      "graph_cost_before": 430.51916256776985,
+      "graph_cost_after": 430.51916256776985
+    }
+  ],
+  "overall": {
+    "before_total_planning_core_ms": 3474.591555,
+    "after_total_planning_core_median_ms": 551.772723,
+    "after_maximum_cycle_median_ms": 231.075413,
+    "worker_solved": 57,
+    "worker_total": 60,
+    "candidate_fcl_valid": 15,
+    "candidate_selected": 0,
+    "maximum_graph_cost_delta": 0.0
+  },
+  "validation": {
+    "direct_frames": 28822,
+    "direct_edge_samples": 1087,
+    "safe_turn_frames": 25717,
+    "safe_turn_edge_samples": 4027,
+    "maximum_left_tilt_deg": 5.901348619436878,
+    "maximum_right_tilt_deg": 7.46256490562253,
+    "maximum_equal_height_error_m": 1.0699796604285439e-10,
+    "box_count": 25,
+    "cycle_count": 15
+  },
+  "rerun": {
+    "path": "/home/tim/alfa_robot-v322-vamp-17d-parallel/results/v322_vamp_17d/contract17-4w-safe-turn-production-shell.rrd",
+    "sha256": "02b16704e2d0cca5577256c415bbdbb9a94e919aeecf3ef7da068d75ca121e17",
+    "rrd_verified": true,
+    "orbit_center_world_m": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "ui_layout_changed": false
+  }
+}

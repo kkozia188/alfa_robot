@@ -22,6 +22,7 @@ def generate_launch_description():
                 "maximum_carried_box_tilt_deg", default_value="8.0"
             ),
             DeclareLaunchArgument("local_rrt_mode", default_value="full"),
+            DeclareLaunchArgument("visibility_graph_mode", default_value="full"),
             DeclareLaunchArgument("local_rrt_time_s", default_value="0.95"),
             DeclareLaunchArgument("manifold_alpha_max", default_value="1.25"),
             DeclareLaunchArgument("manifold_levels", default_value="64"),
@@ -32,6 +33,9 @@ def generate_launch_description():
             DeclareLaunchArgument("vamp_workers", default_value="4"),
             DeclareLaunchArgument("vamp_max_iterations", default_value="1000"),
             DeclareLaunchArgument("vamp_max_samples", default_value="2000"),
+            DeclareLaunchArgument(
+                "vamp_secondary_max_iterations", default_value="300"
+            ),
             DeclareLaunchArgument("vamp_range", default_value="0.08"),
             DeclareLaunchArgument("vamp_max_refinements", default_value="8"),
             DeclareLaunchArgument(
@@ -39,9 +43,6 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "full_vamp_base_yaw_margin_deg", default_value="5.0"
-            ),
-            DeclareLaunchArgument(
-                "full_vamp_updown_margin_m", default_value="0.08"
             ),
             DeclareLaunchArgument(
                 "full_vamp_arm_margin_deg", default_value="35.0"
@@ -79,6 +80,9 @@ def generate_launch_description():
                             value_type=float,
                         ),
                         "local_rrt_mode": LaunchConfiguration("local_rrt_mode"),
+                        "visibility_graph_mode": LaunchConfiguration(
+                            "visibility_graph_mode"
+                        ),
                         "local_rrt_time_s": ParameterValue(
                             LaunchConfiguration("local_rrt_time_s"),
                             value_type=float,
@@ -111,6 +115,10 @@ def generate_launch_description():
                             LaunchConfiguration("vamp_max_samples"),
                             value_type=int,
                         ),
+                        "vamp_secondary_max_iterations": ParameterValue(
+                            LaunchConfiguration("vamp_secondary_max_iterations"),
+                            value_type=int,
+                        ),
                         "vamp_range": ParameterValue(
                             LaunchConfiguration("vamp_range"),
                             value_type=float,
@@ -125,10 +133,6 @@ def generate_launch_description():
                         ),
                         "full_vamp_base_yaw_margin_deg": ParameterValue(
                             LaunchConfiguration("full_vamp_base_yaw_margin_deg"),
-                            value_type=float,
-                        ),
-                        "full_vamp_updown_margin_m": ParameterValue(
-                            LaunchConfiguration("full_vamp_updown_margin_m"),
                             value_type=float,
                         ),
                         "full_vamp_arm_margin_deg": ParameterValue(

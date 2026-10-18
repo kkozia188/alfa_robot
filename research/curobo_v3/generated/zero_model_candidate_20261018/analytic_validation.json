@@ -1,0 +1,22 @@
+{
+  "arms": [
+    {
+      "side": "left",
+      "passed": 100,
+      "trials": 100,
+      "failed_trials": [],
+      "max_position_error_mm": 5.000354835935808e-05,
+      "max_rotation_error_deg": 5.146034851877584e-07
+    },
+    {
+      "side": "right",
+      "passed": 100,
+      "trials": 100,
+      "failed_trials": [],
+      "max_position_error_mm": 3.1879560684963e-05,
+      "max_rotation_error_deg": 5.31783490759111e-07
+    }
+  ],
+  "right_mirror_shoulder_elbow_wrist_error_mm": 0.00016317384584567233,
+  "scope": "Only re-zero candidate with legacy installation/tool; not colleague v3.3.1 IK, collision, or task planning validation"
+}

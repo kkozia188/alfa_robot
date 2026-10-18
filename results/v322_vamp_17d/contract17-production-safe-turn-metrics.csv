@@ -1,0 +1,17 @@
+group,row,boxes,kind,frames,transition_strategy,updown_policy,selected_task_core_s,accumulated_task_search_s,selected_transition_core_s,accumulated_transition_search_s,bridge_planning_s,recorded_core_planning_s,joint_travel_deg,maximum_joint_step_deg,joint_flip_events,lift_travel_m,edge_repairs,base_travel_m
+1,1,1+5,dual_safe_turn_unload_cycle,1553,fresh_whole_body_bridge,left,0.010807,0.842663,0.049275,0.049275,0.024637,0.084719,2696.829264,1.587475,0,1.200000,[],4.700000
+2,1,2+4,dual_safe_turn_unload_cycle,1793,fresh_whole_body_bridge,left,0.013299,3.681748,0.052977,0.052977,0.026489,0.092764,2739.446719,1.572668,0,1.200000,[],4.700000
+3,1,3,dual_safe_turn_unload_cycle,1819,fresh_whole_body_bridge,golden,0.017382,0.831527,0.032348,0.032348,0.032348,0.082078,1733.400174,1.584126,0,1.200000,[],4.700000
+4,2,6+10,dual_safe_turn_unload_cycle,1453,fresh_whole_body_bridge,left,0.007938,0.884955,0.043883,0.043883,0.021941,0.073762,2925.343976,2.943380,0,1.200000,[],4.700000
+5,2,7+9,dual_safe_turn_unload_cycle,1491,fresh_whole_body_bridge,left,0.008165,1.399403,0.046947,0.046947,0.023474,0.078586,2456.366344,1.588152,0,1.200000,[],4.700000
+6,2,8,dual_safe_turn_unload_cycle,1835,fresh_whole_body_bridge,golden,0.012120,0.834726,0.035641,0.035641,0.035641,0.083401,1788.527265,1.829520,0,1.200000,[],4.700000
+7,3,11+15,dual_safe_turn_unload_cycle,1539,fresh_whole_body_bridge,left,0.011127,0.838013,0.047472,0.047472,0.023736,0.082335,2903.555506,2.272682,0,0.200000,[],4.700000
+8,3,12+14,dual_safe_turn_unload_cycle,1509,fresh_whole_body_bridge,left,0.009733,4.421412,0.050350,0.050350,0.025175,0.085258,2898.889571,2.393345,0,0.200000,[],4.700000
+9,3,13,dual_safe_turn_unload_cycle,1987,fresh_whole_body_bridge,golden,0.008558,0.862720,0.034720,0.034720,0.034720,0.077998,3180.403899,1.681040,0,0.800000,[],4.700000
+10,4,,base_transition,48,validated_planar_linear,stationary,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0,0.000000,[],0.250000
+11,4,16+20,dual_safe_turn_unload_cycle,1685,fresh_whole_body_bridge,left,0.182527,1.099874,0.058905,0.058905,0.029452,0.270884,2402.530221,1.151518,0,0.800000,[],4.700000
+12,4,17+19,dual_safe_turn_unload_cycle,1609,fresh_whole_body_bridge,left,0.014668,2.407818,0.053121,0.053121,0.026561,0.094350,2406.859168,1.030156,0,0.800000,[],4.700000
+13,4,18,dual_safe_turn_unload_cycle,2051,fresh_whole_body_bridge,golden,0.009974,1.001797,7.934414,7.934414,7.934414,15.878802,3453.440146,1.310335,0,0.800000,[],4.700000
+14,5,21+25,dual_safe_turn_unload_cycle,1895,fresh_whole_body_bridge,left,0.031007,2.512701,0.060366,0.060366,0.030183,0.121556,2631.934149,2.533471,0,1.800000,[],4.700000
+15,5,22+24,dual_safe_turn_unload_cycle,1595,fresh_whole_body_bridge,right,0.014100,3.514563,0.055374,0.055374,0.027687,0.097162,2662.560521,2.925286,0,1.800000,[],4.700000
+16,5,23,dual_safe_turn_unload_cycle,1855,fresh_whole_body_bridge,golden,0.007663,0.927544,5.043567,5.043567,5.043567,10.094796,3218.897954,1.235783,0,1.800000,[],4.700000

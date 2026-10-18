@@ -65,12 +65,13 @@ def main() -> int:
     before = cycles(before_report)
     reports = [
         read_json(path)
-        for path in sorted(root.glob("contract17-4w-run*-report.json"))
+        for path in sorted(root.glob("contract17-production-run*-report.json"))
     ]
     if len(reports) != 3:
         raise RuntimeError(f"expected three final runs, got {len(reports)}")
     run_cycles = [cycles(report) for report in reports]
     representative = run_cycles[1]
+    audit = cycles(read_json(root / "contract17-4w-run2-report.json"))
 
     focus = []
     for label in FOCUS_LABELS:
@@ -111,17 +112,27 @@ def main() -> int:
         for report in reports
     ]
     run_maximums = [float(report["maximum_task_core_ms"]) for report in reports]
-    validation = read_json(root / "contract17-4w-validation.json")
-    safe_validation = read_json(root / "contract17-4w-safe-turn-validation.json")
-    safe_contract = read_json(root / "contract17-4w-safe-turn-contract.json")
-    rrd = root / "contract17-4w-safe-turn-production-shell.rrd"
-    worker_solved = sum(
+    validation = read_json(root / "contract17-production-validation.json")
+    safe_validation = read_json(root / "contract17-production-safe-turn-validation.json")
+    safe_contract = read_json(root / "contract17-production-safe-turn-contract.json")
+    rrd = root / "contract17-production-safe-turn.rrd"
+    audit_worker_solved = sum(
+        int(cycle["local_search_solved_workers"])
+        for cycle in audit.values()
+    )
+    audit_worker_total = sum(
+        int(cycle["local_search_workers"])
+        for cycle in audit.values()
+    )
+    production_worker_solved = sum(
         int(cycle["local_search_solved_workers"])
         for cycle in representative.values()
+        if bool(cycle["local_rrt_attempted"])
     )
-    worker_total = sum(
+    production_worker_total = sum(
         int(cycle["local_search_workers"])
         for cycle in representative.values()
+        if bool(cycle["local_rrt_attempted"])
     )
     payload = {
         "schema": "alfa.v322_contract17_planning_optimization.v1",
@@ -156,6 +167,12 @@ def main() -> int:
             "parallel_workers": 4,
             "primary_worker_iterations": 1000,
             "secondary_worker_iterations": 300,
+            "vamp_range": 0.25,
+            "metric_lower_bound_pruning": True,
+            "pruning_rule": (
+                "skip VAMP only when graph weighted travel equals the "
+                "admissible weighted-L1 endpoint lower bound within 1e-9"
+            ),
             "visibility_order": [
                 "metric lower-bound/direct edge",
                 "center waypoint",
@@ -174,13 +191,23 @@ def main() -> int:
             ),
             "after_total_planning_core_median_ms": statistics.median(run_totals),
             "after_maximum_cycle_median_ms": statistics.median(run_maximums),
-            "worker_solved": worker_solved,
-            "worker_total": worker_total,
-            "candidate_fcl_valid": sum(
+            "audit_worker_solved": audit_worker_solved,
+            "audit_worker_total": audit_worker_total,
+            "audit_candidate_fcl_valid": sum(
+                bool(cycle["local_candidate_fcl_valid"])
+                for cycle in audit.values()
+            ),
+            "production_worker_solved": production_worker_solved,
+            "production_worker_total": production_worker_total,
+            "production_pruned_cycles": sum(
+                bool(cycle["local_rrt_pruned"])
+                for cycle in representative.values()
+            ),
+            "production_candidate_fcl_valid": sum(
                 bool(cycle["local_candidate_fcl_valid"])
                 for cycle in representative.values()
             ),
-            "candidate_selected": sum(
+            "production_candidate_selected": sum(
                 bool(cycle["local_rrt_success"])
                 for cycle in representative.values()
             ),
@@ -234,8 +261,11 @@ def main() -> int:
         f"- Fifteen-cycle planning core: **{payload['overall']['before_total_planning_core_ms'] / 1000:.3f}s "
         f"-> {payload['overall']['after_total_planning_core_median_ms'] / 1000:.3f}s**.",
         f"- Maximum cycle median: **{payload['overall']['after_maximum_cycle_median_ms']:.1f}ms**.",
-        f"- Contract-17 workers solved **{worker_solved}/{worker_total}** seeds; "
-        "15/15 winning candidates passed FCL.",
+        f"- Full contract-17 audit solved **{audit_worker_solved}/{audit_worker_total}** "
+        "seeds and 15/15 winning candidates passed FCL.",
+        f"- Production pruned **{payload['overall']['production_pruned_cycles']}/15** "
+        "cycles at the exact metric lower bound; `16+20` retained the real "
+        f"four-worker search ({production_worker_solved}/{production_worker_total} solved).",
         f"- Maximum graph cost delta versus the previous replay: "
         f"**{maximum_graph_cost_delta:.12f}**.",
         f"- Direct replay validation: **{validation['checked_frames']:,} frames + "

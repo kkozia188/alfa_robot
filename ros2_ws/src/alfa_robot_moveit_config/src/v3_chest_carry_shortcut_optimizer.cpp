@@ -322,6 +322,8 @@ public:
     vamp_max_samples_ = getParameter<int>("vamp_max_samples", 2000);
     vamp_secondary_max_iterations_ = getParameter<int>(
       "vamp_secondary_max_iterations", 300);
+    vamp_prune_at_metric_lower_bound_ = getParameter<bool>(
+      "vamp_prune_at_metric_lower_bound", true);
     vamp_range_ = getParameter<double>("vamp_range", 0.08);
     vamp_max_refinements_ = getParameter<int>("vamp_max_refinements", 8);
     full_vamp_base_xy_margin_ =
@@ -391,6 +393,7 @@ public:
         {"vamp_compiled", kVampCompiled},
         {"vamp_workers", vamp_workers_},
         {"vamp_secondary_max_iterations", vamp_secondary_max_iterations_},
+        {"vamp_prune_at_metric_lower_bound", vamp_prune_at_metric_lower_bound_},
         {"cycles", nlohmann::json::array()},
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
@@ -1880,6 +1883,8 @@ private:
     struct RouteEdge {size_t from; size_t to; bool direct;};
     std::vector<RouteEdge> route;
     double graph_cost = golden_cost(0U, goal);
+    const double metric_lower_bound = frame_distance(
+      golden.front(), golden.back());
     size_t visibility_cache_hits = 0U;
     std::string visibility_strategy = "full_dag";
     const size_t last_representative = representatives.size() - 1U;
@@ -1925,7 +1930,7 @@ private:
           return frame_distance(
             golden.at(representatives[from]), golden.at(representatives[to]));
         };
-      const double lower_bound = direct_cost(0U, last_representative);
+      const double lower_bound = metric_lower_bound;
       bool family_improved = false;
       if (lower_bound >= graph_cost - 1e-9) {
         visibility_strategy = "golden_at_metric_lower_bound";
@@ -2097,9 +2102,17 @@ private:
     bool local_candidate_fcl_valid = false;
     LocalSearchStats local_search_stats;
     local_search_stats.backend = local_rrt_mode_;
+    const double metric_lower_bound_gap = std::max(
+      0.0, graph_cost - metric_lower_bound);
+    const bool local_rrt_pruned =
+      local_rrt_mode_ == "contract17_vamp" &&
+      vamp_prune_at_metric_lower_bound_ && metric_lower_bound_gap <= 1e-9;
     const auto local_rrt_started = std::chrono::steady_clock::now();
     nlohmann::json local_rrt;
-    if (local_rrt_mode_ == "golden_manifold") {
+    if (local_rrt_pruned) {
+      local_search_stats.backend = "metric_lower_bound_pruned";
+      local_search_stats.workers = 0U;
+    } else if (local_rrt_mode_ == "golden_manifold") {
       local_rrt = tryGoldenManifoldRrt(
         scene, operation, joint_names, golden, left_spec, right_spec,
         &local_rrt_cost);
@@ -2181,7 +2194,12 @@ private:
       {"golden_rrt_window_count", golden_windows},
       {"source_joint_travel_cost", golden_cost(0U, goal)},
       {"graph_joint_travel_cost", graph_cost},
-      {"local_rrt_attempted", true},
+      {"local_rrt_attempted", !local_rrt_pruned},
+      {"local_rrt_pruned", local_rrt_pruned},
+      {"local_rrt_prune_reason", local_rrt_pruned ?
+        "graph_cost_reached_weighted_l1_lower_bound" : ""},
+      {"metric_lower_bound_cost", metric_lower_bound},
+      {"metric_lower_bound_gap", metric_lower_bound_gap},
       {"local_rrt_mode", local_rrt_mode_},
       {"local_rrt_state_dimension", local_rrt_mode_ == "contract17_vamp" ?
         static_cast<int>(kFullStateDimension) :
@@ -2344,6 +2362,7 @@ private:
   int vamp_max_iterations_ = 1000;
   int vamp_max_samples_ = 2000;
   int vamp_secondary_max_iterations_ = 300;
+  bool vamp_prune_at_metric_lower_bound_ = true;
   double vamp_range_ = 0.08;
   int vamp_max_refinements_ = 8;
   double full_vamp_base_xy_margin_ = 0.15;

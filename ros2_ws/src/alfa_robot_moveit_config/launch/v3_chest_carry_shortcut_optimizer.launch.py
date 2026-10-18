@@ -36,6 +36,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "vamp_secondary_max_iterations", default_value="300"
             ),
+            DeclareLaunchArgument(
+                "vamp_prune_at_metric_lower_bound", default_value="true"
+            ),
             DeclareLaunchArgument("vamp_range", default_value="0.08"),
             DeclareLaunchArgument("vamp_max_refinements", default_value="8"),
             DeclareLaunchArgument(
@@ -118,6 +121,10 @@ def generate_launch_description():
                         "vamp_secondary_max_iterations": ParameterValue(
                             LaunchConfiguration("vamp_secondary_max_iterations"),
                             value_type=int,
+                        ),
+                        "vamp_prune_at_metric_lower_bound": ParameterValue(
+                            LaunchConfiguration("vamp_prune_at_metric_lower_bound"),
+                            value_type=bool,
                         ),
                         "vamp_range": ParameterValue(
                             LaunchConfiguration("vamp_range"),

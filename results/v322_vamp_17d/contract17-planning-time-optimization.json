@@ -31,6 +31,9 @@
     "parallel_workers": 4,
     "primary_worker_iterations": 1000,
     "secondary_worker_iterations": 300,
+    "vamp_range": 0.25,
+    "metric_lower_bound_pruning": true,
+    "pruning_rule": "skip VAMP only when graph weighted travel equals the admissible weighted-L1 endpoint lower bound within 1e-9",
     "visibility_order": [
       "metric lower-bound/direct edge",
       "center waypoint",
@@ -48,8 +51,8 @@
         3
       ],
       "before_ms": 435.990854,
-      "after_median_ms": 48.015646,
-      "speedup": 9.080183030339736,
+      "after_median_ms": 17.382229,
+      "speedup": 25.082563001557514,
       "before_visibility_checks": 240,
       "after_visibility_checks": 3,
       "before_edge_samples": 5958,
@@ -64,8 +67,8 @@
         8
       ],
       "before_ms": 130.090816,
-      "after_median_ms": 21.25484,
-      "speedup": 6.1205267129745495,
+      "after_median_ms": 12.119934,
+      "speedup": 10.73362412699607,
       "before_visibility_checks": 32,
       "after_visibility_checks": 1,
       "before_edge_samples": 1758,
@@ -81,8 +84,8 @@
         15
       ],
       "before_ms": 552.240933,
-      "after_median_ms": 10.61929,
-      "speedup": 52.00356455092573,
+      "after_median_ms": 5.56331,
+      "speedup": 99.26481411246182,
       "before_visibility_checks": 330,
       "after_visibility_checks": 1,
       "before_edge_samples": 13566,
@@ -98,8 +101,8 @@
         20
       ],
       "before_ms": 1242.952648,
-      "after_median_ms": 114.828076,
-      "speedup": 10.82446637876263,
+      "after_median_ms": 91.263472,
+      "speedup": 13.619388138115106,
       "before_visibility_checks": 1291,
       "after_visibility_checks": 8,
       "before_edge_samples": 24185,
@@ -115,8 +118,8 @@
         25
       ],
       "before_ms": 588.331377,
-      "after_median_ms": 231.075413,
-      "speedup": 2.5460578837091594,
+      "after_median_ms": 15.5034,
+      "speedup": 37.948538836642285,
       "before_visibility_checks": 970,
       "after_visibility_checks": 9,
       "before_edge_samples": 4563,
@@ -128,12 +131,16 @@
   ],
   "overall": {
     "before_total_planning_core_ms": 3474.591555,
-    "after_total_planning_core_median_ms": 551.772723,
-    "after_maximum_cycle_median_ms": 231.075413,
-    "worker_solved": 57,
-    "worker_total": 60,
-    "candidate_fcl_valid": 15,
-    "candidate_selected": 0,
+    "after_total_planning_core_median_ms": 207.38298,
+    "after_maximum_cycle_median_ms": 91.263472,
+    "audit_worker_solved": 57,
+    "audit_worker_total": 60,
+    "audit_candidate_fcl_valid": 15,
+    "production_worker_solved": 2,
+    "production_worker_total": 4,
+    "production_pruned_cycles": 14,
+    "production_candidate_fcl_valid": 1,
+    "production_candidate_selected": 0,
     "maximum_graph_cost_delta": 0.0
   },
   "validation": {
@@ -148,8 +155,8 @@
     "cycle_count": 15
   },
   "rerun": {
-    "path": "/home/tim/alfa_robot-v322-vamp-17d-parallel/results/v322_vamp_17d/contract17-4w-safe-turn-production-shell.rrd",
-    "sha256": "02b16704e2d0cca5577256c415bbdbb9a94e919aeecf3ef7da068d75ca121e17",
+    "path": "/home/tim/alfa_robot-v322-vamp-17d-parallel/results/v322_vamp_17d/contract17-production-safe-turn.rrd",
+    "sha256": "05cad97036441b51bb4fb3326cc306c418b9fb76af7989572d95a016d17ae5fb",
     "rrd_verified": true,
     "orbit_center_world_m": [
       0.0,

@@ -25,9 +25,13 @@ The planning-time fix is independent of the VAMP collision checks. The previous
 5. one-waypoint routes;
 6. the original full DAG as a fallback.
 
-This matches the previous graph cost for every cycle while reducing the slow
-cycles from `436/130/552/1243/588 ms` to approximately
-`48/21/11/115/231 ms` for boxes `3`, `8`, `11+15`, `16+20`, and `21+25`.
+This matches the previous graph cost for every cycle. The complete audit mode
+solves 57/60 worker seeds and validates 15/15 winning candidates. Production
+mode additionally skips VAMP only when the selected graph path has already
+reached the admissible weighted-L1 endpoint lower bound. Fourteen cycles meet
+that proof; `16+20` retains real four-worker 17-D search. The slow cycles fall
+from `436/130/552/1243/588 ms` to approximately `17/12/6/91/16 ms` for boxes
+`3`, `8`, `11+15`, `16+20`, and `21+25`.
 
 ## Reproduce
 
@@ -44,8 +48,9 @@ ros2 launch alfa_robot_moveit_config \
   vamp_workers:=4 \
   vamp_max_iterations:=1000 \
   vamp_secondary_max_iterations:=300 \
+  vamp_prune_at_metric_lower_bound:=true \
   vamp_max_samples:=2000 \
-  vamp_range:=0.15
+  vamp_range:=0.25
 ```
 
 Generate the before/after report with:

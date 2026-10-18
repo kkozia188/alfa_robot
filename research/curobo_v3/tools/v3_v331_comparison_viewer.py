@@ -3,6 +3,7 @@ from pathlib import Path
 import time
 import queue
 import argparse
+import yaml
 
 import numpy as np
 from scipy.spatial.transform import Rotation
@@ -15,7 +16,12 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--candidate',action='store_true')
     parser.add_argument('--smoke-test',action='store_true')
+    parser.add_argument('--original-home',action='store_true')
     args=parser.parse_args()
+    if args.original_home and args.candidate:
+        parser.error('--original-home displays the unchanged original URDF; do not combine with --candidate')
+    home=yaml.safe_load((Path(__file__).resolve().parents[1]/'models/robot_description_analytic_071cb95/config/named_poses_analytic_proxy.yaml').read_text())['named_poses']['home']
+    home_label='原第一初始姿态Home（仅旧URDF，不换算）'
     geometry=json.loads(Path('/tmp/v331_model_compare_20261018/geometry.json').read_text())
     paths={'current':Path('/mnt/mydisk/ALFA/alfa_robot_v3/research/curobo_v3/generated/v3_analytic_071cb95/model/robot_meter_meshes.urdf'),
            'new':Path('/mnt/mydisk/ALFA/backpack/real2sim_v3.3.1/urdf/robot.urdf')}
@@ -34,7 +40,8 @@ def main():
         from v3_rezero_validation import centers
         geometry['current']={side:dict(geometry['current'][side],shoulder_elbow_wrist_m=centers(models['current'],side).tolist()) for side in ('left','right')}
     mode=server.gui.add_dropdown('对照方式',options=['并排：各自footprint在地面','同一footprint重合：仅当前模型','同一footprint重合：仅3.3.1','同一footprint重合：两者'],initial_value='并排：各自footprint在地面')
-    pose=server.gui.add_dropdown('关节状态',options=['全部零位','同一组关节角（不代表同一姿态）'],initial_value='全部零位')
+    presets=['全部零位','同一组关节角（不代表同一姿态）']+([] if args.candidate else [home_label])
+    pose=server.gui.add_dropdown('关节状态',options=presets,initial_value=home_label if args.original_home else '全部零位')
     axes=server.gui.add_checkbox('显示footprint/base_link及肩肘腕中心',initial_value=True)
     tools_visible=server.gui.add_checkbox('显示两版tool0原点和XYZ轴',initial_value=True)
     focus_tools=server.gui.add_button('近看左腕与两版tool0')
@@ -49,8 +56,9 @@ def main():
                 joint=models[label].joint_map[name]
                 factor=180/np.pi
                 key=(label,name)
-                slider=server.gui.add_slider(name+' °',min=float(joint.limit.lower*factor),max=float(joint.limit.upper*factor),step=.1,initial_value=0.)
-                number=server.gui.add_number(name+' 精确值 °',initial_value=0.,step=.1)
+                initial=float(np.rad2deg(home[name])) if args.original_home and label=='current' else 0.
+                slider=server.gui.add_slider(name+' °',min=float(joint.limit.lower*factor),max=float(joint.limit.upper*factor),step=.1,initial_value=initial)
+                number=server.gui.add_number(name+' 精确值 °',initial_value=initial,step=.1)
                 controls[key]=(slider,number,factor)
                 def slider_changed(_event,key=key):edits.put((key,controls[key][0].value))
                 def number_changed(_event,key=key):edits.put((key,controls[key][1].value))
@@ -59,6 +67,8 @@ def main():
     server.gui.add_markdown('蓝色＝当前cuRobo模型；橙色＝3.3.1。并排仅为显示加Y偏移，重合视图严格对齐footprint，不做肩部平移对齐。红点base_link、绿色footprint；肩/肘/腕为关节轴交点估计，不是CAD link原点。只读离线对比，无SSH/ROS或实机控制。')
     if args.candidate:
         server.gui.add_markdown('本页蓝色current已切为重零候选URDF：左旧角[-90,15,0,0,90,0,90]及右[90,-15,0,0,-90,0,-90]现在是真正关节0；J2正方向反转、限位±90°，其余数值限位不变。不是改Home。橙色仍是同事原始3.3.1，未改tool0或J3。')
+    if args.original_home:
+        server.gui.add_markdown('现在蓝色使用未重零的原URDF和文件内第一Home：Updown=-0.3m；左[155,-90,20,90,-90,-40,0]°，右[-155,90,-20,-90,90,40,0]°。没有将J2改成±105或截到±90。橙色保持原3.3.1，可独立拖动比较。')
     status=server.gui.add_markdown('')
 
     def render():
@@ -70,6 +80,8 @@ def main():
             roots[label].position=offset
             roots[label].visible=mode.value.startswith('并排') or mode.value.endswith('两者') or (label=='current' and mode.value.endswith('当前模型')) or (label=='new' and mode.value.endswith('3.3.1'))
             values={name:0. for name in model.actuated_joint_names}
+            if label=='current' and pose.value==home_label:
+                values.update({name:float(value) for name,value in home.items() if name in values})
             values.update({name:slider.value/factor for (owner,name),(slider,number,factor) in controls.items() if owner==label})
             robots[label].update_cfg(np.array([values[name] for name in model.actuated_joint_names]))
             if roots[label].visible and tools_visible.value:
@@ -118,6 +130,10 @@ def main():
                 for index,value in enumerate([65,-80,10,80,0,-30,0],1):
                     values[(label,f'left_joint{index}')]=value
                     values[(label,f'right_joint{index}')]=-value
+        if pose.value==home_label:
+            for key in controls:
+                if key[0]=='current':values[key]=float(np.rad2deg(home[key[1]]))
+                else:values[key]=controls[key][0].value
         for name,value in values.items():edits.put((name,value))
 
     @reset_current.on_click

@@ -28,10 +28,10 @@
     1,
     1,
     1,
-    1,
+    -1,
     1
   ],
-  "mapping": "q_legacy = offsets + signs * q_candidate",
+  "mapping": "q_legacy = offsets + signs * q_candidate; J6 direction reversed without changing zero",
   "limits": "left J2 [-90,120]; right J2 [-120,90]; J3 +/-180; other numerical limits unchanged",
   "status": "true coordinate redefinition, not Home change; legacy installation and confirmed legacy tool retained",
   "rights_source": "mirrored legacy configuration; checked against shoulder/elbow/wrist reflection",

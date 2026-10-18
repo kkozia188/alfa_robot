@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from v3_zero_model_candidate import OFFSETS_DEG,J2_LIMITS_DEG
+from v3_zero_model_candidate import OFFSETS_DEG,J2_LIMITS_DEG,JOINT_SIGNS
 
 
 class RezeroAnalytic:
@@ -15,7 +15,7 @@ class RezeroAnalytic:
         self.library.v3_swivel.restype=ctypes.c_double
         self.library.v3_solve.argtypes=[ctypes.c_int,array,ctypes.c_double,array,array,ctypes.c_int]
         self.library.v3_solve.restype=ctypes.c_int
-        self.signs=np.array([1.,-1.,1.,1.,1.,1.,1.])
+        self.signs=JOINT_SIGNS.copy()
         self.offsets=np.deg2rad(np.asarray([OFFSETS_DEG['left'],OFFSETS_DEG['right']]))
         self.limits=np.deg2rad([180.,90.,180.,145.,180.,110.,180.])
         self.lower=np.tile(-self.limits,(2,1));self.upper=np.tile(self.limits,(2,1))

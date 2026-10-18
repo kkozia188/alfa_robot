@@ -10,7 +10,7 @@ from curobo.scene import Scene
 import yaml
 import yourdfpy
 
-from v3_zero_model_candidate import ROOT,OLD,build,OFFSETS_DEG,J2_LIMITS_DEG
+from v3_zero_model_candidate import ROOT,OLD,build,OFFSETS_DEG,J2_LIMITS_DEG,JOINT_SIGNS
 from v3_rezero_analytic import RezeroAnalytic
 
 
@@ -18,7 +18,7 @@ def convert_row(names,values):
     result=np.asarray(values).copy()
     for side in ('left','right'):
         indices=[names.index(f'{side}_joint{index}') for index in range(1,8)]
-        result[...,indices]=(result[...,indices]-np.deg2rad(OFFSETS_DEG[side]))*np.array([1,-1,1,1,1,1,1])
+        result[...,indices]=(result[...,indices]-np.deg2rad(OFFSETS_DEG[side]))*JOINT_SIGNS
         result[...,indices]=(result[...,indices]+np.pi)%(2*np.pi)-np.pi
     return result
 
@@ -89,6 +89,17 @@ def main():
         reports.append(dict(name=name,success=True,left_deg=np.rad2deg([output[f'left_joint{i}'] for i in range(1,8)]).tolist(),
             right_deg=np.rad2deg([output[f'right_joint{i}'] for i in range(1,8)]).tolist()))
         print('POSE',name,reports[-1],flush=True)
+    home_policy=json.loads((ROOT/'config/rezero_home.json').read_text())
+    named['named_poses']['home']['updown']=home_policy['updown_m']
+    for side in ('left','right'):
+        named['named_poses']['home'].update({f'{side}_joint{index}':float(np.deg2rad(value)) for index,value in enumerate(home_policy[side+'_deg'],1)})
+    for report in reports:
+        if report['name']=='home':
+            report['coordinate_converted_previous_home']={key:report[key] for key in ('left_deg','right_deg')}
+            report.update(left_deg=home_policy['left_deg'],right_deg=home_policy['right_deg'],
+                          updown_m=home_policy['updown_m'],source=home_policy['source'])
+    named['metadata']['model_revision']='rezero-20261018-asymmetric-j2-reversed-j6'
+    named['metadata']['home_source']='config/rezero_home.json: explicitly selected new Home, not a coordinate redefinition'
     (folder/'named_poses.yaml').write_text(yaml.safe_dump(named,sort_keys=False))
     (folder/'named_pose_migration.json').write_text(json.dumps(reports,indent=2))
     for label,config in profiles.items():

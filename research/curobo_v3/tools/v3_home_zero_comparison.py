@@ -11,7 +11,7 @@ from viser.extras import ViserUrdf
 import yaml
 import yourdfpy
 
-from v3_zero_model_candidate import ROOT,OLD,OFFSETS_DEG,COLLEAGUE
+from v3_zero_model_candidate import ROOT,OLD,OFFSETS_DEG,COLLEAGUE,JOINT_SIGNS
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
     converted=original_home.copy()
     for side in ('left','right'):
         names=[f'{side}_joint{index}' for index in range(1,8)]
-        values=(np.asarray([home[name] for name in names])-np.deg2rad(OFFSETS_DEG[side]))*np.array([1,-1,1,1,1,1,1])
+        values=(np.asarray([home[name] for name in names])-np.deg2rad(OFFSETS_DEG[side]))*JOINT_SIGNS
         values=(values+np.pi)%(2*np.pi)-np.pi
         converted.update(dict(zip(names,values)))
     server=viser.ViserServer(host='127.0.0.1',port=8152,label='原Home vs 自制重零URDF · 不夹限位的姿态核对')

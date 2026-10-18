@@ -14,11 +14,11 @@ OLD=ROOT/'generated/v3_analytic_071cb95/model/robot_meter_meshes.urdf'
 COLLEAGUE=Path('/mnt/mydisk/ALFA/backpack/real2sim_v3.3.1/urdf/robot.urdf')
 OFFSETS_DEG={'left':[-90.,15.,0.,0.,90.,0.,90.], 'right':[90.,-15.,0.,0.,-90.,0.,-90.]}
 J2_LIMITS_DEG={'left':(-90.,120.),'right':(-120.,90.)}
+JOINT_SIGNS=np.array([1.,-1.,1.,1.,1.,-1.,1.])
 
 
 def legacy_angles(side,new_angles):
-    signs=np.array([1.,-1.,1.,1.,1.,1.,1.])
-    return np.deg2rad(OFFSETS_DEG[side])+signs*np.asarray(new_angles)
+    return np.deg2rad(OFFSETS_DEG[side])+JOINT_SIGNS*np.asarray(new_angles)
 
 
 def build(output,source=OLD):
@@ -40,8 +40,9 @@ def build(output,source=OLD):
             else:
                 rpy=rotation.as_euler('xyz')
             origin.set('rpy',' '.join(f'{value:.17g}' for value in rpy))
-            if index==1:
+            if JOINT_SIGNS[index]<0:
                 axis.set('xyz',' '.join(f'{value:.17g}' for value in -vector))
+            if index==1:
                 joint.find('limit').set('lower',str(np.deg2rad(J2_LIMITS_DEG[side][0])))
                 joint.find('limit').set('upper',str(np.deg2rad(J2_LIMITS_DEG[side][1])))
     for mesh in root.findall('.//mesh'):
@@ -52,7 +53,7 @@ def build(output,source=OLD):
     ET.ElementTree(root).write(path,encoding='utf-8',xml_declaration=True)
     manifest=dict(source=str(source),source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         reference_colleague_urdf=str(COLLEAGUE),offsets_deg=OFFSETS_DEG,
-        signs=[1,-1,1,1,1,1,1],mapping='q_legacy = offsets + signs * q_candidate',
+        signs=JOINT_SIGNS.astype(int).tolist(),mapping='q_legacy = offsets + signs * q_candidate; J6 direction reversed without changing zero',
         limits='left J2 [-90,120]; right J2 [-120,90]; J3 +/-180; other numerical limits unchanged',
         status='true coordinate redefinition, not Home change; legacy installation and confirmed legacy tool retained',
         rights_source='mirrored legacy configuration; checked against shoulder/elbow/wrist reflection')

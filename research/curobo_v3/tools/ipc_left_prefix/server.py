@@ -1,0 +1,320 @@
+import argparse
+from collections import deque
+from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+import json
+import math
+import signal
+from pathlib import Path
+import threading
+import time
+from urllib.parse import urlsplit
+
+from model import JOINT_NAMES,MOTOR_SIGNS,motor_positions,read_library,select_path,time_parameterize
+
+
+class State:
+    def __init__(self,library,scope):
+        self.library=library
+        self.scope=scope
+        self.lock=threading.RLock()
+        self.positions=None
+        self.received=0.
+        self.stamp_age=float('inf')
+        self.samples=deque(maxlen=40)
+        self.controller=False
+        self.controller_received=0.
+        self.enable_state='UNKNOWN'
+        self.enable_received=0.
+        self.subscribers=0
+        self.active=None
+        self.last_task=None
+        self.last_message='尚未发送运动'
+        self.publisher=None
+        self.console_status={}
+        self.console_received=0.
+        self.lease_client=None
+        self.viewer_seen=time.monotonic()
+        self.motor_bounds=None
+        self.motion_publications=0
+
+    def feedback(self,positions,stamp_age):
+        with self.lock:
+            now=time.monotonic()
+            self.positions=list(positions)
+            self.received=now
+            self.stamp_age=stamp_age
+            self.samples.append((now,list(positions)))
+            if self.active and now>=self.active['deadline']:
+                error=max(abs(value-target) for value,target in zip(positions,self.active['target']))
+                if error<math.radians(.5) and self.stationary():
+                    self.last_message='终点反馈已确认；topic接口没有Action执行回执'
+                    self.active=None
+                elif now>self.active['deadline']+3.:
+                    self.last_message='未确认到达终点；停止本脚本后续自动处理，请检查RT控制台'
+                    self.active=None
+
+    def stationary(self):
+        if len(self.samples)<2:
+            return False
+        now,position=self.samples[-1]
+        reference=next(((stamp,row) for stamp,row in reversed(self.samples) if now-stamp>=.2),None)
+        return bool(reference and now-reference[0]<.6 and max(abs(value-old)/(now-reference[0]) for value,old in zip(position,reference[1]))<math.radians(.5))
+
+    def reason(self):
+        now=time.monotonic()
+        if self.scope!='left7_joint_replay':
+            return '待确认：仅回放左7轴将不复现原轨迹的升降和右臂运动，不能宣称到达原箱面'
+        if self.positions is None or now-self.received>.5 or not -.05<=self.stamp_age+now-self.received<=.5:
+            return '没有新鲜的左臂7轴 /joint_states 反馈'
+        if not self.controller or now-self.controller_received>3.:
+            return 'left_arm_jtc未处于active状态，或控制器状态已过期'
+        if not self.subscribers:
+            return 'RT未提供JointTrajectory话题订阅；18121实际使用FollowJointTrajectory Action，等待接口方式确认'
+        if self.enable_state!='ENABLED' or now-self.enable_received>2.5:
+            return '没有新鲜的RT ENABLED状态；本脚本不执行电机使能'
+        if not self.lease_client or now-self.console_received>1.:
+            return '18121控制台会话状态未就绪或已过期'
+        if self.console_status.get('lease')!='you':
+            return '请先获取18121控制权；其他终端持有时不能发送'
+        if self.console_status.get('moving') or self.console_status.get('sequence'):
+            return '18121控制台有其他运动任务'
+        if self.active:
+            return '正在执行已发送的前缀轨迹，请等待终点反馈'
+        if not self.stationary():
+            return '左臂尚未停稳'
+        return ''
+
+    def status(self):
+        with self.lock:
+            return dict(scope=self.scope,ready=not self.reason(),reason=self.reason(),
+                feedback_deg=None if self.positions is None else [math.degrees(value) for value in self.positions],
+                feedback_age_s=None if not self.received else time.monotonic()-self.received,
+                controller_active=self.controller,subscribers=self.subscribers,
+                enable_state=self.enable_state,
+                lease=self.console_status.get('lease','unknown'),
+                motion_publications=self.motion_publications,
+                busy=bool(self.active),last_task=self.last_task,message=self.last_message,
+                active=None if not self.active else dict(task=self.active['task'],direction=self.active['direction'],
+                    remaining_s=max(0.,self.active['deadline']-time.monotonic())))
+
+    def send(self,task,direction,speed):
+        with self.lock:
+            reason=self.reason()
+            if reason:
+                raise ValueError(reason)
+            if direction=='home' and self.last_task:
+                task=self.last_task
+            if task not in self.library['tasks']:
+                raise ValueError('请选择已记录的组合任务')
+            record=self.library['tasks'][task]
+            rows=select_path(record,self.positions,direction)
+            if self.motor_bounds is None or any(not lower-1e-6<=value<=upper+1e-6 for row in rows for value,(lower,upper) in zip(row,self.motor_bounds)):
+                raise ValueError('轨迹超出18121当前实机软限位，拒绝发送')
+            points=time_parameterize(rows,speed_deg_s=speed)
+            if time.monotonic()-self.received>.5:
+                raise ValueError('生成发送数据时反馈已过期，请等待新鲜反馈')
+            if self.publisher is None:
+                raise ValueError('预览模式不能发布运动')
+            self.publisher(points)
+            self.motion_publications+=1
+            duration=points[-1]['time_s']
+            started=time.monotonic()
+            self.active=dict(task=task,direction=direction,deadline=started+duration,target=points[-1]['positions'],points=points,started=started)
+            self.last_task=task
+            self.last_message=f'已发布左臂7轴{len(points)}点，预计{duration:.1f}秒；未控制升降、右臂或吸附'
+            print(json.dumps(dict(event='left_prefix_command',task=task,direction=direction,points=len(points),duration_s=duration)),flush=True)
+            return dict(task=task,direction=direction,points=len(points),duration_s=duration,joint_names=JOINT_NAMES)
+
+    def stop(self):
+        with self.lock:
+            if not self.active:
+                return dict(stopped=True,message='本脚本没有运行中的轨迹')
+            now=time.monotonic()
+            if self.console_status.get('lease')!='you' or now-self.console_received>1.:
+                raise ValueError('没有新鲜控制权状态，请使用现场RT停止流程')
+            if now-self.received>.5 or self.positions is None:
+                raise ValueError('反馈已过期，无法确认受控停止，请使用现场RT停止流程')
+            elapsed=now-self.active['started']
+            pending=[point for point in self.active['points'] if point['time_s']>elapsed+.05]
+            if not pending:
+                return dict(stopped=False,message='轨迹接近终点，等待反馈确认')
+            tail=[]
+            for point in pending:
+                tail.append(dict(point,time_s=point['time_s']-elapsed))
+                if max(abs(value) for value in point['velocities'])<1e-7 and max(abs(value) for value in point['accelerations'])<1e-7:
+                    break
+            if max(abs(value-reference) for value,reference in zip(self.positions,tail[0]['positions']))>math.radians(1.):
+                raise ValueError('实测偏离计划，不能确认停止衔接，请使用现场RT停止流程')
+            self.publisher(tail)
+            self.motion_publications+=1
+            self.active=dict(self.active,direction='stop',points=tail,started=now,deadline=now+tail[-1]['time_s'],target=tail[-1]['positions'])
+            self.last_message='已请求在下一个原记录点停稳；不是硬件急停'
+            print(json.dumps(dict(event='left_prefix_stop',task=self.active['task'],duration_s=tail[-1]['time_s'])),flush=True)
+            return dict(stopped=True,duration_s=tail[-1]['time_s'])
+
+
+def attach_ros(state,topic):
+    import rclpy
+    from rclpy.node import Node
+    from sensor_msgs.msg import JointState
+    from trajectory_msgs.msg import JointTrajectory,JointTrajectoryPoint
+    from controller_manager_msgs.srv import ListControllers
+    from builtin_interfaces.msg import Duration
+    from diagnostic_msgs.msg import DiagnosticArray
+    from rclpy.executors import SingleThreadedExecutor
+
+    rclpy.init()
+    node=Node('alfa_left_prefix_control')
+    publisher=node.create_publisher(JointTrajectory,topic,10)
+    client=node.create_client(ListControllers,'/controller_manager/list_controllers')
+    query={'future':None}
+
+    def receive(message):
+        mapping=dict(zip(message.name,message.position))
+        if not all(name in mapping and math.isfinite(mapping[name]) for name in JOINT_NAMES):
+            return
+        stamp=message.header.stamp.sec+message.header.stamp.nanosec*1e-9
+        age=node.get_clock().now().nanoseconds*1e-9-stamp
+        state.feedback([mapping[name] for name in JOINT_NAMES],age)
+
+    def controller_status():
+        state.subscribers=publisher.get_subscription_count()
+        future=query['future']
+        if future is not None and future.done():
+            try:
+                with state.lock:
+                    state.controller=any(item.name=='left_arm_jtc' and item.state=='active' for item in future.result().controller)
+                    state.controller_received=time.monotonic()
+            except Exception:
+                state.controller=False
+            query['future']=None
+        if query['future'] is None and client.service_is_ready():
+            query['future']=client.call_async(ListControllers.Request())
+
+    def diagnostics(message):
+        for item in message.status:
+            if item.name=='/robot/rt_control/enable_manager':
+                with state.lock:
+                    state.enable_state={value.key:value.value for value in item.values}.get('state','UNKNOWN')
+                    state.enable_received=time.monotonic()
+
+    def publish(points):
+        message=JointTrajectory()
+        message.joint_names=list(JOINT_NAMES)
+        for point in points:
+            nanos=round(point['time_s']*1e9)
+            message.points.append(JointTrajectoryPoint(positions=point['positions'],velocities=point['velocities'],
+                accelerations=point['accelerations'],time_from_start=Duration(sec=nanos//10**9,nanosec=nanos%10**9)))
+        publisher.publish(message)
+
+    node.create_subscription(JointState,'/joint_states',receive,10)
+    node.create_subscription(DiagnosticArray,'/diagnostics',diagnostics,10)
+    node.create_timer(.5,controller_status)
+    state.publisher=publish
+    node.prefix_executor=SingleThreadedExecutor()
+    node.prefix_executor.add_node(node)
+    node.prefix_thread=threading.Thread(target=node.prefix_executor.spin,daemon=True)
+    node.prefix_thread.start()
+    return node
+
+
+def detach_ros(node):
+    import rclpy
+    node.prefix_executor.shutdown()
+    node.prefix_thread.join(timeout=3)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--library',type=Path,required=True)
+    parser.add_argument('--bind',default='127.0.0.1',choices=['127.0.0.1'])
+    parser.add_argument('--port',type=int,default=18122)
+    parser.add_argument('--topic',default='/left_arm_jtc/joint_trajectory',choices=['/left_arm_jtc/joint_trajectory'])
+    parser.add_argument('--scope',default='pending',choices=['pending','left7_joint_replay'])
+    parser.add_argument('--offline-preview',action='store_true')
+    parser.add_argument('--console-url',default='http://192.168.100.40:18121')
+    parser.add_argument('--console-token-file',type=Path)
+    args=parser.parse_args()
+    library=read_library(args.library)
+    state=State(library,args.scope)
+    if not args.offline_preview:
+        from console_lease import ConsoleLease,running_console_token_file
+        if args.console_token_file is None:
+            args.console_token_file=running_console_token_file()
+        state.lease_client=ConsoleLease(state,args.console_url,args.console_token_file)
+    node=None if args.offline_preview else attach_ros(state,args.topic)
+    page=(Path(__file__).parent/'index.html').read_bytes()
+
+    class Handler(BaseHTTPRequestHandler):
+        def reply(self,code,payload,kind='application/json'):
+            body=payload if isinstance(payload,bytes) else json.dumps(payload,ensure_ascii=False).encode()
+            self.send_response(code)
+            self.send_header('Content-Type',kind+'; charset=utf-8')
+            self.send_header('Cache-Control','no-store')
+            self.send_header('X-Content-Type-Options','nosniff')
+            self.send_header('Content-Length',str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path=='/':
+                self.reply(200,page,'text/html')
+            elif self.path=='/api/status':
+                state.viewer_seen=time.monotonic()
+                self.reply(200,state.status())
+            elif self.path=='/api/tasks':
+                self.reply(200,dict(joint_names=JOINT_NAMES,motor_signs=MOTOR_SIGNS,topic=args.topic,
+                    tasks={name:dict(task=record['task'],points=len(record['model_positions']),
+                        home_model_deg=[math.degrees(value) for value in record['model_positions'][0]],
+                        target_model_deg=[math.degrees(value) for value in record['model_positions'][-1]],
+                        target_motor_deg=[math.degrees(value) for value in motor_positions(record['model_positions'][-1])],
+                        duration_at_5_deg_s=time_parameterize([motor_positions(row) for row in record['model_positions']])[-1]['time_s'],
+                        updown=record['updown_reference'],right_max_motion_deg=record['right_reference_max_motion_deg']) for name,record in library['tasks'].items()}))
+            else:
+                self.reply(404,dict(error='Not found'))
+
+        def do_POST(self):
+            origin=self.headers.get('Origin')
+            if self.headers.get('X-Alfa-Request')!='left-prefix' or (origin and urlsplit(origin).netloc!=self.headers.get('Host')):
+                self.reply(403,dict(error='Request origin rejected'))
+                return
+            if self.path not in ('/api/move','/api/stop','/api/acquire','/api/release'):
+                self.reply(404,dict(error='Only prefix and reverse-prefix commands exist'))
+                return
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=2048:
+                    raise ValueError('Invalid request size')
+                data=json.loads(self.rfile.read(length))
+                if self.path=='/api/stop':
+                    result=state.stop()
+                elif self.path in ('/api/acquire','/api/release'):
+                    if state.lease_client is None:
+                        raise ValueError('离线预览不操作实机控制权')
+                    if self.path=='/api/release' and state.active:
+                        raise ValueError('先停止并确认停稳，再释放控制权')
+                    result=state.lease_client.acquire() if self.path=='/api/acquire' else state.lease_client.release()
+                else:
+                    result=state.send(data['task'],data['direction'],float(data.get('speed_deg_s',5.)))
+                self.reply(200,result)
+            except (ValueError,KeyError,TypeError) as error:
+                self.reply(409,dict(error=str(error)))
+
+    server=ThreadingHTTPServer((args.bind,args.port),Handler)
+    def shutdown(_signal,_frame):
+        threading.Thread(target=server.shutdown,daemon=True).start()
+    signal.signal(signal.SIGTERM,shutdown)
+    signal.signal(signal.SIGINT,shutdown)
+    print(f'READY http://{args.bind}:{args.port}/ scope={args.scope} topic={args.topic}',flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        if node is not None:
+            detach_ros(node)
+
+
+if __name__=='__main__':
+    main()

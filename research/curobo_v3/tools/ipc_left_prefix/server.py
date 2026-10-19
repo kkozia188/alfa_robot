@@ -154,7 +154,7 @@ class State:
             return dict(task=task,direction=direction,points=len(points),duration_s=duration,joint_names=JOINT_NAMES)
 
     def send_preview(self,preview_id,direction):
-        from smooth_timing import validate_preview
+        from smooth_timing import validate_preview,rt_curves
         if direction=='home' and self.last_preview_id:
             preview_id=self.last_preview_id
         if preview_id not in self.prepared:
@@ -172,6 +172,11 @@ class State:
             raise ValueError('实际起点与预览起点相差超过0.05°；请先回对应起点或重新规划，不能硬接')
         if self.motor_bounds is None or any(not lower<=value<=upper for point in points for value,(lower,upper)in zip(point['positions'],self.motor_bounds)):
             raise ValueError('预览超出实机软限位')
+        for curve,(lower,upper) in zip(rt_curves(points),self.motor_bounds):
+            roots=curve.derivative().roots(extrapolate=False)
+            for stamp in [0.,points[-1]['time_s'],*roots]:
+                if math.isfinite(stamp) and not lower-1e-9<=float(curve(stamp))<=upper+1e-9:
+                    raise ValueError('RT插值内部超出实机软限位')
         if self.publisher is None:
             raise ValueError('执行接口未就绪')
         started=time.monotonic();duration=points[-1]['time_s']

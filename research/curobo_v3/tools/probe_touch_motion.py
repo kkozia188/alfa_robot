@@ -73,20 +73,28 @@ class ProbeCollision:
         return self.validity.mask(self.torch.tensor(values, device='cuda', dtype=self.torch.float32)).cpu().numpy()
 
     def check_motion(self, points):
+        result = self.inspect_motion(points)
+        if not result['collision_passed']:
+            raise ValueError(f"关节插值路径在{result['first_collision_s']:.3f}秒碰撞；未改用其他路径，禁止发送")
+        return result['collision_samples']
+
+    def inspect_motion(self, points):
         curves = rt_curves(points)
         duration = points[-1]['time_s']
         stamps = np.linspace(0, duration, math.ceil(duration * 200) + 1)
         rows = np.column_stack([curve(stamps) for curve in curves])
         valid = self.mask(rows)
-        if not valid.all():
-            first = int(np.flatnonzero(~valid)[0])
-            raise ValueError(f'关节插值路径在{stamps[first]:.3f}秒碰撞；未改用其他路径，禁止发送')
-        return len(stamps)
+        failed = np.flatnonzero(~valid)
+        return dict(collision_samples=len(stamps), collision_passed=bool(valid.all()),
+            first_collision_s=None if not len(failed) else float(stamps[failed[0]]),
+            collision_frames=len(failed))
 
 
-def motion_payload(points, report, samples, target):
+def motion_payload(points, report, samples, target, collision_result=None):
     report = dict(report, collision_checked=True, collision_samples=samples, left_task=True,
         collision_scope='模型自碰撞/底盘cuboid/地面；右臂为Home参考；不含实测外部障碍或测试杆标定', within_duration=True)
+    if collision_result is not None:
+        report.update(collision_result, collision_advisory=True)
     payload = dict(task='probe_touch', points=points, report=report, target_tcp=target.tolist(),
         fixed_updown_m=-.3, tcp_in_left_link7=[0.,0.,.070])
     payload['preview_id'] = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()

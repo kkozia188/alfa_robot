@@ -35,6 +35,8 @@ def validate_preview(payload,max_duration_s=60.):
     points=payload['points'];report=payload['report']
     if not report.get('collision_checked')or not report.get('left_task'):
         raise ValueError('该预览没有通过参考碰撞检查，或是仅右臂任务，禁止发布')
+    if report.get('collision_passed') is False and not (payload.get('task')=='probe_touch' and report.get('collision_advisory') is True):
+        raise ValueError('参考碰撞未通过，且不是已授权仅提示的测试杆任务')
     if not 2<=len(points)<=1000:
         raise ValueError('Action必须2～1000点')
     duration=points[-1]['time_s']

@@ -52,6 +52,26 @@ class ProbeTouchIKTest(unittest.TestCase):
         self.assertTrue(np.all(actual <= np.maximum(start, goal) + 1e-10))
         self.assertEqual(len(points), round(report['duration_s'] * 10) + 1)
 
+    def test_preview_send_uses_exact_points_and_rejects_changed_start(self):
+        from unittest.mock import Mock
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/ipc_left_prefix'))
+        from server import State
+        from probe_touch_motion import motion_payload
+        start = np.zeros(7)
+        points, timing = interpolate_motion(start, np.deg2rad([1, 2, 3, 4, 5, 6, 7]))
+        payload = motion_payload(points, timing, 10, np.eye(4))
+        state = State(dict(tasks={'sample': {}}), 'left7_joint_replay')
+        state.positions = start.tolist()
+        state.motor_bounds = [(-np.pi, np.pi)] * 7
+        state.publisher = Mock()
+        state.prepared[payload['preview_id']] = payload
+        state.send_preview(payload['preview_id'], 'forward')
+        state.publisher.assert_called_once_with(points, validated_preview=True)
+        self.assertEqual(state.motion_publications, 1)
+        state.positions = [1.] * 7
+        with self.assertRaises(ValueError):
+            state.send_preview(payload['preview_id'], 'forward')
+
 
 if __name__ == '__main__':
     unittest.main()

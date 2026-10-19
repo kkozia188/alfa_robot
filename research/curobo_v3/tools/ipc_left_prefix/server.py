@@ -34,6 +34,8 @@ class State:
         self.console_received=0.
         self.console_error=''
         self.controller_error=''
+        self.prepared={}
+        self.last_preview_id=None
         self.lease_client=None
         self.viewer_seen=time.monotonic()
         self.motor_bounds=None
@@ -111,11 +113,13 @@ class State:
                 active=None if not self.active else dict(task=self.active['task'],direction=self.active['direction'],
                     remaining_s=max(0.,self.active['deadline']-time.monotonic())))
 
-    def send(self,task,direction,speed):
+    def send(self,task,direction,speed,preview_id=None):
         with self.lock:
             reason=self.reason()
             if reason:
                 raise ValueError(reason)
+            if preview_id is not None:
+                return self.send_preview(preview_id,direction)
             if direction=='home' and self.last_task:
                 task=self.last_task
             if task not in self.library['tasks']:
@@ -148,6 +152,38 @@ class State:
             self.last_message=f'已发送左臂7轴{len(points)}点，核验总时长{duration:.1f}秒（上限60秒），峰值速度≤{speed:.1f}°/s；未控制升降、右臂或吸附'
             print(json.dumps(dict(event='left_prefix_command',task=task,direction=direction,points=len(points),duration_s=duration)),flush=True)
             return dict(task=task,direction=direction,points=len(points),duration_s=duration,joint_names=JOINT_NAMES)
+
+    def send_preview(self,preview_id,direction):
+        from smooth_timing import validate_preview
+        if direction=='home' and self.last_preview_id:
+            preview_id=self.last_preview_id
+        if preview_id not in self.prepared:
+            raise ValueError('预览不存在，请先计算并预览')
+        payload=self.prepared[preview_id]
+        validate_preview(payload)
+        points=payload['points']
+        if direction=='home':
+            duration=points[-1]['time_s']
+            points=[dict(time_s=round(duration-point['time_s'],8),positions=point['positions'],
+                velocities=[-value for value in point['velocities']],accelerations=point['accelerations'])for point in reversed(points)]
+        elif direction!='forward':
+            raise ValueError('仅允许前往接触或逆序回Home')
+        if max(abs(value-target)for value,target in zip(self.positions,points[0]['positions']))>math.radians(.05):
+            raise ValueError('实际起点与预览起点相差超过0.05°；请先回对应起点或重新规划，不能硬接')
+        if self.motor_bounds is None or any(not lower<=value<=upper for point in points for value,(lower,upper)in zip(point['positions'],self.motor_bounds)):
+            raise ValueError('预览超出实机软限位')
+        if self.publisher is None:
+            raise ValueError('执行接口未就绪')
+        started=time.monotonic();duration=points[-1]['time_s']
+        self.active=dict(task=payload['task'],direction=direction,deadline=started+duration,target=points[-1]['positions'],points=points,started=started)
+        self.action_phase='sending';self.action_result=None
+        try:
+            self.publisher(points,validated_preview=True)
+        except Exception:
+            self.active=None;self.action_phase='send_failed';raise
+        self.motion_publications+=1;self.last_task=payload['task'];self.last_preview_id=preview_id
+        self.last_message=f'已发送已预览的左7轴10Hz轨迹：{len(points)}点/{duration:.1f}秒；无升降、右臂、吸附或后续动作'
+        return dict(task=payload['task'],direction=direction,points=len(points),duration_s=duration,joint_names=JOINT_NAMES)
 
     def stop(self):
         with self.lock:
@@ -221,8 +257,9 @@ def attach_ros(state,action_name):
                     state.enable_state={value.key:value.value for value in item.values}.get('state','UNKNOWN')
                     state.enable_received=time.monotonic()
 
-    def publish(points):
-        validate_timing(points)
+    def publish(points,validated_preview=False):
+        if not validated_preview:
+            validate_timing(points)
         if not action.server_is_ready():
             raise ValueError('FollowJointTrajectory Action服务不可用')
         goal=FollowJointTrajectory.Goal()
@@ -324,9 +361,15 @@ def main():
     state=State(library,args.scope)
     if not args.offline_preview:
         from console_lease import ConsoleLease,running_console_token_file
-        if args.console_token_file is None:
-            args.console_token_file=running_console_token_file()
-        state.lease_client=ConsoleLease(state,args.console_url,args.console_token_file)
+        def connect_console():
+            while state.lease_client is None:
+                try:
+                    token_file=args.console_token_file or running_console_token_file()
+                    state.lease_client=ConsoleLease(state,args.console_url,token_file)
+                except Exception:
+                    state.console_error='18121控制台未启动或认证未就绪，等待重连；不会自动使能'
+                    time.sleep(2.)
+        threading.Thread(target=connect_console,daemon=True).start()
     node=None if args.offline_preview else attach_ros(state,args.action)
     page=(Path(__file__).parent/'index.html').read_bytes()
 
@@ -377,15 +420,28 @@ def main():
             if self.headers.get('X-Alfa-Request')!='left-prefix' or (origin and urlsplit(origin).netloc!=self.headers.get('Host')):
                 self.reply(403,dict(error='Request origin rejected'))
                 return
-            if self.path not in ('/api/move','/api/stop','/api/acquire','/api/release'):
+            if self.path not in ('/api/move','/api/stop','/api/acquire','/api/release','/api/prepare'):
                 self.reply(404,dict(error='Only prefix and reverse-prefix commands exist'))
                 return
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if not 0<length<=2048:
+                if not 0<length<=(2_000_000 if self.path=='/api/prepare'else 2048):
                     raise ValueError('Invalid request size')
                 data=json.loads(self.rfile.read(length))
-                if self.path=='/api/stop':
+                if self.path=='/api/prepare':
+                    if state.active:
+                        raise ValueError('正在执行，不能更新预览')
+                    from smooth_timing import validate_preview
+                    identity=validate_preview(data)
+                    with state.lock:
+                        state.prepared[identity]=data
+                        while len(state.prepared)>12:
+                            oldest=next(iter(state.prepared))
+                            if oldest==state.last_preview_id:
+                                state.prepared[oldest]=state.prepared.pop(oldest);continue
+                            del state.prepared[oldest]
+                    result=dict(preview_id=identity,ready=True)
+                elif self.path=='/api/stop':
                     result=state.stop()
                 elif self.path in ('/api/acquire','/api/release'):
                     if state.lease_client is None:
@@ -394,7 +450,7 @@ def main():
                         raise ValueError('先停止并确认停稳，再释放控制权')
                     result=state.lease_client.acquire() if self.path=='/api/acquire' else state.lease_client.release()
                 else:
-                    result=state.send(data['task'],data['direction'],float(data.get('speed_deg_s',15.)))
+                    result=state.send(data.get('task',''),data['direction'],float(data.get('speed_deg_s',15.)),data.get('preview_id'))
                 self.reply(200,result)
             except (ValueError,KeyError,TypeError) as error:
                 self.reply(409,dict(error=str(error)))

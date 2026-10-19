@@ -178,6 +178,12 @@ def run_attempt(
         f"precontact_candidate_limit:={args.precontact_candidate_limit}",
         f"rrt_planning_time:={args.rrt_planning_time:.6f}",
         f"rrt_planning_attempts:={args.rrt_planning_attempts}",
+        "pure_rrt_full_flow:=" + (
+            "true" if getattr(args, "pure_rrt_full_flow", False) else "false"
+        ),
+        "ompl_simplify_solutions:=" + (
+            "true" if getattr(args, "ompl_simplify_solutions", True) else "false"
+        ),
         f"edge_joint_resolution_deg:={getattr(args, 'edge_joint_resolution_deg', 2.5):.6f}",
         "natural_seed_swivel_sampling:=" + (
             "true" if getattr(args, "natural_seed_swivel_sampling", False) else "false"

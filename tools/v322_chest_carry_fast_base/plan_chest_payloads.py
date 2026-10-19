@@ -147,7 +147,7 @@ def chest_box_center_base(payload: dict[str, Any]) -> np.ndarray:
 
 
 def chest_target(
-    robot: UrdfRobot, payload: dict[str, Any]
+    robot: UrdfRobot, payload: dict[str, Any], pure_rrt: bool = False
 ) -> tuple[list[float], list[float]]:
     base_x, base_y, base_yaw = [float(value) for value in payload["base_pose_map"]]
     if abs(base_yaw) > 1e-9:
@@ -155,8 +155,25 @@ def chest_target(
     desired_center = chest_box_center_base(payload) + np.asarray(
         [base_x, base_y, 0.0]
     )
-    contact = contact_tool_transform(robot, payload)
-    rotation = contact[:3, :3]
+    if pure_rrt:
+        angle = math.pi if payload["grasp_mode"] == "top_suction" else math.pi / 2.0
+        axis = np.asarray(
+            [1.0, 0.0, 0.0] if payload["grasp_mode"] == "top_suction"
+            else [0.0, 1.0, 0.0],
+            dtype=float,
+        )
+        skew = np.asarray([
+            [0.0, -axis[2], axis[1]],
+            [axis[2], 0.0, -axis[0]],
+            [-axis[1], axis[0], 0.0],
+        ])
+        rotation = (
+            np.eye(3) * math.cos(angle)
+            + (1.0 - math.cos(angle)) * np.outer(axis, axis)
+            + math.sin(angle) * skew
+        )
+    else:
+        rotation = contact_tool_transform(robot, payload)[:3, :3]
     offset = np.asarray(payload["tool_to_box_center"], dtype=float)
     tcp_position = desired_center - rotation @ offset
     pose = [
@@ -232,6 +249,7 @@ def planner_args(
     guide_payload: dict[str, Any] | None,
     fast_probe: bool = False,
     parallel_rrt_workers: int = 1,
+    pure_rrt: bool = False,
 ) -> SimpleNamespace:
     if not task.get("transition_frames"):
         raise ValueError(f"box {task['box_id']} has no validated entry bridge")
@@ -254,7 +272,9 @@ def planner_args(
         end_effector="scoop",
         ignore_opposite_arm=False,
         continuous_sequence=True,
-        continuous_plan_approach=False,
+        continuous_plan_approach=pure_rrt,
+        pure_rrt_full_flow=pure_rrt,
+        ompl_simplify_solutions=not pure_rrt,
         maximum_carried_box_tilt_deg=8.0,
         maximum_carried_box_center_z=2.20,
         center_front_suction_y_offset=0.08,
@@ -287,7 +307,7 @@ def planner_args(
         psi_step_deg=5.0,
         maximum_cartesian_joint_step_deg=180.0,
         precontact_candidate_limit=1 if fast_probe else 2,
-        rrt_planning_time=0.25 if fast_probe else 1.0,
+        rrt_planning_time=30.0 if pure_rrt else (0.25 if fast_probe else 1.0),
         rrt_planning_attempts=1,
         edge_joint_resolution_deg=1.0,
         natural_seed_swivel_sampling=False,
@@ -297,23 +317,23 @@ def planner_args(
         natural_joint_wrap_weight=1.0,
         natural_place_return_weight=0.0,
         natural_cartesian_replay_step_deg=0.0,
-        natural_rrt_shortcut_enabled=True,
-        natural_rrt_shortcut_tcp_cost=True,
+        natural_rrt_shortcut_enabled=not pure_rrt,
+        natural_rrt_shortcut_tcp_cost=not pure_rrt,
         natural_rrt_shortcut_max_nodes=64,
-        cartesian_transfer_search_enabled=True,
+        cartesian_transfer_search_enabled=not pure_rrt,
         cartesian_transfer_translation_step=0.02,
         cartesian_transfer_rotation_step_deg=2.0,
         cartesian_transfer_max_search_attempts=2 if fast_probe else 12,
-        shortcut_repair_rrt_enabled=True,
+        shortcut_repair_rrt_enabled=not pure_rrt,
         shortcut_repair_rrt_budget_ms=300.0 if fast_probe else 1000.0,
         shortcut_repair_rrt_max_samples=120 if fast_probe else 400,
         parallel_rrt_workers=parallel_rrt_workers,
         shortcut_repair_max_joint_offset_deg=35.0,
-        place_updown_enabled=True,
+        place_updown_enabled=not pure_rrt,
         place_updown_m=CHEST_UPDOWN_M,
         top_loaded_transfer_direct_only=False,
         loaded_transfer_defer_place_updown=True,
-        auto_safe_opposite_arm=(
+        auto_safe_opposite_arm=(not pure_rrt and
             not fixed_opposite and (
                 box_id in {3, 8, 13, 18, 23}
                 or float(payload["initial_updown"]) < CHEST_UPDOWN_M - 1e-9
@@ -335,14 +355,14 @@ def planner_args(
         loaded_transfer_waypoint_start_deg="",
         loaded_transfer_arm_updown_waypoints=(
             coupled_guide_string(guide_payload, str(payload["side"]))
-            if guide_payload else ""
+            if guide_payload and not pure_rrt else ""
         ),
         loaded_transfer_arm_updown_waypoint_start="",
         transition_joint_waypoints="",
         transition_waypoint_start="",
         transition_whole_body_waypoints="",
         transition_whole_body_waypoint_start="",
-        timeout=20.0 if fast_probe else 90.0,
+        timeout=1200.0 if pure_rrt else (20.0 if fast_probe else 90.0),
     )
 
 
@@ -448,6 +468,22 @@ def main() -> int:
         action="store_true",
         help="solve each chest TCP pose from its own retreat state; do not reuse joint profiles",
     )
+    parser.add_argument(
+        "--pure-rrt",
+        action="store_true",
+        help="online pose IK plus mandatory OMPL RRTConnect for every motion segment",
+    )
+    parser.add_argument(
+        "--pure-initial-updown",
+        type=float,
+        default=-0.30,
+        help="actual current lift state used by pure RRT instead of cached task height",
+    )
+    parser.add_argument(
+        "--continue-on-failure",
+        action="store_true",
+        help="record a failed box and continue scanning the remaining requested boxes",
+    )
     args = parser.parse_args()
     if not 1 <= args.parallel_rrt_workers <= 32:
         parser.error("--parallel-rrt-workers must be in [1, 32]")
@@ -475,7 +511,7 @@ def main() -> int:
     selected = parse_box_ids(args.box_ids)
     for box_id in ordered_box_ids(selected, tasks):
         source = copy.deepcopy(tasks[box_id]["payload"])
-        place_pose, desired_center = chest_target(robot, source)
+        place_pose, desired_center = chest_target(robot, source, args.pure_rrt)
         key = profile_key(source)
         profile_path = profiles_dir / f"{key}.json"
         profile = (
@@ -521,22 +557,31 @@ def main() -> int:
         resumed = (
             bool(planned.get("success"))
             and bool(geometry["success"])
-            and "precontact" in stages
-            and "rrt_to_precontact" not in stages
-            and "rrt_to_ready" not in stages
+            and (
+                bool(planned.get("pure_rrt_full_flow")) == args.pure_rrt
+                if args.pure_rrt else (
+                    "precontact" in stages
+                    and "rrt_to_precontact" not in stages
+                    and "rrt_to_ready" not in stages
+                )
+            )
         )
         attempt: dict[str, Any] = {}
         if not resumed:
             attempt = scan.run_attempt(
                 planner_args(
                     tasks[box_id], source, place_pose, profile_degrees,
-                    guide_payload, args.fast_probe, args.parallel_rrt_workers
+                    guide_payload, args.fast_probe, args.parallel_rrt_workers,
+                    args.pure_rrt,
                 ),
                 box_id,
                 str(source["grasp_mode"]),
                 set(int(value) for value in source["removed_box_ids"]),
                 str(source["side"]),
-                float(source["initial_updown"]),
+                (
+                    args.pure_initial_updown
+                    if args.pure_rrt else float(source["initial_updown"])
+                ),
                 box_center(box_id),
                 result_path,
             )
@@ -551,9 +596,16 @@ def main() -> int:
             planned["desired_chest_box_center_base"] = desired_center_base
             planned["desired_chest_box_center_map"] = desired_center
             planned["chest_pullback_contract"] = {
-                "strategy": "fresh_tcp_goal_cartesian_first",
-                "fallback": "inward_tcp_waypoints_then_local_shortcut",
+                "strategy": (
+                    "online_pose_ik_mandatory_rrtconnect"
+                    if args.pure_rrt else "fresh_tcp_goal_cartesian_first"
+                ),
+                "fallback": (
+                    "none" if args.pure_rrt
+                    else "inward_tcp_waypoints_then_local_shortcut"
+                ),
                 "shared_joint_profile": False,
+                "pure_rrt_full_flow": args.pure_rrt,
             }
             write_json(result_path, planned)
         if success and profile is None and not args.fresh_pose_goals:
@@ -600,7 +652,7 @@ def main() -> int:
             f"stage={entry['failure_stage']} time_ms={entry['total_ms']:.3f}",
             flush=True,
         )
-        if not entry["success"]:
+        if not entry["success"] and not args.continue_on_failure:
             return 1
 
     print(f"RESULT success={sum(item['success'] for item in summary)}/{len(summary)}")

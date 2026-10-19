@@ -98,6 +98,8 @@ def generate_launch_description():
             DeclareLaunchArgument("precontact_candidate_limit", default_value="8"),
             DeclareLaunchArgument("rrt_planning_time", default_value="1.0"),
             DeclareLaunchArgument("rrt_planning_attempts", default_value="1"),
+            DeclareLaunchArgument("pure_rrt_full_flow", default_value="false"),
+            DeclareLaunchArgument("ompl_simplify_solutions", default_value="true"),
             DeclareLaunchArgument("edge_joint_resolution_deg", default_value="2.5"),
             DeclareLaunchArgument("natural_motion_enabled", default_value="true"),
             DeclareLaunchArgument("natural_swivel_weight", default_value="0.02"),
@@ -344,6 +346,12 @@ def generate_launch_description():
                         ),
                         "rrt_planning_attempts": ParameterValue(
                             LaunchConfiguration("rrt_planning_attempts"), value_type=int
+                        ),
+                        "pure_rrt_full_flow": ParameterValue(
+                            LaunchConfiguration("pure_rrt_full_flow"), value_type=bool
+                        ),
+                        "ompl.simplify_solutions": ParameterValue(
+                            LaunchConfiguration("ompl_simplify_solutions"), value_type=bool
                         ),
                         "edge_joint_resolution_deg": ParameterValue(
                             LaunchConfiguration("edge_joint_resolution_deg"), value_type=float

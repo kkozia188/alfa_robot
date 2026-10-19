@@ -14,6 +14,9 @@
 #include <moveit/robot_trajectory/robot_trajectory.h>
 #include <moveit_msgs/msg/collision_object.hpp>
 #include <nlohmann/json.hpp>
+#include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <ompl/geometric/SimpleSetup.h>
+#include <ompl/geometric/planners/rrt/RRTConnect.h>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/joint_state.hpp>
 #include <shape_msgs/msg/solid_primitive.hpp>
@@ -66,6 +69,8 @@ using Feedback = visualization_msgs::msg::InteractiveMarkerFeedback;
 using InteractiveMarker = visualization_msgs::msg::InteractiveMarker;
 using InteractiveMarkerControl = visualization_msgs::msg::InteractiveMarkerControl;
 using Marker = visualization_msgs::msg::Marker;
+namespace ob = ompl::base;
+namespace og = ompl::geometric;
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr char kMarkerName[] = "extract_box";
@@ -424,6 +429,8 @@ public:
       1, getParameter<int>("precontact_candidate_limit", 8)));
     rrt_planning_time_ = std::max(0.05, getParameter<double>("rrt_planning_time", 1.0));
     rrt_planning_attempts_ = std::max(1, getParameter<int>("rrt_planning_attempts", 1));
+    pure_rrt_full_flow_ = getParameter<bool>("pure_rrt_full_flow", false);
+    ompl_simplify_solutions_ = getParameter<bool>("ompl.simplify_solutions", true);
     natural_motion_enabled_ = getParameter<bool>("natural_motion_enabled", true);
     natural_swivel_weight_ = getParameter<double>("natural_swivel_weight", 0.02);
     natural_wrist_singularity_weight_ = getParameter<double>(
@@ -560,6 +567,19 @@ public:
         task_mode_ != "state_transition") {
       throw std::invalid_argument(
         "task_mode must be contact_reachability, full_extract, or state_transition");
+    }
+    if (pure_rrt_full_flow_ && ompl_simplify_solutions_) {
+      throw std::invalid_argument(
+        "pure_rrt_full_flow requires ompl.simplify_solutions=false");
+    }
+    if (pure_rrt_full_flow_ &&
+        (natural_rrt_shortcut_enabled_ || cartesian_transfer_search_enabled_ ||
+        shortcut_repair_rrt_enabled_ || !loaded_transfer_joint_waypoints_deg_.empty() ||
+        !loaded_transfer_arm_updown_waypoints_.empty() ||
+        !transition_joint_waypoints_.empty() ||
+        !transition_whole_body_waypoints_.empty() || top_loaded_transfer_direct_only_)) {
+      throw std::invalid_argument(
+        "pure_rrt_full_flow forbids shortcut, Cartesian, repair, direct-only, and waypoint inputs");
     }
     if (grasp_mode_ != "front" && grasp_mode_ != "top_suction") {
       throw std::invalid_argument("grasp_mode must be front or top_suction");
@@ -1444,18 +1464,35 @@ private:
   {
     const auto from_joints = armJoints(from);
     const auto to_joints = armJoints(to);
-    const double maximum_delta = maximumJointDelta(from_joints, to_joints);
+    double maximum_delta = 0.0;
+    for (size_t index = 0U; index < from_joints.size(); ++index) {
+      const double delta = pure_rrt_full_flow_ ?
+        to_joints[index] - from_joints[index] :
+        normalizedAngle(to_joints[index] - from_joints[index]);
+      maximum_delta = std::max(maximum_delta, std::abs(delta));
+    }
     const size_t steps = std::max<size_t>(
       1, static_cast<size_t>(std::ceil(maximum_delta / edge_joint_resolution_)));
     for (size_t step = 1; step <= steps; ++step) {
       const double ratio = static_cast<double>(step) / static_cast<double>(steps);
-      std::array<double, 7> interpolated{};
-      for (size_t index = 0; index < interpolated.size(); ++index) {
-        interpolated[index] = from_joints[index] +
-          normalizedAngle(to_joints[index] - from_joints[index]) * ratio;
-      }
       moveit::core::RobotState probe(from);
-      probe.setJointGroupPositions(planning_group_, interpolated.data());
+      if (pure_rrt_full_flow_) {
+        std::array<double, 7> interpolated{};
+        for (size_t index = 0; index < interpolated.size(); ++index) {
+          interpolated[index] = from_joints[index] +
+            (to_joints[index] - from_joints[index]) * ratio;
+        }
+        probe.setJointGroupPositions(planning_group_, interpolated.data());
+        probe.zeroVelocities();
+        probe.zeroAccelerations();
+      } else {
+        std::array<double, 7> interpolated{};
+        for (size_t index = 0; index < interpolated.size(); ++index) {
+          interpolated[index] = from_joints[index] +
+            normalizedAngle(to_joints[index] - from_joints[index]) * ratio;
+        }
+        probe.setJointGroupPositions(planning_group_, interpolated.data());
+      }
       if (attached) {
         attachCarriedBox(probe);
       } else if (probe.hasAttachedBody(kCarriedBoxId)) {
@@ -1463,7 +1500,29 @@ private:
       }
       probe.update(true);
       if (!probe.satisfiesBounds(planning_group_)) {
-        if (reason) *reason = "joint_bounds";
+        if (reason) {
+          *reason = "joint_bounds";
+          bool detailed = false;
+          for (const auto& variable : planning_group_->getVariableNames()) {
+            const auto& bounds = robot_model_->getVariableBounds(variable);
+            const double value = probe.getVariablePosition(variable);
+            if (bounds.position_bounded_ &&
+                (value < bounds.min_position_ || value > bounds.max_position_)) {
+              *reason += ":" + variable + "=" + std::to_string(value) +
+                " not_in[" + std::to_string(bounds.min_position_) + "," +
+                std::to_string(bounds.max_position_) + "]";
+              detailed = true;
+              break;
+            }
+          }
+          if (!detailed) {
+            *reason += ":group_rejected_values=";
+            for (const auto& variable : planning_group_->getVariableNames()) {
+              *reason += variable + "=" +
+                std::to_string(probe.getVariablePosition(variable)) + ",";
+            }
+          }
+        }
         return false;
       }
       const std::string collision = collisionReason(scene, probe, metrics);
@@ -1879,18 +1938,35 @@ private:
     for (size_t segment = 1; segment < states.size(); ++segment) {
       const auto from_joints = armJoints(*states[segment - 1]);
       const auto to_joints = armJoints(*states[segment]);
+      double maximum_delta = 0.0;
+      for (size_t index = 0U; index < from_joints.size(); ++index) {
+        const double delta = pure_rrt_full_flow_ ?
+          to_joints[index] - from_joints[index] :
+          normalizedAngle(to_joints[index] - from_joints[index]);
+        maximum_delta = std::max(maximum_delta, std::abs(delta));
+      }
       const size_t steps = std::max<size_t>(
-        1, static_cast<size_t>(std::ceil(
-          maximumJointDelta(from_joints, to_joints) / maximum_step)));
+        1, static_cast<size_t>(std::ceil(maximum_delta / maximum_step)));
       for (size_t step = 1; step <= steps; ++step) {
         const double ratio = static_cast<double>(step) / static_cast<double>(steps);
-        std::array<double, 7> interpolated{};
-        for (size_t index = 0; index < interpolated.size(); ++index) {
-          interpolated[index] = from_joints[index] +
-            normalizedAngle(to_joints[index] - from_joints[index]) * ratio;
-        }
         auto state = std::make_shared<moveit::core::RobotState>(*states[segment - 1]);
-        state->setJointGroupPositions(planning_group_, interpolated.data());
+        if (pure_rrt_full_flow_) {
+          std::array<double, 7> interpolated{};
+          for (size_t index = 0; index < interpolated.size(); ++index) {
+            interpolated[index] = from_joints[index] +
+              (to_joints[index] - from_joints[index]) * ratio;
+          }
+          state->setJointGroupPositions(planning_group_, interpolated.data());
+          state->zeroVelocities();
+          state->zeroAccelerations();
+        } else {
+          std::array<double, 7> interpolated{};
+          for (size_t index = 0; index < interpolated.size(); ++index) {
+            interpolated[index] = from_joints[index] +
+              normalizedAngle(to_joints[index] - from_joints[index]) * ratio;
+          }
+          state->setJointGroupPositions(planning_group_, interpolated.data());
+        }
         state->update(true);
         dense.push_back(std::move(state));
       }
@@ -3058,7 +3134,8 @@ private:
       return result;
     }
 
-    if (shortcut_repair_rrt_enabled_ && cartesian_transfer_search_enabled_ &&
+    if (!pure_rrt_full_flow_ &&
+        shortcut_repair_rrt_enabled_ && cartesian_transfer_search_enabled_ &&
         !direct_only && !force_cartesian_search) {
       const auto start_joints = armJoints(start_state);
       const auto goal_joints = armJoints(goal_state);
@@ -3125,7 +3202,8 @@ private:
       cartesian_diagnostic = repair_reason;
     }
 
-    if (cartesian_transfer_search_enabled_ && cartesian_search_available()) {
+    if (!pure_rrt_full_flow_ &&
+        cartesian_transfer_search_enabled_ && cartesian_search_available()) {
       const auto shortcut_started = std::chrono::steady_clock::now();
       record_cartesian_attempt();
       if (metrics) ++metrics->tcp_shortcut_attempts;
@@ -3153,7 +3231,8 @@ private:
       }
       cartesian_diagnostic = "direct Cartesian: " + cartesian_reason;
     }
-    if (cartesian_transfer_search_enabled_ && cartesian_search_available()) {
+    if (!pure_rrt_full_flow_ &&
+        cartesian_transfer_search_enabled_ && cartesian_search_available()) {
       const auto waypoint_started = std::chrono::steady_clock::now();
       std::vector<moveit::core::RobotStatePtr> waypoint_states;
       std::string waypoint_reason;
@@ -3180,7 +3259,8 @@ private:
       }
       cartesian_diagnostic += "; waypoint Cartesian: " + waypoint_reason;
     }
-    if (force_cartesian_search && shortcut_repair_rrt_enabled_ && !direct_only) {
+    if (!pure_rrt_full_flow_ && force_cartesian_search &&
+        shortcut_repair_rrt_enabled_ && !direct_only) {
       const auto repair_started = std::chrono::steady_clock::now();
       if (metrics) ++metrics->reduced_rrt_attempts;
       const uint64_t samples_before = metrics ? metrics->reduced_rrt_samples : 0U;
@@ -3212,32 +3292,36 @@ private:
     }
     const auto start_joints = armJoints(start_state);
     const auto goal_joints = armJoints(goal_state);
-    const size_t direct_steps = std::max<size_t>(
-      1, static_cast<size_t>(std::ceil(
-        maximumJointDelta(start_joints, goal_joints) / edge_joint_resolution_)));
     std::vector<moveit::core::RobotStatePtr> direct_states;
-    direct_states.reserve(direct_steps + 1U);
-    direct_states.push_back(std::make_shared<moveit::core::RobotState>(start_state));
-    bool direct_clear = true;
-    for (size_t step = 1; step <= direct_steps; ++step) {
-      const double ratio = static_cast<double>(step) / static_cast<double>(direct_steps);
-      std::array<double, 7> interpolated{};
-      for (size_t index = 0; index < interpolated.size(); ++index) {
-        interpolated[index] = start_joints[index] +
-          normalizedAngle(goal_joints[index] - start_joints[index]) * ratio;
+    bool direct_clear = false;
+    if (!pure_rrt_full_flow_) {
+      const size_t direct_steps = std::max<size_t>(
+        1, static_cast<size_t>(std::ceil(
+          maximumJointDelta(start_joints, goal_joints) / edge_joint_resolution_)));
+      direct_states.reserve(direct_steps + 1U);
+      direct_states.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+      direct_clear = true;
+      for (size_t step = 1; step <= direct_steps; ++step) {
+        const double ratio = static_cast<double>(step) / static_cast<double>(direct_steps);
+        std::array<double, 7> interpolated{};
+        for (size_t index = 0; index < interpolated.size(); ++index) {
+          interpolated[index] = start_joints[index] +
+            normalizedAngle(goal_joints[index] - start_joints[index]) * ratio;
+        }
+        auto state = std::make_shared<moveit::core::RobotState>(start_state);
+        state->setJointGroupPositions(planning_group_, interpolated.data());
+        state->update(true);
+        if (!state->satisfiesBounds(planning_group_) ||
+            (loaded && !carriedBoxFeasible(*state)) ||
+            !alfa_robot::motion::scene_collision_reason(
+              scene, *state, planning_group_).empty()) {
+          direct_clear = false;
+          break;
+        }
+        direct_states.push_back(std::move(state));
       }
-      auto state = std::make_shared<moveit::core::RobotState>(start_state);
-      state->setJointGroupPositions(planning_group_, interpolated.data());
-      state->update(true);
-      if (!state->satisfiesBounds(planning_group_) ||
-          (loaded && !carriedBoxFeasible(*state)) ||
-          !alfa_robot::motion::scene_collision_reason(scene, *state, planning_group_).empty()) {
-        direct_clear = false;
-        break;
-      }
-      direct_states.push_back(std::move(state));
     }
-    if (direct_clear) {
+    if (!pure_rrt_full_flow_ && direct_clear) {
       if (metrics) ++metrics->joint_fallback_segments;
       result.wall_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - wall_started).count();
@@ -3247,7 +3331,7 @@ private:
       result.strategy = "joint_shortcut";
       return result;
     }
-    if (direct_only) {
+    if (!pure_rrt_full_flow_ && direct_only) {
       result.wall_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - wall_started).count();
       result.reason = "direct_joint_interpolation_in_collision";
@@ -3276,7 +3360,7 @@ private:
     result.planner_ms = response.planning_time_ * 1000.0;
     if (!generated || response.error_code_.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS ||
         !response.trajectory_) {
-      if (direct_clear) {
+      if (!pure_rrt_full_flow_ && direct_clear) {
         if (metrics) ++metrics->joint_fallback_segments;
         result.states = std::move(direct_states);
         result.success = true;
@@ -3299,6 +3383,36 @@ private:
     }
     if (result.states.empty()) {
       result.reason = "RRTConnect returned empty trajectory";
+      return result;
+    }
+    if (pure_rrt_full_flow_) {
+      std::vector<moveit::core::RobotStatePtr> raw_path;
+      raw_path.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+      raw_path.insert(raw_path.end(), result.states.begin(), result.states.end());
+      const auto& last = *raw_path.back();
+      double goal_error = 0.0;
+      for (const auto& variable : planning_group_->getVariableNames()) {
+        goal_error = std::max(goal_error, std::abs(
+          last.getVariablePosition(variable) - goal_state.getVariablePosition(variable)));
+      }
+      if (goal_error > 1e-8) {
+        raw_path.push_back(std::make_shared<moveit::core::RobotState>(goal_state));
+      }
+      result.states = densifyRrtReplay(raw_path);
+      for (size_t index = 1U; index < result.states.size(); ++index) {
+        if (!edgeClear(
+              scene, *result.states[index - 1U], *result.states[index],
+              loaded, nullptr, &result.reason)) {
+          result.reason = "pure_rrt_path_validation: " + result.reason;
+          result.states.clear();
+          return result;
+        }
+      }
+      result.success = true;
+      result.reason = "pure_rrt_full_flow exact solution";
+      result.strategy = "pure_ompl_rrt_connect";
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - wall_started).count();
       return result;
     }
     if (natural_rrt_shortcut_enabled_ && result.states.size() > 2U) {
@@ -3444,12 +3558,175 @@ private:
       }
     }
     result.success = true;
-    result.reason = "rrt_cartesian_hybrid";
-    result.strategy = "joint_rrt_fallback";
+    result.reason = pure_rrt_full_flow_ ?
+      "pure_rrt_full_flow exact solution" : "rrt_cartesian_hybrid";
+    result.strategy = pure_rrt_full_flow_ ?
+      "pure_ompl_rrt_connect" : "joint_rrt_fallback";
     if (metrics) ++metrics->joint_rrt_fallbacks;
     if (!cartesian_diagnostic.empty()) result.reason += " after " + cartesian_diagnostic;
     result.wall_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - wall_started).count();
+    return result;
+  }
+
+  RrtPlanResult planPureArmUpdownRrt(
+    const planning_scene::PlanningSceneConstPtr& base_scene,
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    bool attached,
+    PlanningMetrics* metrics) const
+  {
+    RrtPlanResult result;
+    const auto started = std::chrono::steady_clock::now();
+    const std::string group_name = "dual_arm_with_updown";
+    const auto* group = robot_model_->getJointModelGroup(group_name);
+    if (!group || group->getVariableCount() != 15U) {
+      result.reason = "missing pure RRT group " + group_name;
+      return result;
+    }
+    auto scene = planning_scene::PlanningScene::clone(base_scene);
+    scene->setCurrentState(start_state);
+    if (attached) {
+      scene->setStateFeasibilityPredicate(
+        [this](const moveit::core::RobotState& state, bool) {
+          return carriedBoxFeasible(state);
+        });
+    }
+    const auto state_valid = [&](const moveit::core::RobotState& state) {
+        return state.satisfiesBounds(group) &&
+          (!attached || carriedBoxFeasible(state)) &&
+          fullCollisionReason(scene, state, metrics).empty();
+      };
+    if (!state_valid(start_state)) {
+      result.reason = "pure arm+updown RRT start state invalid";
+      return result;
+    }
+    if (!state_valid(goal_state)) {
+      result.reason = "pure arm+updown RRT goal state invalid";
+      return result;
+    }
+
+    const auto& variables = group->getVariableNames();
+    auto space = std::make_shared<ob::RealVectorStateSpace>(variables.size());
+    ob::RealVectorBounds bounds(variables.size());
+    for (size_t index = 0U; index < variables.size(); ++index) {
+      const auto& limit = robot_model_->getVariableBounds(variables[index]);
+      if (!limit.position_bounded_ || !(limit.min_position_ < limit.max_position_)) {
+        result.reason = "pure RRT variable lacks finite bounds: " + variables[index];
+        return result;
+      }
+      bounds.setLow(index, limit.min_position_);
+      bounds.setHigh(index, limit.max_position_);
+    }
+    space->setBounds(bounds);
+    og::SimpleSetup setup(space);
+    auto validity_probe = std::make_shared<moveit::core::RobotState>(start_state);
+    setup.setStateValidityChecker(
+      [&, validity_probe](const ob::State* state) mutable {
+        const auto* values = state->as<
+          ob::RealVectorStateSpace::StateType>()->values;
+        for (size_t index = 0U; index < variables.size(); ++index) {
+          validity_probe->setVariablePosition(variables[index], values[index]);
+        }
+        validity_probe->zeroVelocities();
+        validity_probe->zeroAccelerations();
+        if (attached) attachCarriedBox(*validity_probe);
+        else if (validity_probe->hasAttachedBody(kCarriedBoxId)) {
+          validity_probe->clearAttachedBody(kCarriedBoxId);
+        }
+        validity_probe->update(true);
+        return state_valid(*validity_probe);
+      });
+    setup.getSpaceInformation()->setStateValidityCheckingResolution(0.0005);
+    ob::ScopedState<> start(space);
+    ob::ScopedState<> goal(space);
+    for (size_t index = 0U; index < variables.size(); ++index) {
+      start[index] = start_state.getVariablePosition(variables[index]);
+      goal[index] = goal_state.getVariablePosition(variables[index]);
+    }
+    setup.setStartAndGoalStates(start, goal);
+    auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
+    planner->setRange(0.12);
+    setup.setPlanner(planner);
+    const auto search_started = std::chrono::steady_clock::now();
+    const auto status = setup.solve(rrt_planning_time_);
+    result.joint_rrt_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - search_started).count();
+    if (metrics) metrics->joint_rrt_ms += result.joint_rrt_ms;
+    result.planner_ms = result.joint_rrt_ms;
+    if (status != ob::PlannerStatus::EXACT_SOLUTION) {
+      result.reason = "pure dual-arm+updown RRTConnect status=" +
+        status.asString();
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return result;
+    }
+
+    std::vector<moveit::core::RobotStatePtr> sparse;
+    sparse.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+    const auto& path = setup.getSolutionPath();
+    for (size_t path_index = 0U; path_index < path.getStateCount(); ++path_index) {
+      const auto* values = path.getState(path_index)->as<
+        ob::RealVectorStateSpace::StateType>()->values;
+      auto path_state = std::make_shared<moveit::core::RobotState>(start_state);
+      for (size_t index = 0U; index < variables.size(); ++index) {
+        path_state->setVariablePosition(variables[index], values[index]);
+      }
+      path_state->zeroVelocities();
+      path_state->zeroAccelerations();
+      if (attached) attachCarriedBox(*path_state);
+      else if (path_state->hasAttachedBody(kCarriedBoxId)) {
+        path_state->clearAttachedBody(kCarriedBoxId);
+      }
+      path_state->update(true);
+      sparse.push_back(std::move(path_state));
+    }
+    sparse.push_back(std::make_shared<moveit::core::RobotState>(goal_state));
+    result.states.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+    for (size_t edge = 1U; edge < sparse.size(); ++edge) {
+      const auto& from = *sparse[edge - 1U];
+      const auto& to = *sparse[edge];
+      double maximum_ratio = 0.0;
+      for (const auto& variable : group->getVariableNames()) {
+        const double resolution = variable == "updown" ? 0.01 : degToRad(1.0);
+        maximum_ratio = std::max(
+          maximum_ratio,
+          std::abs(to.getVariablePosition(variable) -
+            from.getVariablePosition(variable)) / resolution);
+      }
+      const size_t steps = std::max<size_t>(
+        1U, static_cast<size_t>(std::ceil(maximum_ratio)));
+      for (size_t step = 1U; step <= steps; ++step) {
+        const double ratio =
+          static_cast<double>(step) / static_cast<double>(steps);
+        auto probe = std::make_shared<moveit::core::RobotState>(from);
+        for (const auto& variable : group->getVariableNames()) {
+          probe->setVariablePosition(
+            variable, from.getVariablePosition(variable) +
+            (to.getVariablePosition(variable) - from.getVariablePosition(variable)) * ratio);
+        }
+        probe->zeroVelocities();
+        probe->zeroAccelerations();
+        if (attached) attachCarriedBox(*probe);
+        else if (probe->hasAttachedBody(kCarriedBoxId)) {
+          probe->clearAttachedBody(kCarriedBoxId);
+        }
+        probe->update(true);
+        if (!state_valid(*probe)) {
+          result.states.clear();
+          result.reason = "pure arm+updown RRT path failed dense FCL validation";
+          result.wall_ms = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - started).count();
+          return result;
+        }
+        result.states.push_back(std::move(probe));
+      }
+    }
+    result.success = true;
+    result.strategy = "pure_ompl_rrt_connect_dual_arm_updown";
+    result.reason = "pure_rrt_full_flow exact dual-arm+updown solution";
+    result.wall_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
     return result;
   }
 
@@ -3825,6 +4102,61 @@ private:
           precontact_candidates.push_back(std::move(candidate));
         }
       }
+    } else if (pure_rrt_full_flow_) {
+      const auto& lift_bounds = robot_model_->getVariableBounds("updown");
+      std::vector<double> lift_samples{
+        initial_state_->getVariablePosition("updown")};
+      constexpr double kLiftGoalStep = 0.25;
+      for (double lift = lift_bounds.max_position_;
+          lift >= lift_bounds.min_position_ - 1e-9; lift -= kLiftGoalStep) {
+        if (std::none_of(
+              lift_samples.begin(), lift_samples.end(),
+              [lift](double existing) {return std::abs(existing - lift) < 1e-9;})) {
+          lift_samples.push_back(lift);
+        }
+      }
+      std::sort(
+        lift_samples.begin(), lift_samples.end(),
+        [this](double left, double right) {
+          const double current = initial_state_->getVariablePosition("updown");
+          return std::abs(left - current) < std::abs(right - current);
+        });
+      std::ostringstream lift_diagnostics;
+      std::vector<AnalyticCandidate> whole_body_candidates;
+      for (const double lift : lift_samples) {
+        moveit::core::RobotState lift_seed(*initial_state_);
+        lift_seed.setVariablePosition("updown", lift);
+        lift_seed.update(true);
+        std::string rejection;
+        auto candidates = solvePoseCandidates(
+          precontactPose(box_center), lift_seed, false, scene, &result.metrics,
+          false, &rejection);
+        for (auto& candidate : candidates) {
+          candidate.score += 0.1 * std::abs(
+            lift - initial_state_->getVariablePosition("updown"));
+          std::vector<moveit::core::RobotStatePtr> target_states{
+            candidate.state};
+          std::string opposite_reason;
+          if (!assignCollisionFreeOppositeArm(
+                scene, &target_states, &target_states,
+                &result.metrics, &opposite_reason)) {
+            precontact_rejections += " opposite=[" + opposite_reason + "]";
+            continue;
+          }
+          candidate.state = target_states.front();
+          whole_body_candidates.push_back(std::move(candidate));
+          if (whole_body_candidates.size() >= precontact_candidate_limit_) break;
+        }
+        lift_diagnostics << " h=" << lift << "[" << rejection << "]";
+        if (whole_body_candidates.size() >= precontact_candidate_limit_) break;
+      }
+      std::stable_sort(
+        whole_body_candidates.begin(), whole_body_candidates.end(),
+        [](const AnalyticCandidate& left, const AnalyticCandidate& right) {
+          return left.score < right.score;
+        });
+      precontact_rejections = lift_diagnostics.str();
+      precontact_candidates = std::move(whole_body_candidates);
     } else {
       precontact_candidates = solvePoseCandidates(
         precontactPose(box_center), *initial_state_, false, scene, &result.metrics,
@@ -3849,10 +4181,75 @@ private:
       std::vector<moveit::core::RobotStatePtr> retreat_states;
       std::string analytic_failure_stage;
       std::string analytic_failure_reason;
-      const bool analytic_ok = traceCartesianPath(
-        box_center, *precontact_candidates[candidate_index].state, scene,
-        &result.metrics, &approach_states, &retreat_states,
-        &analytic_failure_stage, &analytic_failure_reason);
+      RrtPlanResult pure_precontact_rrt;
+      if (pure_rrt_full_flow_) {
+        pure_precontact_rrt = planPureArmUpdownRrt(
+          scene, *initial_state_, *precontact_candidates[candidate_index].state,
+          false, &result.metrics);
+        record_search("to_precontact", pure_precontact_rrt);
+        result.metrics.rrt_approach_ms += pure_precontact_rrt.wall_ms;
+        if (!pure_precontact_rrt.success) {
+          last_failure_stage = "rrt_to_precontact";
+          last_failure_reason = "candidate " + std::to_string(candidate_index) +
+            " " + pure_precontact_rrt.reason;
+          continue;
+        }
+      }
+      bool analytic_ok = false;
+      if (pure_rrt_full_flow_) {
+        std::string contact_rejections;
+        const auto contact_candidates = solvePoseCandidates(
+          contactPose(box_center), *precontact_candidates[candidate_index].state,
+          false, scene, &result.metrics, false, &contact_rejections);
+        for (const auto& contact_candidate : contact_candidates) {
+          auto to_contact = planRrt(
+            scene, *precontact_candidates[candidate_index].state,
+            *contact_candidate.state, false, &result.metrics);
+          record_search("precontact_to_contact", to_contact);
+          if (!to_contact.success) {
+            analytic_failure_reason = to_contact.reason;
+            continue;
+          }
+          moveit::core::RobotState loaded_contact(*contact_candidate.state);
+          attachCarriedBox(loaded_contact);
+          loaded_contact.update(true);
+          std::string retreat_rejections;
+          const auto retreat_candidates = solvePoseCandidates(
+            retreatPose(box_center), loaded_contact, true, scene,
+            &result.metrics, false, &retreat_rejections);
+          for (const auto& retreat_candidate : retreat_candidates) {
+            auto to_retreat = planRrt(
+              scene, loaded_contact, *retreat_candidate.state,
+              false, &result.metrics);
+            record_search("contact_to_retreat_loaded", to_retreat);
+            if (!to_retreat.success) {
+              analytic_failure_reason = to_retreat.reason;
+              continue;
+            }
+            approach_states = std::move(to_contact.states);
+            retreat_states = std::move(to_retreat.states);
+            if (retreat_states.empty() ||
+                !retreat_states.front()->hasAttachedBody(kCarriedBoxId)) {
+              retreat_states.insert(
+                retreat_states.begin(),
+                std::make_shared<moveit::core::RobotState>(loaded_contact));
+            }
+            analytic_ok = true;
+            break;
+          }
+          if (analytic_ok) break;
+          analytic_failure_reason = retreat_rejections;
+        }
+        analytic_failure_stage = analytic_ok ? "" : "pure_rrt_grasp_motion";
+        if (!analytic_ok && analytic_failure_reason.empty()) {
+          analytic_failure_reason = contact_rejections;
+        }
+      } else {
+        analytic_ok = traceCartesianPath(
+          box_center, *precontact_candidates[candidate_index].state, scene,
+          &result.metrics, &approach_states, &retreat_states,
+          &analytic_failure_stage, &analytic_failure_reason);
+      }
       result.metrics.analytic_path_ms += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - analytic_started).count();
       if (!analytic_ok) {
@@ -3890,7 +4287,10 @@ private:
       }
 
       RrtPlanResult approach_rrt;
-      if (continuous_sequence_ && !continuous_plan_approach_) {
+      if (pure_rrt_full_flow_) {
+        approach_rrt = std::move(pure_precontact_rrt);
+      } else if (
+          continuous_sequence_ && !continuous_plan_approach_) {
         // The sequence planner connects the last release directly to this
         // precontact state with whole-body collision checking.
         approach_rrt.success = true;
@@ -3901,7 +4301,9 @@ private:
           false, &result.metrics, continuous_plan_approach_);
         record_search("to_precontact", approach_rrt);
       }
-      result.metrics.rrt_approach_ms += approach_rrt.wall_ms;
+      if (!pure_rrt_full_flow_) {
+        result.metrics.rrt_approach_ms += approach_rrt.wall_ms;
+      }
       if (!approach_rrt.success) {
         last_failure_stage = "rrt_to_precontact";
         last_failure_reason = "candidate " + std::to_string(candidate_index) + " " +
@@ -3910,21 +4312,26 @@ private:
       }
 
       std::vector<ReplayFrame> executable_prefix;
+      const std::string approach_stage = pure_rrt_full_flow_ ?
+        "rrt_to_precontact" :
+        (continuous_plan_approach_ ? "tcp_to_precontact" :
+        (continuous_sequence_ ? "precontact" : "rrt_to_precontact"));
       appendStates(
-        approach_rrt.states,
-        continuous_plan_approach_ ? "tcp_to_precontact" :
-        (continuous_sequence_ ? "precontact" : "rrt_to_precontact"),
-        false, false, &executable_prefix);
+        approach_rrt.states, approach_stage, false, false, &executable_prefix);
       appendStates(
-        densifyCartesianReplay(approach_states),
-        "cartesian_approach", false, true, &executable_prefix);
+        pure_rrt_full_flow_ ? approach_states :
+          densifyCartesianReplay(approach_states),
+        pure_rrt_full_flow_ ? "rrt_to_contact" : "cartesian_approach",
+        false, true, &executable_prefix);
       if (!retreat_states.empty()) {
         executable_prefix.push_back(
           ReplayFrame{"attach_box", allJoints(*retreat_states.front()), true});
       }
       appendStates(
-        densifyCartesianReplay(retreat_states),
-        "cartesian_retreat", true, true, &executable_prefix);
+        pure_rrt_full_flow_ ? retreat_states :
+          densifyCartesianReplay(retreat_states),
+        pure_rrt_full_flow_ ? "rrt_loaded_retreat" : "cartesian_retreat",
+        true, true, &executable_prefix);
       if (executable_prefix.size() > best_partial.size()) {
         best_partial = executable_prefix;
       }
@@ -4020,6 +4427,53 @@ private:
             place_candidates.push_back(std::move(candidate));
           }
         }
+      } else if (pure_rrt_full_flow_) {
+        const auto& lift_bounds = robot_model_->getVariableBounds("updown");
+        std::vector<double> lift_samples{
+          place_seed->getVariablePosition("updown")};
+        constexpr double kLiftGoalStep = 0.25;
+        for (double lift = lift_bounds.max_position_;
+            lift >= lift_bounds.min_position_ - 1e-9; lift -= kLiftGoalStep) {
+          if (std::none_of(
+                lift_samples.begin(), lift_samples.end(),
+                [lift](double existing) {return std::abs(existing - lift) < 1e-9;})) {
+            lift_samples.push_back(lift);
+          }
+        }
+        std::sort(
+          lift_samples.begin(), lift_samples.end(),
+          [place_seed](double left, double right) {
+            const double current = place_seed->getVariablePosition("updown");
+            return std::abs(left - current) < std::abs(right - current);
+          });
+        std::ostringstream diagnostics;
+        for (const double lift : lift_samples) {
+          moveit::core::RobotState lift_seed(*place_seed);
+          lift_seed.setVariablePosition("updown", lift);
+          attachCarriedBox(lift_seed);
+          lift_seed.update(true);
+          std::string rejection;
+          auto candidates = solvePoseCandidates(
+            placeTcpPose(), lift_seed, true, scene, &result.metrics,
+            false, &rejection);
+          for (auto& candidate : candidates) {
+            if (!fullCollisionReason(scene, *candidate.state, &result.metrics).empty()) {
+              continue;
+            }
+            candidate.score += 0.1 * std::abs(
+              lift - place_seed->getVariablePosition("updown"));
+            place_candidates.push_back(std::move(candidate));
+            if (place_candidates.size() >= 2U) break;
+          }
+          diagnostics << " h=" << lift << "[" << rejection << "]";
+          if (place_candidates.size() >= 2U) break;
+        }
+        std::stable_sort(
+          place_candidates.begin(), place_candidates.end(),
+          [](const AnalyticCandidate& left, const AnalyticCandidate& right) {
+            return left.score < right.score;
+          });
+        place_rejections = diagnostics.str();
       } else {
         place_candidates = solvePoseCandidates(
           placeTcpPose(), *place_seed, true, scene, &result.metrics,
@@ -4049,7 +4503,12 @@ private:
           std::min(place_candidates.size(), place_candidate_limit); ++place_index) {
         const auto& place_state = *place_candidates[place_index].state;
         RrtPlanResult to_place;
-        if (low_clearance_staging) {
+        if (pure_rrt_full_flow_) {
+          to_place = planPureArmUpdownRrt(
+            scene, *retreat_states.back(), place_state, true, &result.metrics);
+          record_search("loaded_transfer_dual_arm_updown", to_place);
+          result.metrics.rrt_return_ms += to_place.wall_ms;
+        } else if (low_clearance_staging) {
           moveit::core::RobotState low_place(place_state);
           low_place.setVariablePosition("updown", pickup_updown);
           low_place.update(true);
@@ -4921,6 +5380,8 @@ private:
     payload["tool_link"] = tool_link_;
     payload["initial_updown"] = initial_state_->getVariablePosition("updown");
     payload["ignore_opposite_arm"] = ignore_opposite_arm_;
+    payload["pure_rrt_full_flow"] = pure_rrt_full_flow_;
+    payload["ompl_simplify_solutions"] = ompl_simplify_solutions_;
     payload["success"] = result.success;
     payload["failure_stage"] = result.failure_stage;
     payload["failure_reason"] = result.failure_reason;
@@ -5302,6 +5763,8 @@ private:
   size_t precontact_candidate_limit_ = 8;
   double rrt_planning_time_ = 1.0;
   int rrt_planning_attempts_ = 1;
+  bool pure_rrt_full_flow_ = false;
+  bool ompl_simplify_solutions_ = true;
   bool natural_motion_enabled_ = true;
   double natural_swivel_weight_ = 0.02;
   double natural_wrist_singularity_weight_ = 0.03;

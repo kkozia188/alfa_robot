@@ -48,8 +48,10 @@ class ProbeCollision:
         from probe_touch_ik import ROOT
         from v3_batched_loaded_search import GpuValidity
         from v3_base_cuboid_layer import BaseCuboidLayer
+        from v3_base_mesh_layer import replace_arm_base_pairs
         self.torch = torch
         self.robot = yaml.safe_load((ROOT / 'generated/zero_model_candidate_20261018/fixed.yaml').read_text())
+        replace_arm_base_pairs(self.robot)
         self.checker = RobotCollisionChecker(RobotCollisionCheckerCfg.load_from_config(
             robot_config=self.robot, scene_model=Scene(cuboid=[Cuboid(name='remote_unused', dims=[.01]*3, pose=[100,100,100,1,0,0,0])]),
             n_cuboids=1, n_meshes=0, collision_activation_distance=0.))

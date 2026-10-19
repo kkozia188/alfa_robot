@@ -8,7 +8,7 @@ import time
 import unittest
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools/ipc_left_prefix'))
-from model import JOINT_NAMES,MOTOR_SIGNS,export_prefix,motor_positions,read_library,select_path,time_parameterize
+from model import JOINT_NAMES,MOTOR_SIGNS,export_prefix,motor_positions,read_library,select_path,time_parameterize,compact_path,validate_timing
 from server import State
 
 
@@ -50,6 +50,48 @@ class PrefixControlTest(unittest.TestCase):
         for start,end in zip(points,points[1:]):
             jerk=max(abs(b-a)/(end['time_s']-start['time_s']) for a,b in zip(start['accelerations'],end['accelerations']))
             self.assertLessEqual(jerk,math.radians(50.)+1e-6)
+
+    def test_compaction_preserves_corners_and_reversal(self):
+        rows=[[value,0.,0.,0.,0.,0.,0.] for value in [0.,.1,.2,.3]]
+        rows+=[[.3,value,0.,0.,0.,0.,0.] for value in [.1,.2,.1,0.]]
+        compact=compact_path(rows)
+        self.assertEqual(compact,[rows[0],rows[3],rows[5],rows[-1]])
+        self.assertLess(len(time_parameterize(rows)),len(rows))
+
+    def test_actual_quintic_interpolation_peaks_and_runtime_hard_limits(self):
+        points=time_parameterize(self.record()['model_positions'],speed_deg_s=15.)
+        for start,end in zip(points,points[1:]):
+            duration=end['time_s']-start['time_s']
+            for index in range(1001):
+                fraction=index/1000
+                for origin,target in zip(start['positions'],end['positions']):
+                    delta=target-origin
+                    velocity=delta*(30*fraction**2-60*fraction**3+30*fraction**4)/duration
+                    acceleration=delta*(60*fraction-180*fraction**2+120*fraction**3)/duration**2
+                    jerk=delta*(60-360*fraction+360*fraction**2)/duration**3
+                    self.assertLessEqual(abs(velocity),math.radians(15)+1e-9)
+                    self.assertLessEqual(abs(acceleration),math.radians(30)+1e-9)
+                    self.assertLessEqual(abs(jerk),math.radians(150)+1e-9)
+        with self.assertRaises(ValueError):time_parameterize(self.record()['model_positions'],speed_deg_s=16.)
+        with self.assertRaises(ValueError):validate_timing(points,max_duration_s=.1)
+        with self.assertRaises(ValueError):validate_timing(points,max_points=1)
+
+    def test_all_six_recordings_fit_15_degree_and_60_second_caps(self):
+        library=read_library(Path(__file__).resolve().parents[1]/'generated/left_prefix_control_20261018/prefixes.json')
+        for record in library['tasks'].values():
+            rows=record['model_positions'];points=time_parameterize(rows,speed_deg_s=15.)
+            self.assertLessEqual(len(points),200)
+            self.assertLessEqual(points[-1]['time_s'],60.)
+            for point in rows:
+                errors=[]
+                for first,last in zip(points,points[1:]):
+                    start,end=first['positions'],last['positions']
+                    delta=[b-a for a,b in zip(start,end)]
+                    length=sum(value*value for value in delta)
+                    fraction=sum((value-origin)*change for value,origin,change in zip(point,start,delta))/length if length>1e-20 else 0.
+                    fraction=max(0.,min(1.,fraction))
+                    errors.append(max(abs(value-origin-fraction*change) for value,origin,change in zip(point,start,delta)))
+                self.assertLessEqual(min(errors),2.1e-7)
 
     def test_invalid_or_post_contact_library_is_rejected(self):
         data=dict(joint_names=JOINT_NAMES,motor_signs=MOTOR_SIGNS,tasks=dict(sample=self.record()))

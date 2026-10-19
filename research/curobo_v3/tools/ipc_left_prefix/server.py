@@ -36,6 +36,9 @@ class State:
         self.viewer_seen=time.monotonic()
         self.motor_bounds=None
         self.motion_publications=0
+        self.cancel_motion=None
+        self.action_phase='idle'
+        self.action_result=None
 
     def feedback(self,positions,stamp_age):
         with self.lock:
@@ -44,10 +47,10 @@ class State:
             self.received=now
             self.stamp_age=stamp_age
             self.samples.append((now,list(positions)))
-            if self.active and now>=self.active['deadline']:
+            if self.active and self.action_phase=='succeeded':
                 error=max(abs(value-target) for value,target in zip(positions,self.active['target']))
                 if error<math.radians(.5) and self.stationary():
-                    self.last_message='终点反馈已确认；topic接口没有Action执行回执'
+                    self.last_message='Action成功且终点反馈已确认'
                     self.active=None
                 elif now>self.active['deadline']+3.:
                     self.last_message='未确认到达终点；停止本脚本后续自动处理，请检查RT控制台'
@@ -69,7 +72,7 @@ class State:
         if not self.controller or now-self.controller_received>3.:
             return 'left_arm_jtc未处于active状态，或控制器状态已过期'
         if not self.subscribers:
-            return 'RT未提供JointTrajectory话题订阅；18121实际使用FollowJointTrajectory Action，等待接口方式确认'
+            return 'FollowJointTrajectory Action服务不可用'
         if self.enable_state!='ENABLED' or now-self.enable_received>2.5:
             return '没有新鲜的RT ENABLED状态；本脚本不执行电机使能'
         if not self.lease_client or now-self.console_received>1.:
@@ -93,6 +96,8 @@ class State:
                 enable_state=self.enable_state,
                 lease=self.console_status.get('lease','unknown'),
                 motion_publications=self.motion_publications,
+                action_phase=self.action_phase,action_result=self.action_result,
+                action_server_ready=bool(self.subscribers),
                 busy=bool(self.active),last_task=self.last_task,message=self.last_message,
                 active=None if not self.active else dict(task=self.active['task'],direction=self.active['direction'],
                     remaining_s=max(0.,self.active['deadline']-time.monotonic())))
@@ -113,14 +118,24 @@ class State:
             points=time_parameterize(rows,speed_deg_s=speed)
             if time.monotonic()-self.received>.5:
                 raise ValueError('生成发送数据时反馈已过期，请等待新鲜反馈')
+            reason=self.reason()
+            if reason:
+                raise ValueError(reason)
             if self.publisher is None:
                 raise ValueError('预览模式不能发布运动')
-            self.publisher(points)
-            self.motion_publications+=1
             duration=points[-1]['time_s']
             started=time.monotonic()
             self.active=dict(task=task,direction=direction,deadline=started+duration,target=points[-1]['positions'],points=points,started=started)
             self.last_task=task
+            self.action_phase='sending'
+            self.action_result=None
+            try:
+                self.publisher(points)
+            except Exception:
+                self.active=None
+                self.action_phase='send_failed'
+                raise
+            self.motion_publications+=1
             self.last_message=f'已发布左臂7轴{len(points)}点，预计{duration:.1f}秒；未控制升降、右臂或吸附'
             print(json.dumps(dict(event='left_prefix_command',task=task,direction=direction,points=len(points),duration_s=duration)),flush=True)
             return dict(task=task,direction=direction,points=len(points),duration_s=duration,joint_names=JOINT_NAMES)
@@ -129,35 +144,20 @@ class State:
         with self.lock:
             if not self.active:
                 return dict(stopped=True,message='本脚本没有运行中的轨迹')
-            now=time.monotonic()
-            if self.console_status.get('lease')!='you' or now-self.console_received>1.:
-                raise ValueError('没有新鲜控制权状态，请使用现场RT停止流程')
-            if now-self.received>.5 or self.positions is None:
-                raise ValueError('反馈已过期，无法确认受控停止，请使用现场RT停止流程')
-            elapsed=now-self.active['started']
-            pending=[point for point in self.active['points'] if point['time_s']>elapsed+.05]
-            if not pending:
-                return dict(stopped=False,message='轨迹接近终点，等待反馈确认')
-            tail=[]
-            for point in pending:
-                tail.append(dict(point,time_s=point['time_s']-elapsed))
-                if max(abs(value) for value in point['velocities'])<1e-7 and max(abs(value) for value in point['accelerations'])<1e-7:
-                    break
-            if max(abs(value-reference) for value,reference in zip(self.positions,tail[0]['positions']))>math.radians(1.):
-                raise ValueError('实测偏离计划，不能确认停止衔接，请使用现场RT停止流程')
-            self.publisher(tail)
-            self.motion_publications+=1
-            self.active=dict(self.active,direction='stop',points=tail,started=now,deadline=now+tail[-1]['time_s'],target=tail[-1]['positions'])
-            self.last_message='已请求在下一个原记录点停稳；不是硬件急停'
-            print(json.dumps(dict(event='left_prefix_stop',task=self.active['task'],duration_s=tail[-1]['time_s'])),flush=True)
-            return dict(stopped=True,duration_s=tail[-1]['time_s'])
+            if self.cancel_motion is None:
+                raise ValueError('Action取消接口未就绪')
+            self.cancel_motion()
+            self.last_message='已请求取消Action，等待控制器确认；不是硬件急停'
+            return dict(stopped=False,cancel_requested=True)
 
 
-def attach_ros(state,topic):
+def attach_ros(state,action_name):
     import rclpy
     from rclpy.node import Node
     from sensor_msgs.msg import JointState
-    from trajectory_msgs.msg import JointTrajectory,JointTrajectoryPoint
+    from trajectory_msgs.msg import JointTrajectoryPoint
+    from control_msgs.action import FollowJointTrajectory
+    from rclpy.action import ActionClient
     from controller_manager_msgs.srv import ListControllers
     from builtin_interfaces.msg import Duration
     from diagnostic_msgs.msg import DiagnosticArray
@@ -165,7 +165,8 @@ def attach_ros(state,topic):
 
     rclpy.init()
     node=Node('alfa_left_prefix_control')
-    publisher=node.create_publisher(JointTrajectory,topic,10)
+    action=ActionClient(node,FollowJointTrajectory,action_name)
+    execution={'handle':None,'cancel':False}
     client=node.create_client(ListControllers,'/controller_manager/list_controllers')
     query={'future':None}
 
@@ -178,7 +179,9 @@ def attach_ros(state,topic):
         state.feedback([mapping[name] for name in JOINT_NAMES],age)
 
     def controller_status():
-        state.subscribers=publisher.get_subscription_count()
+        state.subscribers=int(action.server_is_ready())
+        if state.active and state.action_phase!='cancel_requested' and time.monotonic()-state.console_received>1.:
+            state.stop()
         future=query['future']
         if future is not None and future.done():
             try:
@@ -199,18 +202,77 @@ def attach_ros(state,topic):
                     state.enable_received=time.monotonic()
 
     def publish(points):
-        message=JointTrajectory()
+        if not action.server_is_ready():
+            raise ValueError('FollowJointTrajectory Action服务不可用')
+        goal=FollowJointTrajectory.Goal()
+        message=goal.trajectory
         message.joint_names=list(JOINT_NAMES)
         for point in points:
             nanos=round(point['time_s']*1e9)
             message.points.append(JointTrajectoryPoint(positions=point['positions'],velocities=point['velocities'],
                 accelerations=point['accelerations'],time_from_start=Duration(sec=nanos//10**9,nanosec=nanos%10**9)))
-        publisher.publish(message)
+        execution.update(handle=None,cancel=False)
+
+        def finished(future):
+            with state.lock:
+                try:
+                    wrapped=future.result()
+                    state.action_result=dict(status=wrapped.status,error_code=wrapped.result.error_code,error_string=wrapped.result.error_string)
+                    if wrapped.status==4 and wrapped.result.error_code==0:
+                        state.action_phase='succeeded'
+                        state.last_message='Action执行成功，正在核对终点关节反馈'
+                    else:
+                        state.action_phase='canceled' if wrapped.status==5 else 'failed'
+                        state.last_message=f'Action{state.action_phase}：{wrapped.result.error_string}（{wrapped.result.error_code}）'
+                        state.active=None
+                    print(json.dumps(dict(event='left_prefix_action_result',**state.action_result)),flush=True)
+                except Exception as error:
+                    state.action_phase='result_unknown'
+                    state.last_message='无法取得Action结果：'+str(error)+'；请在RT控制台确认停止'
+                execution['handle']=None
+
+        def accepted(future):
+            with state.lock:
+                try:
+                    handle=future.result()
+                    if not handle.accepted:
+                        state.action_phase='rejected';state.active=None
+                        state.last_message='控制器拒绝轨迹，请检查起点和RT约束'
+                        return
+                    execution['handle']=handle
+                    state.action_phase='executing'
+                    handle.get_result_async().add_done_callback(finished)
+                    if execution['cancel']:
+                        cancel()
+                except Exception as error:
+                    state.action_phase='acceptance_unknown'
+                    state.last_message='无法确认Action接受状态：'+str(error)+'；保持锁定，请检查RT控制台'
+
+        def feedback(message):
+            with state.lock:
+                state.action_feedback_stamp=time.monotonic()
+
+        action.send_goal_async(goal,feedback_callback=feedback).add_done_callback(accepted)
+
+    def cancel():
+        execution['cancel']=True
+        handle=execution['handle']
+        state.action_phase='cancel_requested'
+        if handle is not None:
+            def canceled(future):
+                with state.lock:
+                    try:
+                        if not future.result().goals_canceling:
+                            state.last_message='控制器未接受取消请求，等待最终结果；必要时使用现场停止'
+                    except Exception as error:
+                        state.last_message='取消确认失败：'+str(error)
+            handle.cancel_goal_async().add_done_callback(canceled)
 
     node.create_subscription(JointState,'/joint_states',receive,10)
     node.create_subscription(DiagnosticArray,'/diagnostics',diagnostics,10)
     node.create_timer(.5,controller_status)
     state.publisher=publish
+    state.cancel_motion=cancel
     node.prefix_executor=SingleThreadedExecutor()
     node.prefix_executor.add_node(node)
     node.prefix_thread=threading.Thread(target=node.prefix_executor.spin,daemon=True)
@@ -231,7 +293,7 @@ def main():
     parser.add_argument('--library',type=Path,required=True)
     parser.add_argument('--bind',default='127.0.0.1',choices=['127.0.0.1'])
     parser.add_argument('--port',type=int,default=18122)
-    parser.add_argument('--topic',default='/left_arm_jtc/joint_trajectory',choices=['/left_arm_jtc/joint_trajectory'])
+    parser.add_argument('--action',default='/left_arm_jtc/follow_joint_trajectory',choices=['/left_arm_jtc/follow_joint_trajectory'])
     parser.add_argument('--scope',default='pending',choices=['pending','left7_joint_replay'])
     parser.add_argument('--offline-preview',action='store_true')
     parser.add_argument('--console-url',default='http://192.168.100.40:18121')
@@ -244,7 +306,7 @@ def main():
         if args.console_token_file is None:
             args.console_token_file=running_console_token_file()
         state.lease_client=ConsoleLease(state,args.console_url,args.console_token_file)
-    node=None if args.offline_preview else attach_ros(state,args.topic)
+    node=None if args.offline_preview else attach_ros(state,args.action)
     page=(Path(__file__).parent/'index.html').read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
@@ -265,7 +327,7 @@ def main():
                 state.viewer_seen=time.monotonic()
                 self.reply(200,state.status())
             elif self.path=='/api/tasks':
-                self.reply(200,dict(joint_names=JOINT_NAMES,motor_signs=MOTOR_SIGNS,topic=args.topic,
+                self.reply(200,dict(joint_names=JOINT_NAMES,motor_signs=MOTOR_SIGNS,action=args.action,
                     tasks={name:dict(task=record['task'],points=len(record['model_positions']),
                         home_model_deg=[math.degrees(value) for value in record['model_positions'][0]],
                         target_model_deg=[math.degrees(value) for value in record['model_positions'][-1]],
@@ -307,7 +369,7 @@ def main():
         threading.Thread(target=server.shutdown,daemon=True).start()
     signal.signal(signal.SIGTERM,shutdown)
     signal.signal(signal.SIGINT,shutdown)
-    print(f'READY http://{args.bind}:{args.port}/ scope={args.scope} topic={args.topic}',flush=True)
+    print(f'READY http://{args.bind}:{args.port}/ scope={args.scope} action={args.action}',flush=True)
     try:
         server.serve_forever()
     finally:

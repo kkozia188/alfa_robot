@@ -64,9 +64,11 @@ class ConsoleLease:
                         with self.state.lock:
                             self.state.console_status=status
                             self.state.console_received=time.monotonic()
+                        if self.state.active and status.get('lease')!='you' and self.state.action_phase!='cancel_requested':
+                            self.state.stop()
                         if status.get('lease')=='you' and time.monotonic()-self.state.viewer_seen>5:
                             if self.state.active:
-                                if self.state.active['direction']!='stop':
+                                if self.state.action_phase!='cancel_requested':
                                     self.state.stop()
                             else:
                                 self.request('/api/release',{})

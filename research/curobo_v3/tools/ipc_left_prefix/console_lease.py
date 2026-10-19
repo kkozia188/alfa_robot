@@ -32,23 +32,37 @@ class ConsoleLease:
     def __init__(self,state,url,token_file):
         self.state=state
         self.url=url.rstrip('/')
+        self.token_file=Path(token_file)
+        self.authentication_lock=threading.RLock()
         self.opener=build_opener(HTTPCookieProcessor(CookieJar()))
-        self.request('/api/login',dict(token=Path(token_file).read_text().strip()))
-        info=self.request('/api/info')
+        self.refresh_login()
+        threading.Thread(target=self.watch,daemon=True).start()
+
+    def refresh_login(self):
+        with self.authentication_lock:
+            self.token_file=running_console_token_file()
+            self.request('/api/login',dict(token=self.token_file.read_text().strip()),retry=False)
+            self.refresh_model()
+
+    def refresh_model(self):
+        info=self.request('/api/info',retry=False)
         joints={item['name']:item for item in info['joints']}
         from model import JOINT_NAMES
         if set(JOINT_NAMES)!=set(joints):
             raise ValueError('18121控制台必须恰好为左臂7轴')
-        state.motor_bounds=[(joints[name]['lower'],joints[name]['upper']) for name in JOINT_NAMES]
-        threading.Thread(target=self.watch,daemon=True).start()
+        with self.state.lock:
+            self.state.motor_bounds=[(joints[name]['lower'],joints[name]['upper']) for name in JOINT_NAMES]
 
-    def request(self,path,data=None):
+    def request(self,path,data=None,retry=True):
         body=None if data is None else json.dumps(data).encode()
         request=Request(self.url+path,data=body,headers={'Content-Type':'application/json','Origin':self.url})
         try:
             with self.opener.open(request,timeout=3) as response:
                 return json.load(response)
         except HTTPError as error:
+            if error.code==401 and retry and path!='/api/login':
+                self.refresh_login()
+                return self.request(path,data,retry=False)
             try:message=json.load(error).get('message','控制台拒绝请求')
             except ValueError:message='控制台拒绝请求'
             raise ValueError(message) from None
@@ -64,6 +78,7 @@ class ConsoleLease:
                         with self.state.lock:
                             self.state.console_status=status
                             self.state.console_received=time.monotonic()
+                            self.state.console_error=''
                         if self.state.active and status.get('lease')!='you' and self.state.action_phase!='cancel_requested':
                             self.state.stop()
                         if status.get('lease')=='you' and time.monotonic()-self.state.viewer_seen>5:
@@ -72,9 +87,15 @@ class ConsoleLease:
                                     self.state.stop()
                             else:
                                 self.request('/api/release',{})
-            except Exception:
+            except Exception as error:
                 with self.state.lock:
                     self.state.console_received=0.
+                    self.state.console_error='18121连接中断，正在重新认证'
+                if isinstance(error,HTTPError) and error.code==401:
+                    try:
+                        self.refresh_login()
+                    except Exception:
+                        pass
                 time.sleep(.5)
 
     def acquire(self):

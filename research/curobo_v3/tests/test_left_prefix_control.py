@@ -6,13 +6,36 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import MagicMock,patch
+from urllib.error import HTTPError
+from io import BytesIO
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools/ipc_left_prefix'))
 from model import JOINT_NAMES,MOTOR_SIGNS,export_prefix,motor_positions,read_library,select_path,time_parameterize,compact_path,validate_timing
 from server import State
+from console_lease import ConsoleLease
 
 
 class PrefixControlTest(unittest.TestCase):
+    def test_expired_console_session_reauthenticates_once_before_acquire(self):
+        lease=ConsoleLease.__new__(ConsoleLease)
+        lease.url='http://127.0.0.1:18121'
+        response=MagicMock()
+        response.__enter__.return_value=BytesIO(b'{"ok":true}')
+        lease.opener=MagicMock()
+        lease.opener.open.side_effect=[HTTPError(lease.url,401,'expired',{},BytesIO(b'{}')),response]
+        with patch.object(lease,'refresh_login') as refresh:
+            self.assertTrue(lease.acquire()['ok'])
+            refresh.assert_called_once()
+        self.assertEqual(lease.opener.open.call_count,2)
+
+    def test_controller_inactive_is_distinct_from_query_stale(self):
+        state=State(dict(tasks=dict(sample=self.record())),'left7_joint_replay')
+        state.positions=[0.]*7;state.received=time.monotonic();state.stamp_age=0.
+        self.assertIn('查询过期',state.reason())
+        state.controller_received=time.monotonic()
+        self.assertIn('未激活',state.reason())
+
     def record(self):
         return dict(model_positions=[[0.]*7,[.01,.02,.03,0.,0.,.04,0.],[.02,.03,.04,0.,0.,.05,0.]],
                     phases=['home','approach','contact_approach'])

@@ -32,6 +32,8 @@ class State:
         self.publisher=None
         self.console_status={}
         self.console_received=0.
+        self.console_error=''
+        self.controller_error=''
         self.lease_client=None
         self.viewer_seen=time.monotonic()
         self.motor_bounds=None
@@ -70,8 +72,10 @@ class State:
             return '待确认：仅回放左7轴将不复现原轨迹的升降和右臂运动，不能宣称到达原箱面'
         if self.positions is None or now-self.received>.5 or not -.05<=self.stamp_age+now-self.received<=.5:
             return '没有新鲜的左臂7轴 /joint_states 反馈'
-        if not self.controller or now-self.controller_received>3.:
-            return 'left_arm_jtc未处于active状态，或控制器状态已过期'
+        if now-self.controller_received>3.:
+            return '控制器状态查询过期，正在重试'+('：'+self.controller_error if self.controller_error else '')
+        if not self.controller:
+            return 'RT当前报告left_arm_jtc未激活；请在18121确认使能状态'
         if not self.subscribers:
             return 'FollowJointTrajectory Action服务不可用'
         if self.enable_state!='ENABLED' or now-self.enable_received>2.5:
@@ -94,6 +98,9 @@ class State:
                 feedback_deg=None if self.positions is None else [math.degrees(value) for value in self.positions],
                 feedback_age_s=None if not self.received else time.monotonic()-self.received,
                 controller_active=self.controller,subscribers=self.subscribers,
+                controller_age_s=None if not self.controller_received else time.monotonic()-self.controller_received,
+                controller_error=self.controller_error,console_error=self.console_error,
+                console_age_s=None if not self.console_received else time.monotonic()-self.console_received,
                 enable_state=self.enable_state,
                 lease=self.console_status.get('lease','unknown'),
                 motion_publications=self.motion_publications,
@@ -170,7 +177,7 @@ def attach_ros(state,action_name):
     action=ActionClient(node,FollowJointTrajectory,action_name)
     execution={'handle':None,'cancel':False}
     client=node.create_client(ListControllers,'/controller_manager/list_controllers')
-    query={'future':None}
+    query={'future':None,'started':0.}
 
     def receive(message):
         mapping=dict(zip(message.name,message.position))
@@ -193,11 +200,19 @@ def attach_ros(state,action_name):
                 with state.lock:
                     state.controller=any(item.name=='left_arm_jtc' and item.state=='active' for item in future.result().controller)
                     state.controller_received=time.monotonic()
-            except Exception:
+                    state.controller_error=''
+            except Exception as error:
                 state.controller=False
+                state.controller_error=str(error)
             query['future']=None
+        elif future is not None and time.monotonic()-query['started']>2.:
+            client.remove_pending_request(future)
+            future.cancel()
+            query['future']=None
+            state.controller_error='list_controllers响应超时'
         if query['future'] is None and client.service_is_ready():
             query['future']=client.call_async(ListControllers.Request())
+            query['started']=time.monotonic()
 
     def diagnostics(message):
         for item in message.status:

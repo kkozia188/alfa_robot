@@ -31,6 +31,7 @@ def generate_launch_description():
                 "manifold_alpha_neighbor_steps", default_value="1"
             ),
             DeclareLaunchArgument("vamp_workers", default_value="4"),
+            DeclareLaunchArgument("vamp_seed", default_value="169343505"),
             DeclareLaunchArgument("vamp_max_iterations", default_value="1000"),
             DeclareLaunchArgument("vamp_max_samples", default_value="2000"),
             DeclareLaunchArgument(
@@ -111,6 +112,10 @@ def generate_launch_description():
                         ),
                         "vamp_workers": ParameterValue(
                             LaunchConfiguration("vamp_workers"),
+                            value_type=int,
+                        ),
+                        "vamp_seed": ParameterValue(
+                            LaunchConfiguration("vamp_seed"),
                             value_type=int,
                         ),
                         "vamp_max_iterations": ParameterValue(

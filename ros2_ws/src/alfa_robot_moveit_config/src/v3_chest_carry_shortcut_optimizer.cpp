@@ -88,7 +88,9 @@ struct LocalSearchStats {
   double candidate_arm_path_deg = 0.0;
   size_t workers = 1U;
   size_t solved_workers = 0U;
-  int winner_seed = -1;
+  int64_t winner_seed = -1;
+  nlohmann::json worker_trials = nlohmann::json::array();
+  nlohmann::json search_bounds = nlohmann::json::array();
   size_t refinements = 0U;
   size_t rejected_candidates = 0U;
   std::string last_rejection_reason;
@@ -318,6 +320,7 @@ public:
     manifold_alpha_neighbor_steps_ = getParameter<int>(
       "manifold_alpha_neighbor_steps", 1);
     vamp_workers_ = getParameter<int>("vamp_workers", 4);
+    vamp_seed_ = getParameter<int64_t>("vamp_seed", 0xA17FA11U);
     vamp_max_iterations_ = getParameter<int>("vamp_max_iterations", 1000);
     vamp_max_samples_ = getParameter<int>("vamp_max_samples", 2000);
     vamp_secondary_max_iterations_ = getParameter<int>(
@@ -345,6 +348,7 @@ public:
         manifold_levels_ < 2 || manifold_alpha_samples_ < 2 ||
         manifold_alpha_neighbor_steps_ < 1 ||
         vamp_workers_ < 1 || vamp_workers_ > 32 ||
+        vamp_seed_ < 0 ||
         vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 || vamp_range_ <= 0.0 ||
         vamp_secondary_max_iterations_ < 1 ||
         vamp_secondary_max_iterations_ > vamp_max_iterations_ ||
@@ -357,7 +361,8 @@ public:
         visibility_graph_mode_ != "fast_families") ||
         (local_rrt_mode_ != "full" && local_rrt_mode_ != "golden_manifold" &&
         local_rrt_mode_ != "golden_lattice" && local_rrt_mode_ != "golden_vamp" &&
-        local_rrt_mode_ != "contract17_vamp")) {
+        local_rrt_mode_ != "contract17_vamp" &&
+        local_rrt_mode_ != "contract17_vamp_search")) {
       throw std::invalid_argument(
           "validation steps, tilt, RRT time, manifold bounds, and mode are invalid");
     }
@@ -386,8 +391,12 @@ public:
 
   bool run() {
     auto output = readJson(replay_path_);
+    const bool mandatory_search =
+      local_rrt_mode_ == "contract17_vamp_search";
     nlohmann::json result = {
-        {"schema", "alfa.v322_chest_golden_shortcut.v1"},
+        {"schema", mandatory_search ?
+          "alfa.v322_contract17_vamp_search.v1" :
+          "alfa.v322_chest_golden_shortcut.v1"},
         {"input", replay_path_},
         {"output", output_path_},
         {"success", true},
@@ -396,7 +405,15 @@ public:
         {"visibility_graph_mode", visibility_graph_mode_},
         {"vamp_compiled", kVampCompiled},
         {"vamp_workers", vamp_workers_},
+        {"vamp_seed", vamp_seed_},
+        {"vamp_max_iterations", vamp_max_iterations_},
+        {"vamp_max_samples", vamp_max_samples_},
         {"vamp_secondary_max_iterations", vamp_secondary_max_iterations_},
+        {"vamp_range", vamp_range_},
+        {"full_vamp_base_xy_margin_m", full_vamp_base_xy_margin_},
+        {"full_vamp_base_yaw_margin_deg",
+          full_vamp_base_yaw_margin_ * 180.0 / kPi},
+        {"full_vamp_arm_margin_deg", full_vamp_arm_margin_ * 180.0 / kPi},
         {"vamp_prune_at_metric_lower_bound", vamp_prune_at_metric_lower_bound_},
         {"vamp_max_unsearched_improvement_ratio",
           vamp_max_unsearched_improvement_ratio_},
@@ -404,7 +421,8 @@ public:
         {"maximum_task_core_ms", 0.0},
         {"boxes_within_3s", 0},
     };
-    if (local_rrt_mode_ == "contract17_vamp") {
+    if (local_rrt_mode_ == "contract17_vamp" ||
+        local_rrt_mode_ == "contract17_vamp_search") {
       result["full_state_contract"] = {
         {"dimension", kFullStateDimension},
         {"axes", {
@@ -418,8 +436,11 @@ public:
         {"updown_mapping", "start-goal projection in the 17-D state"},
         {"collision_backend", "MoveIt/FCL callback per VAMP edge sample"},
         {"vamp_tree_backend", "VAMP RRT-Connect"},
+        {"golden_intermediate_frames_used", !mandatory_search},
+        {"mandatory_search", mandatory_search},
       };
     }
+    std::string active_operation_label;
     try {
       validateInput(output);
       const auto joint_names = output.at("joint_names").get<std::vector<std::string>>();
@@ -430,9 +451,18 @@ public:
           optimized_operations.push_back(source_operation);
           continue;
         }
+        active_operation_label = source_operation.value("label", "unnamed");
         nlohmann::json operation_result;
-        auto optimized = optimizeOperation(
-          source_operation, joint_names, &operation_result);
+        nlohmann::json optimized;
+        try {
+          optimized = optimizeOperation(
+            source_operation, joint_names, &operation_result);
+        } catch (...) {
+          if (!operation_result.empty()) {
+            result["cycles"].push_back(operation_result);
+          }
+          throw;
+        }
         const double core_ms = operation_result.at("planning_core_ms").get<double>();
         result["maximum_task_core_ms"] = std::max(
           result.at("maximum_task_core_ms").get<double>(), core_ms);
@@ -448,11 +478,13 @@ public:
         const int box_id = item.at("box_id").get<int>();
         item["golden_source_search_ms"] = item.value("selected_task_core_ms", 0.0);
         item["selected_task_core_ms"] = task_times.at(box_id);
-        item["source"] = local_rrt_mode_ == "golden_vamp" ?
+        item["source"] = mandatory_search ?
+          "contract17_vamp_rrtc_search_tree" :
+          (local_rrt_mode_ == "golden_vamp" ?
           "golden_curve_vamp_parallel_2d" :
           (local_rrt_mode_ == "contract17_vamp" ?
           "contract17_vamp_parallel" :
-          "golden_chest_curve_local_shortcut");
+          "golden_chest_curve_local_shortcut"));
         if (task_times.at(box_id) < 3000.0) {
           result["boxes_within_3s"] =
             result.at("boxes_within_3s").get<int>() + 1;
@@ -471,23 +503,29 @@ public:
         operation["box_planning"] = std::move(planning);
       }
       output["golden_curve_optimization"] = result;
-      if (task_times.size() != 25U || result.at("boxes_within_3s").get<int>() != 25) {
+      if (task_times.size() != 25U) {
+        throw std::runtime_error("search did not produce all 25 box task paths");
+      }
+      if (!mandatory_search && result.at("boxes_within_3s").get<int>() != 25) {
         throw std::runtime_error("not all 25 box task cores are below 3 seconds");
       }
       writeJson(output_path_, output);
     } catch (const std::exception &error) {
       result["success"] = false;
       result["failure_reason"] = error.what();
+      if (!active_operation_label.empty()) {
+        result["failed_cycle_label"] = active_operation_label;
+      }
     }
 
     writeJson(result_path_, result);
     if (result.at("success").get<bool>()) {
       RCLCPP_INFO(get_logger(),
-                  "Chest golden shortcut passed: boxes=25/25 max_core=%.3fms",
+                  "Chest path planning passed: boxes=25/25 max_core=%.3fms",
                   result.at("maximum_task_core_ms").get<double>());
       return true;
     }
-    RCLCPP_ERROR(get_logger(), "Chest golden shortcut failed: %s",
+    RCLCPP_ERROR(get_logger(), "Chest path planning failed: %s",
                  result.value("failure_reason", "operation failure").c_str());
     return false;
   }
@@ -1266,7 +1304,7 @@ private:
     (void)raw_cost;
     if (stats) stats->backend = "vamp_unavailable";
     throw std::runtime_error(
-      "local_rrt_mode=contract17_vamp requires building with vamp::vamp");
+      "contract17 VAMP modes require building with vamp::vamp");
 #else
     using Robot = FullStateVampRobot;
     static constexpr size_t kRake = vamp::FloatVectorWidth;
@@ -1275,6 +1313,7 @@ private:
       vamp::collision::Environment<vamp::FloatVector<kRake>>;
     struct Trial {
       bool solved = false;
+      bool full_fcl_valid = false;
       size_t seed = 0U;
       size_t nanoseconds = 0U;
       size_t iterations = 0U;
@@ -1282,8 +1321,11 @@ private:
       size_t validity_batches = 0U;
       size_t validity_states = 0U;
       double fcl_ms = 0.0;
+      double candidate_fcl_ms = 0.0;
       double task_cost = std::numeric_limits<double>::infinity();
+      std::string rejection_reason;
       std::vector<std::array<float, kFullStateDimension>> path;
+      nlohmann::json dense_path = nlohmann::json::array();
     };
     if (golden.size() < 2U) return nlohmann::json::array();
     if (joint_names.size() != 16U) {
@@ -1369,13 +1411,20 @@ private:
 
     std::array<float, kFullStateDimension> lows{};
     std::array<float, kFullStateDimension> highs{};
-    lows.fill(std::numeric_limits<float>::infinity());
-    highs.fill(-std::numeric_limits<float>::infinity());
-    for (const auto &frame : golden) {
-      const auto state = frame_state(frame);
+    if (local_rrt_mode_ == "contract17_vamp_search") {
       for (size_t axis = 0U; axis < kFullStateDimension; ++axis) {
-        lows[axis] = std::min(lows[axis], state[axis]);
-        highs[axis] = std::max(highs[axis], state[axis]);
+        lows[axis] = std::min(start_values[axis], goal_values[axis]);
+        highs[axis] = std::max(start_values[axis], goal_values[axis]);
+      }
+    } else {
+      lows.fill(std::numeric_limits<float>::infinity());
+      highs.fill(-std::numeric_limits<float>::infinity());
+      for (const auto &frame : golden) {
+        const auto state = frame_state(frame);
+        for (size_t axis = 0U; axis < kFullStateDimension; ++axis) {
+          lows[axis] = std::min(lows[axis], state[axis]);
+          highs[axis] = std::max(highs[axis], state[axis]);
+        }
       }
     }
     for (size_t axis = 0U; axis < 2U; ++axis) {
@@ -1400,6 +1449,26 @@ private:
       };
     for (size_t index = 0U; index < arm_names.size(); ++index) {
       clamp_to_bounds(index + 3U, arm_names[index]);
+    }
+    if (stats) {
+      const std::array<std::string, 3U> base_names{
+        "base_x", "base_y", "base_yaw"};
+      for (size_t axis = 0U; axis < base_names.size(); ++axis) {
+        stats->search_bounds.push_back({
+          {"axis", base_names[axis]},
+          {"lower", lows[axis]},
+          {"upper", highs[axis]},
+          {"source", "task_endpoints_plus_explicit_margin"},
+        });
+      }
+      for (size_t index = 0U; index < arm_names.size(); ++index) {
+        stats->search_bounds.push_back({
+          {"axis", arm_names[index]},
+          {"lower", lows[index + 3U]},
+          {"upper", highs[index + 3U]},
+          {"source", "task_endpoints_plus_margin_clipped_to_robot_limit"},
+        });
+      }
     }
     Robot::setBounds(lows, highs);
     const Robot::Configuration start(start_values);
@@ -1426,7 +1495,9 @@ private:
         settings, arm_names, left_attached, right_attached, left_spec,
         right_spec, task_cost, updown_at]() mutable {
           Trial trial;
-          trial.seed = static_cast<size_t>(worker);
+          const uint32_t seed = static_cast<uint32_t>(vamp_seed_) +
+            static_cast<uint32_t>(worker) * 0x9E3779B9U;
+          trial.seed = static_cast<size_t>(seed);
           FullStateVampContext context;
           context.validator = [this, worker_scene, worker_state, arm_names,
             left_attached, right_attached, left_spec, right_spec, updown_at](
@@ -1449,8 +1520,7 @@ private:
                 worker_scene, *worker_state, nullptr).empty();
             };
           g_full_state_vamp_context = &context;
-          auto rng = std::make_shared<FullStateVampSampler>(
-            static_cast<uint32_t>(0xA17FA11U + worker * 0x9E3779B9U));
+          auto rng = std::make_shared<FullStateVampSampler>(seed);
           auto worker_settings = settings;
           if (worker > 0) {
             worker_settings.max_iterations = static_cast<size_t>(
@@ -1483,12 +1553,58 @@ private:
     std::vector<Trial> trials;
     trials.reserve(futures.size());
     for (auto &future : futures) trials.push_back(future.get());
+    const double planner_wall_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - batch_started).count();
+    const bool require_full_candidate_fcl =
+      local_rrt_mode_ == "contract17_vamp_search";
+    if (require_full_candidate_fcl) {
+      for (auto &trial : trials) {
+        if (!trial.solved) continue;
+        nlohmann::json sparse = nlohmann::json::array();
+        for (const auto &state : trial.path) {
+          auto frame = golden.front();
+          auto joints = frame.at("joints").get<std::vector<double>>();
+          joints[updown_index] = updown_at(state);
+          for (size_t index = 0U; index < arm_indices.size(); ++index) {
+            joints[arm_indices[index]] = state[index + 3U];
+          }
+          frame["joints"] = std::move(joints);
+          frame["base_pose_map"] = {state[0], state[1], state[2]};
+          frame["stage"] = "chest_carry_retract";
+          sparse.push_back(std::move(frame));
+        }
+        sparse.front() = golden.front();
+        sparse.back() = golden.back();
+        std::vector<size_t> anchors(sparse.size(), 0U);
+        std::iota(anchors.begin(), anchors.end(), 0U);
+        trial.dense_path = densifyShortcut(
+          sparse, anchors, operation, joint_names, left_spec, right_spec);
+        nlohmann::json candidate = operation;
+        candidate["frames"] = trial.dense_path;
+        nlohmann::json aggregate = {
+          {"maximum_left_tilt_deg", 0.0},
+          {"maximum_right_tilt_deg", 0.0},
+          {"checked_frames", 0},
+          {"checked_edge_samples", 0}};
+        nlohmann::json validation_result;
+        const auto validation_started = std::chrono::steady_clock::now();
+        trial.full_fcl_valid = validateOperation(
+          candidate, joint_names, &validation_result, &aggregate);
+        trial.candidate_fcl_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - validation_started).count();
+        if (!trial.full_fcl_valid) {
+          trial.rejection_reason = validation_result.value(
+            "failure_reason", "full candidate FCL rejection");
+        }
+      }
+    } else {
+      for (auto &trial : trials) trial.full_fcl_valid = trial.solved;
+    }
     if (stats) {
       stats->backend = "vamp_rrtc_contract17_fcl_callback";
       stats->state_dimension = kFullStateDimension;
       stats->workers = trials.size();
-      stats->search_wall_ms = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - batch_started).count();
+      stats->search_wall_ms = planner_wall_ms;
       for (const auto &trial : trials) {
         stats->search_core_ms +=
           static_cast<double>(trial.nanoseconds) / 1.0e6;
@@ -1498,20 +1614,45 @@ private:
         stats->search_iterations += trial.iterations;
         stats->search_tree_nodes += trial.tree_nodes;
         if (trial.solved) ++stats->solved_workers;
+        stats->candidate_fcl_ms += trial.candidate_fcl_ms;
+        if (trial.solved && !trial.full_fcl_valid) {
+          ++stats->rejected_candidates;
+          stats->last_rejection_reason = trial.rejection_reason;
+        }
+        stats->worker_trials.push_back({
+          {"seed", trial.seed},
+          {"solved", trial.solved},
+          {"iterations", trial.iterations},
+          {"tree_nodes", trial.tree_nodes},
+          {"validity_batches", trial.validity_batches},
+          {"validity_states", trial.validity_states},
+          {"search_core_ms", static_cast<double>(trial.nanoseconds) / 1.0e6},
+          {"fcl_ms", trial.fcl_ms},
+          {"full_fcl_valid", trial.full_fcl_valid},
+          {"candidate_fcl_ms", trial.candidate_fcl_ms},
+          {"rejection_reason", trial.rejection_reason},
+          {"raw_path_cost", std::isfinite(trial.task_cost) ?
+            nlohmann::json(trial.task_cost) : nlohmann::json(nullptr)},
+          {"raw_sparse_states", trial.path.size()},
+        });
       }
     }
+    const auto usable = [require_full_candidate_fcl](const Trial &trial) {
+        return trial.solved &&
+          (!require_full_candidate_fcl || trial.full_fcl_valid);
+      };
     const auto winner = std::min_element(
-      trials.begin(), trials.end(), [](const Trial &left, const Trial &right) {
-        if (left.solved != right.solved) return left.solved > right.solved;
+      trials.begin(), trials.end(), [&usable](const Trial &left, const Trial &right) {
+        if (usable(left) != usable(right)) return usable(left) > usable(right);
         if (left.task_cost != right.task_cost)
           return left.task_cost < right.task_cost;
         return left.nanoseconds < right.nanoseconds;
       });
-    if (winner == trials.end() || !winner->solved) {
+    if (winner == trials.end() || !usable(*winner)) {
       return nlohmann::json::array();
     }
     if (stats) {
-      stats->winner_seed = static_cast<int>(winner->seed);
+      stats->winner_seed = static_cast<int64_t>(winner->seed);
       stats->candidate_sparse_states = winner->path.size();
       const auto &origin = winner->path.front();
       for (size_t index = 1U; index < winner->path.size(); ++index) {
@@ -1542,6 +1683,10 @@ private:
       }
     }
 
+    if (require_full_candidate_fcl) {
+      *raw_cost = winner->task_cost;
+      return winner->dense_path;
+    }
     nlohmann::json sparse = nlohmann::json::array();
     for (const auto &state : winner->path) {
       auto frame = golden.front();
@@ -1738,7 +1883,7 @@ private:
           return left.nanoseconds < right.nanoseconds;
         });
       if (winner == trials.end() || !winner->solved) break;
-      if (stats) stats->winner_seed = static_cast<int>(winner->seed);
+      if (stats) stats->winner_seed = static_cast<int64_t>(winner->seed);
 
       nlohmann::json dense = nlohmann::json::array();
       std::vector<std::array<double, 2>> dense_coordinates;
@@ -1834,6 +1979,197 @@ private:
 #endif
   }
 
+  nlohmann::json optimizeOperationWithMandatorySearch(
+      const nlohmann::json &operation,
+      const std::vector<std::string> &joint_names,
+      const nlohmann::json &search_endpoints,
+      size_t source_frame_count,
+      double source_path_cost,
+      size_t chest_start,
+      const planning_scene::PlanningSceneConstPtr &scene,
+      const AttachmentSpec &left_spec,
+      const AttachmentSpec &right_spec,
+      nlohmann::json *operation_result) const {
+    const auto started = std::chrono::steady_clock::now();
+    LocalSearchStats search_stats;
+    search_stats.backend = "vamp_rrtc_contract17_endpoint_bounds";
+    double searched_cost = std::numeric_limits<double>::infinity();
+    auto searched = tryContract17Vamp(
+      scene, operation, joint_names, search_endpoints,
+      left_spec, right_spec, &searched_cost, &search_stats);
+    const double search_wall_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    if (searched.empty()) {
+      *operation_result = {
+        {"label", operation.value("label", "unnamed")},
+        {"success", false},
+        {"strategy", "mandatory_contract17_vamp_search"},
+        {"path_source", nullptr},
+        {"search_result_required", true},
+        {"search_executed", true},
+        {"fallback_used", false},
+        {"golden_intermediate_frames_used_for_search", false},
+        {"search_input_frame_count", search_endpoints.size()},
+        {"local_rrt_pruned", false},
+        {"local_search_workers", search_stats.workers},
+        {"local_search_solved_workers", search_stats.solved_workers},
+        {"local_search_worker_trials", search_stats.worker_trials},
+        {"local_search_bounds", search_stats.search_bounds},
+        {"local_search_rejected_candidates", search_stats.rejected_candidates},
+        {"local_search_last_rejection_reason",
+          search_stats.last_rejection_reason},
+        {"local_search_planner_wall_ms", search_stats.search_wall_ms},
+        {"local_search_planner_core_ms", search_stats.search_core_ms},
+        {"local_search_fcl_ms", search_stats.search_fcl_ms},
+        {"local_search_candidate_fcl_ms", search_stats.candidate_fcl_ms},
+        {"failure_reason",
+          "no VAMP worker produced a full-FCL-valid search-tree path"},
+      };
+      throw std::runtime_error(
+        "no VAMP worker produced a full-FCL-valid search-tree path");
+    }
+
+    nlohmann::json searched_operation = operation;
+    searched_operation["frames"] = searched;
+    nlohmann::json search_validation = {
+      {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0},
+      {"checked_frames", 0}, {"checked_edge_samples", 0}};
+    nlohmann::json search_validation_result;
+    const auto candidate_fcl_started = std::chrono::steady_clock::now();
+    const bool candidate_fcl_valid = validateOperation(
+      searched_operation, joint_names, &search_validation_result,
+      &search_validation);
+    search_stats.candidate_fcl_ms +=
+      std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - candidate_fcl_started).count();
+    if (!candidate_fcl_valid) {
+      ++search_stats.rejected_candidates;
+      search_stats.last_rejection_reason = search_validation_result.value(
+        "failure_reason", "mandatory search path failed full FCL validation");
+      *operation_result = {
+        {"label", operation.value("label", "unnamed")},
+        {"success", false},
+        {"strategy", "mandatory_contract17_vamp_search"},
+        {"path_source", "vamp_rrtc_search_tree"},
+        {"search_result_required", true},
+        {"search_executed", true},
+        {"fallback_used", false},
+        {"golden_intermediate_frames_used_for_search", false},
+        {"local_search_worker_trials", search_stats.worker_trials},
+        {"failure_reason", search_stats.last_rejection_reason},
+      };
+      throw std::runtime_error(search_stats.last_rejection_reason);
+    }
+
+    nlohmann::json metadata = {
+      {"strategy", "mandatory_contract17_vamp_search"},
+      {"path_source", "vamp_rrtc_search_tree"},
+      {"search_result_required", true},
+      {"search_executed", true},
+      {"fallback_used", false},
+      {"golden_intermediate_frames_used_for_search", false},
+      {"search_bounds_source", "task_endpoints_plus_explicit_margins"},
+      {"search_path_postprocess", "edge_densification_only"},
+      {"cache_loading_counted", false},
+      {"source_frame_count", source_frame_count},
+      {"search_input_frame_count", search_endpoints.size()},
+      {"optimized_frame_count", searched.size()},
+      {"anchor_count", 0},
+      {"anchors", nlohmann::json::array()},
+      {"representative_node_count", 0},
+      {"shortcut_edge_count", 0},
+      {"golden_rrt_window_count", 0},
+      {"source_joint_travel_cost", source_path_cost},
+      {"graph_joint_travel_cost", nullptr},
+      {"local_rrt_attempted", true},
+      {"local_rrt_pruned", false},
+      {"local_rrt_prune_reason", ""},
+      {"metric_lower_bound_cost", nullptr},
+      {"metric_lower_bound_gap", nullptr},
+      {"maximum_unsearched_improvement_ratio", nullptr},
+      {"local_rrt_mode", local_rrt_mode_},
+      {"local_rrt_state_dimension", static_cast<int>(kFullStateDimension)},
+      {"local_rrt_wall_ms", search_wall_ms},
+      {"local_candidate_fcl_valid", true},
+      {"local_search_backend", search_stats.backend},
+      {"local_search_grid_state_checks", search_stats.grid_state_checks},
+      {"local_search_occupied_cells", search_stats.occupied_cells},
+      {"local_search_grid_build_ms", search_stats.grid_build_ms},
+      {"local_search_planner_wall_ms", search_stats.search_wall_ms},
+      {"local_search_planner_core_ms", search_stats.search_core_ms},
+      {"local_search_fcl_ms", search_stats.search_fcl_ms},
+      {"local_search_candidate_fcl_ms", search_stats.candidate_fcl_ms},
+      {"local_search_validity_batches", search_stats.validity_batches},
+      {"local_search_validity_states", search_stats.validity_states},
+      {"local_search_iterations", search_stats.search_iterations},
+      {"local_search_tree_nodes", search_stats.search_tree_nodes},
+      {"local_search_candidate_sparse_states",
+        search_stats.candidate_sparse_states},
+      {"local_search_candidate_base_path_m",
+        search_stats.candidate_base_path_m},
+      {"local_search_candidate_base_yaw_path_deg",
+        search_stats.candidate_base_yaw_path_deg},
+      {"local_search_candidate_max_base_offset_m",
+        search_stats.candidate_max_base_offset_m},
+      {"local_search_candidate_max_base_yaw_offset_deg",
+        search_stats.candidate_max_base_yaw_offset_deg},
+      {"local_search_candidate_updown_path_m",
+        search_stats.candidate_updown_path_m},
+      {"local_search_candidate_arm_path_deg",
+        search_stats.candidate_arm_path_deg},
+      {"local_search_workers", search_stats.workers},
+      {"local_search_solved_workers", search_stats.solved_workers},
+      {"local_search_winner_seed", search_stats.winner_seed},
+      {"local_search_worker_trials", search_stats.worker_trials},
+      {"local_search_bounds", search_stats.search_bounds},
+      {"local_search_refinements", search_stats.refinements},
+      {"local_search_rejected_candidates", search_stats.rejected_candidates},
+      {"local_search_last_rejection_reason",
+        search_stats.last_rejection_reason},
+      {"local_search_last_rejection_progress",
+        search_stats.last_rejection_progress},
+      {"local_search_last_rejection_alpha", search_stats.last_rejection_alpha},
+      {"local_rrt_success", true},
+      {"local_rrt_joint_travel_cost", searched_cost},
+      {"raw_search_joint_travel_cost", searched_cost},
+      {"postprocessed_joint_travel_cost", searched_cost},
+      {"optimized_joint_travel_cost", searched_cost},
+      {"visibility_checks", 0},
+      {"visibility_cache_hits", 0},
+      {"visibility_strategy", "disabled_for_mandatory_search"},
+      {"visibility_graph_mode", "disabled_for_mandatory_search"},
+      {"search_path_checked_frames", search_validation.at("checked_frames")},
+      {"search_path_checked_edge_samples",
+        search_validation.at("checked_edge_samples")},
+    };
+    auto rebuilt = rebuildOperation(operation, searched, metadata, chest_start);
+    nlohmann::json full_validation = {
+      {"maximum_left_tilt_deg", 0.0}, {"maximum_right_tilt_deg", 0.0},
+      {"checked_frames", 0}, {"checked_edge_samples", 0}};
+    nlohmann::json full_validation_result;
+    if (!validateOperation(
+          rebuilt, joint_names, &full_validation_result, &full_validation)) {
+      throw std::runtime_error(
+        "mandatory search rebuilt operation failed: " +
+        full_validation_result.value("failure_reason", "unknown"));
+    }
+    const double core_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - started).count();
+    metadata["checked_frames"] = full_validation.at("checked_frames");
+    metadata["checked_edge_samples"] =
+      full_validation.at("checked_edge_samples");
+    metadata["maximum_left_tilt_deg"] =
+      full_validation.at("maximum_left_tilt_deg");
+    metadata["maximum_right_tilt_deg"] =
+      full_validation.at("maximum_right_tilt_deg");
+    metadata["planning_core_ms"] = core_ms;
+    metadata["within_3s"] = core_ms < 3000.0;
+    rebuilt["chest_shortcut"] = metadata;
+    *operation_result = metadata;
+    (*operation_result)["label"] = operation.value("label", "unnamed");
+    return rebuilt;
+  }
+
   nlohmann::json optimizeOperation(
       const nlohmann::json &operation,
       const std::vector<std::string> &joint_names,
@@ -1855,6 +2191,35 @@ private:
     const auto left_spec = attachmentSpec(operation.at("left_attachment"), "left");
     const auto right_spec = attachmentSpec(operation.at("right_attachment"), "right");
     const auto scene = makeScene(operation);
+
+    if (local_rrt_mode_ == "contract17_vamp_search") {
+      nlohmann::json search_endpoints = nlohmann::json::array();
+      search_endpoints.push_back(golden.front());
+      search_endpoints.push_back(golden.back());
+      double source_path_cost = 0.0;
+      for (size_t index = 1U; index < golden.size(); ++index) {
+        const auto &from = golden.at(index - 1U);
+        const auto &to = golden.at(index);
+        const auto from_base = basePose(operation, &from);
+        const auto to_base = basePose(operation, &to);
+        source_path_cost += std::hypot(
+          to_base[0] - from_base[0], to_base[1] - from_base[1]) * 100.0;
+        source_path_cost += std::abs(
+          shortestAngleDelta(from_base[2], to_base[2])) * 180.0 / kPi;
+        const auto from_joints = from.at("joints").get<std::vector<double>>();
+        const auto to_joints = to.at("joints").get<std::vector<double>>();
+        source_path_cost +=
+          std::abs(to_joints.at(0) - from_joints.at(0)) * 100.0;
+        for (size_t joint = 2U; joint < from_joints.size(); ++joint) {
+          source_path_cost +=
+            std::abs(to_joints[joint] - from_joints[joint]) * 180.0 / kPi;
+        }
+      }
+      return optimizeOperationWithMandatorySearch(
+        operation, joint_names, search_endpoints, golden.size(),
+        source_path_cost, chest_start, scene, left_spec, right_spec,
+        operation_result);
+    }
 
     const auto started = std::chrono::steady_clock::now();
     size_t visibility_checks = 0U;
@@ -2375,6 +2740,7 @@ private:
   int manifold_alpha_samples_ = 11;
   int manifold_alpha_neighbor_steps_ = 1;
   int vamp_workers_ = 4;
+  int64_t vamp_seed_ = 0xA17FA11U;
   int vamp_max_iterations_ = 1000;
   int vamp_max_samples_ = 2000;
   int vamp_secondary_max_iterations_ = 300;

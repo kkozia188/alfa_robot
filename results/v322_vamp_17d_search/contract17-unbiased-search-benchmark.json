@@ -1,0 +1,271 @@
+{
+  "schema": "alfa.v322_contract17_unbiased_search_summary.v1",
+  "success": true,
+  "failures": [],
+  "search_contract": {
+    "dimension": 17,
+    "input": "start state, goal state, explicit margins, limits and scene",
+    "intermediate_golden_frames_used": false,
+    "visibility_graph_used": false,
+    "search_mandatory": true,
+    "fallback_allowed": false,
+    "postprocess": "edge densification only",
+    "authoritative_collision_backend": "MoveIt/FCL"
+  },
+  "three_seed_acceptance": {
+    "runs": 3,
+    "successful_runs": 3,
+    "searched_cycles": 45,
+    "searched_boxes": 75,
+    "fallback_cycles": 0,
+    "golden_guided_cycles": 0,
+    "planning_core_total_median_ms": 3281.619383,
+    "maximum_cycle_median_ms": 443.080062,
+    "maximum_cycle_observed_ms": 494.187942,
+    "search_wall_total_median_ms": 379.650983,
+    "worker_solved": 178,
+    "worker_total": 180,
+    "worker_full_fcl_valid": 176,
+    "worker_full_fcl_rejected": 2
+  },
+  "per_run": [
+    {
+      "seed": 169343505,
+      "cycle_count": 15,
+      "planning_core_total_ms": 3261.7993720000004,
+      "maximum_cycle_ms": 410.319372,
+      "search_wall_total_ms": 360.27433899999994,
+      "direct_connection_cycles": 12,
+      "tree_expansion_cycles": 3,
+      "worker_solved": 60,
+      "worker_total": 60,
+      "worker_full_fcl_valid": 60,
+      "worker_full_fcl_rejected": 0
+    },
+    {
+      "seed": 271828183,
+      "cycle_count": 15,
+      "planning_core_total_ms": 3333.273784,
+      "maximum_cycle_ms": 494.187942,
+      "search_wall_total_ms": 410.17922500000003,
+      "direct_connection_cycles": 12,
+      "tree_expansion_cycles": 3,
+      "worker_solved": 59,
+      "worker_total": 60,
+      "worker_full_fcl_valid": 59,
+      "worker_full_fcl_rejected": 0
+    },
+    {
+      "seed": 314159265,
+      "cycle_count": 15,
+      "planning_core_total_ms": 3281.619383,
+      "maximum_cycle_ms": 443.080062,
+      "search_wall_total_ms": 379.650983,
+      "direct_connection_cycles": 12,
+      "tree_expansion_cycles": 3,
+      "worker_solved": 59,
+      "worker_total": 60,
+      "worker_full_fcl_valid": 57,
+      "worker_full_fcl_rejected": 2
+    }
+  ],
+  "cycles": [
+    {
+      "label": "Box 1 + Box 5",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 167.366386,
+      "search_wall_median_ms": 2.749294,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.9782241018581272
+    },
+    {
+      "label": "Box 2 + Box 4",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 191.980783,
+      "search_wall_median_ms": 2.177677,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.9999999741978797
+    },
+    {
+      "label": "Box 3",
+      "solve_kind": "tree_expansion",
+      "planning_core_median_ms": 267.990073,
+      "search_wall_median_ms": 34.928521,
+      "iterations_median": 215.0,
+      "sparse_states_median": 10.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 1.0502427230870237
+    },
+    {
+      "label": "Box 6 + Box 10",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 156.734072,
+      "search_wall_median_ms": 1.447235,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.7022765372772288
+    },
+    {
+      "label": "Box 7 + Box 9",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 158.206078,
+      "search_wall_median_ms": 1.678691,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.9826241345658723
+    },
+    {
+      "label": "Box 8",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 228.641499,
+      "search_wall_median_ms": 2.05785,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.949933773263185
+    },
+    {
+      "label": "Box 11 + Box 15",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 172.017399,
+      "search_wall_median_ms": 2.646199,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.20822950086731168
+    },
+    {
+      "label": "Box 12 + Box 14",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 171.35032,
+      "search_wall_median_ms": 2.414903,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.27300996423172724
+    },
+    {
+      "label": "Box 13",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 199.441285,
+      "search_wall_median_ms": 1.721382,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.9102395256006441
+    },
+    {
+      "label": "Box 16 + Box 20",
+      "solve_kind": "tree_expansion",
+      "planning_core_median_ms": 320.78486,
+      "search_wall_median_ms": 92.481553,
+      "iterations_median": 823.0,
+      "sparse_states_median": 14.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.6281095648270656
+    },
+    {
+      "label": "Box 17 + Box 19",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 181.246732,
+      "search_wall_median_ms": 2.703501,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.4933955496361132
+    },
+    {
+      "label": "Box 18",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 207.549307,
+      "search_wall_median_ms": 2.590883,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.8829958530771304
+    },
+    {
+      "label": "Box 21 + Box 25",
+      "solve_kind": "tree_expansion",
+      "planning_core_median_ms": 443.080062,
+      "search_wall_median_ms": 205.281322,
+      "iterations_median": 2178.0,
+      "sparse_states_median": 19.0,
+      "worker_solved": 10,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.7232320743149132
+    },
+    {
+      "label": "Box 22 + Box 24",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 187.203008,
+      "search_wall_median_ms": 2.412648,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.9941956232720026
+    },
+    {
+      "label": "Box 23",
+      "solve_kind": "direct_connection",
+      "planning_core_median_ms": 192.805762,
+      "search_wall_median_ms": 2.564855,
+      "iterations_median": 0.0,
+      "sparse_states_median": 2.0,
+      "worker_solved": 12,
+      "worker_total": 12,
+      "searched_to_reference_cost_ratio_median": 0.8218205445202862
+    }
+  ],
+  "validation": {
+    "direct_frames": 28844,
+    "direct_edge_samples": 1045,
+    "safe_turn_frames": 25739,
+    "safe_turn_edge_samples": 3985,
+    "maximum_left_tilt_deg": 7.708451455400197,
+    "maximum_right_tilt_deg": 7.934816255856766,
+    "maximum_equal_height_error_m": 1.0699796604285439e-10
+  },
+  "rerun": {
+    "path": "/home/tim/alfa_robot-v322-vamp-17d-search/results/v322_vamp_17d_search/search-production-safe-turn.rrd",
+    "sha256": "416d5ecd10d9ff0c695537c04f9193fe1fae73c632913c95655bb93498ad689f",
+    "verified": true,
+    "model": {
+      "model_revision": "robot_v3.2.2-suction",
+      "link_count": 21,
+      "visual_mesh_count": 49,
+      "tool0_offset_local_z_m": 0.151,
+      "urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893"
+    }
+  },
+  "reference_comparison": {
+    "warning": "The historical OMPL baseline is 15-D while this planner is contract-17; ratios are indicative, not a same-dimensional proof.",
+    "historical_ompl_15d_search_wall_ms": 3989.1333879999997,
+    "historical_ompl_15d_planning_core_ms": 7037.753689,
+    "indicative_search_speedup": 10.507370102081364,
+    "indicative_end_to_end_speedup": 2.1445977938386647,
+    "prior_fast_path_planning_core_ms": 131.76852,
+    "prior_fast_path_pruned_cycles": 15,
+    "prior_fast_path_worker_total": 0
+  },
+  "comparison_note": "The earlier 0.132s production total is a prior-guided fast-path result that prunes all VAMP calls. It is not a searched-path baseline."
+}

@@ -210,6 +210,13 @@ data/
 /log-chest-carry/
 /results/v322_chest_carry_fast_base/
 
+# Isolated mandatory contract-17 VAMP search build and large replay artifacts
+/build-vamp-search*/
+/install-vamp-search*/
+/log-vamp-search*/
+/results/v322_vamp_17d_search/*-replay.json
+/results/v322_vamp_17d_search/*.rrd
+
 # MOTION-38 local one-off/debug scripts
 scripts/ik_benchmark/motion38/visualize_single_down_point_9_orients.py
 

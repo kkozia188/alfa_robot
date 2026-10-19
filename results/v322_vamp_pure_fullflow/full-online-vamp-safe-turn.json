@@ -1,0 +1,453 @@
+{
+  "schema": "alfa.v322_chest_safe_turn_contract.v1",
+  "success": true,
+  "model_revision": "robot_v3.2.2-suction",
+  "box_count": 25,
+  "cycle_count": 15,
+  "maximum_task_core_ms": 1679974.713053,
+  "boxes_within_3s": 0,
+  "checked_frames": 18688,
+  "checked_edge_samples": 2466,
+  "maximum_left_tilt_deg": 7.9993289111614185,
+  "maximum_right_tilt_deg": 7.9952152732462745,
+  "maximum_dual_release_height_error_m": 1.9313661780984148e-11,
+  "equal_height_tolerance_m": 1e-06,
+  "failures": [],
+  "cases": [
+    {
+      "label": "Box 1 + Box 5",
+      "boxes": [
+        1,
+        5
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.9499999999983544,
+          -0.6000000000006445,
+          1.2000000000015993
+        ],
+        "right": [
+          -3.9499999999992106,
+          0.6000000000007599,
+          1.200000000001202
+        ]
+      },
+      "dual_release_height_error_m": 3.97237798210881e-13
+    },
+    {
+      "label": "Box 2 + Box 4",
+      "boxes": [
+        2,
+        4
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.9499999999945525,
+          -0.6000000000221333,
+          1.2000000000256228
+        ],
+        "right": [
+          -3.9499999999958995,
+          0.6000000000215222,
+          1.2000000000259472
+        ]
+      },
+      "dual_release_height_error_m": 3.2440716779547074e-13
+    },
+    {
+      "label": "Box 3",
+      "boxes": [
+        3
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "right": [
+          -3.9499999999805624,
+          0.45000000017773223,
+          1.2000000001391342
+        ]
+      },
+      "dual_release_height_error_m": 0.0
+    },
+    {
+      "label": "Box 6 + Box 10",
+      "boxes": [
+        6,
+        10
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.9499999987918692,
+          -0.600000002998935,
+          1.2000000017241401
+        ],
+        "right": [
+          -3.9499999987913306,
+          0.6000000029843412,
+          1.2000000017359014
+        ]
+      },
+      "dual_release_height_error_m": 1.1761258633669058e-11
+    },
+    {
+      "label": "Box 7 + Box 9",
+      "boxes": [
+        7,
+        9
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.949999999823958,
+          -0.5999999988684164,
+          1.199999999913099
+        ],
+        "right": [
+          -3.9499999998319204,
+          0.5999999988825403,
+          1.199999999908755
+        ]
+      },
+      "dual_release_height_error_m": 4.3440806507533125e-12
+    },
+    {
+      "label": "Box 8",
+      "boxes": [
+        8
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "right": [
+          -3.9499999992266144,
+          0.6000000035696376,
+          1.2000000010016152
+        ]
+      },
+      "dual_release_height_error_m": 0.0
+    },
+    {
+      "label": "Box 11 + Box 15",
+      "boxes": [
+        11,
+        15
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.9500000000083433,
+          -0.5999999999910347,
+          1.1999999999985405
+        ],
+        "right": [
+          -3.9500000000084894,
+          0.5999999999908405,
+          1.199999999998466
+        ]
+      },
+      "dual_release_height_error_m": 7.438494264988549e-14
+    },
+    {
+      "label": "Box 12 + Box 14",
+      "boxes": [
+        12,
+        14
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.949999999997694,
+          -0.600000000003188,
+          1.2000000000000914
+        ],
+        "right": [
+          -3.949999999997863,
+          0.6000000000031799,
+          1.2000000000000282
+        ]
+      },
+      "dual_release_height_error_m": 6.328271240363392e-14
+    },
+    {
+      "label": "Box 13",
+      "boxes": [
+        13
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "right": [
+          -3.9499999998687443,
+          0.6000000005556259,
+          1.2000000001226838
+        ]
+      },
+      "dual_release_height_error_m": 0.0
+    },
+    {
+      "label": "Box 16 + Box 20",
+      "boxes": [
+        16,
+        20
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.6999999999780644,
+          -0.5999999999868514,
+          1.1999999999888677
+        ],
+        "right": [
+          -3.6999999999750894,
+          0.5999999999882047,
+          1.1999999999901845
+        ]
+      },
+      "dual_release_height_error_m": 1.3167245072054357e-12
+    },
+    {
+      "label": "Box 17 + Box 19",
+      "boxes": [
+        17,
+        19
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.6999999999975324,
+          -0.6000000000023842,
+          1.2000000000028688
+        ],
+        "right": [
+          -3.6999999999982442,
+          0.6000000000023881,
+          1.200000000001799
+        ]
+      },
+      "dual_release_height_error_m": 1.0698109065288008e-12
+    },
+    {
+      "label": "Box 18",
+      "boxes": [
+        18
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "right": [
+          -3.6999999992509807,
+          0.5999999924060054,
+          1.2000000081997773
+        ]
+      },
+      "dual_release_height_error_m": 0.0
+    },
+    {
+      "label": "Box 21 + Box 25",
+      "boxes": [
+        21,
+        25
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.749999992226272,
+          -0.4499999775653301,
+          1.099999997405352
+        ],
+        "right": [
+          -3.7499999922161513,
+          0.44999997762053245,
+          1.0999999973860384
+        ]
+      },
+      "dual_release_height_error_m": 1.9313661780984148e-11
+    },
+    {
+      "label": "Box 22 + Box 24",
+      "boxes": [
+        22,
+        24
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.599999999999591,
+          -0.4000000000023656,
+          0.8500000000002281
+        ],
+        "right": [
+          -3.599999999999462,
+          0.400000000002372,
+          0.8500000000002375
+        ]
+      },
+      "dual_release_height_error_m": 9.325873406851315e-15
+    },
+    {
+      "label": "Box 23",
+      "boxes": [
+        23
+      ],
+      "checks": {
+        "chest_before_backoff": true,
+        "backoff_2_35m": true,
+        "lateral_shuttle_zero": true,
+        "turn_180deg": true,
+        "release_detached": true,
+        "dual_release_equal_height": true
+      },
+      "backoff_m": 2.35,
+      "lateral_shuttle_m": 0.0,
+      "turn_deg": 180.0,
+      "release_centers_map_m": {
+        "left": [
+          -3.6000000000240906,
+          -0.4000000000484884,
+          0.850000000010531
+        ]
+      },
+      "dual_release_height_error_m": 0.0
+    }
+  ]
+}

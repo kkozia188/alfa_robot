@@ -250,14 +250,21 @@ def planner_args(
     fast_probe: bool = False,
     parallel_rrt_workers: int = 1,
     pure_rrt: bool = False,
+    pure_rrt_backend: str = "ompl",
+    vamp_workers: int = 4,
+    vamp_max_iterations: int = 100000,
+    vamp_max_samples: int = 200000,
+    vamp_range: float = 0.08,
+    vamp_seed: int = 20261019,
 ) -> SimpleNamespace:
-    if not task.get("transition_frames"):
+    if not pure_rrt and not task.get("transition_frames"):
         raise ValueError(f"box {task['box_id']} has no validated entry bridge")
     box_id = int(payload["target_box_id"])
-    source_precontact = next(
-        frame for frame in payload["frames"] if frame["stage"] == "precontact"
+    fixed_opposite = box_id in FIXED_OPPOSITE_ARM_BOXES and not pure_rrt
+    source_precontact = (
+        next(frame for frame in payload["frames"] if frame["stage"] == "precontact")
+        if fixed_opposite else None
     )
-    fixed_opposite = box_id in FIXED_OPPOSITE_ARM_BOXES
     initial_left = LEFT_HOME
     initial_right = RIGHT_HOME
     if fixed_opposite:
@@ -274,6 +281,12 @@ def planner_args(
         continuous_sequence=True,
         continuous_plan_approach=pure_rrt,
         pure_rrt_full_flow=pure_rrt,
+        pure_rrt_backend=pure_rrt_backend,
+        vamp_workers=vamp_workers,
+        vamp_max_iterations=vamp_max_iterations,
+        vamp_max_samples=vamp_max_samples,
+        vamp_range=vamp_range,
+        vamp_seed=vamp_seed,
         ompl_simplify_solutions=not pure_rrt,
         maximum_carried_box_tilt_deg=8.0,
         maximum_carried_box_center_z=2.20,
@@ -306,7 +319,7 @@ def planner_args(
         top_initial_right_arm_joints_deg=initial_right,
         psi_step_deg=5.0,
         maximum_cartesian_joint_step_deg=180.0,
-        precontact_candidate_limit=1 if fast_probe else 2,
+        precontact_candidate_limit=8 if pure_rrt else (1 if fast_probe else 2),
         rrt_planning_time=30.0 if pure_rrt else (0.25 if fast_probe else 1.0),
         rrt_planning_attempts=1,
         edge_joint_resolution_deg=1.0,
@@ -484,6 +497,13 @@ def main() -> int:
         action="store_true",
         help="record a failed box and continue scanning the remaining requested boxes",
     )
+    parser.add_argument("--pure-rrt-backend", choices=("ompl", "vamp"), default="ompl")
+    parser.add_argument("--vamp-workers", type=int, default=4)
+    parser.add_argument("--vamp-max-iterations", type=int, default=100000)
+    parser.add_argument("--vamp-max-samples", type=int, default=200000)
+    parser.add_argument("--vamp-range", type=float, default=0.08)
+    parser.add_argument("--vamp-seed", type=int, default=20261019)
+    parser.add_argument("--extra-removed-box-ids", default="")
     args = parser.parse_args()
     if not 1 <= args.parallel_rrt_workers <= 32:
         parser.error("--parallel-rrt-workers must be in [1, 32]")
@@ -509,6 +529,9 @@ def main() -> int:
     summary: list[dict[str, Any]] = []
 
     selected = parse_box_ids(args.box_ids)
+    extra_removed = {
+        int(value) for value in args.extra_removed_box_ids.split(",") if value.strip()
+    }
     for box_id in ordered_box_ids(selected, tasks):
         source = copy.deepcopy(tasks[box_id]["payload"])
         place_pose, desired_center = chest_target(robot, source, args.pure_rrt)
@@ -572,11 +595,13 @@ def main() -> int:
                 planner_args(
                     tasks[box_id], source, place_pose, profile_degrees,
                     guide_payload, args.fast_probe, args.parallel_rrt_workers,
-                    args.pure_rrt,
+                    args.pure_rrt, args.pure_rrt_backend,
+                    args.vamp_workers, args.vamp_max_iterations,
+                    args.vamp_max_samples, args.vamp_range, args.vamp_seed,
                 ),
                 box_id,
                 str(source["grasp_mode"]),
-                set(int(value) for value in source["removed_box_ids"]),
+                set(int(value) for value in source["removed_box_ids"]) | extra_removed,
                 str(source["side"]),
                 (
                     args.pure_initial_updown

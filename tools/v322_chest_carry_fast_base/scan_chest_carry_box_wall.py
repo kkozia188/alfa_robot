@@ -181,6 +181,12 @@ def run_attempt(
         "pure_rrt_full_flow:=" + (
             "true" if getattr(args, "pure_rrt_full_flow", False) else "false"
         ),
+        f"pure_rrt_backend:={getattr(args, 'pure_rrt_backend', 'ompl')}",
+        f"vamp_workers:={getattr(args, 'vamp_workers', 4)}",
+        f"vamp_max_iterations:={getattr(args, 'vamp_max_iterations', 100000)}",
+        f"vamp_max_samples:={getattr(args, 'vamp_max_samples', 200000)}",
+        f"vamp_range:={getattr(args, 'vamp_range', 0.08):.6f}",
+        f"vamp_seed:={getattr(args, 'vamp_seed', 20261019)}",
         "ompl_simplify_solutions:=" + (
             "true" if getattr(args, "ompl_simplify_solutions", True) else "false"
         ),

@@ -99,6 +99,12 @@ def generate_launch_description():
             DeclareLaunchArgument("rrt_planning_time", default_value="1.0"),
             DeclareLaunchArgument("rrt_planning_attempts", default_value="1"),
             DeclareLaunchArgument("pure_rrt_full_flow", default_value="false"),
+            DeclareLaunchArgument("pure_rrt_backend", default_value="ompl"),
+            DeclareLaunchArgument("vamp_workers", default_value="4"),
+            DeclareLaunchArgument("vamp_max_iterations", default_value="100000"),
+            DeclareLaunchArgument("vamp_max_samples", default_value="200000"),
+            DeclareLaunchArgument("vamp_range", default_value="0.08"),
+            DeclareLaunchArgument("vamp_seed", default_value="20261019"),
             DeclareLaunchArgument("ompl_simplify_solutions", default_value="true"),
             DeclareLaunchArgument("edge_joint_resolution_deg", default_value="2.5"),
             DeclareLaunchArgument("natural_motion_enabled", default_value="true"),
@@ -349,6 +355,24 @@ def generate_launch_description():
                         ),
                         "pure_rrt_full_flow": ParameterValue(
                             LaunchConfiguration("pure_rrt_full_flow"), value_type=bool
+                        ),
+                        "pure_rrt_backend": LaunchConfiguration(
+                            "pure_rrt_backend"
+                        ),
+                        "vamp_workers": ParameterValue(
+                            LaunchConfiguration("vamp_workers"), value_type=int
+                        ),
+                        "vamp_max_iterations": ParameterValue(
+                            LaunchConfiguration("vamp_max_iterations"), value_type=int
+                        ),
+                        "vamp_max_samples": ParameterValue(
+                            LaunchConfiguration("vamp_max_samples"), value_type=int
+                        ),
+                        "vamp_range": ParameterValue(
+                            LaunchConfiguration("vamp_range"), value_type=float
+                        ),
+                        "vamp_seed": ParameterValue(
+                            LaunchConfiguration("vamp_seed"), value_type=int
                         ),
                         "ompl.simplify_solutions": ParameterValue(
                             LaunchConfiguration("ompl_simplify_solutions"), value_type=bool

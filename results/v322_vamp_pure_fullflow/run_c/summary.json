@@ -1,0 +1,331 @@
+[
+  {
+    "box_id": 3,
+    "side": "right",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.4,
+      -0.45,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      -0.45,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.25,
+      -0.53,
+      1.15,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "right-front-855aa9629386",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 246633.822835,
+    "release_geometry": {
+      "box_center_base": [
+        0.9999999999805624,
+        -0.4500000001777321,
+        1.2000000001391342
+      ],
+      "target_box_center_base": [
+        1.0,
+        -0.45,
+        1.2
+      ],
+      "box_center_error_m": 2.2654991248562599e-10,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-03.json"
+  },
+  {
+    "box_id": 7,
+    "side": "left",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.4,
+      0.6,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      0.6,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.25,
+      0.6,
+      1.2,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "left-front-5e358511927d",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 174183.677145,
+    "release_geometry": {
+      "box_center_base": [
+        0.9999999998239575,
+        0.5999999988684165,
+        1.199999999913099
+      ],
+      "target_box_center_base": [
+        1.0,
+        0.6,
+        1.2
+      ],
+      "box_center_error_m": 1.14848767578088e-09,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-07.json"
+  },
+  {
+    "box_id": 9,
+    "side": "right",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.4,
+      -0.6,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      -0.6,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.25,
+      -0.6,
+      1.2,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "right-front-c18d21fa9dc2",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 174097.171318,
+    "release_geometry": {
+      "box_center_base": [
+        0.9999999998319204,
+        -0.5999999988825402,
+        1.199999999908755
+      ],
+      "target_box_center_base": [
+        1.0,
+        -0.6,
+        1.2
+      ],
+      "box_center_error_m": 1.1337075340116342e-09,
+      "box_tilt_deg": 8.537736462515939e-07,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-09.json"
+  },
+  {
+    "box_id": 23,
+    "side": "left",
+    "mode": "top_suction",
+    "desired_box_center_map": [
+      0.55,
+      0.4,
+      0.85
+    ],
+    "desired_box_center_base": [
+      0.9,
+      0.4,
+      0.85
+    ],
+    "place_tcp_pose_map": [
+      0.45000000000000007,
+      0.4,
+      1.05,
+      1.0,
+      0.0,
+      0.0,
+      6.123233995736766e-17
+    ],
+    "profile_key": "left-top_suction-6ff9b46d65f2",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 737784.579244,
+    "release_geometry": {
+      "box_center_base": [
+        0.9000000000240902,
+        0.4000000000484885,
+        0.850000000010531
+      ],
+      "target_box_center_base": [
+        0.9,
+        0.4,
+        0.85
+      ],
+      "box_center_error_m": 5.515770707743568e-11,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-23.json"
+  },
+  {
+    "box_id": 13,
+    "side": "right",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.4,
+      -0.6,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      -0.6,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.25,
+      -0.6799999999999999,
+      1.15,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "right-front-855aa9629386",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 284982.050133,
+    "release_geometry": {
+      "box_center_base": [
+        0.9999999998687443,
+        -0.6000000005556257,
+        1.2000000001226838
+      ],
+      "target_box_center_base": [
+        1.0,
+        -0.6,
+        1.2
+      ],
+      "box_center_error_m": 5.839515181862104e-10,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-13.json"
+  },
+  {
+    "box_id": 17,
+    "side": "left",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.65,
+      0.6,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      0.6,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.5,
+      0.6,
+      1.2,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "left-front-5e358511927d",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 231159.491529,
+    "release_geometry": {
+      "box_center_base": [
+        0.9999999999975321,
+        0.6000000000023843,
+        1.2000000000028688
+      ],
+      "target_box_center_base": [
+        1.0,
+        0.6,
+        1.2
+      ],
+      "box_center_error_m": 4.472769619926423e-12,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-17.json"
+  },
+  {
+    "box_id": 19,
+    "side": "right",
+    "mode": "front",
+    "desired_box_center_map": [
+      0.65,
+      -0.6,
+      1.2
+    ],
+    "desired_box_center_base": [
+      1.0,
+      -0.6,
+      1.2
+    ],
+    "place_tcp_pose_map": [
+      0.5,
+      -0.6,
+      1.2,
+      0.0,
+      0.7071067811865475,
+      0.0,
+      0.7071067811865476
+    ],
+    "profile_key": "right-front-c18d21fa9dc2",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 223259.044521,
+    "release_geometry": {
+      "box_center_base": [
+        0.999999999998244,
+        -0.600000000002388,
+        1.200000000001799
+      ],
+      "target_box_center_base": [
+        1.0,
+        -0.6,
+        1.2
+      ],
+      "box_center_error_m": 3.4673532140574724e-12,
+      "box_tilt_deg": 8.537736462515939e-07,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-19.json"
+  }
+]

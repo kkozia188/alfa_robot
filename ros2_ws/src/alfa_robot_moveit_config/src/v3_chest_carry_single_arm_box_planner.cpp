@@ -1,5 +1,8 @@
 #include <alfa_robot_analytic_ik/v3_redundant_analytic_ik.hpp>
 #include <alfa_robot_moveit_config/planning_diagnostics.hpp>
+#ifdef ALFA_HAS_VAMP
+#include <alfa_robot_moveit_config/vamp_full_online_rrt.hpp>
+#endif
 
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/point.hpp>
@@ -299,6 +302,7 @@ struct RrtPlanResult
   std::string reason;
   std::string strategy;
   std::vector<moveit::core::RobotStatePtr> states;
+  nlohmann::json backend_audit = nlohmann::json::object();
 };
 
 struct PlanningMetrics
@@ -430,6 +434,12 @@ public:
     rrt_planning_time_ = std::max(0.05, getParameter<double>("rrt_planning_time", 1.0));
     rrt_planning_attempts_ = std::max(1, getParameter<int>("rrt_planning_attempts", 1));
     pure_rrt_full_flow_ = getParameter<bool>("pure_rrt_full_flow", false);
+    pure_rrt_backend_ = getParameter<std::string>("pure_rrt_backend", "ompl");
+    vamp_workers_ = getParameter<int>("vamp_workers", 4);
+    vamp_max_iterations_ = getParameter<int>("vamp_max_iterations", 100000);
+    vamp_max_samples_ = getParameter<int>("vamp_max_samples", 200000);
+    vamp_range_ = getParameter<double>("vamp_range", 0.08);
+    vamp_seed_ = getParameter<int64_t>("vamp_seed", 20261019);
     ompl_simplify_solutions_ = getParameter<bool>("ompl.simplify_solutions", true);
     natural_motion_enabled_ = getParameter<bool>("natural_motion_enabled", true);
     natural_swivel_weight_ = getParameter<double>("natural_swivel_weight", 0.02);
@@ -572,6 +582,19 @@ public:
       throw std::invalid_argument(
         "pure_rrt_full_flow requires ompl.simplify_solutions=false");
     }
+    if (pure_rrt_backend_ != "ompl" && pure_rrt_backend_ != "vamp") {
+      throw std::invalid_argument("pure_rrt_backend must be ompl or vamp");
+    }
+    if (vamp_workers_ < 1 || vamp_workers_ > 32 ||
+        vamp_max_iterations_ < 1 || vamp_max_samples_ < 4 ||
+        !std::isfinite(vamp_range_) || vamp_range_ <= 0.0 || vamp_seed_ < 0) {
+      throw std::invalid_argument("VAMP worker, budget, range, and seed are invalid");
+    }
+#ifndef ALFA_HAS_VAMP
+    if (pure_rrt_backend_ == "vamp") {
+      throw std::invalid_argument("pure_rrt_backend=vamp requires vamp::vamp");
+    }
+#endif
     if (pure_rrt_full_flow_ &&
         (natural_rrt_shortcut_enabled_ || cartesian_transfer_search_enabled_ ||
         shortcut_repair_rrt_enabled_ || !loaded_transfer_joint_waypoints_deg_.empty() ||
@@ -3094,6 +3117,11 @@ private:
     PlanningMetrics* metrics = nullptr,
     bool force_cartesian_search = false) const
   {
+    if (pure_rrt_full_flow_ && pure_rrt_backend_ == "vamp") {
+      return planPureArmUpdownRrt(
+        base_scene, start_state, goal_state,
+        start_state.hasAttachedBody(kCarriedBoxId), metrics);
+    }
     RrtPlanResult result;
     const auto wall_started = std::chrono::steady_clock::now();
     auto scene = planning_scene::PlanningScene::clone(base_scene);
@@ -3618,6 +3646,158 @@ private:
       bounds.setLow(index, limit.min_position_);
       bounds.setHigh(index, limit.max_position_);
     }
+#ifdef ALFA_HAS_VAMP
+    if (pure_rrt_backend_ == "vamp") {
+      using alfa_robot::motion::kFullOnlineVampDimension;
+      std::array<float, kFullOnlineVampDimension> start_values{};
+      std::array<float, kFullOnlineVampDimension> goal_values{};
+      std::array<float, kFullOnlineVampDimension> lows{};
+      std::array<float, kFullOnlineVampDimension> highs{};
+      if (variables.size() != kFullOnlineVampDimension) {
+        result.reason = "VAMP state dimension does not match dual_arm_with_updown";
+        return result;
+      }
+      for (size_t index = 0U; index < variables.size(); ++index) {
+        start_values[index] = static_cast<float>(
+          start_state.getVariablePosition(variables[index]));
+        goal_values[index] = static_cast<float>(
+          goal_state.getVariablePosition(variables[index]));
+        lows[index] = static_cast<float>(bounds.low[index]);
+        highs[index] = static_cast<float>(bounds.high[index]);
+      }
+      auto state_template = std::make_shared<moveit::core::RobotState>(start_state);
+      const auto validator_factory = [this, base_scene, state_template,
+          variables, group, attached]() {
+          auto worker_scene = planning_scene::PlanningScene::clone(base_scene);
+          auto worker_state = std::make_shared<moveit::core::RobotState>(*state_template);
+          return [this, worker_scene, worker_state, variables, group, attached](
+              const std::array<float,
+                alfa_robot::motion::kFullOnlineVampDimension>& values) mutable {
+              for (size_t index = 0U; index < variables.size(); ++index) {
+                worker_state->setVariablePosition(variables[index], values[index]);
+              }
+              worker_state->zeroVelocities();
+              worker_state->zeroAccelerations();
+              if (attached) attachCarriedBox(*worker_state);
+              else if (worker_state->hasAttachedBody(kCarriedBoxId)) {
+                worker_state->clearAttachedBody(kCarriedBoxId);
+              }
+              worker_state->update(true);
+              return worker_state->satisfiesBounds(group) &&
+                (!attached || carriedBoxFeasible(*worker_state)) &&
+                fullCollisionReason(worker_scene, *worker_state, nullptr).empty();
+            };
+        };
+      const auto search_started = std::chrono::steady_clock::now();
+      auto trials = alfa_robot::motion::solveFullOnlineVampRrtc(
+        start_values, goal_values, lows, highs, validator_factory,
+        static_cast<size_t>(vamp_workers_),
+        static_cast<size_t>(vamp_max_iterations_),
+        static_cast<size_t>(vamp_max_samples_),
+        static_cast<float>(vamp_range_), static_cast<uint32_t>(vamp_seed_));
+      result.joint_rrt_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - search_started).count();
+      if (metrics) metrics->joint_rrt_ms += result.joint_rrt_ms;
+      result.planner_ms = result.joint_rrt_ms;
+      result.parallel_workers_launched = trials.size();
+      result.parallel_workers_completed = trials.size();
+      result.backend_audit = {
+        {"backend", "vamp_rrt_connect_15d"},
+        {"state_dimension", kFullOnlineVampDimension},
+        {"endpoint_source", task_mode_ == "state_transition" ?
+          "current_run_release_state_and_named_home" : "online_pose_ik"},
+        {"shortcut_used", false},
+        {"fallback_used", false},
+        {"workers", nlohmann::json::array()},
+      };
+      for (const auto& trial : trials) {
+        result.backend_audit["workers"].push_back({
+          {"seed", trial.seed}, {"solved", trial.solved},
+          {"iterations", trial.iterations}, {"tree_nodes", trial.tree_nodes},
+          {"validity_batches", trial.validity_batches},
+          {"validity_states", trial.validity_states},
+          {"search_ms", trial.search_ms}, {"fcl_ms", trial.fcl_ms},
+          {"sparse_states", trial.path.size()},
+        });
+      }
+      const auto winner = std::min_element(
+        trials.begin(), trials.end(), [](const auto& left, const auto& right) {
+          if (left.solved != right.solved) return left.solved > right.solved;
+          if (left.path.size() != right.path.size())
+            return left.path.size() < right.path.size();
+          return left.search_ms < right.search_ms;
+        });
+      if (winner == trials.end() || !winner->solved) {
+        result.reason = "VAMP 15D RRT-Connect exhausted exact-solution budget";
+        result.wall_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - started).count();
+        return result;
+      }
+      result.parallel_winner_seed = static_cast<int>(winner->seed);
+      std::vector<moveit::core::RobotStatePtr> sparse;
+      sparse.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+      for (const auto& values : winner->path) {
+        auto path_state = std::make_shared<moveit::core::RobotState>(start_state);
+        for (size_t index = 0U; index < variables.size(); ++index) {
+          path_state->setVariablePosition(variables[index], values[index]);
+        }
+        path_state->zeroVelocities();
+        path_state->zeroAccelerations();
+        if (attached) attachCarriedBox(*path_state);
+        else if (path_state->hasAttachedBody(kCarriedBoxId)) {
+          path_state->clearAttachedBody(kCarriedBoxId);
+        }
+        path_state->update(true);
+        sparse.push_back(std::move(path_state));
+      }
+      sparse.push_back(std::make_shared<moveit::core::RobotState>(goal_state));
+      result.states.push_back(std::make_shared<moveit::core::RobotState>(start_state));
+      for (size_t edge = 1U; edge < sparse.size(); ++edge) {
+        const auto& from = *sparse[edge - 1U];
+        const auto& to = *sparse[edge];
+        double maximum_ratio = 0.0;
+        for (const auto& variable : variables) {
+          const double resolution = variable == "updown" ? 0.01 : degToRad(1.0);
+          maximum_ratio = std::max(
+            maximum_ratio,
+            std::abs(to.getVariablePosition(variable) -
+            from.getVariablePosition(variable)) / resolution);
+        }
+        const size_t steps = std::max<size_t>(
+          1U, static_cast<size_t>(std::ceil(maximum_ratio)));
+        for (size_t step = 1U; step <= steps; ++step) {
+          const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+          auto probe = std::make_shared<moveit::core::RobotState>(from);
+          for (const auto& variable : variables) {
+            probe->setVariablePosition(
+              variable, from.getVariablePosition(variable) +
+              (to.getVariablePosition(variable) - from.getVariablePosition(variable)) * ratio);
+          }
+          probe->zeroVelocities();
+          probe->zeroAccelerations();
+          if (attached) attachCarriedBox(*probe);
+          else if (probe->hasAttachedBody(kCarriedBoxId)) {
+            probe->clearAttachedBody(kCarriedBoxId);
+          }
+          probe->update(true);
+          if (!state_valid(*probe)) {
+            result.states.clear();
+            result.reason = "VAMP 15D path failed dense MoveIt/FCL validation";
+            result.wall_ms = std::chrono::duration<double, std::milli>(
+              std::chrono::steady_clock::now() - started).count();
+            return result;
+          }
+          result.states.push_back(std::move(probe));
+        }
+      }
+      result.success = true;
+      result.strategy = "pure_vamp_rrt_connect_dual_arm_updown";
+      result.reason = "pure full-flow VAMP exact 15D solution";
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+      return result;
+    }
+#endif
     space->setBounds(bounds);
     og::SimpleSetup setup(space);
     auto validity_probe = std::make_shared<moveit::core::RobotState>(start_state);
@@ -4047,6 +4227,7 @@ private:
         {"parallel_rrt_winner_seed", plan.parallel_winner_seed},
         {"repaired_joints", repaired_joints},
         {"joint_rrt_ms", plan.joint_rrt_ms},
+        {"backend_audit", plan.backend_audit},
         {"diagnostic", plan.reason},
       });
     };
@@ -4763,6 +4944,31 @@ private:
         result.failure_reason = collision;
         return finish();
       }
+    }
+
+    if (pure_rrt_full_flow_ && pure_rrt_backend_ == "vamp") {
+      auto plan = planPureArmUpdownRrt(
+        scene, *initial_state_, goal, false, &result.metrics);
+      result.segment_search.push_back({
+        {"stage", "state_transition"},
+        {"success", plan.success},
+        {"strategy", plan.strategy},
+        {"total_ms", plan.wall_ms},
+        {"joint_rrt_ms", plan.joint_rrt_ms},
+        {"backend_audit", plan.backend_audit},
+        {"diagnostic", plan.reason},
+      });
+      if (!plan.success) {
+        result.failure_stage = "transition_vamp";
+        result.failure_reason = plan.reason;
+        return finish();
+      }
+      appendStates(plan.states, "between_boxes", false, false, &result.frames);
+      result.transition_group = "dual_arm_with_updown";
+      result.transition_strategy = "pure_vamp_rrt_connect_dual_arm_updown";
+      result.transition_diagnostic = plan.reason;
+      result.success = true;
+      return finish();
     }
 
     const auto sample_edge = [&](
@@ -5764,6 +5970,12 @@ private:
   double rrt_planning_time_ = 1.0;
   int rrt_planning_attempts_ = 1;
   bool pure_rrt_full_flow_ = false;
+  std::string pure_rrt_backend_ = "ompl";
+  int vamp_workers_ = 4;
+  int vamp_max_iterations_ = 100000;
+  int vamp_max_samples_ = 200000;
+  double vamp_range_ = 0.08;
+  int64_t vamp_seed_ = 20261019;
   bool ompl_simplify_solutions_ = true;
   bool natural_motion_enabled_ = true;
   double natural_swivel_weight_ = 0.02;

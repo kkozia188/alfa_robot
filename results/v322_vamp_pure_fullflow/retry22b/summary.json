@@ -1,0 +1,49 @@
+[
+  {
+    "box_id": 22,
+    "side": "left",
+    "mode": "top_suction",
+    "desired_box_center_map": [
+      0.55,
+      0.4,
+      0.85
+    ],
+    "desired_box_center_base": [
+      0.9,
+      0.4,
+      0.85
+    ],
+    "place_tcp_pose_map": [
+      0.45000000000000007,
+      0.4,
+      1.05,
+      1.0,
+      0.0,
+      0.0,
+      6.123233995736766e-17
+    ],
+    "profile_key": "left-top_suction-6ff9b46d65f2",
+    "profile_seeded": false,
+    "resumed": false,
+    "success": true,
+    "failure_stage": "",
+    "failure_reason": "",
+    "total_ms": 837956.703796,
+    "release_geometry": {
+      "box_center_base": [
+        0.8999999999995907,
+        0.4000000000023657,
+        0.8500000000002281
+      ],
+      "target_box_center_base": [
+        0.9,
+        0.4,
+        0.85
+      ],
+      "box_center_error_m": 2.41163303200755e-12,
+      "box_tilt_deg": 0.0,
+      "success": true
+    },
+    "output": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/retry22b/box-22.json"
+  }
+]

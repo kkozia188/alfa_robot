@@ -338,6 +338,15 @@ target_link_libraries(v3_chest_carry_single_arm_box_planner
   alfa_robot_analytic_ik::alfa_robot_analytic_ik
 )
 
+if(vamp_FOUND)
+  target_link_libraries(v3_chest_carry_single_arm_box_planner vamp::vamp)
+  target_compile_definitions(
+    v3_chest_carry_single_arm_box_planner PRIVATE
+    ALFA_HAS_VAMP=1
+    EIGEN_MAX_ALIGN_BYTES=16
+    EIGEN_MAX_STATIC_ALIGN_BYTES=16)
+endif()
+
 ament_target_dependencies(v3_chest_carry_single_arm_box_planner
   alfa_robot_analytic_ik
   geometry_msgs

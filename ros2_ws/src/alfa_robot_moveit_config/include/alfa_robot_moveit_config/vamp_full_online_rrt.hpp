@@ -206,13 +206,15 @@ struct FullOnlineVampTrial
   std::vector<std::array<float, kFullOnlineVampDimension>> path;
 };
 
+using FullOnlineVampValidator = std::function<bool(
+  const std::array<float, kFullOnlineVampDimension>&)>;
+
 inline std::vector<FullOnlineVampTrial> solveFullOnlineVampRrtc(
   const std::array<float, kFullOnlineVampDimension>& start_values,
   const std::array<float, kFullOnlineVampDimension>& goal_values,
   const std::array<float, kFullOnlineVampDimension>& lows,
   const std::array<float, kFullOnlineVampDimension>& highs,
-  const std::function<bool(
-    const std::array<float, kFullOnlineVampDimension>&)>& validator,
+  const std::function<FullOnlineVampValidator()>& validator_factory,
   size_t workers,
   size_t max_iterations,
   size_t max_samples,
@@ -248,7 +250,7 @@ inline std::vector<FullOnlineVampTrial> solveFullOnlineVampRrtc(
         FullOnlineVampTrial trial;
         trial.seed = base_seed + static_cast<uint32_t>(worker) * 0x9E3779B9U;
         FullOnlineVampContext context;
-        context.validator = validator;
+        context.validator = validator_factory();
         g_full_online_vamp_context = &context;
         auto rng = std::make_shared<FullOnlineVampSampler>(
           trial.seed, start_normalized, goal_normalized);

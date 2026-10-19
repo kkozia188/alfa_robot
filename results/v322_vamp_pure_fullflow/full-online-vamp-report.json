@@ -1,0 +1,457 @@
+{
+  "schema": "alfa.v322_online_pose_vamp_fullflow.v1",
+  "success": true,
+  "failures": [],
+  "contract": {
+    "input": "current RobotState + target box/TCP Pose + scene",
+    "online_ik": true,
+    "cached_joint_endpoint_used": false,
+    "cached_path_or_waypoint_used": false,
+    "shortcut_used": false,
+    "fallback_used": false,
+    "arm_search_state": "15D updown + dual-arm 14 axes",
+    "base_search_state": "17D base x/y/yaw + dual-arm 14 axes; updown projected",
+    "tree_backend": "VAMP RRT-Connect"
+  },
+  "boxes": [
+    {
+      "box_id": 1,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-01.json",
+      "total_ms": 77554.503915,
+      "ik_ms": 76946.28497999998,
+      "tree_ms": 540.8448050000001,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 2,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_b/box-02.json",
+      "total_ms": 189028.438669,
+      "ik_ms": 186091.46779500003,
+      "tree_ms": 2856.701487,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 3,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-03.json",
+      "total_ms": 246633.822835,
+      "ik_ms": 245018.47583400016,
+      "tree_ms": 1546.149414,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 4,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_b/box-04.json",
+      "total_ms": 189407.282936,
+      "ik_ms": 186401.92834200003,
+      "tree_ms": 2930.134369,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 5,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-05.json",
+      "total_ms": 77744.94837,
+      "ik_ms": 77026.564136,
+      "tree_ms": 652.16361,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 6,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-06.json",
+      "total_ms": 77774.73057,
+      "ik_ms": 77600.87094299999,
+      "tree_ms": 117.611504,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 7,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-07.json",
+      "total_ms": 174183.677145,
+      "ik_ms": 174061.79567399994,
+      "tree_ms": 64.524489,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 8,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-08.json",
+      "total_ms": 259960.002459,
+      "ik_ms": 259756.5933999999,
+      "tree_ms": 139.981306,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 9,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-09.json",
+      "total_ms": 174097.171318,
+      "ik_ms": 173946.7214899999,
+      "tree_ms": 90.749455,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 10,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-10.json",
+      "total_ms": 77799.368253,
+      "ik_ms": 77672.00376199996,
+      "tree_ms": 67.230211,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 11,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-11.json",
+      "total_ms": 95186.934071,
+      "ik_ms": 94873.01532699999,
+      "tree_ms": 254.367468,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 12,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_b/box-12.json",
+      "total_ms": 214523.436425,
+      "ik_ms": 214322.20882299996,
+      "tree_ms": 151.669479,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 13,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-13.json",
+      "total_ms": 284982.050133,
+      "ik_ms": 284778.1806569998,
+      "tree_ms": 141.51709200000002,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 14,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_b/box-14.json",
+      "total_ms": 208852.902727,
+      "ik_ms": 208665.81809499997,
+      "tree_ms": 140.469042,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 15,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-15.json",
+      "total_ms": 94810.531391,
+      "ik_ms": 94624.45302999999,
+      "tree_ms": 131.256858,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 16,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-16.json",
+      "total_ms": 422098.203369,
+      "ik_ms": 421801.70663900033,
+      "tree_ms": 234.695739,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 17,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-17.json",
+      "total_ms": 231159.491529,
+      "ik_ms": 230893.87766500007,
+      "tree_ms": 203.596049,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 18,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-18.json",
+      "total_ms": 519452.996321,
+      "ik_ms": 516422.4749919996,
+      "tree_ms": 2948.620128,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 19,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-19.json",
+      "total_ms": 223259.044521,
+      "ik_ms": 223011.60702499986,
+      "tree_ms": 187.082256,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 20,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_d/box-20.json",
+      "total_ms": 423157.901089,
+      "ik_ms": 420553.1363640004,
+      "tree_ms": 2514.706881,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 21,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-21.json",
+      "total_ms": 764628.100064,
+      "ik_ms": 764053.0584580002,
+      "tree_ms": 487.08500300000003,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 22,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/retry22b/box-22.json",
+      "total_ms": 837956.703796,
+      "ik_ms": 505819.3605010003,
+      "tree_ms": 332010.416601,
+      "segments": 9,
+      "worker_trials": 36,
+      "worker_solved": 25
+    },
+    {
+      "box_id": 23,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_c/box-23.json",
+      "total_ms": 737784.579244,
+      "ik_ms": 737549.3379869994,
+      "tree_ms": 166.095207,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    },
+    {
+      "box_id": 24,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/retry24e/box-24.json",
+      "total_ms": 830416.89948,
+      "ik_ms": 491810.5698419997,
+      "tree_ms": 338423.26066,
+      "segments": 9,
+      "worker_trials": 36,
+      "worker_solved": 25
+    },
+    {
+      "box_id": 25,
+      "payload": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/run_a/box-25.json",
+      "total_ms": 766122.93736,
+      "ik_ms": 765339.132308,
+      "tree_ms": 695.895816,
+      "segments": 4,
+      "worker_trials": 16,
+      "worker_solved": 16
+    }
+  ],
+  "totals": {
+    "boxes": 25,
+    "online_total_ms": 8234628.852403,
+    "online_ik_ms": 7509040.644068999,
+    "vamp_tree_ms": 723749.0193419999,
+    "searched_base_and_dual_stow_phases": 45,
+    "worker_trials": 620,
+    "worker_solved": 598
+  },
+  "validation": {
+    "checked_edge_samples": 2466,
+    "checked_frames": 18688,
+    "input": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/full-online-vamp-replay.json",
+    "maximum_left_tilt_deg": 7.9993289111614185,
+    "maximum_right_tilt_deg": 7.9952152732462745,
+    "operations": [
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1070,
+        "label": "Box 1 + Box 5",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1230,
+        "label": "Box 2 + Box 4",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1266,
+        "label": "Box 3",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 935,
+        "label": "Box 6 + Box 10",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1081,
+        "label": "Box 7 + Box 9",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1239,
+        "label": "Box 8",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 877,
+        "label": "Box 11 + Box 15",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 821,
+        "label": "Box 12 + Box 14",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.6,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 162,
+        "checked_frames": 1236,
+        "label": "Box 13",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 1377,
+        "label": "Box 16 + Box 20",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 1060,
+        "label": "Box 17 + Box 19",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 1609,
+        "label": "Box 18",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 1274,
+        "label": "Box 21 + Box 25",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 2268,
+        "label": "Box 22 + Box 24",
+        "success": true
+      },
+      {
+        "base_pose_map": [
+          -0.35,
+          0.0,
+          0.0
+        ],
+        "checked_edge_samples": 168,
+        "checked_frames": 1345,
+        "label": "Box 23",
+        "success": true
+      }
+    ],
+    "schema": "alfa.v3_scoop_5x5_dual_validation.v1",
+    "success": true
+  },
+  "rerun": {
+    "path": "/home/tim/alfa_robot-v322-vamp-pure-fullflow/results/v322_vamp_pure_fullflow/full-online-vamp-safe-turn.rrd",
+    "sha256": "3914af55a9acf7158704daa61a4734144bf2fd11503f0b8f2e0a7ef63751a0aa"
+  }
+}

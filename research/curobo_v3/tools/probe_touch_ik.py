@@ -11,6 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE_OFFSET_M = .070
 
 
+def nearby_targets(target, tilt_deg=25.):
+    if not 0 <= tilt_deg <= 30:
+        raise ValueError('朝向偏转必须在0～30度')
+    output = [('原朝向', target.copy(), 0.)]
+    for axis, vector in [('X', np.array([1., 0., 0.])), ('Y', np.array([0., 1., 0.])), ('Z', np.array([0., 0., 1.]))]:
+        for sign in (-1, 1):
+            pose = target.copy()
+            pose[:3, :3] = target[:3, :3] @ Rotation.from_rotvec(vector * np.deg2rad(tilt_deg * sign)).as_matrix()
+            output.append((f'局部{axis}{tilt_deg * sign:+g}°', pose, tilt_deg))
+    return output
+
+
 class ProbeTouchIK:
     def __init__(self, updown_m):
         self.updown_m = float(updown_m)

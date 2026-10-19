@@ -5,7 +5,8 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
-from probe_touch_ik import ProbeTouchIK
+from probe_touch_ik import ProbeTouchIK, nearby_targets
+from probe_touch_motion import interpolate_motion
 
 
 class ProbeTouchIKTest(unittest.TestCase):
@@ -26,6 +27,30 @@ class ProbeTouchIKTest(unittest.TestCase):
         solver = ProbeTouchIK(-.3)
         with self.assertRaises(ValueError):
             solver.solve(np.zeros((4, 4)), np.zeros(7))
+
+    def test_nearby_orientations_keep_position(self):
+        from scipy.spatial.transform import Rotation
+        target = np.eye(4)
+        target[:3, 3] = [.3, .4, .5]
+        poses = nearby_targets(target)
+        self.assertEqual(len(poses), 7)
+        for label, pose, angle in poses:
+            np.testing.assert_allclose(pose[:3, 3], target[:3, 3])
+            self.assertAlmostEqual(np.rad2deg(Rotation.from_matrix(pose[:3, :3]).magnitude()), angle)
+
+    def test_monotonic_quintic_joint_interpolation(self):
+        from ipc_left_prefix.smooth_timing import rt_curves
+        start = np.deg2rad([0, -10, 20, -30, 40, -50, 60])
+        goal = start + np.deg2rad([25, 10, -10, 5, 0, -30, -20])
+        points, report = interpolate_motion(start, goal)
+        self.assertLessEqual(report['peak_velocity_deg_s'], 10.00001)
+        self.assertLessEqual(report['peak_acceleration_deg_s2'], 30.00001)
+        self.assertLessEqual(report['peak_jerk_deg_s3'], 150.00001)
+        stamps = np.linspace(0, report['duration_s'], 2001)
+        actual = np.column_stack([curve(stamps) for curve in rt_curves(points)])
+        self.assertTrue(np.all(actual >= np.minimum(start, goal) - 1e-10))
+        self.assertTrue(np.all(actual <= np.maximum(start, goal) + 1e-10))
+        self.assertEqual(len(points), round(report['duration_s'] * 10) + 1)
 
 
 if __name__ == '__main__':

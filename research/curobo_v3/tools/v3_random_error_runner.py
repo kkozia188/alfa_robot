@@ -9,6 +9,7 @@ from curobo_core.scene import RobotState, Pose
 from v3_tcp_scene_contract import GraspInput
 from v3_tcp_rezero_pipeline import TcpMotionPlanner, TcpMotionRequest, tool_to_box
 from v3_rezero_task_planner import migrated_assets
+from v3_random_error_placement import navigation_and_box_goals
 
 
 class RandomErrorRunner:
@@ -38,24 +39,10 @@ class RandomErrorRunner:
             from v3_wall_ik_benchmark import ACTIVE_JOINTS
             active = [names.index(name) for name in ACTIVE_JOINTS]
             held_tools = planner.tool_matrices(last[active])
-            turn = Rotation.from_euler('z', np.pi).as_matrix()
-            reference = {grasp.side: np.array([-2.3, .495 if grasp.side == 'left' else -.495, 1.082]) for grasp in inputs}
-            required = []
-            for grasp in inputs:
-                box = held_tools[grasp.side] @ tool_to_box(grasp.mode)
-                box[0, 3] += .8
-                required.append((reference[grasp.side] - turn @ box[:3, 3])[:2])
-            placed_base = np.eye(4)
-            placed_base[:3, :3] = turn
-            placed_base[:2, 3] = np.mean(required, axis=0)
-            goals = {}
-            for grasp in inputs:
-                held_box = held_tools[grasp.side] @ tool_to_box(grasp.mode)
-                heading = np.arctan2(held_box[1, 0], held_box[0, 0])
-                world_box = np.eye(4)
-                world_box[:3, :3] = turn @ Rotation.from_euler('z', heading).as_matrix()
-                world_box[:3, 3] = reference[grasp.side]
-                goals[grasp.side] = matrix_pose(np.linalg.inv(placed_base) @ world_box)
+            reference = planner.conveyor_reference_targets()
+            held_boxes = {grasp.side:held_tools[grasp.side]@tool_to_box(grasp.mode) for grasp in inputs}
+            placed_base,box_goals = navigation_and_box_goals(held_boxes,reference,planner.conveyor_push_m)
+            goals = {side:matrix_pose(pose) for side,pose in box_goals.items()}
             feedback = RobotState.from_mapping(dict(zip(names, last)), 1, matrix_pose(placed_base))
             progress('模拟导航到位，规划外部放箱目标…')
             result = planner.plan_external_placement(feedback, goals, result, progress)

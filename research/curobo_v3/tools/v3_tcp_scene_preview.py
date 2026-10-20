@@ -46,7 +46,19 @@ def main():
     server=viser.ViserServer(host='127.0.0.1',port=args.port,label='随机误差 · 场景、规划与轨迹回放')
     renderer=ReadOnlyScene(server,robot_urdf,default_visual_assets())
     cartons={side:renderer.carton_object('/preview/box_'+side,(.3,.4,.4)) for side in ('left','right')}
-    renderer.reference_conveyors()
+    conveyor_root=renderer.reference_conveyors()
+    conveyor_root.visible=True
+    from types import SimpleNamespace
+    from v3_conveyor_cycle_planner import ConveyorCyclePlanner
+    conveyor_layout=SimpleNamespace(conveyor_center_x_m=ConveyorCyclePlanner.conveyor_center_x_m,
+        conveyor_marker_x_m=ConveyorCyclePlanner.conveyor_marker_x_m,
+        conveyor_height_m=ConveyorCyclePlanner.conveyor_height_m,
+        box_fit=dict(dimensions_m=[.3,.4,.4]),placement_clearance_m=.15)
+    conveyor_targets=ConveyorCyclePlanner.conveyor_reference_targets(conveyor_layout)
+    renderer.update_conveyor_targets(conveyor_targets)
+    show_conveyors=server.gui.add_checkbox('显示双龙头车外观',initial_value=True)
+    @show_conveyors.on_update
+    def conveyor_visibility(_event):conveyor_root.visible=show_conveyors.value
     renderer.assembled_container(environment)
     for item in environment:renderer.snapshot_object(item)
     selector=server.gui.add_dropdown('原任务选择',options=list(options),initial_value=next(iter(options)))

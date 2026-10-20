@@ -46,7 +46,7 @@ class ProbeTouchIK:
         pose[:3, 3] += pose[:3, :3] @ np.array([0., 0., PROBE_OFFSET_M])
         return pose
 
-    def solve(self, target, seed, step_deg=3.):
+    def solve(self, target, seed, step_deg=3., swivel_samples=None):
         target = np.asarray(target, dtype=float)
         seed = np.asarray(seed, dtype=float)
         if (target.shape != (4, 4) or seed.shape != (7,)
@@ -63,6 +63,10 @@ class ProbeTouchIK:
         probe_to_link[2, 3] = -PROBE_OFFSET_M
         old_target = np.linalg.inv(carriage) @ target @ probe_to_link @ link_to_old_tool
         swivels = np.r_[self.analytic.swivel(0, seed), np.deg2rad(np.arange(-180., 180., step_deg))]
+        if swivel_samples is not None:
+            swivels = np.asarray(swivel_samples, dtype=float)
+            if swivels.ndim != 1 or not np.isfinite(swivels).all():
+                raise ValueError('冗余角采样必须为有限一维数组')
         solutions = []
         for swivel in swivels:
             for angles in self.analytic.solve(0, old_target, float(swivel), seed):
@@ -79,6 +83,23 @@ class ProbeTouchIK:
         solutions.sort(key=lambda row: row['joint_distance_rad'])
         self.state(seed)
         return solutions
+
+    def solve_nearest(self, target, seed):
+        seed = np.asarray(seed, dtype=float)
+        current = self.analytic.swivel(0, seed)
+        samples = np.r_[np.deg2rad(np.arange(-180., 180., 15.)),
+            current + np.deg2rad([0., -1., 1., -3., 3., -7., 7.])]
+        rows = self.solve(target, seed, swivel_samples=samples)
+        if not rows:
+            rows = self.solve(target, seed, step_deg=3.)
+        if not rows:
+            return None
+        best = rows[0]
+        for radius, step in [(3., .5), (.5, .1)]:
+            refined = self.solve(target, seed, swivel_samples=best['swivel_rad'] + np.deg2rad(np.arange(-radius, radius + step / 2, step)))
+            if refined and refined[0]['joint_distance_rad'] < best['joint_distance_rad']:
+                best = refined[0]
+        return best
 
     def solve_fixed(self, target, seed, joint_index, angle_rad, step_deg=1.):
         from scipy.optimize import brentq, minimize_scalar, linear_sum_assignment

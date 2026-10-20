@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import json
 import queue
@@ -17,6 +18,7 @@ from v3_zero_model_candidate import COORDINATE_REVISION
 from ipc_left_prefix.coordinate_mapping import motor_to_model, EXECUTION_REVISION
 from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload, selected_endpoint
 from ipc_left_prefix.smooth_timing import rt_curves, validate_preview
+from probe_calibration import measured_angles, record_contact
 
 
 def main():
@@ -39,6 +41,13 @@ def main():
     sync = server.gui.add_button('目标对齐实时杆尖／清除旧预览')
     position = server.gui.add_vector3('目标XYZ / m', initial_value=(.4, .4, 1.2), step=.001)
     orientation = server.gui.add_vector3('目标RPY / 度', initial_value=(0., 0., 0.), step=1.)
+    server.gui.add_markdown('**TCP标定快速模式**：只求当前精确朝向，不枚举附近朝向；选已采样候选中关节距离最近的解并局部细化，不保证全局最近。修改目标不会自动运动。“快速到位”是本次明确发送指令，无需完整播放；仍保留速度/限位/起点/控制权门禁。')
+    quick_preview = server.gui.add_button('快速计算最近解＋轨迹（只预览）')
+    quick_allowed = server.gui.add_checkbox('允许快速到位；已现场确认运动空间', initial_value=False)
+    quick_go = server.gui.add_button('快速到位：计算最近解并发送一次', disabled=True)
+    point_id = server.gui.add_text('标定固定点编号', initial_value='point_01')
+    record = server.gui.add_button('已实际触碰固定点：一键记录实测姿态')
+    record_info = server.gui.add_markdown('不同朝向实际触碰同一固定点后，使用同一编号记录；不记录规划目标作为测量值。')
     tilt = server.gui.add_slider('附近朝向偏转 / 度', min=0., max=30., step=5., initial_value=25.)
     fixed_axis = server.gui.add_dropdown('目标解锁定轴（仅终点固定）', options=['不锁定'] + [f'J{index}' for index in range(1, 8)])
     capture = server.gui.add_button('读取当前角度并锁定（归零后保留）')
@@ -67,6 +76,8 @@ def main():
     evidence = ROOT / 'generated/probe_touch_runs'
     evidence.mkdir(parents=True, exist_ok=True)
     pending_status = None
+    contact_path = evidence / ('tcp_contacts_' + datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.jsonl')
+    contact_count = 0
 
     def request(path, data=None):
         body = None if data is None else json.dumps(data).encode()
@@ -79,12 +90,7 @@ def main():
 
     def feedback():
         status = request('/api/status')
-        age = status.get('feedback_age_s')
-        if age is None or age > .5 or status.get('feedback_deg') is None:
-            raise ValueError('左臂反馈过期，不能使用旧状态')
-        if status.get('busy'):
-            raise ValueError('已有动作运行，等待停稳')
-        return motor_to_model(np.deg2rad(status['feedback_deg']))
+        return motor_to_model(np.deg2rad(measured_angles(status)))
 
     def pose_matrix():
         pose = np.eye(4)
@@ -97,6 +103,18 @@ def main():
         state['payload'] = state['curves'] = None
         state['seen'] = False
         play.value = confirm.value = False
+
+    @quick_preview.on_click
+    def quick_preview_clicked(_event):
+        events.put('quick_preview')
+
+    @quick_go.on_click
+    def quick_go_clicked(_event):
+        events.put('quick_go')
+
+    @record.on_click
+    def record_clicked(_event):
+        events.put('record')
 
     @target.on_update
     def dragged(_event):
@@ -167,6 +185,31 @@ def main():
         payload = motion_payload(points, timing, collision['collision_samples'], desired, collision, context)
         validate_preview(payload)
         return payload
+
+    def quick_work(pose, velocity, locked):
+        started = time.monotonic()
+        seed = feedback()
+        if resources['ik'] is None:
+            resources['ik'] = ProbeTouchIK(-.3)
+        if locked is None:
+            row = resources['ik'].solve_nearest(pose, seed)
+        else:
+            rows = resources['ik'].solve_fixed(pose, seed, locked['joint_index'], locked['angle_rad'])
+            row = rows[0] if rows else None
+        if row is None:
+            raise ValueError('该精确朝向未找到合法解析解；没有自动改朝向或发送')
+        elapsed = time.monotonic() - started
+        row = dict(row, target=pose, orientation_label='快速：精确原朝向', deviation_deg=0.)
+        payload = plan_work(row, velocity, locked)
+        payload['quick_ik_ms'] = elapsed * 1000
+        payload['quick_total_ms'] = (time.monotonic() - started) * 1000
+        import hashlib
+        payload['preview_id'] = hashlib.sha256(json.dumps({key: value for key, value in payload.items() if key != 'preview_id'}, sort_keys=True).encode()).hexdigest()
+        return payload
+
+    def record_work(identifier, pose):
+        solver = ProbeTouchIK(-.3)
+        return record_contact(lambda: request('/api/status'), solver, contact_path, identifier, pose)
 
     @plan.on_click
     def plan_clicked(_event):
@@ -254,12 +297,27 @@ def main():
                     state['rows'] = [row for row in state['all_rows'] if row['orientation_label'] == family.value]
                     selector.options = [f"{index + 1} · {row['orientation_label']} · 关节距离{np.rad2deg(row['joint_distance_rad']):.1f}°" for index, row in enumerate(state['rows'])] or ['无IK解']
                     selector.value = selector.options[0]
-                elif event in ('solve', 'plan', 'zero'):
+                elif event == 'record':
+                    if state['future'] is not None:
+                        raise ValueError('有计算进行中，请稍后记录')
+                    state['future'] = (worker.submit(record_work, point_id.value, pose_matrix()), event, None)
+                    record_info.content = '读取新鲜实测反馈并检查停稳…'
+                elif event in ('solve', 'plan', 'zero', 'quick_preview', 'quick_go'):
                     if state['future'] is not None:
                         continue
                     clear()
                     revision = state['revision']
-                    if event == 'solve':
+                    if event in ('quick_preview', 'quick_go'):
+                        if fixed_axis.value != '不锁定' and state['locked'] is None:
+                            raise ValueError('已选固定轴，请先捕获角度或选择不锁定')
+                        if event == 'quick_go' and (not quick_allowed.value or not state['status'].get('ready')):
+                            raise ValueError('快速到位需勾选现场确认，且控制权/使能状态就绪')
+                        state['rows'] = state['all_rows'] = []
+                        selector.options = ['快速计算中']
+                        selector.value = selector.options[0]
+                        state['future'] = (worker.submit(quick_work, pose_matrix(), float(speed.value.split('°')[0]), state['locked']), event, revision)
+                        report.content = '快速解析IK＋实时起点插值计算中…'
+                    elif event == 'solve':
                         if fixed_axis.value != '不锁定' and state['locked'] is None:
                             raise ValueError('请先读取当前角度并锁定，再求解；归零后不要重新读取')
                         state['future'] = (worker.submit(solve_work, pose_matrix(), tilt.value, state['locked']), event, revision)
@@ -290,6 +348,10 @@ def main():
                 state['future'] = None
                 try:
                     result = future.result()
+                    if kind == 'record':
+                        contact_count += 1
+                        record_info.content = f"**已保存第{contact_count}条 · 固定点{result['point_id']}**\n\n实测模型角（度）：`{np.round(result['model_joint_deg'], 4).tolist()}`\n\n文件：`{contact_path}`"
+                        continue
                     if revision != state['revision']:
                         raise ValueError('目标已变化，丢弃旧计算结果')
                     if kind == 'solve':
@@ -311,8 +373,22 @@ def main():
                         warning = '参考模型未检出碰撞。' if checked['collision_passed'] else f"**参考碰撞警告：{checked['collision_frames']}帧不合法，首次{checked['first_collision_s']:.3f}秒。按用户要求仅提示，不作为发送门禁；不代表实机无碰撞。**"
                         kind_text = '左七轴全部归零（不会自动去目标）' if result['motion_context']['kind'] == 'all_seven_zero' else '到所选IK（锁定仅终点生效）'
                         report.content = f"**{kind_text}：{len(result['points'])}点／{timeline.max:.1f}秒／10Hz**\n{warning}\n先播放预览，再确认发送。"
+                        if kind in ('quick_preview', 'quick_go'):
+                            report.content += f"\n\n快速IK {result['quick_ik_ms']:.1f}ms；含轨迹/参考验碰 {result['quick_total_ms']:.1f}ms。"
+                        if kind == 'quick_go':
+                            if not quick_allowed.value:
+                                raise ValueError('快速到位确认已取消，本次未发送')
+                            if not np.allclose(result['target_tcp'], pose_matrix(), atol=1e-10, rtol=0.):
+                                raise ValueError('目标已改变，本次未发送')
+                            validate_preview(result)
+                            request('/api/prepare', result)
+                            response = request('/api/move', dict(direction='forward', preview_id=result['preview_id']))
+                            report.content += '\n\n**本次快速到位已提交Action**：' + str(response)
                 except Exception as error:
-                    report.content = '**计算未通过：** ' + str(error)
+                    if kind == 'record':
+                        record_info.content = '**记录未保存：** ' + str(error)
+                    else:
+                        report.content = '**计算／操作未通过：** ' + str(error)
         if play.value and state['curves']:
             timeline.value = min(timeline.max, timeline.value + elapsed)
             if timeline.value >= timeline.max:
@@ -337,6 +413,7 @@ def main():
         tip.position = frame[:3, 3] + frame[:3, :3] @ [0., 0., .070]
         rod.points = np.array([[frame[:3, 3], tip.position]])
         send.disabled = not bool(state['payload'] and state['seen'] and confirm.value and state['status'].get('ready') and state['future'] is None)
+        quick_go.disabled = not bool(quick_allowed.value and state['status'].get('ready') and state['future'] is None)
         cancel.disabled = not bool(state['status'].get('busy'))
         time.sleep(.03)
 

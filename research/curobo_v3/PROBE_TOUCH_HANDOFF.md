@@ -2,6 +2,8 @@
 
 更新时间：2026-10-20。本文是本功能的接手入口；历史排障看 `PROBE_TOUCH_STATUS.md`，不要将其中早期“开发暂停”视为最新结论。
 
+**最新验收结论：用户已完成现场测试，确认当前补偿“几乎已经准了，可以作为这次任务的结论”。** 当前contact-fit-a-v1据此作为本次左臂70mm测试杆联调基线；历史“待实机验证”描述不再代表这一配置当前的验收状态。完整结论、补偿表、版本和适用范围见[CONCLUSION.md](generated/probe_contact_fit_20261020/CONCLUSION.md)。现场未提供量化误差数据，不把离线2.968mm RMS写成实机绝对精度。
+
 ## 当前已启用：同点十姿态候选A零位补偿
 
 用户明确授权将离线拟合结果应用8162测试，采用固定70mm TCP的候选A，不使用联合TCP候选。分支feature/probe-apply-contact-fit，执行版本rezero-left-j5-plus180-20261020-contact-fit-a-v1。

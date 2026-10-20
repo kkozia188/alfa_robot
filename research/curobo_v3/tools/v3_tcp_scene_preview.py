@@ -18,6 +18,10 @@ from v3_visualization_dependency import verify_frontend_package
 from v3_contact_roll_policy import TOOL_ROLL
 
 
+def display_robot_urdf(root):
+    return root/'generated/zero_model_candidate_20261018/robot_rezero_candidate.urdf'
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--port',type=int,default=8171)
@@ -29,9 +33,7 @@ def main():
     args.evidence_dir.mkdir(parents=True,exist_ok=True)
     verify_frontend_package()
     root=Path(__file__).resolve().parents[1]
-    mobile_config=root/'generated/zero_model_candidate_20261018/mobile.yaml'
-    config=yaml.safe_load(mobile_config.read_text())['kinematics']
-    robot_urdf=Path(config['urdf_path'])
+    robot_urdf=display_robot_urdf(root)
     frozen=json.loads((Path(__file__).resolve().parents[1]/'config/tcp_scene_preview.json').read_text())
     home=frozen['home']
     current_home=json.loads((root/'config/rezero_home.json').read_text())

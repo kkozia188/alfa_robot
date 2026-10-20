@@ -18,6 +18,9 @@ def main():
     parser.add_argument('--port',type=int,default=8156)
     args=parser.parse_args()
     library=json.loads(args.library.read_text())
+    policy=Path(__file__).parent/'coordinate_policy.json'
+    if policy.is_file():
+        library.update(json.loads(policy.read_text()))
     model=yourdfpy.URDF.load(args.urdf,load_meshes=True)
     for name,link in model.link_map.items():
         if name.startswith('right_'):
@@ -62,6 +65,7 @@ def main():
     update_joint7()
     state_text=server.gui.add_markdown('等待左臂实测反馈…')
     server.gui.add_markdown('机器人运动来自实测 /joint_states，不是预设播放。绿球表示所选轨迹的接触目标TCP；仅左7轴。Updown固定-0.3m只用于显示参考，未反馈的轴不代表实机状态。')
+    server.gui.add_markdown('**左J5新零位：反馈0°＝旧URDF 180°。** 电控已同步，反馈直接使用，不重复加减180°。旧吸附轨迹目标因零位变更暂不显示。')
 
     @server.on_client_connect
     def connected(client):
@@ -80,7 +84,7 @@ def main():
             if degrees is None or status.get('feedback_age_s',999)>.5:
                 state_text.content='**反馈过期：保持最后画面，不当作实时状态**'
             else:
-                if task!=last:
+                if task!=last and not library.get('legacy_replay_blocked'):
                     row=library['tasks'][task]['model_positions'][-1]
                     mapping=dict(zip(library['joint_names'],row));mapping['updown']=-.3
                     model.update_cfg({name:mapping.get(name,0.) for name in model.actuated_joint_names})

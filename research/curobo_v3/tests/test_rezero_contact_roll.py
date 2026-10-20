@@ -56,7 +56,7 @@ class ContactRollTest(unittest.TestCase):
             target={side+'_tool0':dict(position=[1.,0.,1.],quaternion=np.roll(Rotation.from_matrix(old[:3,:3].T).as_quat(),1)) for side in ('left','right')}
             with patch.object(SingleArmPlanner,'contact_poses_for_task',return_value=target):
                 actual=planner.contact_poses_for_task(dict(left=18,right=22))
-            for side,angles in [('left',[65,-75,20,-90,0,40,90]),('right',[-65,75,-20,90,0,-40,-90])]:
+            for side,angles in [('left',[65,-75,20,-90,-180,40,90]),('right',[-65,75,-20,90,0,-40,-90])]:
                 values={name:0. for name in model.actuated_joint_names}
                 values.update({f'{side}_joint{index}':np.deg2rad(angle) for index,angle in enumerate(angles,1)})
                 model.update_cfg(values)

@@ -97,6 +97,8 @@ class State:
     def status(self):
         with self.lock:
             return dict(scope=self.scope,ready=not self.reason(),reason=self.reason(),
+                coordinate_revision=self.library.get('required_coordinate_revision'),
+                legacy_replay_blocked=self.library.get('legacy_replay_blocked'),
                 feedback_deg=None if self.positions is None else [math.degrees(value) for value in self.positions],
                 feedback_age_s=None if not self.received else time.monotonic()-self.received,
                 controller_active=self.controller,subscribers=self.subscribers,
@@ -120,6 +122,8 @@ class State:
                 raise ValueError(reason)
             if preview_id is not None:
                 return self.send_preview(preview_id,direction)
+            if self.library.get('legacy_replay_blocked'):
+                raise ValueError(self.library['legacy_replay_blocked'])
             if direction=='home' and self.last_task:
                 task=self.last_task
             if task not in self.library['tasks']:
@@ -160,6 +164,9 @@ class State:
         if preview_id not in self.prepared:
             raise ValueError('预览不存在，请先计算并预览')
         payload=self.prepared[preview_id]
+        expected=self.library.get('required_coordinate_revision')
+        if expected and payload.get('coordinate_revision')!=expected:
+            raise ValueError('预览使用旧关节零位，请刷新8162重新求解和预览')
         validate_preview(payload)
         points=payload['points']
         if direction=='home':
@@ -363,6 +370,9 @@ def main():
     parser.add_argument('--console-token-file',type=Path)
     args=parser.parse_args()
     library=read_library(args.library)
+    policy=Path(__file__).parent/'coordinate_policy.json'
+    if policy.is_file():
+        library.update(json.loads(policy.read_text()))
     state=State(library,args.scope)
     if not args.offline_preview:
         from console_lease import ConsoleLease,running_console_token_file
@@ -396,6 +406,9 @@ def main():
                 state.viewer_seen=time.monotonic()
                 self.reply(200,state.status())
             elif self.path.startswith('/api/preview?'):
+                if library.get('legacy_replay_blocked'):
+                    self.reply(409,dict(error=library['legacy_replay_blocked']))
+                    return
                 from urllib.parse import parse_qs
                 parameters=parse_qs(urlsplit(self.path).query)
                 try:
@@ -437,6 +450,9 @@ def main():
                     if state.active:
                         raise ValueError('正在执行，不能更新预览')
                     from smooth_timing import validate_preview
+                    expected=library.get('required_coordinate_revision')
+                    if expected and data.get('coordinate_revision')!=expected:
+                        raise ValueError('预览关节零位版本过期，请刷新8162重新计算')
                     identity=validate_preview(data)
                     with state.lock:
                         state.prepared[identity]=data

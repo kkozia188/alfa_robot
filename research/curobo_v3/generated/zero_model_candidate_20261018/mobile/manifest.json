@@ -8,7 +8,7 @@
       15.0,
       0.0,
       0.0,
-      90.0,
+      270.0,
       0.0,
       90.0
     ],
@@ -34,7 +34,8 @@
   "mapping": "q_legacy = offsets + signs * q_candidate; J6 direction reversed without changing zero",
   "limits": "left J2 [-90,120]; right J2 [-120,90]; J3 +/-180; other numerical limits unchanged",
   "status": "true coordinate redefinition, not Home change; legacy installation and confirmed legacy tool retained",
-  "rights_source": "mirrored legacy configuration; checked against shoulder/elbow/wrist reflection",
+  "rights_source": "right arm unchanged; left J5 zero shifted +180 degrees per electrical calibration",
+  "coordinate_revision": "rezero-left-j5-plus180-20261020",
   "random_reparameterization_trials": 100,
   "maximum_all_link_fk_matrix_error": 1.889917963446286e-09
 }

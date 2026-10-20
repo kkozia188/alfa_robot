@@ -102,12 +102,13 @@ class ProbeCollision:
 
 
 def motion_payload(points, report, samples, target, collision_result=None, motion_context=None):
+    from v3_zero_model_candidate import COORDINATE_REVISION
     report = dict(report, collision_checked=True, collision_samples=samples, left_task=True,
         collision_scope='模型自碰撞/底盘cuboid/地面；右臂为Home参考；不含实测外部障碍或测试杆标定', within_duration=True)
     if collision_result is not None:
         report.update(collision_result, collision_advisory=True)
     payload = dict(task='probe_touch', points=points, report=report, target_tcp=target.tolist(),
-        fixed_updown_m=-.3, tcp_in_left_link7=[0.,0.,.070])
+        fixed_updown_m=-.3, tcp_in_left_link7=[0.,0.,.070], coordinate_revision=COORDINATE_REVISION)
     if motion_context is not None:
         payload['motion_context'] = motion_context
     payload['preview_id'] = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()

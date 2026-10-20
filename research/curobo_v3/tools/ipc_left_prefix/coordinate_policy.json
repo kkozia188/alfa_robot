@@ -1,0 +1,4 @@
+{
+  "required_coordinate_revision": "rezero-left-j5-plus180-20261020",
+  "legacy_replay_blocked": "左J5零位已变更180度；旧吸附轨迹尚未重新规划验证，禁止发送。请使用8162新求解预览。"
+}

@@ -13,6 +13,7 @@ from viser.extras import ViserUrdf
 import yourdfpy
 
 from probe_touch_ik import ROOT, ProbeTouchIK, nearby_targets
+from v3_zero_model_candidate import COORDINATE_REVISION
 from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload, selected_endpoint
 from ipc_left_prefix.smooth_timing import rt_curves, validate_preview
 
@@ -32,6 +33,7 @@ def main():
     tip = server.scene.add_icosphere('/probe_tip', radius=.009, color=(230, 40, 220))
     rod = server.scene.add_line_segments('/probe', points=np.zeros((1, 2, 3)), colors=(230, 40, 220), line_width=5)
     server.gui.add_markdown('**左7轴 · Updown固定−0.3m · Joint7＋Z 70mm测试TCP**\n拖动坐标轴/旋转环，或输入XYZ/RPY。求解→选构型→计算轨迹→播放预览→确认→获取控制权→手动发送。不会自动使能或发送。\n**碰撞仅模型参考**：右臂按Home、底盘cuboid；未建模真实工作台、接触物和杆体。请先在空旷处低速测试。')
+    server.gui.add_markdown(f'**左J5零位已同步电控：新0°＝旧URDF 180°；右臂不变。** 反馈/命令直接使用新角度。坐标版本：`{COORDINATE_REVISION}`；旧预览失效，需重新求解。七轴全零中的左J5=0也是新零位。')
     sync = server.gui.add_button('目标对齐实时杆尖／清除旧预览')
     position = server.gui.add_vector3('目标XYZ / m', initial_value=(.4, .4, 1.2), step=.001)
     orientation = server.gui.add_vector3('目标RPY / 度', initial_value=(0., 0., 0.), step=1.)

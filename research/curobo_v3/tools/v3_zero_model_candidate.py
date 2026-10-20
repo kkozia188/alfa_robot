@@ -12,7 +12,8 @@ import yourdfpy
 ROOT=Path(__file__).resolve().parents[1]
 OLD=ROOT/'generated/v3_analytic_071cb95/model/robot_meter_meshes.urdf'
 COLLEAGUE=Path('/mnt/mydisk/ALFA/backpack/real2sim_v3.3.1/urdf/robot.urdf')
-OFFSETS_DEG={'left':[-90.,15.,0.,0.,90.,0.,90.], 'right':[90.,-15.,0.,0.,-90.,0.,-90.]}
+OFFSETS_DEG={'left':[-90.,15.,0.,0.,270.,0.,90.], 'right':[90.,-15.,0.,0.,-90.,0.,-90.]}
+COORDINATE_REVISION='rezero-left-j5-plus180-20261020'
 J2_LIMITS_DEG={'left':(-90.,120.),'right':(-120.,90.)}
 JOINT_SIGNS=np.array([1.,-1.,1.,1.,1.,-1.,1.])
 
@@ -56,7 +57,8 @@ def build(output,source=OLD):
         signs=JOINT_SIGNS.astype(int).tolist(),mapping='q_legacy = offsets + signs * q_candidate; J6 direction reversed without changing zero',
         limits='left J2 [-90,120]; right J2 [-120,90]; J3 +/-180; other numerical limits unchanged',
         status='true coordinate redefinition, not Home change; legacy installation and confirmed legacy tool retained',
-        rights_source='mirrored legacy configuration; checked against shoulder/elbow/wrist reflection')
+        rights_source='right arm unchanged; left J5 zero shifted +180 degrees per electrical calibration',
+        coordinate_revision=COORDINATE_REVISION)
     old=yourdfpy.URDF.load(source,load_meshes=False)
     candidate=yourdfpy.URDF.load(path,load_meshes=False)
     rng=np.random.default_rng(20261018)

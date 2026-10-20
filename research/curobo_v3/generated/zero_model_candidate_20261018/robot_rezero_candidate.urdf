@@ -770,7 +770,7 @@
     <limit lower="-2.53072742" upper="2.53072742" effort="459" velocity="1.749" />
   </joint>
   <joint name="left_joint5" type="revolute">
-    <origin xyz="0 -0.241 -0.085" rpy="-1.5707963009899999 -1.570134696690499e-16 -3.1415926535894658" />
+    <origin xyz="0 -0.241 -0.085" rpy="1.5707963009899999 1.570134696690499e-16 3.2736427763354125e-13" />
     <parent link="left_link4" />
     <child link="left_link5" />
     <axis xyz="0 0 1" />

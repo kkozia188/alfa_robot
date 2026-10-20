@@ -10,7 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from probe_touch_ik import ProbeTouchIK
 from probe_calibration import record_contact, measured_angles
-from ipc_left_prefix.coordinate_mapping import EXECUTION_REVISION, motor_to_model
+from ipc_left_prefix.coordinate_mapping import EXECUTION_REVISION, motor_to_model, POLICY
 
 
 class QuickCalibrationTest(unittest.TestCase):
@@ -69,7 +69,7 @@ class QuickCalibrationTest(unittest.TestCase):
             self.assertEqual(len(records), 2)
             sample = records[0]
             self.assertEqual(sample['raw_motor_deg'][1], 1.)
-            self.assertAlmostEqual(sample['model_joint_deg'][1], 0.)
+            self.assertAlmostEqual(sample['model_joint_deg'][1], 1.-POLICY['motor_minus_model_deg'][1])
             np.testing.assert_allclose(sample['nominal_tip_in_footprint'], solver.forward(motor_to_model(np.deg2rad(sample['raw_motor_deg']))))
             self.assertFalse(np.allclose(np.asarray(sample['nominal_tip_in_footprint'])[:3, 3], target[:3, 3]))
             self.assertEqual(sample['point_id'], 'fixed_point')

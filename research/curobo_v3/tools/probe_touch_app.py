@@ -13,7 +13,7 @@ from viser.extras import ViserUrdf
 import yourdfpy
 
 from probe_touch_ik import ROOT, ProbeTouchIK, nearby_targets
-from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload
+from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload, selected_endpoint
 from ipc_left_prefix.smooth_timing import rt_curves, validate_preview
 
 
@@ -36,12 +36,17 @@ def main():
     position = server.gui.add_vector3('目标XYZ / m', initial_value=(.4, .4, 1.2), step=.001)
     orientation = server.gui.add_vector3('目标RPY / 度', initial_value=(0., 0., 0.), step=1.)
     tilt = server.gui.add_slider('附近朝向偏转 / 度', min=0., max=30., step=5., initial_value=25.)
+    fixed_axis = server.gui.add_dropdown('目标解锁定轴（仅终点固定）', options=['不锁定'] + [f'J{index}' for index in range(1, 8)])
+    capture = server.gui.add_button('读取当前角度并锁定（归零后保留）')
+    lock_text = server.gui.add_markdown('未锁定轴。锁定值不会随归零自动改变。')
+    server.gui.add_markdown('**固定轴仅约束目标解，途中可运动。** 先选轴并读取当前角度，再求解；可单独预览/发送全零，停稳后再单独计算/预览/发送所选解。归零不清掉锁定值或候选，不会自动连续执行。固定J4等情况可能仍有连续冗余，不保证恰好8解；有限ψ扫描不保证穷尽。')
     solve = server.gui.add_button('1 求解解析IK候选')
     family = server.gui.add_dropdown('候选朝向分组', options=['原朝向'])
     selector = server.gui.add_dropdown('候选构型（按关节距离排序）', options=['尚未求解'])
     detail = server.gui.add_markdown('等待求解。')
     speed = server.gui.add_dropdown('速度上限', options=['5°/s', '10°/s', '15°/s'], initial_value='5°/s')
     plan = server.gui.add_button('2 从实时姿态生成关节插值轨迹')
+    zero = server.gui.add_button('单独预览：当前姿态 → 左七轴全零')
     play = server.gui.add_checkbox('播放轨迹预览', initial_value=False)
     timeline = server.gui.add_slider('轨迹时间 / s', min=0., max=1., step=.01, initial_value=0.)
     confirm = server.gui.add_checkbox('已看碰撞提示并预览；现场确认可运动，仅发送左7轴', initial_value=False)
@@ -50,7 +55,7 @@ def main():
     cancel = server.gui.add_button('取消本后端Action', disabled=True)
     report = server.gui.add_markdown('未发送实机运动。')
     status_text = server.gui.add_markdown('读取反馈中…')
-    state = dict(status={}, rows=[], all_rows=[], payload=None, curves=None, future=None, seen=False, initialized=False, revision=0)
+    state = dict(status={}, rows=[], all_rows=[], payload=None, curves=None, future=None, seen=False, initialized=False, revision=0, locked=None)
     events = queue.Queue()
     worker = ThreadPoolExecutor(max_workers=1)
     poller = ThreadPoolExecutor(max_workers=1)
@@ -118,13 +123,22 @@ def main():
     def family_changed(_event):
         events.put('family')
 
-    def solve_work(pose, angle):
+    @fixed_axis.on_update
+    def axis_changed(_event):
+        events.put('axis')
+
+    @capture.on_click
+    def capture_clicked(_event):
+        events.put('capture')
+
+    def solve_work(pose, angle, locked):
         seed = feedback()
         if resources['ik'] is None:
             resources['ik'] = ProbeTouchIK(-.3)
         rows = []
         for label, desired, deviation in nearby_targets(pose, angle):
-            for row in resources['ik'].solve(desired, seed):
+            solved = resources['ik'].solve(desired, seed) if locked is None else resources['ik'].solve_fixed(desired, seed, locked['joint_index'], locked['angle_rad'])
+            for row in solved:
                 rows.append(dict(row, orientation_label=label, target=desired, deviation_deg=deviation))
         rows.sort(key=lambda row: (row['deviation_deg'] != 0, row['joint_distance_rad']))
         return rows
@@ -133,19 +147,30 @@ def main():
     def solve_clicked(_event):
         events.put('solve')
 
-    def plan_work(row, velocity):
+    def plan_work(row, velocity, locked):
         start = feedback()
-        points, timing = interpolate_motion(start, row['joints'], velocity)
+        goal, context = selected_endpoint(row, locked)
+        if row is None:
+            if resources['ik'] is None:
+                resources['ik'] = ProbeTouchIK(-.3)
+            desired = resources['ik'].forward(goal)
+        else:
+            desired = row['target']
+        points, timing = interpolate_motion(start, goal, velocity)
         if resources['collision'] is None:
             resources['collision'] = ProbeCollision()
         collision = resources['collision'].inspect_motion(points)
-        payload = motion_payload(points, timing, collision['collision_samples'], row['target'], collision)
+        payload = motion_payload(points, timing, collision['collision_samples'], desired, collision, context)
         validate_preview(payload)
         return payload
 
     @plan.on_click
     def plan_clicked(_event):
         events.put('plan')
+
+    @zero.on_click
+    def zero_clicked(_event):
+        events.put('zero')
 
     @lease.on_click
     def lease_clicked(_event):
@@ -189,12 +214,21 @@ def main():
         while not events.empty():
             event = events.get()
             try:
-                if event in ('drag', 'typed', 'sync', 'invalidate'):
+                if event in ('drag', 'typed', 'sync', 'invalidate', 'axis', 'capture'):
                     clear()
                     state['rows'] = []
                     state['all_rows'] = []
                     selector.options = ['尚未求解']
                     selector.value = '尚未求解'
+                    if event == 'axis':
+                        state['locked'] = None
+                        lock_text.content = '锁定轴已改变，请读取当前角度；归零前先读取。'
+                    elif event == 'capture':
+                        if fixed_axis.value == '不锁定':
+                            raise ValueError('请先选择J1～J7')
+                        index = int(fixed_axis.value[1:]) - 1
+                        state['locked'] = dict(joint_index=index, angle_rad=float(feedback()[index]))
+                        lock_text.content = f"**保存锁定：J{index + 1}={np.rad2deg(state['locked']['angle_rad']):.6f}°**。仅终点约束，途中可动；全零预览不改变此值。"
                     if event == 'typed':
                         target.position = position.value
                         target.wxyz = np.roll(Rotation.from_euler('xyz', orientation.value, degrees=True).as_quat(), 1)
@@ -213,19 +247,21 @@ def main():
                     state['rows'] = [row for row in state['all_rows'] if row['orientation_label'] == family.value]
                     selector.options = [f"{index + 1} · {row['orientation_label']} · 关节距离{np.rad2deg(row['joint_distance_rad']):.1f}°" for index, row in enumerate(state['rows'])] or ['无IK解']
                     selector.value = selector.options[0]
-                elif event in ('solve', 'plan'):
+                elif event in ('solve', 'plan', 'zero'):
                     if state['future'] is not None:
                         continue
                     clear()
                     revision = state['revision']
                     if event == 'solve':
-                        state['future'] = (worker.submit(solve_work, pose_matrix(), tilt.value), event, revision)
-                        report.content = '解析IK枚举中…'
+                        if fixed_axis.value != '不锁定' and state['locked'] is None:
+                            raise ValueError('请先读取当前角度并锁定，再求解；归零后不要重新读取')
+                        state['future'] = (worker.submit(solve_work, pose_matrix(), tilt.value, state['locked']), event, revision)
+                        report.content = '解析IK枚举／固定轴ψ分支寻根中…不是保证8解，有限网格亦不保证穷尽。'
                     else:
-                        if not state['rows']:
+                        if event == 'plan' and not state['rows']:
                             raise ValueError('先求解并选择IK')
-                        row = state['rows'][selector.options.index(selector.value)]
-                        state['future'] = (worker.submit(plan_work, row, float(speed.value.split('°')[0])), event, revision)
+                        row = None if event == 'zero' else state['rows'][selector.options.index(selector.value)]
+                        state['future'] = (worker.submit(plan_work, row, float(speed.value.split('°')[0]), state['locked']), event, revision)
                         report.content = '读取当前姿态、生成插值并参考验碰…'
                 elif event == 'lease':
                     report.content = str(request('/api/release' if state['status'].get('lease') == 'you' else '/api/acquire', {}))
@@ -266,7 +302,8 @@ def main():
                         timeline.value = 0.
                         checked = result['report']
                         warning = '参考模型未检出碰撞。' if checked['collision_passed'] else f"**参考碰撞警告：{checked['collision_frames']}帧不合法，首次{checked['first_collision_s']:.3f}秒。按用户要求仅提示，不作为发送门禁；不代表实机无碰撞。**"
-                        report.content = f"**轨迹准备好：{len(result['points'])}点／{timeline.max:.1f}秒／10Hz**\n{warning}\n先播放预览，再确认发送。"
+                        kind_text = '左七轴全部归零（不会自动去目标）' if result['motion_context']['kind'] == 'all_seven_zero' else '到所选IK（锁定仅终点生效）'
+                        report.content = f"**{kind_text}：{len(result['points'])}点／{timeline.max:.1f}秒／10Hz**\n{warning}\n先播放预览，再确认发送。"
                 except Exception as error:
                     report.content = '**计算未通过：** ' + str(error)
         if play.value and state['curves']:
@@ -284,6 +321,8 @@ def main():
             row = state['rows'][selector.options.index(selector.value)]
             left = row['joints']
             detail.content = '**候选角度（度）**：`' + str(np.round(np.rad2deg(left), 3).tolist()) + f"`\n\n{row['orientation_label']}；FK位置误差{row['position_error_m'] * 1000:.6f}mm；朝向误差{np.rad2deg(row['rotation_error_rad']):.6f}°。"
+            if 'fixed_error_rad' in row:
+                detail.content += f"\n\n锁定J{row['fixed_joint_index'] + 1}误差{np.rad2deg(row['fixed_error_rad']):.8f}°。"
         values.update({f'left_joint{index}': float(angle) for index, angle in enumerate(left, 1)})
         robot.update_cfg(np.array([values[name] for name in model.actuated_joint_names]))
         frame = model.get_transform('left_link7', model.base_link)

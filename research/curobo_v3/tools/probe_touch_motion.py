@@ -7,6 +7,17 @@ import numpy as np
 from ipc_left_prefix.smooth_timing import exact_peaks, rt_curves
 
 
+def selected_endpoint(row, locked=None):
+    if row is None:
+        return np.zeros(7), dict(kind='all_seven_zero', saved_lock=None if locked is None else dict(locked))
+    goal = np.asarray(row['joints'], dtype=float)
+    if goal.shape != (7,) or not np.isfinite(goal).all():
+        raise ValueError('所选解必须为七轴有限数值')
+    if locked is not None and abs(goal[locked['joint_index']] - locked['angle_rad']) > 1e-6:
+        raise ValueError('所选解不满足保存的锁定角，请重新求解')
+    return goal.copy(), dict(kind='selected_ik', endpoint_lock=None if locked is None else dict(locked))
+
+
 def interpolate_motion(start, goal, speed_deg_s=10.):
     start = np.asarray(start, dtype=float)
     goal = np.asarray(goal, dtype=float)
@@ -90,12 +101,14 @@ class ProbeCollision:
             collision_frames=len(failed))
 
 
-def motion_payload(points, report, samples, target, collision_result=None):
+def motion_payload(points, report, samples, target, collision_result=None, motion_context=None):
     report = dict(report, collision_checked=True, collision_samples=samples, left_task=True,
         collision_scope='模型自碰撞/底盘cuboid/地面；右臂为Home参考；不含实测外部障碍或测试杆标定', within_duration=True)
     if collision_result is not None:
         report.update(collision_result, collision_advisory=True)
     payload = dict(task='probe_touch', points=points, report=report, target_tcp=target.tolist(),
         fixed_updown_m=-.3, tcp_in_left_link7=[0.,0.,.070])
+    if motion_context is not None:
+        payload['motion_context'] = motion_context
     payload['preview_id'] = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     return payload

@@ -79,3 +79,88 @@ class ProbeTouchIK:
         solutions.sort(key=lambda row: row['joint_distance_rad'])
         self.state(seed)
         return solutions
+
+    def solve_fixed(self, target, seed, joint_index, angle_rad, step_deg=1.):
+        from scipy.optimize import brentq, minimize_scalar, linear_sum_assignment
+        target = np.asarray(target, dtype=float)
+        seed = np.asarray(seed, dtype=float)
+        if not isinstance(joint_index, int) or not 0 <= joint_index < 7:
+            raise ValueError('锁定关节必须为J1～J7')
+        if not np.isfinite(angle_rad) or not self.analytic.lower[0, joint_index] <= angle_rad <= self.analytic.upper[0, joint_index]:
+            raise ValueError('锁定角超出模型限位')
+        if not .1 <= step_deg <= 3.:
+            raise ValueError('固定轴搜索网格必须0.1～3度')
+        if target.shape != (4, 4) or seed.shape != (7,) or not np.isfinite([*target.ravel(), *seed]).all():
+            raise ValueError('非法目标或种子')
+        if not np.allclose(target[3], [0, 0, 0, 1]) or not np.allclose(target[:3, :3].T @ target[:3, :3], np.eye(3), atol=1e-7) or not np.isclose(np.linalg.det(target[:3, :3]), 1.):
+            raise ValueError('目标必须是SE(3)')
+        self.state(seed)
+        carriage = self.model.get_transform('arm_carriage', self.model.base_link)
+        probe_to_link = np.eye(4)
+        probe_to_link[2, 3] = -PROBE_OFFSET_M
+        old_target = np.linalg.inv(carriage) @ target @ probe_to_link @ self.model.get_transform('left_tool0', 'left_link7')
+
+        def evaluate(swivel):
+            return self.analytic.solve(0, old_target, float(swivel), seed)
+
+        solutions = []
+
+        def retain(swivel, angles):
+            error = abs(float(angles[joint_index] - angle_rad))
+            if error > 1e-6 or any(np.max(np.abs(angles - row['joints'])) < 1e-5 for row in solutions):
+                return
+            actual = self.forward(angles)
+            position_error = float(np.linalg.norm(actual[:3, 3] - target[:3, 3]))
+            rotation_error = float(Rotation.from_matrix(actual[:3, :3].T @ target[:3, :3]).magnitude())
+            if position_error <= 2e-6 and rotation_error <= 2e-6:
+                solutions.append(dict(joints=angles.copy(), swivel_rad=float(swivel),
+                    joint_distance_rad=float(np.linalg.norm(angles - seed)), position_error_m=position_error,
+                    rotation_error_rad=rotation_error, fixed_joint_index=joint_index,
+                    fixed_angle_rad=float(angle_rad), fixed_error_rad=error))
+
+        original = self.analytic.swivel(0, seed)
+        for angles in evaluate(original):
+            retain(original, angles)
+        grid = np.deg2rad(np.linspace(-180., 180., round(360 / step_deg) + 1))
+        sampled = [evaluate(value) for value in grid]
+        for swivel, candidates in zip(grid, sampled):
+            for angles in candidates:
+                retain(swivel, angles)
+        for index in range(len(grid) - 1):
+            left, right = sampled[index:index + 2]
+            if not len(left) or not len(right):
+                continue
+            distances = np.linalg.norm(left[:, None] - right[None, :], axis=2)
+            first_indices, second_indices = linear_sum_assignment(distances)
+            for first, second in zip(first_indices, second_indices):
+                if np.max(np.abs(left[first] - right[second])) > np.deg2rad(25.):
+                    continue
+                low, high = grid[index:index + 2]
+                anchor = (left[first] + right[second]) / 2
+
+                def residual(swivel):
+                    candidates = evaluate(swivel)
+                    if not len(candidates):
+                        raise ValueError('该分支在区间内不可用')
+                    angles = candidates[np.argmin(np.linalg.norm(candidates - anchor, axis=1))]
+                    if np.max(np.abs(angles - anchor)) > np.deg2rad(30.):
+                        raise ValueError('解析分支发生跳变')
+                    return float(angles[joint_index] - angle_rad), angles
+
+                left_error = float(left[first, joint_index] - angle_rad)
+                right_error = float(right[second, joint_index] - angle_rad)
+                if abs(left_error) <= 1e-6 and abs(right_error) <= 1e-6:
+                    continue
+                try:
+                    if left_error * right_error < 0:
+                        root = brentq(lambda value: residual(value)[0], low, high, xtol=1e-12)
+                        retain(root, residual(root)[1])
+                    elif min(abs(left_error), abs(right_error)) < np.deg2rad(.2):
+                        minimum = minimize_scalar(lambda value: residual(value)[0] ** 2,
+                            bounds=(low, high), method='bounded', options={'xatol': 1e-12})
+                        retain(minimum.x, residual(minimum.x)[1])
+                except ValueError:
+                    continue
+        solutions.sort(key=lambda row: row['joint_distance_rad'])
+        self.state(seed)
+        return solutions

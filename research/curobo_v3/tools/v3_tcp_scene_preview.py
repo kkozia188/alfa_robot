@@ -24,6 +24,7 @@ def main():
     parser.add_argument('--evidence-dir',type=Path,default=Path('/tmp/tcp_scene_preview_20261018'))
     parser.add_argument('--smoke-test',action='store_true')
     parser.add_argument('--result',type=Path)
+    parser.add_argument('--input-preview',type=Path)
     args=parser.parse_args()
     args.evidence_dir.mkdir(parents=True,exist_ok=True)
     verify_frontend_package()
@@ -202,7 +203,11 @@ def main():
     @server.on_client_connect
     def connected(client):
         client.camera.position=(-2.8,-3.8,2.5);client.camera.look_at=(.8,0.,1.0);client.camera.up_direction=(0.,0.,1.)
-    if args.result and args.result.is_file():
+    if args.input_preview and args.input_preview.is_file():
+        saved=json.loads(args.input_preview.read_text())
+        selector.value=saved['task_label']
+        update(selector.value,saved)
+    elif args.result and args.result.is_file():
         initial=json.loads(args.result.read_text())
         selector.value=initial['input_evidence']['task_label']
         update(selector.value,initial['input_evidence'])

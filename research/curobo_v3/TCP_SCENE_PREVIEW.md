@@ -1,5 +1,7 @@
 # TCP任务输入与随机停车箱墙预览
 
+2026-10-20端口调整：本工作独立使用8170（场景预览）、8171（规划回放预留）、8172（诊断预留），不再替换8152。以下旧文中的8152属于历史记录。详见[端口登记](DEMO_PORTS.md)。新零位下的完整误差任务适配尚待完成；端口调整不代表规划已验收。
+
 本轮只验证输入反推/场景几何与可视化，不运行抓取规划。基于alfa_v3_curobo的feature/tcp-scene-contract-preview；旧完整任务链和后续实验保留，不在本阶段合并未经视觉验收的任务重构。
 
 ## 输入合同
@@ -22,7 +24,7 @@
 
 ```bash
 cd /mnt/mydisk/ALFA/alfa_robot_v3
-/mnt/mydisk/ALFA/.venvs/curobo-v2-py310/bin/python research/curobo_v3/tools/v3_tcp_scene_preview.py --port 8152
+/mnt/mydisk/ALFA/.venvs/curobo-v2-py310/bin/python research/curobo_v3/tools/v3_tcp_scene_preview.py --port 8170
 ```
 
 模型与外观仍使用当前冻结模型/前端包；已知集装箱/初始状态在config/tcp_scene_preview.json，不依赖临时历史轨迹。最新生成样本保存在/tmp/tcp_scene_preview_20261018/latest.json，不把完整模拟箱号传入重建器。

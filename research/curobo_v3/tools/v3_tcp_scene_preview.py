@@ -17,7 +17,7 @@ from v3_visualization_dependency import verify_frontend_package
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--port',type=int,default=8152)
+    parser.add_argument('--port',type=int,default=8170)
     parser.add_argument('--evidence-dir',type=Path,default=Path('/tmp/tcp_scene_preview_20261018'))
     parser.add_argument('--smoke-test',action='store_true')
     args=parser.parse_args()

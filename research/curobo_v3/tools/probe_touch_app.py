@@ -19,7 +19,7 @@ from ipc_left_prefix.coordinate_mapping import motor_to_model, EXECUTION_REVISIO
 from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload, selected_endpoint
 from ipc_left_prefix.smooth_timing import rt_curves, validate_preview
 from probe_calibration import measured_angles, record_contact
-from probe_preview_state import activate_preview, quick_send_ready
+from probe_preview_state import activate_preview, quick_send_ready, preview_time
 
 
 def main():
@@ -63,6 +63,7 @@ def main():
     plan = server.gui.add_button('2 从实时姿态生成关节插值轨迹')
     zero = server.gui.add_button('单独预览：当前姿态 → 左七轴全零')
     play = server.gui.add_checkbox('播放轨迹预览', initial_value=False)
+    preview_speed = server.gui.add_dropdown('预览倍速（不改变实机速度）', options=['1×', '2×', '5×', '10×'], initial_value='5×')
     timeline = server.gui.add_slider('轨迹时间 / s', min=0., max=1., step=.01, initial_value=0.)
     confirm = server.gui.add_checkbox('已看碰撞提示并预览；现场确认可运动，仅发送左7轴', initial_value=False)
     lease = server.gui.add_button('获取18121控制权')
@@ -398,7 +399,7 @@ def main():
                     else:
                         report.content = '**计算／操作未通过：** ' + str(error)
         if play.value and state['curves']:
-            timeline.value = min(timeline.max, timeline.value + elapsed)
+            timeline.value = preview_time(timeline.value, elapsed, timeline.max, float(preview_speed.value[:-1]))
             if timeline.value >= timeline.max:
                 play.value = False
                 state['seen'] = True

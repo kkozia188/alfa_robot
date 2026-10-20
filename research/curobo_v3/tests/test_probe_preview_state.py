@@ -7,10 +7,19 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from probe_touch_motion import interpolate_motion
-from probe_preview_state import activate_preview, quick_send_ready
+from probe_preview_state import activate_preview, quick_send_ready, preview_time
 
 
 class QuickPreviewStateTest(unittest.TestCase):
+    def test_preview_multiplier_changes_only_playhead(self):
+        import copy
+        payload = self.payload()
+        before = copy.deepcopy(payload)
+        self.assertEqual(preview_time(0., .1, 10., 5.), .5)
+        self.assertEqual(preview_time(0., .1, 10., 1.), .1)
+        self.assertEqual(preview_time(9.9, .1, 10., 10.), 10.)
+        self.assertEqual(payload, before)
+
     def payload(self):
         points, report = interpolate_motion(np.zeros(7), np.ones(7) * .05)
         return dict(points=points, report=report, quick_ik_ms=1.)

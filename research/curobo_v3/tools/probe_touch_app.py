@@ -14,6 +14,7 @@ import yourdfpy
 
 from probe_touch_ik import ROOT, ProbeTouchIK, nearby_targets
 from v3_zero_model_candidate import COORDINATE_REVISION
+from ipc_left_prefix.coordinate_mapping import motor_to_model, EXECUTION_REVISION
 from probe_touch_motion import ProbeCollision, interpolate_motion, motion_payload, selected_endpoint
 from ipc_left_prefix.smooth_timing import rt_curves, validate_preview
 
@@ -34,6 +35,7 @@ def main():
     rod = server.scene.add_line_segments('/probe', points=np.zeros((1, 2, 3)), colors=(230, 40, 220), line_width=5)
     server.gui.add_markdown('**左7轴 · Updown固定−0.3m · Joint7＋Z 70mm测试TCP**\n拖动坐标轴/旋转环，或输入XYZ/RPY。求解→选构型→计算轨迹→播放预览→确认→获取控制权→手动发送。不会自动使能或发送。\n**碰撞仅模型参考**：右臂按Home、底盘cuboid；未建模真实工作台、接触物和杆体。请先在空旷处低速测试。')
     server.gui.add_markdown(f'**左J5零位已同步电控：新0°＝旧URDF 180°；右臂不变。** 反馈/命令直接使用新角度。坐标版本：`{COORDINATE_REVISION}`；旧预览失效，需重新求解。七轴全零中的左J5=0也是新零位。')
+    server.gui.add_markdown(f'**临时左J2校准：电控1°＝模型0°。** 显示/IK角度=电控角度−1°；发送目标=模型角度＋1°。其余轴无额外偏移。全零按钮指模型全零，发送给电控的J2为1°。执行版本：`{EXECUTION_REVISION}`。')
     sync = server.gui.add_button('目标对齐实时杆尖／清除旧预览')
     position = server.gui.add_vector3('目标XYZ / m', initial_value=(.4, .4, 1.2), step=.001)
     orientation = server.gui.add_vector3('目标RPY / 度', initial_value=(0., 0., 0.), step=1.)
@@ -82,7 +84,7 @@ def main():
             raise ValueError('左臂反馈过期，不能使用旧状态')
         if status.get('busy'):
             raise ValueError('已有动作运行，等待停稳')
-        return np.deg2rad(status['feedback_deg'])
+        return motor_to_model(np.deg2rad(status['feedback_deg']))
 
     def pose_matrix():
         pose = np.eye(4)
@@ -203,6 +205,9 @@ def main():
             try:
                 state['status'] = pending_status.result()
                 status_text.content = '**RT状态：** ' + (state['status'].get('reason') or '就绪')
+                degrees = state['status'].get('feedback_deg')
+                if degrees is not None:
+                    status_text.content += f'\n\n左J2：电控{degrees[1]:.4f}° → 模型{degrees[1] - 1.:.4f}°。'
                 if not state['initialized'] and state['status'].get('feedback_deg') is not None:
                     events.put('sync')
                     state['initialized'] = True
@@ -316,9 +321,10 @@ def main():
         values = {name: 0. for name in model.actuated_joint_names}
         values['updown'] = -.3
         values.update({f'right_joint{index}': float(np.deg2rad(angle)) for index, angle in enumerate(home['right_deg'], 1)})
-        left = np.deg2rad(state['status'].get('feedback_deg') or home['left_deg'])
+        measured = state['status'].get('feedback_deg')
+        left = np.deg2rad(home['left_deg']) if measured is None else motor_to_model(np.deg2rad(measured))
         if state['curves']:
-            left = np.array([curve(timeline.value) for curve in state['curves']])
+            left = motor_to_model(np.array([curve(timeline.value) for curve in state['curves']]))
         elif state['rows']:
             row = state['rows'][selector.options.index(selector.value)]
             left = row['joints']

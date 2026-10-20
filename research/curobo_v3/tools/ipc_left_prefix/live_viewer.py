@@ -8,6 +8,7 @@ import numpy as np
 import viser
 from viser.extras import ViserUrdf
 import yourdfpy
+from coordinate_mapping import motor_to_model
 
 
 def main():
@@ -66,6 +67,7 @@ def main():
     state_text=server.gui.add_markdown('等待左臂实测反馈…')
     server.gui.add_markdown('机器人运动来自实测 /joint_states，不是预设播放。绿球表示所选轨迹的接触目标TCP；仅左7轴。Updown固定-0.3m只用于显示参考，未反馈的轴不代表实机状态。')
     server.gui.add_markdown('**左J5新零位：反馈0°＝旧URDF 180°。** 电控已同步，反馈直接使用，不重复加减180°。旧吸附轨迹目标因零位变更暂不显示。')
+    server.gui.add_markdown('**临时左J2校准：电控1°＝模型0°**，本页左J2显示减1°。URDF与电控未改。')
 
     @server.on_client_connect
     def connected(client):
@@ -90,10 +92,11 @@ def main():
                     model.update_cfg({name:mapping.get(name,0.) for name in model.actuated_joint_names})
                     marker.position=model.get_transform('left_tool0',model.base_link)[:3,3]
                     marker.visible=True;last=task
-                values=dict(zip(library['joint_names'],np.deg2rad(degrees)));values['updown']=-.3
+                values=dict(zip(library['joint_names'],motor_to_model(np.deg2rad(degrees))));values['updown']=-.3
                 robot.update_cfg(np.array([values.get(name,0.) for name in model.actuated_joint_names]))
                 update_joint7()
                 state_text.content=f"**左臂实测 · {task} · {status.get('action_phase','idle')}**\n\n反馈年龄 {status['feedback_age_s']:.3f}s\n\n{status.get('message','')}"
+                state_text.content += f'\n\n左J2：电控{degrees[1]:.4f}° → 模型{degrees[1] - 1.:.4f}°。'
         except Exception as error:
             state_text.content='**后端连接中断，画面不再更新**\n\n'+str(error)
         time.sleep(.05)

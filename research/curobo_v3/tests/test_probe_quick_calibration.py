@@ -31,6 +31,27 @@ class QuickCalibrationTest(unittest.TestCase):
         target[:3, 3] = [20., 20., 20.]
         self.assertIsNone(solver.solve_nearest(target, np.zeros(7)))
 
+    def test_local_numeric_pose_and_fixed_joint(self):
+        from scipy.spatial.transform import Rotation
+        solver = ProbeTouchIK(-.3)
+        seed = np.deg2rad([40., -50., 15., -60., 20., 30., 60.])
+        target = solver.forward(seed)
+        target[0,3] += .002
+        target[:3,:3] = Rotation.from_rotvec([.02,0,0]).as_matrix() @ target[:3,:3]
+        for locked in (None, dict(joint_index=0, angle_rad=seed[0])):
+            row = solver.solve_local(target, seed, locked)
+            self.assertIsNotNone(row)
+            self.assertLess(row['position_error_m'], 2e-6)
+            self.assertLess(row['rotation_error_rad'], 2e-6)
+            self.assertLess(row['joint_distance_rad'], .2)
+            if locked:
+                self.assertEqual(row['joints'][0], seed[0])
+
+    def test_local_numeric_unreachable_fails(self):
+        target = np.eye(4)
+        target[:3,3] = [20,20,20]
+        self.assertIsNone(ProbeTouchIK(-.3).solve_local(target, np.zeros(7)))
+
     def status(self, angle=1.):
         return dict(feedback_deg=[0., angle, 0., 0., 0., 0., 0.], feedback_age_s=.01,
             busy=False, coordinate_revision=EXECUTION_REVISION)

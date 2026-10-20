@@ -101,6 +101,58 @@ class ProbeTouchIK:
                 best = refined[0]
         return best
 
+    def solve_local(self, target, seed, locked=None, max_iterations=60):
+        import time
+        started = time.perf_counter()
+        target = np.asarray(target, dtype=float)
+        seed = np.asarray(seed, dtype=float)
+        if target.shape != (4, 4) or seed.shape != (7,) or not np.isfinite([*target.ravel(), *seed]).all():
+            raise ValueError('非法目标或种子')
+        if not np.allclose(target[3], [0,0,0,1]) or not np.allclose(target[:3,:3].T @ target[:3,:3], np.eye(3), atol=1e-7) or not np.isclose(np.linalg.det(target[:3,:3]), 1.):
+            raise ValueError('目标必须是SE(3)')
+        angles = np.clip(seed.copy(), self.analytic.lower[0], self.analytic.upper[0])
+        active = list(range(7))
+        if locked is not None:
+            index = locked['joint_index']
+            if index not in active or not self.analytic.lower[0,index] <= locked['angle_rad'] <= self.analytic.upper[0,index]:
+                raise ValueError('非法锁定轴或角度')
+            angles[index] = locked['angle_rad']
+            active.remove(index)
+        for iteration in range(max_iterations):
+            actual = self.forward(angles)
+            position = target[:3,3] - actual[:3,3]
+            rotation = Rotation.from_matrix(target[:3,:3] @ actual[:3,:3].T).as_rotvec()
+            if np.linalg.norm(position) <= 2e-6 and np.linalg.norm(rotation) <= 2e-6:
+                return dict(joints=angles.copy(), joint_distance_rad=float(np.linalg.norm(angles-seed)),
+                    position_error_m=float(np.linalg.norm(position)), rotation_error_rad=float(np.linalg.norm(rotation)),
+                    solver='local_damped_jacobian', iterations=iteration, solve_ms=(time.perf_counter()-started)*1000)
+            if time.perf_counter() - started > .35:
+                break
+            columns = []
+            for index in active:
+                joint = self.model.joint_map[f'left_joint{index+1}']
+                frame = self.model.get_transform(joint.child, self.model.base_link)
+                axis = frame[:3,:3] @ joint.axis
+                columns.append(np.r_[np.cross(axis, actual[:3,3]-frame[:3,3]), axis*.25])
+            jacobian = np.column_stack(columns)
+            error = np.r_[position, rotation*.25]
+            delta = jacobian.T @ np.linalg.solve(jacobian @ jacobian.T + np.eye(6)*1e-6, error)
+            delta *= min(1., .15 / max(float(np.max(np.abs(delta))), 1e-12))
+            accepted = False
+            for factor in (1., .5, .25, .1):
+                candidate = angles.copy()
+                candidate[active] = np.clip(angles[active] + delta*factor, self.analytic.lower[0,active], self.analytic.upper[0,active])
+                pose = self.forward(candidate)
+                candidate_error = np.r_[target[:3,3]-pose[:3,3], Rotation.from_matrix(target[:3,:3] @ pose[:3,:3].T).as_rotvec()*.25]
+                if np.linalg.norm(candidate_error) < np.linalg.norm(error):
+                    angles = candidate
+                    accepted = True
+                    break
+            if not accepted:
+                break
+        self.state(seed)
+        return None
+
     def solve_fixed(self, target, seed, joint_index, angle_rad, step_deg=1.):
         from scipy.optimize import brentq, minimize_scalar, linear_sum_assignment
         target = np.asarray(target, dtype=float)

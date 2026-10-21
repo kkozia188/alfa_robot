@@ -102,11 +102,12 @@ def view(folder,port):
     from scipy.spatial.transform import Rotation
     from alfa_motion_viser import ReadOnlyScene,default_visual_assets
     data=json.loads((folder/'wall.json').read_text());rounds=data['rounds']
-    server=viser.ViserServer(host='127.0.0.1',port=port,label='25箱整墙 · 连续任务回放')
+    total=len(data['world_boxes'])
+    server=viser.ViserServer(host='127.0.0.1',port=port,label=f'{total}箱连续任务回放')
     renderer=ReadOnlyScene(server,ROOT/'generated/zero_model_candidate_20261018/robot_rezero_candidate.urdf',default_visual_assets())
     from curobo_core.scene import SceneSnapshot
     snapshot=SceneSnapshot.from_dict(rounds[0]['visualization_scene_snapshot'])
-    environment=[item for item in snapshot.objects if not item.object_id.startswith(('wall_box_','remaining_box_','task_fill_'))]
+    environment=[item for item in snapshot.objects if not item.object_id.startswith(('wall_box_','remaining_box_','task_fill_','future_walls_'))]
     renderer.assembled_container(environment)
     for item in environment:renderer.snapshot_object(item)
     conveyor=renderer.reference_conveyors();conveyor.visible=True
@@ -117,16 +118,16 @@ def view(folder,port):
     cartons={int(key):renderer.carton_object('/wall/'+key,(.3,.4,.4),np.asarray(pose)[:3,3],np.roll(Rotation.from_matrix(np.asarray(pose)[:3,:3]).as_quat(),1)) for key,pose in data['world_boxes'].items()}
     frame_map=[(cycle,frame) for cycle,result in enumerate(rounds) for frame in range(len(result['frames']))]
     play=server.gui.add_checkbox('连续播放',initial_value=False)
-    speed=server.gui.add_dropdown('播放倍率',options=['1×','2×','4×'],initial_value='1×')
+    speed=server.gui.add_dropdown('播放倍率',options=['1×','2×','4×','8×','16×'],initial_value='1×')
     slider=server.gui.add_slider('总轨迹帧',min=1,max=max(1,len(frame_map)),step=1,initial_value=1)
     playable=[index for index,result in enumerate(rounds) if result.get('frames')]
-    cycles=server.gui.add_dropdown('跳转轮次',options=[f"{index+1}：{rounds[index]['wall_task']}" for index in playable])
+    cycles=server.gui.add_dropdown('跳转轮次',options=[f"{index+1}："+(f"第{rounds[index]['wall_index']+1}面 · " if 'wall_index' in rounds[index] else '')+str(rounds[index]['wall_task']) for index in playable])
     rewind=server.gui.add_button('从第一初始姿态重新播放')
     cutaway=server.gui.add_checkbox('剖视集装箱',initial_value=True)
     status=server.gui.add_markdown('')
     if not data['success']:
         failure=rounds[-1]
-        server.gui.add_markdown(f"**尚未完成25箱：已完成{len(data['completed_boxes'])}箱**\n\n停止在第{len(rounds)}轮 {failure['wall_task']}：{failure.get('blocked_stage','')}，{failure.get('blocked_details','')}。页面只播放已算出的真实轨迹，不用其他任务动画补齐。")
+        server.gui.add_markdown(f"**尚未完成{total}箱：已完成{len(data['completed_boxes'])}箱**\n\n停止在第{len(rounds)}轮 {failure['wall_task']}：{failure.get('blocked_stage','')}，{failure.get('blocked_details','')}。页面只播放已算出的真实轨迹，不用其他任务动画补齐。")
     server.gui.add_markdown('真实规划结果回放；导航阶段按约定瞬移到位。取箱后只移除实际已释放的箱子，不重建满墙。无实机控制。')
     @cycles.on_update
     def jump(_event):slider.value=next(index+1 for index,pair in enumerate(frame_map) if pair[0]==playable[cycles.options.index(cycles.value)])
@@ -139,7 +140,7 @@ def view(folder,port):
     while True:
         now=time.monotonic();elapsed=now-clock;clock=now
         if play.value:
-            credit+=elapsed*float(speed.value[0])
+            credit+=elapsed*float(speed.value.rstrip('×'))
             while slider.value<len(frame_map):
                 current_cycle,current_frame=frame_map[int(slider.value)-1]
                 next_cycle,next_frame=frame_map[int(slider.value)]
@@ -158,6 +159,10 @@ def view(folder,port):
             cycle,index=frame_map[int(slider.value)-1];result=rounds[cycle]
             values=dict(zip(result['joint_names'],result['frames'][index]));values.update({name:values.get(name,0.) for name in renderer.model.actuated_joint_names})
             renderer.apply_state(values);renderer.set_scene_view(False,cutaway.value)
+            if 'conveyor_offset_m' in result:
+                offset=result['conveyor_offset_m']
+                shifted={side:dict(item,position=[item['position'][0]+offset,*item['position'][1:]],conveyor_position=[item['conveyor_position'][0]+offset,*item['conveyor_position'][1:]]) for side,item in references.items()}
+                renderer.update_conveyor_targets(shifted)
             attach=result['phases'].index('attach') if 'attach' in result['phases'] else len(result['frames'])
             released=result['phases'].index('release') if 'release' in result['phases'] else len(result['frames'])
             selected=result['wall_task'];remaining=set(result['remaining_before'])
@@ -168,8 +173,9 @@ def view(folder,port):
                     pose=renderer.tool_poses[side]@np.asarray(result['tool_to_box'][side])
                 else:pose=np.asarray(data['world_boxes'][str(box)])
                 node.position=pose[:3,3];node.wxyz=np.roll(Rotation.from_matrix(pose[:3,:3]).as_quat(),1)
-            count=25-len(remaining)+(len(selected) if index>=released else 0)
-            status.content=f"**{'25箱完整成功' if data['success'] else '任务未完成，保留失败现场'}**\n\n第{cycle+1}/{len(rounds)}轮 · {selected} · {result['phases'][index]}\n\n已放下{count}/25箱 · 帧{slider.value}/{len(frame_map)}\n\n{result.get('blocked_stage','')} {result.get('blocked_details','')}"
+            count=total-len(remaining)+(len(selected) if index>=released else 0)
+            wall_label=f"第{result['wall_index']+1}/{data['layer_count']}面 · " if 'wall_index' in result else ''
+            status.content=f"**{str(total)+'箱完整成功' if data['success'] else '任务未完成，保留失败现场'}**\n\n{wall_label}第{cycle+1}/{len(rounds)}轮 · {selected} · {result['phases'][index]}\n\n已放下{count}/{total}箱 · 帧{slider.value}/{len(frame_map)}\n\n{result.get('blocked_stage','')} {result.get('blocked_details','')}"
             previous=signature
         time.sleep(.01)
 

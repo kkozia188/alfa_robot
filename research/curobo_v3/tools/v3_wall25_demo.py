@@ -125,6 +125,10 @@ def view(folder,port):
     rewind=server.gui.add_button('从第一初始姿态重新播放')
     cutaway=server.gui.add_checkbox('剖视集装箱',initial_value=True)
     status=server.gui.add_markdown('')
+    if 'chosen_extra_deg' in data:
+        baseline=data['baseline_extra_deg'];chosen=data['chosen_extra_deg']
+        improvement=100*(baseline-chosen)/baseline if baseline else 0.
+        server.gui.add_markdown(f"**按整轮末端额外旋转选择配对**\n\n{data.get('baseline_scope','比较基准')}：{baseline:.1f}° → 当前{chosen:.1f}°，减少{improvement:.1f}%。覆盖两侧末端、预接触/抽离/运输/放箱/回Home；导航转身不计入臂的额外旋转。每层四种配对及顺序中择优，不宣称全局最优；不以耗时作选择依据。")
     if not data['success']:
         failure=rounds[-1]
         server.gui.add_markdown(f"**尚未完成{total}箱：已完成{len(data['completed_boxes'])}箱**\n\n停止在第{len(rounds)}轮 {failure['wall_task']}：{failure.get('blocked_stage','')}，{failure.get('blocked_details','')}。页面只播放已算出的真实轨迹，不用其他任务动画补齐。")
@@ -176,6 +180,9 @@ def view(folder,port):
             count=total-len(remaining)+(len(selected) if index>=released else 0)
             wall_label=f"第{result['wall_index']+1}/{data['layer_count']}面 · " if 'wall_index' in result else ''
             status.content=f"**{str(total)+'箱完整成功' if data['success'] else '任务未完成，保留失败现场'}**\n\n{wall_label}第{cycle+1}/{len(rounds)}轮 · {selected} · {result['phases'][index]}\n\n已放下{count}/{total}箱 · 帧{slider.value}/{len(frame_map)}\n\n{result.get('blocked_stage','')} {result.get('blocked_details','')}"
+            if result.get('rotation_metrics'):
+                metric=result['rotation_metrics']
+                status.content+=f"\n\n本轮左末端额外旋转{metric['left']['extra_deg']:.1f}°；右末端{metric['right']['extra_deg']:.1f}°；累计旋转合计{metric['combined_total_deg']:.1f}°。"
             previous=signature
         time.sleep(.01)
 

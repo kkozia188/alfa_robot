@@ -29,6 +29,16 @@ class RezeroAnalytic:
     def swivel(self,side,angles):
         return self.library.v3_swivel(side,self.legacy(side,angles))
 
+    def solve_grid(self, side, matrices, swivels, seed):
+        values = np.zeros((len(matrices), len(swivels), 16, 7), dtype=np.float64)
+        counts = np.zeros((len(matrices), len(swivels)), dtype=np.int32)
+        for matrix_index, matrix in enumerate(matrices):
+            for swivel_index, swivel in enumerate(swivels):
+                solutions = self.solve(side, matrix, swivel, seed)
+                counts[matrix_index, swivel_index] = len(solutions)
+                values[matrix_index, swivel_index, :len(solutions)] = solutions
+        return values, counts
+
     def solve(self,side,target,swivel,seed):
         output=np.zeros((16,7),dtype=np.float64)
         legacy_target=np.asarray(target,dtype=np.float64).copy()

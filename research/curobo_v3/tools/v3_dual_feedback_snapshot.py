@@ -31,14 +31,14 @@ def main():
     server.gui.configure_theme(control_width='large',show_share_button=False)
     robot=ViserUrdf(server,model,root_node_name='/robot')
     server.scene.add_grid('/floor',width=4,height=4)
-    server.gui.add_markdown('**新零位候选 · 仅页面模型，不控制实机**\n\n你确认的原左臂[0,0,0,-1.3,180,0,0]°、右臂全零，现在均定义成0°；保持当时几何姿态。双臂J6轴已翻转，零位不动。\n\n两侧tool0均为Joint7局部+Z 191mm。Updown=-0.3m仅参考，桌面真实安装高度未知。原共享URDF/规划器/实机命令映射未替换，先在本页面确认。\n\n“恢复历史快照”会按新坐标换算，不代表实时反馈；不叠加contact-fit小角度补偿。')
+    server.gui.add_markdown('**已确认零位 · 仅模型，不控制实机**\n\n已删除误加的左J4 −1.3°零位偏置。相对原模型只保留90°/180°整数变换、J2 ±15°和已确认轴方向，不使用拟合小角度补偿。\n\n双臂J6正轴朝上，两侧tool0为Joint7局部+Z 191mm。Updown=-0.3m仅参考，桌面真实安装高度未知。模型已同步当前cuRobo分支，旧规划缓存/实机映射未重新验收，不得直接使用。\n\n“恢复历史快照”按历史坐标换算，非实时；不叠加contact-fit补偿。')
     server.gui.add_markdown('**离线关节调姿**：左右14轴均可拖动或在精确值中输入角度；使用±180°诊断范围，可能超出规划限位，不代表允许实机执行。页面无发送接口。')
     controls={}
     for side,title in [('left','左臂'),('right','右臂')]:
         with server.gui.add_folder(title+' J1～J7（仅模型）'):
             for index in range(1,8):
                 name=f'{side}_joint{index}'
-                initial=0.
+                initial=-90. if index==3 else 90. if index==6 else 0.
                 slider=server.gui.add_slider(f'J{index} / 度',min=-180.,max=180.,step=.1,initial_value=initial)
                 number=server.gui.add_number(f'J{index}精确值 / 度',initial_value=initial,step=.1,min=-180.,max=180.)
                 def bind(slider,number):

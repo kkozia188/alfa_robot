@@ -71,5 +71,22 @@ class DualZeroReviewTest(unittest.TestCase):
         from v3_dual_zero_review import review_definition
         self.assertEqual(ET.tostring(ET.parse(path).getroot()),ET.tostring(review_definition(path).getroot()))
 
+    def test_discrete_offsets_and_equal_heights(self):
+        from v3_zero_model_candidate import OFFSETS_DEG
+        for side,offsets in OFFSETS_DEG.items():
+            for index,angle in enumerate(offsets):
+                self.assertAlmostEqual(angle/90,round(angle/90)) if index!=1 else self.assertEqual(abs(angle),15.)
+        path=Path(__file__).resolve().parents[1]/'generated/zero_model_candidate_20261018/robot_rezero_candidate.urdf'
+        model=yourdfpy.URDF.load(path,load_meshes=False)
+        values={name:0. for name in model.actuated_joint_names};values['updown']=-.3
+        for side in ('left','right'):values.update({side+'_joint3':-np.pi/2,side+'_joint6':np.pi/2})
+        model.update_cfg(values)
+        left=model.get_transform('left_tool0',model.base_link)[2,3]
+        right=model.get_transform('right_tool0',model.base_link)[2,3]
+        self.assertLess(abs(left-right),1e-6)
+        for side in ('left','right'):
+            joint=model.joint_map[side+'_joint4']
+            np.testing.assert_allclose([joint.limit.lower,joint.limit.upper],np.deg2rad([-145,145]),atol=1e-8)
+
 
 if __name__=='__main__':unittest.main()

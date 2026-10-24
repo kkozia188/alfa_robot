@@ -1,7 +1,16 @@
 {
-  "required_coordinate_revision": "rezero-left-j5-plus180-20261020-contact-fit-a-v1",
-  "motor_minus_model_deg": [0, -0.23638073957006833, 0.5736353095123823, 1.1948599250492464, -0.2689652652013817, 0.7586338532082705, 0],
-  "calibration_name": "同点十姿态候选A：固定70mm TCP，仅J2～J6零位修正；已替换原J2减1度",
-  "calibration_source": "generated/probe_contact_fit_20261020/fit_results.json: fits.zero_only.recommended_motor_minus_model_deg",
-  "legacy_replay_blocked": "左J5零位已变更180度；旧吸附轨迹尚未重新规划验证，禁止发送。请使用8162新求解预览。"
+  "required_coordinate_revision": "dual-zero-discrete-only-tool191-20261024",
+  "motor_minus_model_deg": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "calibration_name": "User requested removal of all fitted small-angle offsets",
+  "calibration_source": "2026-10-24 user correction; former contact-fit candidate is historical only",
+  "legacy_replay_blocked": "新模型零位/J6/tool191与旧实机坐标策略未重新验收，禁止发送",
+  "execution_mapping_verified": false
 }

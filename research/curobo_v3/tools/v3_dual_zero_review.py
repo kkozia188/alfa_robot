@@ -7,8 +7,8 @@ from scipy.spatial.transform import Rotation
 import yourdfpy
 
 
-ZERO_DEG={'left':[0.,0.,0.,-1.3,180.,0.,0.],'right':[0.,0.,0.,0.,0.,0.,0.]}
-REVIEW_REVISION='dual-zero-j6-positive-up-tool191-20261024'
+ZERO_DEG={'left':[0.,0.,0.,0.,180.,0.,0.],'right':[0.,0.,0.,0.,0.,0.,0.]}
+REVIEW_REVISION='dual-zero-discrete-only-tool191-20261024'
 
 
 def old_to_review(values):

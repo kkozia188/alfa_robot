@@ -21,7 +21,6 @@ class RezeroAnalytic:
         self.lower=np.tile(-self.limits,(2,1));self.upper=np.tile(self.limits,(2,1))
         for arm,side in enumerate(('left','right')):
             self.lower[arm,1],self.upper[arm,1]=np.deg2rad(J2_LIMITS_DEG[side])
-        self.lower[0,3],self.upper[0,3]=np.deg2rad([-143.7,146.3])
 
     def legacy(self,side,angles):
         values=self.offsets[side]+self.signs*np.asarray(angles)

@@ -1,16 +1,16 @@
 {
   "joint_coordinate_frame": "robot_rezero_candidate.urdf",
-  "source": "Converted prior Home to approved dual zero/J6 coordinates; physical joint configuration preserved, TCP extended40mm",
+  "source": "Discrete-only zero convention; accidental left J4 -1.3deg removed; no fitted zero offsets",
   "left_deg": [
     65.0,
     -75.0,
     20.0,
-    -88.7,
+    -90.0,
     0.0,
     -40.0,
     90.0
   ],
-  "coordinate_revision": "dual-zero-j6-positive-up-tool191-20261024",
+  "coordinate_revision": "dual-zero-discrete-only-tool191-20261024",
   "left_j5_policy": "Previous left J5=180deg now zero",
   "right_deg": [
     -65.0,

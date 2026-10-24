@@ -15,7 +15,6 @@ def convert(names,values):
             name=f'{side}_joint{index}'
             if name not in names:continue
             column=names.index(name)
-            if side=='left' and index==4:result[...,column]+=np.deg2rad(1.3)
             if side=='left' and index==5:result[...,column]=(result[...,column]-np.pi+np.pi)%(2*np.pi)-np.pi
             if index==6:result[...,column]*=-1
     return result
@@ -26,6 +25,8 @@ def main():
     prior=json.loads((folder/'manifest.json').read_text())
     if prior.get('coordinate_revision')==COORDINATE_REVISION:
         raise ValueError('已迁移，拒绝重复应用零位/方向变换')
+    if prior.get('coordinate_revision')!='rezero-left-j5-plus180-20261020':
+        raise ValueError('该迁移只接受原20261020坐标版本，不能重复转换后续版本')
     paths={label:folder/name for label,name in [('fixed','fixed.yaml'),('mobile','mobile.yaml')]}
     configs={label:yaml.safe_load(path.read_text()) for label,path in paths.items()}
     fixed=build(folder)

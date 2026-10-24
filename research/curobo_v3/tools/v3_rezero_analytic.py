@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from v3_zero_model_candidate import OFFSETS_DEG,J2_LIMITS_DEG,JOINT_SIGNS
+from v3_zero_model_candidate import OFFSETS_DEG,J2_LIMITS_DEG,JOINT_SIGNS,TOOL_OFFSET_M
 
 
 class RezeroAnalytic:
@@ -21,6 +21,7 @@ class RezeroAnalytic:
         self.lower=np.tile(-self.limits,(2,1));self.upper=np.tile(self.limits,(2,1))
         for arm,side in enumerate(('left','right')):
             self.lower[arm,1],self.upper[arm,1]=np.deg2rad(J2_LIMITS_DEG[side])
+        self.lower[0,3],self.upper[0,3]=np.deg2rad([-143.7,146.3])
 
     def legacy(self,side,angles):
         values=self.offsets[side]+self.signs*np.asarray(angles)
@@ -31,7 +32,9 @@ class RezeroAnalytic:
 
     def solve(self,side,target,swivel,seed):
         output=np.zeros((16,7),dtype=np.float64)
-        count=self.library.v3_solve(side,np.ascontiguousarray(target,dtype=np.float64),swivel,
+        legacy_target=np.asarray(target,dtype=np.float64).copy()
+        legacy_target[:3,3]+=legacy_target[:3,:3]@np.array([0.,0.,.151-TOOL_OFFSET_M])
+        count=self.library.v3_solve(side,np.ascontiguousarray(legacy_target,dtype=np.float64),swivel,
             self.legacy(side,seed),output,16)
         converted=(output[:count]-self.offsets[side])*self.signs
         converted=(converted+np.pi)%(2*np.pi)-np.pi

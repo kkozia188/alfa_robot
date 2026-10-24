@@ -1,6 +1,7 @@
 from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
+import json
 from unittest.mock import patch
 
 import numpy as np
@@ -30,6 +31,9 @@ class RezeroTaskPlanner(SingleArmPlanner):
     conveyor_search_edge_resolution = .05
 
     def __init__(self,args=None):
+        manifest=json.loads((FOLDER/'manifest.json').read_text())
+        if manifest.get('planning_assets_validated') is False:
+            raise RuntimeError('双臂零位/J6/tool191模型已更新；旧抓放候选库和轨迹尚未按新TCP重建验收，禁止沿用旧缓存规划')
         super().__init__(args or migrated_assets())
         self.analytic=RezeroAnalytic()
         self.target_values=convert_row(['updown']+[f'{side}_joint{index}' for side in ('left','right') for index in range(1,8)],self.target_values)

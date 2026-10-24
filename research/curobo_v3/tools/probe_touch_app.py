@@ -23,6 +23,10 @@ from probe_preview_state import activate_preview, quick_send_ready, preview_time
 
 
 def main():
+    from v3_zero_model_candidate import COORDINATE_REVISION
+    coordinate_policy=json.loads((ROOT/'tools/ipc_left_prefix/coordinate_policy.json').read_text())
+    if not coordinate_policy.get('required_coordinate_revision','').startswith(COORDINATE_REVISION):
+        raise RuntimeError('模型零位/J6方向已更新，旧实机坐标策略尚未重新对齐；禁止启动旧映射的可发送打表页面')
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8162)
     parser.add_argument('--backend', default='http://127.0.0.1:8155')

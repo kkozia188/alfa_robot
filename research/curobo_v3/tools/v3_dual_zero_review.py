@@ -8,6 +8,7 @@ import yourdfpy
 
 
 ZERO_DEG={'left':[0.,0.,0.,-1.3,180.,0.,0.],'right':[0.,0.,0.,0.,0.,0.,0.]}
+REVIEW_REVISION='dual-zero-j6-positive-up-tool191-20261024'
 
 
 def old_to_review(values):
@@ -23,6 +24,8 @@ def old_to_review(values):
 
 def review_definition(path):
     definition=ET.parse(path)
+    if definition.getroot().get('alfa_coordinate_revision')==REVIEW_REVISION:
+        return definition
     for side in ('left','right'):
         for index,offset in enumerate(ZERO_DEG[side],1):
             joint=definition.find(f"joint[@name='{side}_joint{index}']")
@@ -41,6 +44,7 @@ def review_definition(path):
                 bounds=sorted((float(limit.get(key))-np.deg2rad(offset))*sign for key in ('lower','upper'))
                 limit.set('lower',str(bounds[0]));limit.set('upper',str(bounds[1]))
         definition.find(f"joint[@name='{side}_tool0_fixed']/origin").set('xyz','0 0 0.191')
+    definition.getroot().set('alfa_coordinate_revision',REVIEW_REVISION)
     return definition
 
 

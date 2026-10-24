@@ -1,11 +1,27 @@
 {
   "joint_coordinate_frame": "robot_rezero_candidate.urdf",
-  "source": "User-confirmed 2026-10-18 physical Home, converted 2026-10-20 for electrical left J5 zero +180 degrees",
-  "left_deg": [65, -75, 20, -90, -180, 40, 90],
-  "coordinate_revision": "rezero-left-j5-plus180-20261020",
-  "left_j5_policy": "2026-10-20: new J5 zero equals prior +180deg; electrical feedback/commands already changed; Home converted to preserve physical pose",
-  "right_deg": [-65, 75, -20, 90, 0, -40, -90],
-  "j6_policy": "User corrected both J6 axes: reverse direction, retain zero and physical Home",
+  "source": "Converted prior Home to approved dual zero/J6 coordinates; physical joint configuration preserved, TCP extended40mm",
+  "left_deg": [
+    65.0,
+    -75.0,
+    20.0,
+    -88.7,
+    0.0,
+    -40.0,
+    90.0
+  ],
+  "coordinate_revision": "dual-zero-j6-positive-up-tool191-20261024",
+  "left_j5_policy": "Previous left J5=180deg now zero",
+  "right_deg": [
+    -65.0,
+    75.0,
+    -20.0,
+    90.0,
+    0.0,
+    40.0,
+    -90.0
+  ],
+  "j6_policy": "Both positive axes reversed relative to prior model",
   "updown_m": -0.3,
   "updown_policy": "Unspecified in screenshot; retains original configured Home height",
   "right_policy": "Right arm unchanged; no longer a numerical mirror after left-only J5 zero change"

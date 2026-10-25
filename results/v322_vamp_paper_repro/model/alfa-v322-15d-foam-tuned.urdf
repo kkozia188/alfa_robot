@@ -1,0 +1,2190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="alfa_robot" path="/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-mesh.urdf">
+	<link name="base_footprint"></link>
+	<link name="base_link">
+		<inertial>
+			<origin rpy="0 0 0" xyz="-0.036137515 -0.00063829515 0.22563075"></origin>
+			<mass value="982.58382"></mass>
+			<inertia ixx="294.37355" ixy="0.038878568" ixz="-6.0994854" iyy="291.98628" iyz="-0.18347327" izz="131.56855"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_001_solid_001.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_049_solid_049.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="0 0 0" xyz="0 0 0"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_048_solid_048.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+	</link>
+	<link name="arm_carriage">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.23241894 1.4548597e-09 0.35398238"></origin>
+			<mass value="42.349928"></mass>
+			<inertia ixx="1.461624" ixy="0.00047758911" ixz="0.028235631" iyy="1.1919986" iyz="-2.4308674e-08" izz="1.2166646"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_014_surface_shell_014.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_004_surface_shell_004.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_003_solid_003.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_058_solid_058.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_050_solid_050.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_002_solid_002.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_005_surface_shell_005.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_015_surface_shell_015.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_018_surface_shell_018.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_008_surface_shell_008.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_006_surface_shell_006.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_009_surface_shell_009.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_016_surface_shell_016.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_019_surface_shell_019.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_017_surface_shell_017.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="-3.1415927 0 0" xyz="-0.174 0 1.68"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_007_surface_shell_007.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.052664"></sphere>
+			</geometry>
+			<origin xyz="0.39938736791992185 0.10087302963859415 0.5023973512192625" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.048125"></sphere>
+			</geometry>
+			<origin xyz="0.3902553679199219 0.05804302963859415 0.4986803512192625" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.050317"></sphere>
+			</geometry>
+			<origin xyz="0.40043236791992187 0.015248029638594153 0.5029023512192625" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.050139"></sphere>
+			</geometry>
+			<origin xyz="0.38987971027433604 -0.06558670010974454 0.49841969031154026" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.049963"></sphere>
+			</geometry>
+			<origin xyz="0.40006371027433607 -0.10688670010974455 0.5034066903115403" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.053029"></sphere>
+			</geometry>
+			<origin xyz="0.39859271027433607 -0.018336700109744544 0.5029246903115402" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.033452"></sphere>
+			</geometry>
+			<origin xyz="0.36634200000000006 0.07042194446554784 0.4837030244140637" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.04268"></sphere>
+			</geometry>
+			<origin xyz="0.361206 0.005814944465547838 0.4867630244140637" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.038526"></sphere>
+			</geometry>
+			<origin xyz="0.366364 -0.06675305553445217 0.4837350244140637" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072199"></sphere>
+			</geometry>
+			<origin xyz="0.238512 -0.24948435290185267 0.28210352687964535" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.08168"></sphere>
+			</geometry>
+			<origin xyz="0.275722 -0.2635003529018527 0.31963552687964536" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.033334"></sphere>
+			</geometry>
+			<origin xyz="0.327292 -0.21707435290185267 0.3002775268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.075341"></sphere>
+			</geometry>
+			<origin xyz="0.290887 -0.2514063529018527 0.2810665268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.071932"></sphere>
+			</geometry>
+			<origin xyz="0.264185 -0.25137035290185267 0.2673115268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.049569"></sphere>
+			</geometry>
+			<origin xyz="0.315421 -0.2289413529018527 0.31897752687964537" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047209"></sphere>
+			</geometry>
+			<origin xyz="0.22656400000000002 -0.22027735290185269 0.3524155268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.069162"></sphere>
+			</geometry>
+			<origin xyz="0.242091 -0.26376535290185266 0.3105595268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.042931"></sphere>
+			</geometry>
+			<origin xyz="0.308805 -0.22220635290185267 0.34540252687964534" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.053222"></sphere>
+			</geometry>
+			<origin xyz="0.255575 -0.2281063529018527 0.3579945268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.052512"></sphere>
+			</geometry>
+			<origin xyz="0.215871 -0.22823635290185268 0.3111195268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.045938"></sphere>
+			</geometry>
+			<origin xyz="0.28297900000000004 -0.22078635290185267 0.3652775268796454" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.069493"></sphere>
+			</geometry>
+			<origin xyz="0.2842673631935711 0.2711718311402836 0.32016957464142126" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.068553"></sphere>
+			</geometry>
+			<origin xyz="0.2950143631935711 0.2616888311402836 0.2921675746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.076471"></sphere>
+			</geometry>
+			<origin xyz="0.25969536319357106 0.2634578311402836 0.3199605746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.066271"></sphere>
+			</geometry>
+			<origin xyz="0.23620236319357107 0.2719628311402836 0.3096615746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072088"></sphere>
+			</geometry>
+			<origin xyz="0.24028136319357107 0.2563998311402836 0.2845845746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.064771"></sphere>
+			</geometry>
+			<origin xyz="0.24839436319357108 0.2588998311402836 0.26299957464142126" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.067142"></sphere>
+			</geometry>
+			<origin xyz="0.2831383631935711 0.2580448311402836 0.2666835746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.073784"></sphere>
+			</geometry>
+			<origin xyz="0.2856353631935711 0.25738383114028357 0.3174385746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.043432"></sphere>
+			</geometry>
+			<origin xyz="0.20800236319357107 0.21733483114028357 0.2930905746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.050172"></sphere>
+			</geometry>
+			<origin xyz="0.2314753631935711 0.22592483114028358 0.26003657464142127" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047458"></sphere>
+			</geometry>
+			<origin xyz="0.21422536319357108 0.2237658311402836 0.3265105746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.038574"></sphere>
+			</geometry>
+			<origin xyz="0.2235653631935711 0.21396183114028358 0.3576115746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.041746"></sphere>
+			</geometry>
+			<origin xyz="0.2531393631935711 0.21826683114028356 0.36846357464142127" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.0498"></sphere>
+			</geometry>
+			<origin xyz="0.27432836319357107 0.22482283114028356 0.2512765746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.059383"></sphere>
+			</geometry>
+			<origin xyz="0.3012273631935711 0.2337828311402836 0.2743265746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.04493"></sphere>
+			</geometry>
+			<origin xyz="0.2865203631935711 0.22953383114028358 0.3539015746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.032188"></sphere>
+			</geometry>
+			<origin xyz="0.2752493631935711 0.20818683114028358 0.3826915746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.035958"></sphere>
+			</geometry>
+			<origin xyz="0.3022613631935711 0.21287783114028358 0.36773157464142125" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.034106"></sphere>
+			</geometry>
+			<origin xyz="0.3257393631935711 0.21055083114028356 0.3433285746414213" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.041826"></sphere>
+			</geometry>
+			<origin xyz="0.3268203631935711 0.21686983114028358 0.30684757464142126" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.26301"></sphere>
+			</geometry>
+			<origin xyz="0.22668581776880253 -0.006660583740530041 0.3326410361182268" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.197863"></sphere>
+			</geometry>
+			<origin xyz="0.27320081776880256 0.09590441625946995 0.40574103611822687" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.099198"></sphere>
+			</geometry>
+			<origin xyz="-0.0025881822311974723 -0.0006745837405300415 0.46309303611822683" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.147313"></sphere>
+			</geometry>
+			<origin xyz="0.3243908177688025 -0.13915458374053002 0.3281990361182269" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.139143"></sphere>
+			</geometry>
+			<origin xyz="0.04082881776880254 0.0003084162594699587 0.22379903611822682" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.187425"></sphere>
+			</geometry>
+			<origin xyz="0.27094681776880253 -0.09668158374053004 0.27247603611822685" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.193261"></sphere>
+			</geometry>
+			<origin xyz="0.27458281776880256 -0.09939158374053005 0.40581603611822686" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.217277"></sphere>
+			</geometry>
+			<origin xyz="0.2574508177688025 0.03958741625946996 0.3012750361182268" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.202523"></sphere>
+			</geometry>
+			<origin xyz="0.26676481776880256 0.08914541625946996 0.28037603611822687" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.131577"></sphere>
+			</geometry>
+			<origin xyz="0.09401781776880254 0.0025924162594699587 0.44902303611822686" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.119737"></sphere>
+			</geometry>
+			<origin xyz="0.33961181776880256 0.14913941625946997 0.37143803611822684" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.111487"></sphere>
+			</geometry>
+			<origin xyz="-0.004788182231197452 -0.0007145837405300413 0.3422990361182268" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.021262"></sphere>
+			</geometry>
+			<origin xyz="0.3818615942438355 -0.04116899318656893 0.4942911400627532" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020616"></sphere>
+			</geometry>
+			<origin xyz="0.3821965942438355 -0.06206899318656892 0.4934581400627532" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.019743"></sphere>
+			</geometry>
+			<origin xyz="0.3818135942438355 -0.08071699318656893 0.49464514006275323" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.021262"></sphere>
+			</geometry>
+			<origin xyz="0.3818615942438355 0.07883100299873369 0.49429113449352857" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020616"></sphere>
+			</geometry>
+			<origin xyz="0.3821965942438355 0.057931002998733695 0.49345813449352854" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.019743"></sphere>
+			</geometry>
+			<origin xyz="0.3818135942438355 0.03928300299873369 0.4946451344935286" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013866"></sphere>
+			</geometry>
+			<origin xyz="0.3834800965794898 0.04365989654290004 0.47992079289651685" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013368"></sphere>
+			</geometry>
+			<origin xyz="0.3775210965794898 0.06063689654290005 0.48162579289651686" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013139"></sphere>
+			</geometry>
+			<origin xyz="0.38467809657948976 0.07728289654290005 0.47962379289651685" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013406"></sphere>
+			</geometry>
+			<origin xyz="0.38558973024044385 -0.0433551079350734 0.4793960311719138" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013122"></sphere>
+			</geometry>
+			<origin xyz="0.3773917302404438 -0.0593821079350734 0.4816620311719138" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013703"></sphere>
+			</geometry>
+			<origin xyz="0.38538273024044384 -0.0756891079350734 0.4794260311719138" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010977"></sphere>
+			</geometry>
+			<origin xyz="0.3697355096957737 -0.06953499839542317 0.4882754506606982" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010915"></sphere>
+			</geometry>
+			<origin xyz="0.38241550969577365 -0.08402599839542316 0.48453345066069825" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010853"></sphere>
+			</geometry>
+			<origin xyz="0.37462050969577365 -0.08409099839542317 0.5006554506606983" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010788"></sphere>
+			</geometry>
+			<origin xyz="0.37633354109630845 -0.03426574776243805 0.4996026360063776" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.011343"></sphere>
+			</geometry>
+			<origin xyz="0.3821785410963085 -0.03738574776243805 0.4829586360063776" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.011499"></sphere>
+			</geometry>
+			<origin xyz="0.36900954109630846 -0.050226747762438045 0.49025663600637764" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.0108"></sphere>
+			</geometry>
+			<origin xyz="0.3826061184384393 0.03529477803033322 0.48517249790150185" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010926"></sphere>
+			</geometry>
+			<origin xyz="0.3741061184384393 0.03645877803033322 0.5009354979015018" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.011216"></sphere>
+			</geometry>
+			<origin xyz="0.3702801184384393 0.050324778030333216 0.48733949790150183" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.011082"></sphere>
+			</geometry>
+			<origin xyz="0.38238654192140725 0.08364224909911377 0.4840266311452225" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010308"></sphere>
+			</geometry>
+			<origin xyz="0.3753355419214073 0.08493324909911378 0.5003966311452225" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.011392"></sphere>
+			</geometry>
+			<origin xyz="0.36940454192140726 0.06982224909911378 0.4894066311452225" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.012085"></sphere>
+			</geometry>
+			<origin xyz="0.3729094860910446 0.042262055808714845 0.506214685001152" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013665"></sphere>
+			</geometry>
+			<origin xyz="0.36974648609104455 0.059433055808714844 0.49810568500115193" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013693"></sphere>
+			</geometry>
+			<origin xyz="0.3722424860910446 0.07709505580871484 0.5044216850011519" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013746"></sphere>
+			</geometry>
+			<origin xyz="0.37263616582950726 -0.043396949552817726 0.5054425928654985" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013416"></sphere>
+			</geometry>
+			<origin xyz="0.3695691658295072 -0.05974294955281773 0.4978995928654985" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013292"></sphere>
+			</geometry>
+			<origin xyz="0.37343316582950725 -0.07614894955281773 0.5076065928654986" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="head_yaw">
+		<inertial>
+			<origin rpy="0 0 0" xyz="-0.017162676 -0.0055771162 0.02718393"></origin>
+			<mass value="0.072317618"></mass>
+			<inertia ixx="5.6695638e-05" ixy="-1.1455479e-06" ixz="4.6539858e-06" iyy="4.4027791e-05" iyz="1.5137677e-06" izz="4.9804167e-05"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="0 0 0" xyz="-0.441 0 -1.5041"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_047_solid_047.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.041456"></sphere>
+			</geometry>
+			<origin xyz="-0.020888455566406228 0.00016199999999999982 0.03354597558593754" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.037544"></sphere>
+			</geometry>
+			<origin xyz="-0.010895455566406228 -0.0031820000000000004 0.020811975585937538" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.041486"></sphere>
+			</geometry>
+			<origin xyz="-0.020829455566406228 -0.013131 0.03350997558593754" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="head">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.011403312 0.052498 -0.013964383"></origin>
+			<mass value="6.925078"></mass>
+			<inertia ixx="0.58208657" ixy="0.16278386" ixz="-1.9637467e-05" iyy="0.090423591" iyz="-2.3007969e-05" izz="0.6242853"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_025_surface_shell_025.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_035_surface_shell_035.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_045_solid_045.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_024_solid_024.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_046_solid_046.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_036_surface_shell_036.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_026_surface_shell_026.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_028_surface_shell_028.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_030_surface_shell_030.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_040_surface_shell_040.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_029_surface_shell_029.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_027_surface_shell_027.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_038_surface_shell_038.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_037_surface_shell_037.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<visual>
+			<origin rpy="1.5707963 0 0" xyz="-0.419 1.5481 -0.01393364"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_039_surface_shell_039.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.054088"></sphere>
+			</geometry>
+			<origin xyz="0.07227122333196237 -0.12063136978931796 0.08884753273319998" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054223"></sphere>
+			</geometry>
+			<origin xyz="0.06313622333196237 -0.12152936978931796 0.03605453273319997" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.048314"></sphere>
+			</geometry>
+			<origin xyz="0.07497722333196236 -0.12322336978931796 -0.0061824672668000305" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.053462"></sphere>
+			</geometry>
+			<origin xyz="0.07277236206089631 -0.12114652551211584 -0.029504428024038187" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.051455"></sphere>
+			</geometry>
+			<origin xyz="0.06982936206089631 -0.10509652551211585 -0.10335842802403819" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.053722"></sphere>
+			</geometry>
+			<origin xyz="0.06947236206089631 -0.13865552551211585 -0.10171542802403818" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.048004"></sphere>
+			</geometry>
+			<origin xyz="0.057840790771484414 -0.052177398002953304 -0.013933597160278784" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047857"></sphere>
+			</geometry>
+			<origin xyz="0.045982790771484414 -0.056750398002953305 -0.013933597160278784" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.073387"></sphere>
+			</geometry>
+			<origin xyz="0.01785241304739442 -0.025976991907649988 -0.017400566595828584" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.067632"></sphere>
+			</geometry>
+			<origin xyz="0.0075974130473944225 -0.10618399190764999 0.013547433404171416" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.06492"></sphere>
+			</geometry>
+			<origin xyz="0.007454413047394422 -0.10690699190764999 -0.043181566595828585" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065497"></sphere>
+			</geometry>
+			<origin xyz="0.10421217089843755 -0.08183511528283988 -0.11586559643210326" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.062683"></sphere>
+			</geometry>
+			<origin xyz="0.030868170898437554 -0.13017311528283987 -0.10590259643210326" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054263"></sphere>
+			</geometry>
+			<origin xyz="-0.026233829101562453 -0.13489211528283987 -0.05220959643210326" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.062327"></sphere>
+			</geometry>
+			<origin xyz="-0.010900829101562454 -0.15202511528283988 0.019987403567896737" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.056645"></sphere>
+			</geometry>
+			<origin xyz="0.01791817089843755 -0.17751911528283987 -0.045434596432103264" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.058622"></sphere>
+			</geometry>
+			<origin xyz="0.11163017089843755 -0.13568811528283986 -0.09493559643210327" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.063526"></sphere>
+			</geometry>
+			<origin xyz="0.16245217089843755 -0.08138811528283987 -0.05437059643210326" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.062076"></sphere>
+			</geometry>
+			<origin xyz="0.022818170898437552 -0.13952311528283987 0.06886440356789673" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.06125"></sphere>
+			</geometry>
+			<origin xyz="0.16950517089843756 -0.07932511528283986 0.0030674035678967364" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.060346"></sphere>
+			</geometry>
+			<origin xyz="0.14946817089843756 -0.09037011528283986 0.04846840356789674" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.064462"></sphere>
+			</geometry>
+			<origin xyz="0.08578717089843754 -0.08960211528283987 0.09366140356789673" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.056685"></sphere>
+			</geometry>
+			<origin xyz="0.09417317089843755 -0.13673711528283988 0.07391740356789674" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020967"></sphere>
+			</geometry>
+			<origin xyz="0.05459839660088816 -0.12131401977666133 -0.05713577380237952" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.019627"></sphere>
+			</geometry>
+			<origin xyz="0.05465439660088816 -0.12173001977666133 -0.07489477380237952" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020656"></sphere>
+			</geometry>
+			<origin xyz="0.05471439660088816 -0.12178301977666132 -0.09223377380237952" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020967"></sphere>
+			</geometry>
+			<origin xyz="0.05459839660088816 -0.1213140165612736 0.06286422619762044" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.019627"></sphere>
+			</geometry>
+			<origin xyz="0.05465439660088816 -0.1217300165612736 0.045105226197620446" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.020656"></sphere>
+			</geometry>
+			<origin xyz="0.05471439660088816 -0.12178301656127359 0.02776622619762045" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013917"></sphere>
+			</geometry>
+			<origin xyz="0.050691300094968694 -0.13603487206299575 0.06257813625104947" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.01335"></sphere>
+			</geometry>
+			<origin xyz="0.0450423000949687 -0.13087787206299573 0.04484913625104947" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.012243"></sphere>
+			</geometry>
+			<origin xyz="0.052920300094968696 -0.13815087206299573 0.028900136251049473" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010742"></sphere>
+			</geometry>
+			<origin xyz="0.050604360342365685 -0.11357039504526888 0.06946986918376788" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010645"></sphere>
+			</geometry>
+			<origin xyz="0.05088536034236569 -0.13012339504526887 0.06969886918376787" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010622"></sphere>
+			</geometry>
+			<origin xyz="0.041153360342365684 -0.12178339504526887 0.055573869183767874" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010762"></sphere>
+			</geometry>
+			<origin xyz="0.051404360321772063 -0.12947039852279013 -0.049637130803307145" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.01086"></sphere>
+			</geometry>
+			<origin xyz="0.049947360321772064 -0.11287039852279013 -0.051413130803307144" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010729"></sphere>
+			</geometry>
+			<origin xyz="0.04112836032177206 -0.12311139852279013 -0.06442313080330714" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013518"></sphere>
+			</geometry>
+			<origin xyz="0.05216555297753381 -0.10733593073604476 0.06258014276036279" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013165"></sphere>
+			</geometry>
+			<origin xyz="0.04539155297753381 -0.11312293073604476 0.045708142760362794" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.012657"></sphere>
+			</geometry>
+			<origin xyz="0.05295055297753381 -0.10664593073604475 0.029187142760362793" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010974"></sphere>
+			</geometry>
+			<origin xyz="0.04131719033175594 -0.12191696346345061 0.0361657744623433" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010761"></sphere>
+			</geometry>
+			<origin xyz="0.05061319033175594 -0.1130249634634506 0.022602774462343298" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010935"></sphere>
+			</geometry>
+			<origin xyz="0.050896190331755936 -0.13048496346345062 0.0220427744623433" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013258"></sphere>
+			</geometry>
+			<origin xyz="0.05066803017940014 -0.13597871750820126 -0.09091305677252277" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.01328"></sphere>
+			</geometry>
+			<origin xyz="0.045049030179400144 -0.13086971750820126 -0.07465905677252277" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013221"></sphere>
+			</geometry>
+			<origin xyz="0.051834030179400144 -0.13711171750820125 -0.057194056772522775" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010974"></sphere>
+			</geometry>
+			<origin xyz="0.04131719033175594 -0.12191696667883835 -0.08383422553765665" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010761"></sphere>
+			</geometry>
+			<origin xyz="0.05061319033175594 -0.11302496667883834 -0.09739722553765666" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.010935"></sphere>
+			</geometry>
+			<origin xyz="0.050896190331755936 -0.13048496667883835 -0.09795722553765665" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013518"></sphere>
+			</geometry>
+			<origin xyz="0.05216555297749752 -0.10733593395140188 -0.05741985723963718" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.013165"></sphere>
+			</geometry>
+			<origin xyz="0.045391552977497515 -0.11312293395140188 -0.07429185723963719" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.012657"></sphere>
+			</geometry>
+			<origin xyz="0.05295055297749752 -0.10664593395140189 -0.09081285723963718" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link1">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.016307 0.0028851633 0.13851898"></origin>
+			<mass value="12.131"></mass>
+			<inertia ixx="0.051264138" ixy="0.003049957" ixz="0.000823193" iyy="0.042125665" iyz="0.002952565" izz="0.052363933"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="1.3089969 0 0" xyz="-0.44 1.2700466 -0.64109938"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_051_solid_051.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.120662"></sphere>
+			</geometry>
+			<origin xyz="-0.014997999999999985 0.00023203263612891047 0.09619503968858126" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.115857"></sphere>
+			</geometry>
+			<origin xyz="-0.018047999999999984 -0.01656296736387109 0.14816403968858124" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.125695"></sphere>
+			</geometry>
+			<origin xyz="-0.019592999999999985 0.0065090326361289105 0.16525603968858124" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link2">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.15909423 0.039606935 -0.047763"></origin>
+			<mass value="9.297"></mass>
+			<inertia ixx="0.057939842" ixy="2.7731e-05" ixz="-8.356e-06" iyy="0.032807939" iyz="0.004077744" izz="0.046851207"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="0 -1.5707963 -1.5707963" xyz="-0.43583677 -1.4316311 -0.48949"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_052_solid_052.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.093932"></sphere>
+			</geometry>
+			<origin xyz="0.15078314481553623 0.03943430659112236 -0.05120007582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.056037"></sphere>
+			</geometry>
+			<origin xyz="0.05076114481553623 0.011805306591122361 -0.05104907582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.085174"></sphere>
+			</geometry>
+			<origin xyz="0.14806814481553623 0.07481830659112236 -0.051425075828192716" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.085995"></sphere>
+			</geometry>
+			<origin xyz="0.16792214481553625 0.010448306591122357 -0.05153807582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.029726"></sphere>
+			</geometry>
+			<origin xyz="0.008108144815536233 0.006446306591122358 -0.051459075828192716" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.073396"></sphere>
+			</geometry>
+			<origin xyz="0.18186614481553623 0.09921930659112235 -0.060965075828192716" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072332"></sphere>
+			</geometry>
+			<origin xyz="0.20907814481553622 -0.002008693408877639 -0.04908407582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.074596"></sphere>
+			</geometry>
+			<origin xyz="0.17935014481553624 0.09902430659112235 -0.04356707582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.06758"></sphere>
+			</geometry>
+			<origin xyz="0.19570914481553622 0.06381030659112236 -0.025224075828192718" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.066499"></sphere>
+			</geometry>
+			<origin xyz="0.20208914481553625 0.05542630659112236 -0.08336707582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.055108"></sphere>
+			</geometry>
+			<origin xyz="0.22581314481553622 0.0011903065911223615 -0.07461007582819272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.060382"></sphere>
+			</geometry>
+			<origin xyz="0.21242314481553623 0.02631530659112236 -0.024065075828192718" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link3">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.00353 0.0082399219 0.23122565"></origin>
+			<mass value="9.614"></mass>
+			<inertia ixx="0.074213854" ixy="6.9444e-05" ixz="3.4182e-05" iyy="0.03063768" iyz="0.009656211" izz="0.069427186"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="1.3089969 0 0" xyz="-0.43819 1.2700466 -1.0375194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_053_solid_053.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.134987"></sphere>
+			</geometry>
+			<origin xyz="0.001528911960536102 -0.011127165846134155 0.2579312034587522" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.096731"></sphere>
+			</geometry>
+			<origin xyz="0.000411911960536102 0.0008068341538658448 0.0629102034587522" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.102807"></sphere>
+			</geometry>
+			<origin xyz="0.0015929119605361019 0.005161834153865845 0.1856512034587522" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link4">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0035384869 -0.17943366 -0.07983361"></origin>
+			<mass value="3.938"></mass>
+			<inertia ixx="0.024706315" ixy="6.4274e-05" ixz="-1.8679e-05" iyy="0.011824276" iyz="0.002092687" izz="0.020388183"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="2.8797933 0 0" xyz="-0.43814751 1.2975194 1.1850466"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_055_solid_055.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.112806"></sphere>
+			</geometry>
+			<origin xyz="0.00014136368263700468 -0.18044628437901822 -0.08169337400952453" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.088439"></sphere>
+			</geometry>
+			<origin xyz="-0.009473636317362996 -0.08198028437901822 -0.08164137400952452" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.061585"></sphere>
+			</geometry>
+			<origin xyz="0.005558363682637004 -6.0284379018213374e-05 -0.08292437400952453" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link5">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0054994869 -0.019052904 0.10062789"></origin>
+			<mass value="3.025"></mass>
+			<inertia ixx="0.01246249" ixy="-6.9914e-05" ixz="0.000290081" iyy="0.00682627" iyz="-0.000417143" izz="0.009725258"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="1.3089969 0 0" xyz="-0.43814751 1.2673466 -1.5385194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_054_solid_054.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.080289"></sphere>
+			</geometry>
+			<origin xyz="-0.0010000550324447857 -0.007499663012472417 0.052336612606526126" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.080318"></sphere>
+			</geometry>
+			<origin xyz="0.014266944967555215 -0.05505566301247242 0.09833561260652612" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.092999"></sphere>
+			</geometry>
+			<origin xyz="0.004401944967555214 -0.021807663012472417 0.09794761260652612" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.07829"></sphere>
+			</geometry>
+			<origin xyz="-0.026964055032444787 -0.06627766301247243 0.12781061260652612" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.057371"></sphere>
+			</geometry>
+			<origin xyz="0.047029944967555214 -0.07061066301247242 0.16716261260652612" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.050323"></sphere>
+			</geometry>
+			<origin xyz="0.016503944967555216 -0.07232166301247242 0.24720961260652613" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054511"></sphere>
+			</geometry>
+			<origin xyz="-0.022088055032444785 -0.07249466301247243 0.22272961260652613" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.052112"></sphere>
+			</geometry>
+			<origin xyz="-0.030943055032444787 0.04565833698752758 0.13173561260652614" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.051458"></sphere>
+			</geometry>
+			<origin xyz="0.024641944967555215 0.05664233698752759 0.14394261260652613" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.040934"></sphere>
+			</geometry>
+			<origin xyz="-0.012839055032444785 0.07022533698752759 0.19631461260652613" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.046067"></sphere>
+			</geometry>
+			<origin xyz="-0.006118055032444785 0.06935133698752759 0.24308761260652612" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.042728"></sphere>
+			</geometry>
+			<origin xyz="0.028839944967555216 0.07061933698752758 0.22685461260652612" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link6">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0032944869 -0.02865692 -0.25540891"></origin>
+			<mass value="1.352"></mass>
+			<inertia ixx="0.00174899" ixy="-1.2156e-05" ixz="-2.88e-06" iyy="0.001103657" iyz="0.000121955" izz="0.001559634"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-0.26179939 0 0" xyz="-0.43814751 -1.7715194 -1.3578466"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_056_solid_056.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.055369"></sphere>
+			</geometry>
+			<origin xyz="1.0119726562275435e-06 0.053667991496663986 -0.09150403641299654" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.021443"></sphere>
+			</geometry>
+			<origin xyz="0.013368011972656227 -0.006423008503336013 -0.09150003641299653" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.027079"></sphere>
+			</geometry>
+			<origin xyz="-0.016769988027343773 0.004091991496663991 -0.09150003641299653" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_link7">
+		<inertial>
+			<origin rpy="0 0 0" xyz="7.48689e-06 0.0025867311 0.080573425"></origin>
+			<mass value="2.786"></mass>
+			<inertia ixx="0.026860899" ixy="1.9793e-05" ixz="4.2113e-05" iyy="0.026765423" iyz="-0.004670502" izz="0.010612007"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="1.3089969 0 0" xyz="-0.43814751 1.2663466 -1.8707194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_057_solid_057.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.080882"></sphere>
+			</geometry>
+			<origin xyz="0.045896011972656255 0.13589708677445084 0.09550001439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.096106"></sphere>
+			</geometry>
+			<origin xyz="-0.020276988027343745 -0.008813913225549154 0.08377201439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.085759"></sphere>
+			</geometry>
+			<origin xyz="-0.032185988027343744 -0.06503791322554915 0.09568501439041155" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.067"></sphere>
+			</geometry>
+			<origin xyz="-0.045021988027343744 0.13502108677445085 0.09550201439041153" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.085334"></sphere>
+			</geometry>
+			<origin xyz="-0.037120988027343746 0.05669308677445085 0.10062201439041155" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.08224"></sphere>
+			</geometry>
+			<origin xyz="0.03285501197265626 -0.07909691322554915 0.09465101439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.085297"></sphere>
+			</geometry>
+			<origin xyz="0.031999011972656255 0.07654508677445085 0.09550301439041153" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.079172"></sphere>
+			</geometry>
+			<origin xyz="0.007805011972656256 -0.12200291322554915 0.09550001439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.080861"></sphere>
+			</geometry>
+			<origin xyz="-0.045916988027343744 -0.13591691322554916 0.09550001439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.078596"></sphere>
+			</geometry>
+			<origin xyz="0.04814901197265625 -0.13814891322554915 0.09550001439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.084341"></sphere>
+			</geometry>
+			<origin xyz="0.03241901197265626 -0.015830913225549154 0.09591901439041153" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.086472"></sphere>
+			</geometry>
+			<origin xyz="0.025663011972656254 0.026800086774450848 0.08916301439041154" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link1">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.016307 -0.0028851633 0.13851898"></origin>
+			<mass value="12.131"></mass>
+			<inertia ixx="0.051264138" ixy="-0.003049957" ixz="0.000823193" iyy="0.042125665" iyz="-0.002952565" izz="0.052363933"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-1.3089969 0 0" xyz="-0.44 -1.2700466 -0.64109938"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_059_solid_059.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.127097"></sphere>
+			</geometry>
+			<origin xyz="-0.019660999999999984 0.00448496736387109 0.16533703968858124" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.120677"></sphere>
+			</geometry>
+			<origin xyz="-0.015001999999999986 0.00024296736387108953 0.09621203968858125" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.077817"></sphere>
+			</geometry>
+			<origin xyz="0.018513000000000016 -0.04410003263612891 0.14289003968858124" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link2">
+		<inertial>
+			<origin rpy="0 0 0" xyz="-0.15909423 0.039606935 -0.063273"></origin>
+			<mass value="9.297"></mass>
+			<inertia ixx="0.057939842" ixy="-2.7731e-05" ixz="-8.356e-06" iyy="0.032807939" iyz="-0.004077744" izz="0.046851207"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="0 -1.5707963 -1.5707963" xyz="0.43583677 -1.4316311 -0.505"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_060_solid_060.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.085067"></sphere>
+			</geometry>
+			<origin xyz="-0.16548996579433053 0.010651511638007198 -0.06503567460485273" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.090607"></sphere>
+			</geometry>
+			<origin xyz="-0.15188096579433052 0.040205511638007195 -0.06645667460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.05572"></sphere>
+			</geometry>
+			<origin xyz="-0.08224296579433052 0.021128511638007195 -0.06824367460485271" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047171"></sphere>
+			</geometry>
+			<origin xyz="-0.048862965794330526 0.013591511638007196 -0.06648767460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.082583"></sphere>
+			</geometry>
+			<origin xyz="-0.14545796579433054 0.06950351163800719 -0.06703967460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.079373"></sphere>
+			</geometry>
+			<origin xyz="-0.14537096579433054 0.07868451163800719 -0.06610767460485271" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.037943"></sphere>
+			</geometry>
+			<origin xyz="-0.026597965794330533 0.0060815116380071935 -0.06552067460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065377"></sphere>
+			</geometry>
+			<origin xyz="-0.21380096579433053 -0.002048488361992805 -0.05668567460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.057745"></sphere>
+			</geometry>
+			<origin xyz="-0.22059596579433052 -0.005182488361992803 -0.08304067460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.091954"></sphere>
+			</geometry>
+			<origin xyz="-0.16519996579433052 0.0433525116380072 -0.06690667460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.074072"></sphere>
+			</geometry>
+			<origin xyz="-0.17790896579433052 0.0996265116380072 -0.06894467460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.023737"></sphere>
+			</geometry>
+			<origin xyz="-0.002765965794330527 -0.00023748836199280476 -0.06596567460485273" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065004"></sphere>
+			</geometry>
+			<origin xyz="-0.18739696579433052 0.09780851163800719 -0.050163674604852715" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.058157"></sphere>
+			</geometry>
+			<origin xyz="-0.20353496579433053 0.0655685116380072 -0.030613674604852717" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065778"></sphere>
+			</geometry>
+			<origin xyz="-0.18682196579433052 0.09442051163800719 -0.08349867460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.062682"></sphere>
+			</geometry>
+			<origin xyz="-0.13406196579433052 0.09614551163800719 -0.07453567460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.057002"></sphere>
+			</geometry>
+			<origin xyz="-0.20852896579433053 0.04101551163800719 -0.10066667460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065989"></sphere>
+			</geometry>
+			<origin xyz="-0.20651096579433054 0.024950511638007197 -0.04331867460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047039"></sphere>
+			</geometry>
+			<origin xyz="-0.23525796579433053 -0.013833488361992802 -0.08050567460485272" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.051918"></sphere>
+			</geometry>
+			<origin xyz="-0.20419996579433053 0.07918551163800719 -0.10486567460485272" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link3">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.00353 -0.0082399219 0.23122565"></origin>
+			<mass value="9.614"></mass>
+			<inertia ixx="0.074213854" ixy="-6.9444e-05" ixz="3.4182e-05" iyy="0.03063768" iyz="-0.009656211" izz="0.069427186"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-1.3089969 0 0" xyz="-0.43819 -1.2700466 -1.0375194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_061_solid_061.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.092091"></sphere>
+			</geometry>
+			<origin xyz="0.00038501363674029896 -0.0003843880269994045 0.0559899868924221" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.132612"></sphere>
+			</geometry>
+			<origin xyz="0.001102013636740299 -0.0064603880269994045 0.2597999868924221" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.098808"></sphere>
+			</geometry>
+			<origin xyz="0.001544013636740299 -0.0010763880269994044 0.1645959868924221" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link4">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0034535131 0.17943366 -0.07983361"></origin>
+			<mass value="3.938"></mass>
+			<inertia ixx="0.024706315" ixy="-6.4274e-05" ixz="-1.8679e-05" iyy="0.011824276" iyz="-0.002092687" izz="0.020388183"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-2.8797933 0 0" xyz="-0.43823249 -1.2975194 1.1850466"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_062_solid_062.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.116522"></sphere>
+			</geometry>
+			<origin xyz="-3.007089843712116e-06 0.17370395321018423 -0.08229804201147978" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.079608"></sphere>
+			</geometry>
+			<origin xyz="0.0006679929101562879 0.0793149532101842 -0.08229904201147978" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.065451"></sphere>
+			</geometry>
+			<origin xyz="0.012555992910156287 -0.016271046789815793 -0.08230004201147978" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link5">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0054145131 0.019052904 0.10062789"></origin>
+			<mass value="3.025"></mass>
+			<inertia ixx="0.01246249" ixy="6.9914e-05" ixz="0.000290081" iyy="0.00682627" iyz="0.000417143" izz="0.009725258"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-1.3089969 0 0" xyz="-0.43823249 -1.2673466 -1.5385194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_063_solid_063.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.088843"></sphere>
+			</geometry>
+			<origin xyz="0.0004990041904426708 0.00933852182543138 0.06787474668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.094008"></sphere>
+			</geometry>
+			<origin xyz="-0.00022499580955732913 0.042445521825431376 0.09155674668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.073747"></sphere>
+			</geometry>
+			<origin xyz="-0.026810995809557328 0.06816852182543137 0.12262774668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.058796"></sphere>
+			</geometry>
+			<origin xyz="-0.02609799580955733 -0.03084047817456862 0.12109174668193795" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054926"></sphere>
+			</geometry>
+			<origin xyz="-0.029672995809557328 0.07284252182543138 0.21620974668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.058465"></sphere>
+			</geometry>
+			<origin xyz="0.05042500419044267 0.07512952182543138 0.16092174668193795" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.075941"></sphere>
+			</geometry>
+			<origin xyz="0.02104200419044267 -0.0034544781745686204 0.09746674668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054292"></sphere>
+			</geometry>
+			<origin xyz="0.015397004190442671 0.07282452182543138 0.24418674668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.054003"></sphere>
+			</geometry>
+			<origin xyz="0.02431300419044267 -0.06078947817456862 0.14915574668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.047113"></sphere>
+			</geometry>
+			<origin xyz="-0.01755899580955733 -0.07014647817456862 0.19006974668193796" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.044936"></sphere>
+			</geometry>
+			<origin xyz="0.021764004190442672 -0.06990047817456863 0.23751074668193795" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.041881"></sphere>
+			</geometry>
+			<origin xyz="-0.015460995809557329 -0.06964947817456862 0.25325174668193795" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link6">
+		<inertial>
+			<origin rpy="0 0 0" xyz="0.0032095131 0.02865692 -0.25540891"></origin>
+			<mass value="1.352"></mass>
+			<inertia ixx="0.00174899" ixy="1.2156e-05" ixz="-2.88e-06" iyy="0.001103657" iyz="-0.000121955" izz="0.001559634"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="0.26179939 0 0" xyz="-0.43823249 1.7715194 -1.3578466"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_064_solid_064.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.053847"></sphere>
+			</geometry>
+			<origin xyz="-1.0070898437121158e-06 -0.055527991496663986 -0.09150003641299653" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.021477"></sphere>
+			</geometry>
+			<origin xyz="0.014505992910156288 0.004996008503336008 -0.09150003641299653" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.021753"></sphere>
+			</geometry>
+			<origin xyz="-0.016135007089843712 0.003001008503336011 -0.09150003641299653" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="right_link7">
+		<inertial>
+			<origin rpy="0 0 0" xyz="-7.748689e-05 -0.0025867311 0.080573425"></origin>
+			<mass value="2.786"></mass>
+			<inertia ixx="0.026860899" ixy="-1.9793e-05" ixz="4.2113e-05" iyy="0.026765423" iyz="0.004670502" izz="0.010612007"></inertia>
+		</inertial>
+		<visual>
+			<origin rpy="-1.3089969 0 0" xyz="-0.43823249 -1.2663466 -1.8707194"></origin>
+			<geometry>
+				<mesh filename="/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_description/model_sources/robot_v3_2_2/meshes/part_065_solid_065.stl" scale="0.001 0.001 0.001"></mesh>
+			</geometry>
+		</visual>
+		<collision>
+			<geometry>
+				<sphere radius="0.063025"></sphere>
+			</geometry>
+			<origin xyz="9.92910156287884e-07 3.913225549152962e-06 0.057854014390411546" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.093302"></sphere>
+			</geometry>
+			<origin xyz="-0.03363600708984371 -0.12363108677445085 0.09713401439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.080657"></sphere>
+			</geometry>
+			<origin xyz="0.046116992910156286 -0.13611608677445083 0.09550101439041155" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.093341"></sphere>
+			</geometry>
+			<origin xyz="0.026555992910156288 -0.047462086774450844 0.09005801439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.09372"></sphere>
+			</geometry>
+			<origin xyz="-0.027219007089843712 -0.026642086774450846 0.09071801439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.086118"></sphere>
+			</geometry>
+			<origin xyz="-0.030758007089843713 0.048630913225549154 0.09424901439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.089323"></sphere>
+			</geometry>
+			<origin xyz="0.030953992910156287 0.040397913225549156 0.09445501439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072335"></sphere>
+			</geometry>
+			<origin xyz="0.046448992910156285 0.13434891322554915 0.10994901439041155" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.086332"></sphere>
+			</geometry>
+			<origin xyz="-0.03765900708984371 0.12765991322554915 0.10115001439041155" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.080257"></sphere>
+			</geometry>
+			<origin xyz="-0.03811000708984371 -0.13276608677445084 0.08473001439041154" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.074953"></sphere>
+			</geometry>
+			<origin xyz="0.044568992910156285 0.13355391322554916 0.08293201439041153" rpy="0 0 0"></origin>
+		</collision>
+		<collision>
+			<geometry>
+				<sphere radius="0.072044"></sphere>
+			</geometry>
+			<origin xyz="-0.05140700708984371 0.12665691322554914 0.07609301439041154" rpy="0 0 0"></origin>
+		</collision>
+	</link>
+	<link name="left_tool0"></link>
+	<link name="right_tool0"></link>
+	<joint name="base_footprint_to_base_link" type="fixed">
+		<origin rpy="0 0 0" xyz="0 0 0.335"></origin>
+		<parent link="base_footprint"></parent>
+		<child link="base_link"></child>
+	</joint>
+	<joint name="updown" type="prismatic">
+		<origin rpy="3.1415927 0 0" xyz="0.174 0 1.68"></origin>
+		<parent link="base_link"></parent>
+		<child link="arm_carriage"></child>
+		<axis xyz="0 0 -1"></axis>
+		<limit effort="10" lower="-1" upper="0" velocity="5"></limit>
+	</joint>
+	<joint name="head_joint" type="fixed">
+		<origin rpy="-3.1415927 0 0" xyz="0.267 0 0.1759"></origin>
+		<parent link="arm_carriage"></parent>
+		<child link="head_yaw"></child>
+	</joint>
+	<joint name="head_pitch_joint" type="fixed">
+		<origin rpy="-1.5707963 0 0" xyz="-0.022 0.01393364 0.044"></origin>
+		<parent link="head_yaw"></parent>
+		<child link="head"></child>
+	</joint>
+	<joint name="left_joint1" type="revolute">
+		<origin rpy="3.14159265359 1.30899695359 1.57079632679" xyz="0.266 -0.29054221 0.2873005"></origin>
+		<parent link="arm_carriage"></parent>
+		<child link="left_link1"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="647" lower="-3.14159265" upper="3.14159265" velocity="1.309"></limit>
+	</joint>
+	<joint name="left_joint2" type="revolute">
+		<origin rpy="1.5707963 -1.3089969 1.5707963" xyz="0.04949 5.2471965e-10 0.15042"></origin>
+		<parent link="left_link1"></parent>
+		<child link="left_link2"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="647" lower="-1.8325957145940461" upper="1.8325957145940461" velocity="1.309"></limit>
+	</joint>
+	<joint name="left_joint3" type="revolute">
+		<origin rpy="0 -1.5707963 -2.8797933" xyz="0.23761775 0.063669485 -0.0513"></origin>
+		<parent link="left_link2"></parent>
+		<child link="left_link3"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="484" lower="-3.14159265" upper="3.14159265" velocity="1.309"></limit>
+	</joint>
+	<joint name="left_joint4" type="revolute">
+		<origin rpy="-1.5707963 0 0" xyz="-4.248689e-05 0.085000001 0.26"></origin>
+		<parent link="left_link3"></parent>
+		<child link="left_link4"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="459" lower="-2.53072742" upper="2.53072742" velocity="1.749"></limit>
+	</joint>
+	<joint name="left_joint5" type="revolute">
+		<origin rpy="2.28522397028e-09 -1.57079630099 1.57079632451" xyz="0 -0.241 -0.082299999"></origin>
+		<parent link="left_link4"></parent>
+		<child link="left_link5"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="217" lower="-3.14159265" upper="3.14159265" velocity="2.618"></limit>
+	</joint>
+	<joint name="left_joint6" type="revolute">
+		<origin rpy="1.5707963 0 0" xyz="0 -0.090499999 0.233"></origin>
+		<parent link="left_link5"></parent>
+		<child link="left_link6"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="107" lower="-1.91986218" upper="1.91986218" velocity="3.142"></limit>
+	</joint>
+	<joint name="left_joint7" type="revolute">
+		<origin rpy="-1.5707963 0 0" xyz="0 0.0992 -0.0915"></origin>
+		<parent link="left_link6"></parent>
+		<child link="left_link7"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="36" lower="-3.14159265" upper="3.14159265" velocity="3.142"></limit>
+	</joint>
+	<joint name="right_joint1" type="revolute">
+		<origin rpy="-3.14159265359 1.30899695359 -1.57079632679" xyz="0.266 0.29054221 0.2873005"></origin>
+		<parent link="arm_carriage"></parent>
+		<child link="right_link1"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="647" lower="-3.14159265" upper="3.14159265" velocity="1.309"></limit>
+	</joint>
+	<joint name="right_joint2" type="revolute">
+		<origin rpy="1.5707963 1.3089969 1.5707963" xyz="0.065 -5.2471962e-10 0.15042"></origin>
+		<parent link="right_link1"></parent>
+		<child link="right_link2"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="647" lower="-1.8325957145940461" upper="1.8325957145940461" velocity="1.309"></limit>
+	</joint>
+	<joint name="right_joint3" type="revolute">
+		<origin rpy="0 -1.5707963 -0.26179939" xyz="-0.23761775 0.063669485 -0.06681"></origin>
+		<parent link="right_link2"></parent>
+		<child link="right_link3"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="484" lower="-3.14159265" upper="3.14159265" velocity="1.309"></limit>
+	</joint>
+	<joint name="right_joint4" type="revolute">
+		<origin rpy="1.5707963 0 0" xyz="4.248689e-05 -0.085000001 0.26"></origin>
+		<parent link="right_link3"></parent>
+		<child link="right_link4"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="459" lower="-2.53072742" upper="2.53072742" velocity="1.749"></limit>
+	</joint>
+	<joint name="right_joint5" type="revolute">
+		<origin rpy="-2.28522397028e-09 -1.57079630099 -1.57079632451" xyz="0 0.241 -0.082299999"></origin>
+		<parent link="right_link4"></parent>
+		<child link="right_link5"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="217" lower="-3.14159265" upper="3.14159265" velocity="2.618"></limit>
+	</joint>
+	<joint name="right_joint6" type="revolute">
+		<origin rpy="-1.5707963 0 0" xyz="0 0.090499999 0.233"></origin>
+		<parent link="right_link5"></parent>
+		<child link="right_link6"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="107" lower="-1.91986218" upper="1.91986218" velocity="3.142"></limit>
+	</joint>
+	<joint name="right_joint7" type="revolute">
+		<origin rpy="1.5707963 0 0" xyz="0 -0.0992 -0.0915"></origin>
+		<parent link="right_link6"></parent>
+		<child link="right_link7"></child>
+		<axis xyz="0 0 1"></axis>
+		<limit effort="36" lower="-3.14159265" upper="3.14159265" velocity="3.142"></limit>
+	</joint>
+	<joint name="left_tool0_fixed" type="fixed">
+		<parent link="left_link7"></parent>
+		<child link="left_tool0"></child>
+		<origin rpy="0 0 0" xyz="0 0 0.151"></origin>
+	</joint>
+	<joint name="right_tool0_fixed" type="fixed">
+		<parent link="right_link7"></parent>
+		<child link="right_tool0"></child>
+		<origin rpy="0 0 0" xyz="0 0 0.151"></origin>
+	</joint>
+	<ros2_control name="alfa_robot" type="system">
+		<hardware>
+			<plugin>mock_components/GenericSystem</plugin>
+			<param name="mock_sensor_commands">True</param>
+		</hardware>
+		<joint name="updown">
+			<command_interface name="position">
+				<param name="min">-1.0</param>
+				<param name="max">0.0</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-0.3</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="head_joint">
+			<command_interface name="position">
+				<param name="min">-1.57</param>
+				<param name="max">1.57</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.0</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="head_pitch_joint">
+			<command_interface name="position">
+				<param name="min">-1.57</param>
+				<param name="max">1.57</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.0</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint1">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">2.70526034059121</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint2">
+			<command_interface name="position">
+				<param name="min">-1.8325957145940461</param>
+				<param name="max">1.8325957145940461</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-1.832595714594046</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint3">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.34906585039887</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint4">
+			<command_interface name="position">
+				<param name="min">-2.53072742</param>
+				<param name="max">2.53072742</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">1.5707963267949</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint5">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-1.5707963267949</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint6">
+			<command_interface name="position">
+				<param name="min">-1.91986218</param>
+				<param name="max">1.91986218</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-0.69813170079773</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="left_joint7">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.0</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint1">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-2.70526034059121</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint2">
+			<command_interface name="position">
+				<param name="min">-1.8325957145940461</param>
+				<param name="max">1.8325957145940461</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">1.832595714594046</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint3">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-0.34906585039887</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint4">
+			<command_interface name="position">
+				<param name="min">-2.53072742</param>
+				<param name="max">2.53072742</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">-1.5707963267949</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint5">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">1.5707963267949</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint6">
+			<command_interface name="position">
+				<param name="min">-1.91986218</param>
+				<param name="max">1.91986218</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.69813170079773</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+		<joint name="right_joint7">
+			<command_interface name="position">
+				<param name="min">-3.14159265</param>
+				<param name="max">3.14159265</param>
+			</command_interface>
+			<state_interface name="position">
+				<param name="initial_value">0.0</param>
+			</state_interface>
+			<state_interface name="velocity"></state_interface>
+		</joint>
+	</ros2_control>
+</robot>

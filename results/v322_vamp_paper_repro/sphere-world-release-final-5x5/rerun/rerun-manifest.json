@@ -1,0 +1,14 @@
+{
+  "schema": "alfa.v322.vamp_sphere_world_rerun.v1",
+  "english_only_visible_text": true,
+  "recordings": {
+    "ompl": {
+      "path": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/sphere-world-release-final-5x5/rerun/sphere-world-pure-rrt-connect-fcl-5x5.rrd",
+      "sha256": "c79970ae2e3b7ef66542aa13f3622938dfb0605a4c9230565257c1103006d7eb"
+    },
+    "vamp": {
+      "path": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/sphere-world-release-final-5x5/rerun/sphere-world-vamp-rrt-connect-simd-5x5.rrd",
+      "sha256": "454a568eeb51f41efb39ae61c20e0a10eb66061e9916e37b34bf5111fce1f218"
+    }
+  }
+}

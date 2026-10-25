@@ -1,0 +1,46 @@
+{
+  "schema": "alfa.v322.vamp_sphere_audit.v1",
+  "kinematic_structure_unchanged": true,
+  "joint_names": [
+    "updown",
+    "left_joint1",
+    "left_joint2",
+    "left_joint3",
+    "left_joint4",
+    "left_joint5",
+    "left_joint6",
+    "left_joint7",
+    "right_joint1",
+    "right_joint2",
+    "right_joint3",
+    "right_joint4",
+    "right_joint5",
+    "right_joint6",
+    "right_joint7"
+  ],
+  "samples": 10000,
+  "seed": 20261024,
+  "counts": {
+    "both_clear": 4307,
+    "both_collision": 2896,
+    "sphere_false_positive": 2797,
+    "sphere_false_negative": 0
+  },
+  "rates": {
+    "both_clear": 0.4307,
+    "both_collision": 0.2896,
+    "sphere_false_positive": 0.2797,
+    "sphere_false_negative": 0.0
+  },
+  "false_negative_examples": [],
+  "endpoints": {},
+  "elapsed_seconds": 54.751487827001256,
+  "files": {
+    "mesh_urdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-mesh.urdf",
+    "mesh_urdf_sha256": "56ed6749a9e68a2bd8ec33c8845e8b24970762b32e09b63816b9024ff01a3e35",
+    "sphere_urdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-foam-base-box256-m0.urdf",
+    "sphere_urdf_sha256": "cc1ffaa3bd80d6bf258fa0f9b7ce5732e7321a79a0d5129694dc68aa01aa1180",
+    "srdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d.srdf",
+    "srdf_sha256": "48132696d39aedb106d022f8d8a83172cda87ac8d0aeb06e33e713ec75a42995"
+  }
+}

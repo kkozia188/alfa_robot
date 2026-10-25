@@ -3,6 +3,9 @@
 #ifdef ALFA_HAS_VAMP
 #include <alfa_robot_moveit_config/vamp_full_online_rrt.hpp>
 #endif
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+#include <alfa_robot_moveit_config/vamp_paper_native.hpp>
+#endif
 
 #include <geometry_msgs/msg/pose.hpp>
 #include <geometry_msgs/msg/point.hpp>
@@ -74,6 +77,144 @@ using InteractiveMarkerControl = visualization_msgs::msg::InteractiveMarkerContr
 using Marker = visualization_msgs::msg::Marker;
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
+
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+class PaperHaltonSequence
+{
+public:
+  explicit PaperHaltonSequence(size_t skip) : skip_(skip) {reset();}
+
+  void reset()
+  {
+    halton_.reset();
+    for (size_t index = 0U; index < skip_; ++index) {
+      static_cast<void>(halton_.next());
+    }
+  }
+
+  auto next() {return halton_.next();}
+
+private:
+  size_t skip_;
+  vamp::rng::Halton<vamp::robots::AlfaV322> halton_;
+};
+
+class PaperHaltonStateSampler final : public ob::StateSampler
+{
+public:
+  PaperHaltonStateSampler(
+    const ob::StateSpace* space,
+    std::shared_ptr<PaperHaltonSequence> sequence,
+    std::shared_ptr<size_t> sample_count)
+  : ob::StateSampler(space),
+    sequence_(std::move(sequence)), sample_count_(std::move(sample_count))
+  {}
+
+  void sampleUniform(ob::State* state) override
+  {
+    ++(*sample_count_);
+    const auto values = sequence_->next().to_array();
+    auto* output = state->as<ob::RealVectorStateSpace::StateType>();
+    for (size_t index = 0U; index < alfa_robot::motion::kPaperVampDimension; ++index) {
+      output->values[index] = values[index];
+    }
+  }
+
+  void sampleUniformNear(ob::State* state, const ob::State*, double) override
+  {
+    sampleUniform(state);
+  }
+
+  void sampleGaussian(ob::State* state, const ob::State*, double) override
+  {
+    sampleUniform(state);
+  }
+
+private:
+  std::shared_ptr<PaperHaltonSequence> sequence_;
+  std::shared_ptr<size_t> sample_count_;
+};
+
+class PaperCorridorSequence
+{
+public:
+  using State = std::array<float, alfa_robot::motion::kPaperVampDimension>;
+
+  PaperCorridorSequence(
+    const State& start,
+    const State& goal,
+    const State& lower,
+    const State& upper,
+    uint32_t seed,
+    size_t skip)
+  : engine_(seed), start_(start), goal_(goal), lower_(lower), upper_(upper)
+  {
+    for (size_t index = 0U; index < skip; ++index) static_cast<void>(next());
+  }
+
+  State next()
+  {
+    State values{};
+    if (uniform_(engine_) < 0.9F) {
+      const float progress = uniform_(engine_);
+      for (size_t index = 0U; index < values.size(); ++index) {
+        values[index] = std::abs(goal_[index] - start_[index]) <= 1e-6F ?
+          start_[index] : start_[index] + progress * (goal_[index] - start_[index]);
+      }
+    } else {
+      for (size_t index = 0U; index < values.size(); ++index) {
+        values[index] = std::abs(goal_[index] - start_[index]) <= 1e-6F ?
+          start_[index] : lower_[index] + uniform_(engine_) * (upper_[index] - lower_[index]);
+      }
+    }
+    return values;
+  }
+
+private:
+  std::mt19937 engine_;
+  std::uniform_real_distribution<float> uniform_{0.0F, 1.0F};
+  State start_{};
+  State goal_{};
+  State lower_{};
+  State upper_{};
+};
+
+class PaperCorridorStateSampler final : public ob::StateSampler
+{
+public:
+  PaperCorridorStateSampler(
+    const ob::StateSpace* space,
+    std::shared_ptr<PaperCorridorSequence> sequence,
+    std::shared_ptr<size_t> sample_count)
+  : ob::StateSampler(space),
+    sequence_(std::move(sequence)), sample_count_(std::move(sample_count))
+  {}
+
+  void sampleUniform(ob::State* state) override
+  {
+    ++(*sample_count_);
+    const auto values = sequence_->next();
+    auto* output = state->as<ob::RealVectorStateSpace::StateType>();
+    for (size_t index = 0U; index < values.size(); ++index) {
+      output->values[index] = values[index];
+    }
+  }
+
+  void sampleUniformNear(ob::State* state, const ob::State*, double) override
+  {
+    sampleUniform(state);
+  }
+
+  void sampleGaussian(ob::State* state, const ob::State*, double) override
+  {
+    sampleUniform(state);
+  }
+
+private:
+  std::shared_ptr<PaperCorridorSequence> sequence_;
+  std::shared_ptr<size_t> sample_count_;
+};
+#endif
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr char kMarkerName[] = "extract_box";
@@ -347,7 +488,23 @@ struct TaskResult
   std::string transition_strategy;
   std::string transition_diagnostic;
   nlohmann::json segment_search = nlohmann::json::array();
+  nlohmann::json paper_benchmark = nlohmann::json::object();
 };
+
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+struct PaperPairedSegment
+{
+  bool success{false};
+  RrtPlanResult ompl;
+  RrtPlanResult vamp;
+  double ompl_accumulated_planner_ms{0.0};
+  double vamp_accumulated_planner_ms{0.0};
+  double ompl_accumulated_wall_ms{0.0};
+  double vamp_accumulated_wall_ms{0.0};
+  nlohmann::json ompl_attempts = nlohmann::json::array();
+  nlohmann::json vamp_attempts = nlohmann::json::array();
+};
+#endif
 
 struct SceneBox
 {
@@ -440,6 +597,11 @@ public:
     vamp_max_samples_ = getParameter<int>("vamp_max_samples", 200000);
     vamp_range_ = getParameter<double>("vamp_range", 0.08);
     vamp_seed_ = getParameter<int64_t>("vamp_seed", 20261019);
+    paper_halton_skip_ = static_cast<size_t>(std::max(
+      0, getParameter<int>("paper_halton_skip", 0)));
+    paper_search_retries_ = static_cast<size_t>(std::max(
+      1, getParameter<int>("paper_search_retries", 3)));
+    paper_shared_ik_path_ = getParameter<std::string>("paper_shared_ik_path", "");
     ompl_simplify_solutions_ = getParameter<bool>("ompl.simplify_solutions", true);
     natural_motion_enabled_ = getParameter<bool>("natural_motion_enabled", true);
     natural_swivel_weight_ = getParameter<double>("natural_swivel_weight", 0.02);
@@ -574,9 +736,14 @@ public:
       throw std::invalid_argument("place_updown must be in [-1.0, 0.0]");
     }
     if (task_mode_ != "contact_reachability" && task_mode_ != "full_extract" &&
-        task_mode_ != "state_transition") {
+        task_mode_ != "state_transition" && task_mode_ != "paper_rrt_vamp_benchmark" &&
+        task_mode_ != "paper_adaptive_multistage_benchmark" &&
+        task_mode_ != "paper_shared_ik_fullflow_benchmark" &&
+        task_mode_ != "paper_sphere_world_fullflow_benchmark") {
       throw std::invalid_argument(
-        "task_mode must be contact_reachability, full_extract, or state_transition");
+        "task_mode must be contact_reachability, full_extract, state_transition, "
+        "paper_rrt_vamp_benchmark, paper_adaptive_multistage_benchmark, or "
+        "paper_shared_ik_fullflow_benchmark, or paper_sphere_world_fullflow_benchmark");
     }
     if (pure_rrt_full_flow_ && ompl_simplify_solutions_) {
       throw std::invalid_argument(
@@ -611,10 +778,13 @@ public:
       throw std::invalid_argument("initial_arm_pose must be zero or v3_home");
     }
     if (!place_tcp_pose_.empty()) {
-      if (task_mode_ != "full_extract" || place_tcp_pose_.size() != 7U ||
+      if ((task_mode_ != "full_extract" &&
+          task_mode_ != "paper_adaptive_multistage_benchmark") ||
+          place_tcp_pose_.size() != 7U ||
           !std::all_of(place_tcp_pose_.begin(), place_tcp_pose_.end(),
             [](double value) {return std::isfinite(value);})) {
-        throw std::invalid_argument("place_tcp_pose requires seven finite x,y,z,qx,qy,qz,qw values in full_extract");
+        throw std::invalid_argument(
+                "place_tcp_pose requires seven finite x,y,z,qx,qy,qz,qw values");
       }
       const Eigen::Quaterniond quaternion(
         place_tcp_pose_[6], place_tcp_pose_[3], place_tcp_pose_[4], place_tcp_pose_[5]);
@@ -1087,8 +1257,14 @@ private:
     } else {
       try {
         result = task_mode_ == "state_transition" ? planStateTransition(box_center) :
-          (task_mode_ == "contact_reachability" ?
-            planContactReachability(box_center) : planTask(box_center));
+          (task_mode_ == "contact_reachability" ? planContactReachability(box_center) :
+            (task_mode_ == "paper_rrt_vamp_benchmark" ? planPaperBenchmark(box_center) :
+            (task_mode_ == "paper_adaptive_multistage_benchmark" ?
+              planPaperAdaptiveMultistageBenchmark(box_center) :
+            (task_mode_ == "paper_shared_ik_fullflow_benchmark" ?
+              planPaperSharedIkFullflowBenchmark(box_center, false) :
+            (task_mode_ == "paper_sphere_world_fullflow_benchmark" ?
+              planPaperSharedIkFullflowBenchmark(box_center, true) : planTask(box_center))))));
       } catch (const std::exception& error) {
         result.success = false;
         result.failure_stage = "exception";
@@ -3602,7 +3778,11 @@ private:
     const moveit::core::RobotState& start_state,
     const moveit::core::RobotState& goal_state,
     bool attached,
-    PlanningMetrics* metrics) const
+    PlanningMetrics* metrics,
+    const std::string& backend_override = "",
+    std::optional<size_t> paper_skip_override = std::nullopt,
+    std::optional<uint32_t> vamp_seed_override = std::nullopt,
+    bool endpoint_local_bounds = false) const
   {
     RrtPlanResult result;
     const auto started = std::chrono::steady_clock::now();
@@ -3635,6 +3815,10 @@ private:
     }
 
     const auto& variables = group->getVariableNames();
+    const bool paper_ompl = backend_override == "ompl_paper";
+    const bool paper_corridor = backend_override == "ompl_corridor";
+    const std::string selected_backend = (paper_ompl || paper_corridor) ? "ompl" :
+      (backend_override.empty() ? pure_rrt_backend_ : backend_override);
     auto space = std::make_shared<ob::RealVectorStateSpace>(variables.size());
     ob::RealVectorBounds bounds(variables.size());
     for (size_t index = 0U; index < variables.size(); ++index) {
@@ -3643,11 +3827,22 @@ private:
         result.reason = "pure RRT variable lacks finite bounds: " + variables[index];
         return result;
       }
-      bounds.setLow(index, limit.min_position_);
-      bounds.setHigh(index, limit.max_position_);
+      double low = limit.min_position_;
+      double high = limit.max_position_;
+      if (endpoint_local_bounds) {
+        const double start_value = start_state.getVariablePosition(variables[index]);
+        const double goal_value = goal_state.getVariablePosition(variables[index]);
+        const bool changes = std::abs(goal_value - start_value) > 1e-6;
+        const double margin = variables[index] == "updown" ?
+          (changes ? 0.15 : 0.03) : degToRad(changes ? 35.0 : 5.0);
+        low = std::max(low, std::min(start_value, goal_value) - margin);
+        high = std::min(high, std::max(start_value, goal_value) + margin);
+      }
+      bounds.setLow(index, low);
+      bounds.setHigh(index, high);
     }
 #ifdef ALFA_HAS_VAMP
-    if (pure_rrt_backend_ == "vamp") {
+    if (selected_backend == "vamp") {
       using alfa_robot::motion::kFullOnlineVampDimension;
       std::array<float, kFullOnlineVampDimension> start_values{};
       std::array<float, kFullOnlineVampDimension> goal_values{};
@@ -3694,7 +3889,8 @@ private:
         static_cast<size_t>(vamp_workers_),
         static_cast<size_t>(vamp_max_iterations_),
         static_cast<size_t>(vamp_max_samples_),
-        static_cast<float>(vamp_range_), static_cast<uint32_t>(vamp_seed_));
+        static_cast<float>(vamp_range_),
+        vamp_seed_override.value_or(static_cast<uint32_t>(vamp_seed_)));
       result.joint_rrt_ms = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - search_started).count();
       if (metrics) metrics->joint_rrt_ms += result.joint_rrt_ms;
@@ -3708,6 +3904,9 @@ private:
           "current_run_release_state_and_named_home" : "online_pose_ik"},
         {"shortcut_used", false},
         {"fallback_used", false},
+        {"endpoint_local_bounds", endpoint_local_bounds},
+        {"lower", lows},
+        {"upper", highs},
         {"workers", nlohmann::json::array()},
       };
       for (const auto& trial : trials) {
@@ -3799,10 +3998,49 @@ private:
     }
 #endif
     space->setBounds(bounds);
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+    auto paper_sample_count = std::make_shared<size_t>(0U);
+    std::shared_ptr<PaperHaltonSequence> paper_sequence;
+    std::shared_ptr<PaperCorridorSequence> corridor_sequence;
+    if (paper_ompl) {
+      const size_t skip = paper_skip_override.value_or(paper_halton_skip_);
+      paper_sequence = std::make_shared<PaperHaltonSequence>(skip);
+      space->setStateSamplerAllocator(
+        [paper_sequence, paper_sample_count](const ob::StateSpace* allocated_space) {
+          return std::make_shared<PaperHaltonStateSampler>(
+            allocated_space, paper_sequence, paper_sample_count);
+        });
+    }
+    if (paper_corridor) {
+      PaperCorridorSequence::State corridor_start{};
+      PaperCorridorSequence::State corridor_goal{};
+      PaperCorridorSequence::State corridor_lower{};
+      PaperCorridorSequence::State corridor_upper{};
+      for (size_t index = 0U; index < variables.size(); ++index) {
+        corridor_start[index] = static_cast<float>(
+          start_state.getVariablePosition(variables[index]));
+        corridor_goal[index] = static_cast<float>(
+          goal_state.getVariablePosition(variables[index]));
+        corridor_lower[index] = static_cast<float>(bounds.low[index]);
+        corridor_upper[index] = static_cast<float>(bounds.high[index]);
+      }
+      const size_t skip = paper_skip_override.value_or(paper_halton_skip_);
+      corridor_sequence = std::make_shared<PaperCorridorSequence>(
+        corridor_start, corridor_goal, corridor_lower, corridor_upper,
+        static_cast<uint32_t>(skip + 1U), skip);
+      space->setStateSamplerAllocator(
+        [corridor_sequence, paper_sample_count](const ob::StateSpace* allocated_space) {
+          return std::make_shared<PaperCorridorStateSampler>(
+            allocated_space, corridor_sequence, paper_sample_count);
+        });
+    }
+#endif
     og::SimpleSetup setup(space);
     auto validity_probe = std::make_shared<moveit::core::RobotState>(start_state);
+    size_t paper_validity_checks = 0U;
     setup.setStateValidityChecker(
       [&, validity_probe](const ob::State* state) mutable {
+        if (paper_ompl || paper_corridor) ++paper_validity_checks;
         const auto* values = state->as<
           ob::RealVectorStateSpace::StateType>()->values;
         for (size_t index = 0U; index < variables.size(); ++index) {
@@ -3817,7 +4055,10 @@ private:
         validity_probe->update(true);
         return state_valid(*validity_probe);
       });
-    setup.getSpaceInformation()->setStateValidityCheckingResolution(0.0005);
+    const double paper_segment_length = 1.0 / 64.0;
+    setup.getSpaceInformation()->setStateValidityCheckingResolution(
+      (paper_ompl || paper_corridor) ?
+      paper_segment_length / space->getMaximumExtent() : 0.0005);
     ob::ScopedState<> start(space);
     ob::ScopedState<> goal(space);
     for (size_t index = 0U; index < variables.size(); ++index) {
@@ -3826,14 +4067,76 @@ private:
     }
     setup.setStartAndGoalStates(start, goal);
     auto planner = std::make_shared<og::RRTConnect>(setup.getSpaceInformation());
-    planner->setRange(0.12);
+    planner->setRange((paper_ompl || paper_corridor) ? vamp_range_ : 0.12);
     setup.setPlanner(planner);
+    if (paper_ompl) {
+      setup.setup();
+      paper_sequence->reset();
+      *paper_sample_count = 0U;
+    }
     const auto search_started = std::chrono::steady_clock::now();
-    const auto status = setup.solve(rrt_planning_time_);
+    bool paper_direct_motion = false;
+    ob::PlannerStatus status;
+    if (paper_ompl && setup.getSpaceInformation()->checkMotion(start.get(), goal.get())) {
+      auto direct_path = std::make_shared<og::PathGeometric>(setup.getSpaceInformation());
+      direct_path->append(start.get());
+      direct_path->append(goal.get());
+      setup.getProblemDefinition()->addSolutionPath(
+        direct_path, false, 0.0, planner->getName());
+      status = ob::PlannerStatus::EXACT_SOLUTION;
+      paper_direct_motion = true;
+    } else {
+      status = setup.solve(rrt_planning_time_);
+    }
     result.joint_rrt_ms = std::chrono::duration<double, std::milli>(
       std::chrono::steady_clock::now() - search_started).count();
     if (metrics) metrics->joint_rrt_ms += result.joint_rrt_ms;
     result.planner_ms = result.joint_rrt_ms;
+    if (endpoint_local_bounds) {
+      result.backend_audit = {
+        {"backend", "ompl_rrt_connect_15d"},
+        {"collision_backend", "moveit_fcl_mesh"},
+        {"endpoint_local_bounds", true},
+        {"range", 0.12},
+        {"lower", bounds.low},
+        {"upper", bounds.high},
+        {"shortcut_used", false},
+        {"fallback_used", false},
+      };
+    }
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+    if (paper_ompl) {
+      result.backend_audit = {
+        {"backend", "ompl_rrt_connect_15d"},
+        {"collision_backend", "moveit_fcl_mesh"},
+        {"halton_skip", paper_skip_override.value_or(paper_halton_skip_)},
+        {"halton_samples", *paper_sample_count},
+        {"validity_checks", paper_validity_checks},
+        {"range", vamp_range_},
+        {"edge_checks_per_configuration_unit", 64},
+        {"planner_setup_inside_timed_region", false},
+        {"direct_motion", paper_direct_motion},
+        {"shortcut_used", false},
+        {"fallback_used", false},
+      };
+    }
+    if (paper_corridor) {
+      result.backend_audit = {
+        {"backend", "ompl_rrt_connect_15d"},
+        {"collision_backend", "moveit_fcl_mesh"},
+        {"sampler", "shared_goal_corridor_mt19937"},
+        {"corridor_probability", 0.9},
+        {"halton_skip", paper_skip_override.value_or(paper_halton_skip_)},
+        {"samples", *paper_sample_count},
+        {"validity_checks", paper_validity_checks},
+        {"range", vamp_range_},
+        {"edge_checks_per_configuration_unit", 64},
+        {"endpoint_local_bounds", endpoint_local_bounds},
+        {"shortcut_used", false},
+        {"fallback_used", false},
+      };
+    }
+#endif
     if (status != ob::PlannerStatus::EXACT_SOLUTION) {
       result.reason = "pure dual-arm+updown RRTConnect status=" +
         status.asString();
@@ -5422,6 +5725,979 @@ private:
     return finish();
   }
 
+#ifdef ALFA_HAS_VAMP_PAPER_KERNEL
+  std::vector<alfa_robot::motion::PaperVampCuboid> paperNativeCuboids(
+    const Eigen::Vector3d& box_center,
+    const moveit::core::RobotState& state) const
+  {
+    std::vector<alfa_robot::motion::PaperVampCuboid> output;
+    const Eigen::Isometry3d world_to_root =
+      state.getGlobalLinkTransform("base_footprint").inverse();
+    const Eigen::Vector3d euler = world_to_root.linear().eulerAngles(0, 1, 2);
+    const auto append = [&](const Eigen::Vector3d& center, const Eigen::Vector3d& size) {
+        const Eigen::Vector3d local_center = world_to_root * center;
+        alfa_robot::motion::PaperVampCuboid cuboid;
+        for (size_t axis = 0U; axis < 3U; ++axis) {
+          cuboid.center[axis] = static_cast<float>(local_center[axis]);
+          cuboid.euler_xyz[axis] = static_cast<float>(euler[axis]);
+          cuboid.size[axis] = static_cast<float>(size[axis]);
+        }
+        output.push_back(cuboid);
+      };
+
+    if (ground_enabled_) {
+      append(
+        Eigen::Vector3d(
+          0.0, 0.0,
+          ground_surface_z_ - ground_clearance_ - ground_thickness_ * 0.5),
+        Eigen::Vector3d(ground_size_x_, ground_size_y_, ground_thickness_));
+    }
+    const Eigen::Isometry3d root_to_world =
+      state.getGlobalLinkTransform("base_footprint");
+    append(
+      root_to_world * Eigen::Vector3d(0.0, 0.0, 0.15),
+      Eigen::Vector3d(
+        std::max(0.001, 1.016 - 2.0 * collision_inset_),
+        std::max(0.001, 1.022 - 2.0 * collision_inset_),
+        std::max(0.001, 0.300 - 2.0 * collision_inset_)));
+    for (const auto& panel : warehousePanels()) {
+      append(panel.center, panel.size);
+    }
+    const double depth = std::max(0.001, box_depth_ - 2.0 * collision_inset_);
+    const double width = std::max(0.001, box_width_ - 2.0 * collision_inset_);
+    const double height = std::max(0.001, box_height_ - 2.0 * collision_inset_);
+    for (const auto& center : obstacleBoxCenters(box_center)) {
+      append(center, Eigen::Vector3d(depth, width, height));
+    }
+    return output;
+  }
+
+  RrtPlanResult planNativePaperRrt(
+    const planning_scene::PlanningSceneConstPtr& base_scene,
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    const Eigen::Vector3d& box_center,
+    bool attached = false,
+    std::optional<size_t> paper_skip_override = std::nullopt,
+    bool sphere_world_only = false) const
+  {
+    RrtPlanResult result;
+    const auto wall_started = std::chrono::steady_clock::now();
+    const auto* group = robot_model_->getJointModelGroup("dual_arm_with_updown");
+    if (!group || group->getVariableCount() != alfa_robot::motion::kPaperVampDimension) {
+      result.reason = "paper VAMP requires the 15D dual_arm_with_updown group";
+      return result;
+    }
+    const auto& variables = group->getVariableNames();
+    for (size_t index = 0U; index < variables.size(); ++index) {
+      if (variables[index] != vamp::robots::AlfaV322::joint_names[index]) {
+        result.reason = "paper VAMP joint order mismatch at index " + std::to_string(index);
+        return result;
+      }
+    }
+
+    alfa_robot::motion::PaperVampState start{};
+    alfa_robot::motion::PaperVampState goal{};
+    for (size_t index = 0U; index < variables.size(); ++index) {
+      start[index] = static_cast<float>(start_state.getVariablePosition(variables[index]));
+      goal[index] = static_cast<float>(goal_state.getVariablePosition(variables[index]));
+    }
+    const auto cuboids = paperNativeCuboids(box_center, start_state);
+    const size_t effective_skip = paper_skip_override.value_or(paper_halton_skip_);
+    alfa_robot::motion::PaperVampState local_lower{};
+    alfa_robot::motion::PaperVampState local_upper{};
+    if (sphere_world_only) {
+      for (size_t index = 0U; index < variables.size(); ++index) {
+        const auto& limit = robot_model_->getVariableBounds(variables[index]);
+        const double start_value = start_state.getVariablePosition(variables[index]);
+        const double goal_value = goal_state.getVariablePosition(variables[index]);
+        const bool changes = std::abs(goal_value - start_value) > 1e-6;
+        const double margin = variables[index] == "updown" ?
+          (changes ? 0.15 : 0.03) : degToRad(changes ? 35.0 : 5.0);
+        local_lower[index] = static_cast<float>(std::max(
+          limit.min_position_, std::min(start_value, goal_value) - margin));
+        local_upper[index] = static_cast<float>(std::min(
+          limit.max_position_, std::max(start_value, goal_value) + margin));
+      }
+    }
+    std::optional<alfa_robot::motion::PaperVampAttachment> attachment;
+    if (attached) {
+      attachment.emplace();
+      const Eigen::Vector3d center = toolToBoxCenter();
+      const Eigen::Quaterniond orientation(toolToBoxRotation());
+      const Eigen::Vector3d size = carriedBoxSizeInTool();
+      attachment->center = {
+        static_cast<float>(center.x()), static_cast<float>(center.y()),
+        static_cast<float>(center.z())};
+      attachment->quaternion_xyzw = {
+        static_cast<float>(orientation.x()), static_cast<float>(orientation.y()),
+        static_cast<float>(orientation.z()), static_cast<float>(orientation.w())};
+      attachment->size = {
+        static_cast<float>(std::max(0.001, size.x() - 2.0 * collision_inset_)),
+        static_cast<float>(std::max(0.001, size.y() - 2.0 * collision_inset_)),
+        static_cast<float>(std::max(0.001, size.z() - 2.0 * collision_inset_))};
+    }
+    const auto native = side_ == "right" ?
+      alfa_robot::motion::solvePaperVampRrtcRight(
+        start, goal, cuboids, static_cast<float>(vamp_range_),
+        static_cast<size_t>(vamp_max_iterations_),
+        static_cast<size_t>(vamp_max_samples_), effective_skip,
+        attachment ? &*attachment : nullptr,
+        sphere_world_only ? &local_lower : nullptr,
+        sphere_world_only ? &local_upper : nullptr) :
+      alfa_robot::motion::solvePaperVampRrtc(
+        start, goal, cuboids, static_cast<float>(vamp_range_),
+        static_cast<size_t>(vamp_max_iterations_),
+        static_cast<size_t>(vamp_max_samples_), effective_skip,
+        attachment ? &*attachment : nullptr,
+        sphere_world_only ? &local_lower : nullptr,
+        sphere_world_only ? &local_upper : nullptr);
+    result.planner_ms = static_cast<double>(native.search_ns) / 1.0e6;
+    result.joint_rrt_ms = result.planner_ms;
+    result.backend_audit = {
+      {"backend", "native_vamp_rrt_connect_15d"},
+      {"collision_backend", "cricket_simd_spheres"},
+      {"sphere_world_only", sphere_world_only},
+      {"attachment_sphere_count", attached ? 48 : 0},
+      {"attachment_tool_link", attached ? tool_link_ : ""},
+      {"base_collision_model", "lower_chassis_cuboid"},
+      {"endpoint_local_bounds", sphere_world_only},
+      {"sphere_count", vamp::robots::AlfaV322::n_spheres},
+      {"environment_cuboids", cuboids.size()},
+      {"halton_skip", effective_skip},
+      {"range", vamp_range_},
+      {"sampler", sphere_world_only ? "shared_goal_corridor_mt19937" : "halton"},
+      {"corridor_probability", sphere_world_only ? 0.9 : 0.0},
+      {"iterations", native.iterations},
+      {"tree_nodes", native.tree_nodes},
+      {"sparse_states", native.path.size()},
+      {"path_cost", native.cost},
+      {"planner_ms", result.planner_ms},
+      {"start_environment_collisions", native.start_environment_collisions},
+      {"start_self_collisions", native.start_self_collisions},
+      {"goal_environment_collisions", native.goal_environment_collisions},
+      {"goal_self_collisions", native.goal_self_collisions},
+      {"goal_self_collision_details", native.goal_self_collision_details},
+      {"start_sphere_world_valid", native.start_valid},
+      {"goal_sphere_world_valid", native.goal_valid},
+      {"start_robot_attachment_valid", native.start_robot_attachment_valid},
+      {"goal_robot_attachment_valid", native.goal_robot_attachment_valid},
+      {"start_robot_self_valid", native.start_robot_self_valid},
+      {"goal_robot_self_valid", native.goal_robot_self_valid},
+      {"start_robot_environment_collisions", native.start_robot_environment_collisions},
+      {"goal_robot_environment_collisions", native.goal_robot_environment_collisions},
+      {"start_attachment_environment_collisions",
+        native.start_attachment_environment_collisions},
+      {"goal_attachment_environment_collisions",
+        native.goal_attachment_environment_collisions},
+      {"start_attachment_center_root", native.start_attachment_center},
+      {"goal_attachment_center_root", native.goal_attachment_center},
+      {"start_attachment_min_root", native.start_attachment_min},
+      {"start_attachment_max_root", native.start_attachment_max},
+      {"attachment_sphere_radius", native.attachment_sphere_radius},
+      {"shortcut_used", false},
+      {"fallback_used", false},
+      {"endpoint_source", "same_online_pose_ik"},
+      {"fixed_base_mesh_checked_by_fcl_before_search", true},
+      {"dense_fcl_path_audit_outside_timed_region", true},
+      {"attached_payload_in_native_kernel", attached},
+      {"attached_payload_in_dense_fcl_audit", attached},
+    };
+    if (!native.solved) {
+      result.reason = "native VAMP exhausted the exact RRT-Connect budget";
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - wall_started).count();
+      return result;
+    }
+
+    auto scene = planning_scene::PlanningScene::clone(base_scene);
+    auto state_valid = [&](const moveit::core::RobotState& state) {
+        return state.satisfiesBounds(group) &&
+          (!attached || carriedBoxFeasible(state)) &&
+          fullCollisionReason(scene, state, nullptr).empty();
+      };
+    const auto audit_started = std::chrono::steady_clock::now();
+    size_t audit_states = 0U;
+    std::vector<moveit::core::RobotStatePtr> sparse;
+    sparse.reserve(native.path.size());
+    for (const auto& values : native.path) {
+      auto path_state = std::make_shared<moveit::core::RobotState>(start_state);
+      for (size_t index = 0U; index < variables.size(); ++index) {
+        path_state->setVariablePosition(variables[index], values[index]);
+      }
+      path_state->zeroVelocities();
+      path_state->zeroAccelerations();
+      if (attached) attachCarriedBox(*path_state);
+      path_state->update(true);
+      sparse.push_back(std::move(path_state));
+    }
+    if (sparse.empty()) {
+      result.reason = "native VAMP returned an empty path";
+      return result;
+    }
+    bool fcl_audit_valid = true;
+    size_t first_invalid_fcl_state = 0U;
+    size_t invalid_fcl_states = 0U;
+    result.states.push_back(std::make_shared<moveit::core::RobotState>(*sparse.front()));
+    for (size_t edge = 1U; edge < sparse.size(); ++edge) {
+      const auto& from = *sparse[edge - 1U];
+      const auto& to = *sparse[edge];
+      double maximum_ratio = 0.0;
+      for (const auto& variable : variables) {
+        const double resolution = variable == "updown" ? 0.01 : degToRad(1.0);
+        maximum_ratio = std::max(
+          maximum_ratio,
+          std::abs(to.getVariablePosition(variable) -
+          from.getVariablePosition(variable)) / resolution);
+      }
+      const size_t steps = std::max<size_t>(
+        1U, static_cast<size_t>(std::ceil(maximum_ratio)));
+      for (size_t step = 1U; step <= steps; ++step) {
+        const double ratio = static_cast<double>(step) / static_cast<double>(steps);
+        auto probe = std::make_shared<moveit::core::RobotState>(from);
+        for (const auto& variable : variables) {
+          probe->setVariablePosition(
+            variable, from.getVariablePosition(variable) +
+            (to.getVariablePosition(variable) - from.getVariablePosition(variable)) * ratio);
+        }
+        probe->zeroVelocities();
+        probe->zeroAccelerations();
+        if (attached) attachCarriedBox(*probe);
+        probe->update(true);
+        ++audit_states;
+        if (!sphere_world_only && !state_valid(*probe)) {
+          if (fcl_audit_valid) first_invalid_fcl_state = audit_states;
+          fcl_audit_valid = false;
+          ++invalid_fcl_states;
+        }
+        result.states.push_back(std::move(probe));
+      }
+    }
+    result.backend_audit["fcl_audit_performed"] = !sphere_world_only;
+    result.backend_audit["fcl_audit_valid"] = sphere_world_only ?
+      nlohmann::json(nullptr) : nlohmann::json(fcl_audit_valid);
+    result.backend_audit["fcl_audit_states"] = audit_states;
+    result.backend_audit["first_invalid_fcl_state"] = first_invalid_fcl_state;
+    result.backend_audit["invalid_fcl_states"] = invalid_fcl_states;
+    result.backend_audit["fcl_audit_ms"] =
+      std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - audit_started).count();
+    if (!sphere_world_only && !fcl_audit_valid) {
+      result.reason = "native VAMP path failed independent dense MoveIt/FCL audit";
+      result.wall_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - wall_started).count();
+      return result;
+    }
+    result.success = true;
+    result.strategy = sphere_world_only ?
+      "native_vamp_rrt_connect_sphere_world" :
+      "native_vamp_rrt_connect_cricket_simd";
+    result.reason = sphere_world_only ?
+      "native VAMP sphere-world solution" :
+      "native VAMP solution passed independent dense MoveIt/FCL audit";
+    result.wall_ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - wall_started).count();
+    return result;
+  }
+
+  nlohmann::json paperReplayStates(const RrtPlanResult& plan) const
+  {
+    const auto* group = robot_model_->getJointModelGroup("dual_arm_with_updown");
+    nlohmann::json frames = nlohmann::json::array();
+    for (const auto& state : plan.states) {
+      nlohmann::json values = nlohmann::json::array();
+      for (const auto& variable : group->getVariableNames()) {
+        values.push_back(state->getVariablePosition(variable));
+      }
+      frames.push_back(std::move(values));
+    }
+    return frames;
+  }
+
+  PaperPairedSegment planPaperPairedSegment(
+    const planning_scene::PlanningSceneConstPtr& scene,
+    const moveit::core::RobotState& start_state,
+    const moveit::core::RobotState& goal_state,
+    const Eigen::Vector3d& box_center,
+    bool attached,
+    size_t segment_index,
+    bool endpoint_local_bounds = false,
+    bool vamp_sphere_world = false) const
+  {
+    PaperPairedSegment output;
+    bool ompl_solved = false;
+    bool vamp_solved = false;
+    for (size_t attempt = 0U;
+      attempt < paper_search_retries_ && (!ompl_solved || !vamp_solved); ++attempt)
+    {
+      const size_t skip = paper_halton_skip_ + segment_index * 7919U + attempt * 997U;
+      const bool vamp_first = (skip / 997U) % 2U == 1U;
+      const auto run_ompl = [&]() {
+          if (ompl_solved) return;
+          auto plan = planPureArmUpdownRrt(
+            scene, start_state, goal_state, attached, nullptr,
+            vamp_sphere_world ? "ompl_corridor" : "ompl",
+            vamp_sphere_world ? std::optional<size_t>(skip) : std::nullopt,
+            std::nullopt, endpoint_local_bounds);
+          output.ompl_accumulated_planner_ms += plan.planner_ms;
+          output.ompl_accumulated_wall_ms += plan.wall_ms;
+          output.ompl_attempts.push_back({
+            {"attempt", attempt}, {"halton_skip", skip}, {"success", plan.success},
+            {"planner_ms", plan.planner_ms}, {"wall_ms", plan.wall_ms},
+            {"reason", plan.reason}, {"audit", plan.backend_audit},
+          });
+          output.ompl = plan;
+          ompl_solved = plan.success;
+        };
+      const auto run_vamp = [&]() {
+          if (vamp_solved) return;
+          auto plan = vamp_sphere_world ?
+            planNativePaperRrt(
+              scene, start_state, goal_state, box_center, attached, skip, true) :
+            planPureArmUpdownRrt(
+              scene, start_state, goal_state, attached, nullptr, "vamp",
+              std::nullopt, static_cast<uint32_t>(vamp_seed_) + static_cast<uint32_t>(skip),
+              endpoint_local_bounds);
+          output.vamp_accumulated_planner_ms += plan.planner_ms;
+          output.vamp_accumulated_wall_ms += plan.wall_ms;
+          output.vamp_attempts.push_back({
+            {"attempt", attempt}, {"halton_skip", skip}, {"success", plan.success},
+            {"planner_ms", plan.planner_ms}, {"wall_ms", plan.wall_ms},
+            {"reason", plan.reason}, {"audit", plan.backend_audit},
+          });
+          output.vamp = plan;
+          vamp_solved = plan.success;
+        };
+      if (vamp_first) {
+        run_vamp();
+        run_ompl();
+      } else {
+        run_ompl();
+        run_vamp();
+      }
+    }
+    output.success = ompl_solved && vamp_solved;
+    return output;
+  }
+
+  nlohmann::json paperPairedSegmentJson(
+    const std::string& stage,
+    size_t precontact_index,
+    size_t contact_index,
+    size_t retreat_index,
+    size_t transport_index,
+    bool attached,
+    const PaperPairedSegment& pair) const
+  {
+    nlohmann::json output = {
+      {"stage", stage},
+      {"precontact_candidate", precontact_index},
+      {"contact_candidate", contact_index},
+      {"retreat_candidate", retreat_index},
+      {"transport_candidate", transport_index},
+      {"attached", attached},
+      {"paired_success", pair.success},
+      {"ompl", {
+        {"success", pair.ompl.success},
+        {"accumulated_planner_ms", pair.ompl_accumulated_planner_ms},
+        {"accumulated_wall_ms", pair.ompl_accumulated_wall_ms},
+        {"attempts", pair.ompl_attempts},
+        {"replay_states", paperReplayStates(pair.ompl)},
+      }},
+      {"vamp", {
+        {"success", pair.vamp.success},
+        {"accumulated_planner_ms", pair.vamp_accumulated_planner_ms},
+        {"accumulated_wall_ms", pair.vamp_accumulated_wall_ms},
+        {"attempts", pair.vamp_attempts},
+        {"replay_states", paperReplayStates(pair.vamp)},
+      }},
+    };
+    if (pair.success && pair.vamp_accumulated_planner_ms > 0.0) {
+      output["speedup_ompl_over_vamp"] =
+        pair.ompl_accumulated_planner_ms / pair.vamp_accumulated_planner_ms;
+    }
+    return output;
+  }
+#endif
+
+  TaskResult planPaperSharedIkFullflowBenchmark(
+    const Eigen::Vector3d& box_center, bool sphere_world)
+  {
+    TaskResult result;
+    const auto total_started = std::chrono::steady_clock::now();
+    const auto finish = [&]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - total_started).count();
+        return result;
+      };
+#ifndef ALFA_HAS_VAMP_PAPER_KERNEL
+    result.failure_stage = "paper_kernel";
+    result.failure_reason = "shared-IK benchmark requires the paper benchmark build";
+    return finish();
+#else
+    if (paper_shared_ik_path_.empty()) {
+      result.failure_stage = "shared_ik_input";
+      result.failure_reason = "paper_shared_ik_path is required";
+      return finish();
+    }
+    std::ifstream input(paper_shared_ik_path_);
+    if (!input) {
+      result.failure_stage = "shared_ik_input";
+      result.failure_reason = "cannot open shared IK source: " + paper_shared_ik_path_;
+      return finish();
+    }
+    nlohmann::json source;
+    input >> source;
+    if (!source.value("success", false) || !source.contains("joint_names") ||
+        !source.contains("frames") || source["frames"].empty()) {
+      result.failure_stage = "shared_ik_input";
+      result.failure_reason = "shared IK source is not a successful task payload";
+      return finish();
+    }
+    if (source.value("target_box_id", target_box_id_) != target_box_id_) {
+      result.failure_stage = "shared_ik_input";
+      result.failure_reason = "shared IK source target box does not match request";
+      return finish();
+    }
+    const auto* group = robot_model_->getJointModelGroup("dual_arm_with_updown");
+    const auto& variables = group->getVariableNames();
+    const auto source_names = source["joint_names"].get<std::vector<std::string>>();
+    const auto state_from_frame = [&](const nlohmann::json& frame, bool attached) {
+        const auto values = frame.at("joints").get<std::vector<double>>();
+        if (values.size() != source_names.size()) {
+          throw std::runtime_error("shared IK frame joint count mismatch");
+        }
+        auto state = std::make_shared<moveit::core::RobotState>(*initial_state_);
+        for (const auto& variable : variables) {
+          const auto found = std::find(source_names.begin(), source_names.end(), variable);
+          if (found == source_names.end()) {
+            throw std::runtime_error("shared IK source lacks variable " + variable);
+          }
+          const size_t index = static_cast<size_t>(std::distance(source_names.begin(), found));
+          state->setVariablePosition(variable, values[index]);
+        }
+        if (attached) attachCarriedBox(*state);
+        else if (state->hasAttachedBody(kCarriedBoxId)) state->clearAttachedBody(kCarriedBoxId);
+        state->zeroVelocities();
+        state->zeroAccelerations();
+        state->update(true);
+        return state;
+      };
+    const auto last_stage_frame = [&](const std::string& stage) -> const nlohmann::json& {
+        const nlohmann::json* selected = nullptr;
+        for (const auto& frame : source["frames"]) {
+          if (frame.value("stage", "") == stage) selected = &frame;
+        }
+        if (!selected) throw std::runtime_error("shared IK source lacks stage " + stage);
+        return *selected;
+      };
+
+    auto start = state_from_frame(source["frames"].front(), false);
+    auto precontact = state_from_frame(last_stage_frame("rrt_to_precontact"), false);
+    auto contact = state_from_frame(last_stage_frame("rrt_to_contact"), false);
+    auto loaded_contact = std::make_shared<moveit::core::RobotState>(*contact);
+    attachCarriedBox(*loaded_contact);
+    loaded_contact->update(true);
+    auto retreat = state_from_frame(last_stage_frame("rrt_loaded_retreat"), true);
+    auto transport = state_from_frame(last_stage_frame("rrt_to_place"), true);
+    auto released_transport = std::make_shared<moveit::core::RobotState>(*transport);
+    released_transport->clearAttachedBody(kCarriedBoxId);
+    released_transport->update(true);
+
+    result.paper_benchmark = {
+      {"schema", sphere_world ?
+        "alfa.v322.vamp_sphere_world_fullflow_pair.v1" :
+        "alfa.v322.vamp_shared_ik_fullflow_pair.v1"},
+      {"metric", "rrt_connect_search_over_shared_validated_stage_endpoints_ms"},
+      {"vamp_collision_backend", sphere_world ?
+        "cricket_simd_sphere_world" : "moveit_fcl_mesh"},
+      {"vamp_online_fcl_used", !sphere_world},
+      {"shared_ik_source", paper_shared_ik_path_},
+      {"source_frame_count", source["frames"].size()},
+      {"source_frames_used_as_paths", false},
+      {"source_data_used", "first_state_and_last_state_of_each_named_stage_only"},
+      {"joint_names", variables},
+      {"ik_inside_timed_region", false},
+      {"endpoint_local_bounds", true},
+      {"same_sampler_distribution_per_backend", sphere_world},
+      {"same_sampler_seed_per_backend", sphere_world},
+      {"ompl_sampler", sphere_world ?
+        "shared_goal_corridor_mt19937" : "standard_ompl_uniform"},
+      {"vamp_sampler", sphere_world ?
+        "shared_goal_corridor_mt19937" : "goal_corridor_biased"},
+      {"rrt_range", sphere_world ? vamp_range_ : 0.12},
+      {"edge_checks_per_configuration_unit", sphere_world ? 64 : 0},
+      {"changed_joint_margin_deg", 35.0},
+      {"unchanged_joint_margin_deg", 5.0},
+      {"changed_updown_margin_m", 0.15},
+      {"unchanged_updown_margin_m", 0.03},
+      {"shortcut_used", false},
+      {"cartesian_used", false},
+      {"historical_path_used", false},
+      {"fallback_used", false},
+      {"selected_segments", nlohmann::json::array()},
+      {"all_segment_attempts", nlohmann::json::array()},
+    };
+    const auto endpoint_values = [&](const moveit::core::RobotState& state) {
+        nlohmann::json values = nlohmann::json::array();
+        for (const auto& variable : variables) values.push_back(state.getVariablePosition(variable));
+        return values;
+      };
+    result.paper_benchmark["shared_endpoints"] = {
+      {"start", endpoint_values(*start)},
+      {"precontact", endpoint_values(*precontact)},
+      {"contact", endpoint_values(*contact)},
+      {"retreat", endpoint_values(*retreat)},
+      {"transport", endpoint_values(*transport)},
+      {"return_home", endpoint_values(*start)},
+    };
+
+    struct StageSpec
+    {
+      std::string name;
+      moveit::core::RobotStatePtr from;
+      moveit::core::RobotStatePtr to;
+      bool attached{false};
+    };
+    const std::vector<StageSpec> stages = {
+      {"to_precontact", start, precontact, false},
+      {"precontact_to_contact", precontact, contact, false},
+      {"contact_to_retreat_loaded", loaded_contact, retreat, true},
+      {"retreat_to_transport_loaded", retreat, transport, true},
+      {"released_transport_to_home", released_transport, start, false},
+    };
+    double ompl_ms = 0.0;
+    double vamp_ms = 0.0;
+    for (size_t index = 0U; index < stages.size(); ++index) {
+      const auto& stage = stages[index];
+      auto pair = planPaperPairedSegment(
+        makeScene(box_center), *stage.from, *stage.to,
+        box_center, stage.attached, index, true, sphere_world);
+      auto stage_json = paperPairedSegmentJson(
+        stage.name, 0U, 0U, 0U, 0U, stage.attached, pair);
+      result.paper_benchmark["all_segment_attempts"].push_back(stage_json);
+      if (!pair.success) {
+        result.failure_stage = stage.name;
+        result.failure_reason = "OMPL: " + pair.ompl.reason + "; VAMP: " + pair.vamp.reason;
+        result.paper_benchmark["accumulated_search"] = {
+          {"ompl_planner_ms", ompl_ms + pair.ompl_accumulated_planner_ms},
+          {"vamp_planner_ms", vamp_ms + pair.vamp_accumulated_planner_ms},
+        };
+        return finish();
+      }
+      result.paper_benchmark["selected_segments"].push_back(stage_json);
+      ompl_ms += pair.ompl_accumulated_planner_ms;
+      vamp_ms += pair.vamp_accumulated_planner_ms;
+      appendStates(pair.ompl.states, stage.name, stage.attached, true, &result.frames);
+      result.segment_search.push_back({
+        {"stage", stage.name}, {"success", true},
+        {"ompl_planner_ms", pair.ompl_accumulated_planner_ms},
+        {"vamp_planner_ms", pair.vamp_accumulated_planner_ms},
+      });
+    }
+    result.paper_benchmark["accumulated_search"] = {
+      {"ompl_planner_ms", ompl_ms}, {"vamp_planner_ms", vamp_ms},
+      {"speedup_ompl_over_vamp", vamp_ms > 0.0 ? ompl_ms / vamp_ms : 0.0},
+    };
+    result.metrics.joint_rrt_ms = ompl_ms + vamp_ms;
+    result.achieved_place_tcp = transport->getGlobalLinkTransform(tool_link_);
+    result.success = true;
+    return finish();
+#endif
+  }
+
+  TaskResult planPaperAdaptiveMultistageBenchmark(const Eigen::Vector3d& box_center)
+  {
+    TaskResult result;
+    const auto total_started = std::chrono::steady_clock::now();
+    const auto finish = [&]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - total_started).count();
+        return result;
+      };
+#ifndef ALFA_HAS_VAMP_PAPER_KERNEL
+    result.failure_stage = "paper_kernel";
+    result.failure_reason = "Cricket-generated V3.2.2 kernel was not compiled";
+    return finish();
+#else
+    if (!hasPlaceGoal()) {
+      result.failure_stage = "transport_goal";
+      result.failure_reason = "adaptive benchmark requires an online transport TCP pose";
+      return finish();
+    }
+    const auto scene = makeScene(box_center);
+    const std::string initial_collision = collisionReason(scene, *initial_state_, &result.metrics);
+    if (!initial_collision.empty()) {
+      result.failure_stage = "initial_state";
+      result.failure_reason = initial_collision;
+      return finish();
+    }
+
+    result.paper_benchmark = {
+      {"schema", "alfa.v322.vamp_paper_adaptive_multistage.v1"},
+      {"metric", "accumulated_rrt_connect_search_with_exact_fcl_to_first_valid_path_ms"},
+      {"joint_names", robot_model_->getJointModelGroup(
+        "dual_arm_with_updown")->getVariableNames()},
+      {"endpoint_source", "online_pose_ik_for_every_stage"},
+      {"ik_inside_timed_region", false},
+      {"candidate_policy_inside_timed_region", false},
+      {"same_endpoint_per_backend", true},
+      {"same_sampler_per_backend", false},
+      {"ompl_sampler", "standard_ompl_uniform"},
+      {"vamp_sampler", "goal_corridor_biased"},
+      {"ompl_collision_backend", "moveit_fcl_mesh"},
+      {"vamp_collision_backend", "moveit_fcl_mesh"},
+      {"native_simd_paper_metric_reported_separately", true},
+      {"search_retries", paper_search_retries_},
+      {"shortcut_used", false},
+      {"cartesian_used", false},
+      {"historical_path_used", false},
+      {"fallback_used", false},
+      {"all_segment_attempts", nlohmann::json::array()},
+      {"selected_segments", nlohmann::json::array()},
+    };
+
+    const auto pose_candidates = [&](
+      const Eigen::Isometry3d& pose,
+      const moveit::core::RobotState& seed,
+      bool attached,
+      bool search_lift,
+      bool assign_opposite) {
+        std::vector<double> lifts{seed.getVariablePosition("updown")};
+        if (search_lift) {
+          const auto& bounds = robot_model_->getVariableBounds("updown");
+          for (double lift = bounds.max_position_;
+            lift >= bounds.min_position_ - 1e-9; lift -= 0.25)
+          {
+            if (std::none_of(lifts.begin(), lifts.end(), [lift](double existing) {
+              return std::abs(existing - lift) < 1e-9;
+            })) lifts.push_back(lift);
+          }
+          std::stable_sort(lifts.begin(), lifts.end(), [&](double left, double right) {
+            const double current = seed.getVariablePosition("updown");
+            return std::abs(left - current) < std::abs(right - current);
+          });
+        }
+        std::vector<AnalyticCandidate> output;
+        for (const double lift : lifts) {
+          moveit::core::RobotState lift_seed(seed);
+          lift_seed.setVariablePosition("updown", lift);
+          if (attached) attachCarriedBox(lift_seed);
+          lift_seed.update(true);
+          std::string rejection;
+          auto candidates = solvePoseCandidates(
+            pose, lift_seed, attached, scene, &result.metrics, false, &rejection);
+          for (auto& candidate : candidates) {
+            if (assign_opposite) {
+              std::vector<moveit::core::RobotStatePtr> targets{candidate.state};
+              std::string opposite_reason;
+              if (!assignCollisionFreeOppositeArm(
+                  scene, &targets, &targets, &result.metrics, &opposite_reason)) continue;
+              candidate.state = targets.front();
+            }
+            candidate.score += 0.1 * std::abs(lift - seed.getVariablePosition("updown"));
+            output.push_back(std::move(candidate));
+            if (output.size() >= precontact_candidate_limit_) break;
+          }
+          if (output.size() >= precontact_candidate_limit_) break;
+        }
+        std::stable_sort(output.begin(), output.end(), [](const auto& left, const auto& right) {
+          return left.score < right.score;
+        });
+        return output;
+      };
+
+    auto precontact_candidates = pose_candidates(
+      precontactPose(box_center), *initial_state_, false, true, true);
+    if (precontact_candidates.empty()) {
+      result.failure_stage = "precontact_ik";
+      result.failure_reason = "no online precontact IK candidate";
+      return finish();
+    }
+
+    struct SelectedStage
+    {
+      std::string name;
+      bool attached{false};
+      PaperPairedSegment pair;
+    };
+    std::vector<SelectedStage> selected;
+    double all_ompl_ms = 0.0;
+    double all_vamp_ms = 0.0;
+    size_t segment_index = 0U;
+    bool found = false;
+    moveit::core::RobotStatePtr selected_transport_goal;
+    for (size_t pre_index = 0U; pre_index < precontact_candidates.size() && !found; ++pre_index) {
+      auto pre_pair = planPaperPairedSegment(
+        scene, *initial_state_, *precontact_candidates[pre_index].state,
+        box_center, false, segment_index++);
+      all_ompl_ms += pre_pair.ompl_accumulated_planner_ms;
+      all_vamp_ms += pre_pair.vamp_accumulated_planner_ms;
+      result.paper_benchmark["all_segment_attempts"].push_back(paperPairedSegmentJson(
+        "to_precontact", pre_index, 0U, 0U, 0U, false, pre_pair));
+      if (!pre_pair.success) continue;
+
+      std::string contact_rejection;
+      auto contact_candidates = solvePoseCandidates(
+        contactPose(box_center), *precontact_candidates[pre_index].state,
+        false, scene, &result.metrics, false, &contact_rejection);
+      if (contact_candidates.size() > precontact_candidate_limit_)
+        contact_candidates.resize(precontact_candidate_limit_);
+      for (size_t contact_index = 0U;
+        contact_index < contact_candidates.size() && !found; ++contact_index)
+      {
+        auto contact_pair = planPaperPairedSegment(
+          scene, *precontact_candidates[pre_index].state,
+          *contact_candidates[contact_index].state, box_center, false, segment_index++);
+        all_ompl_ms += contact_pair.ompl_accumulated_planner_ms;
+        all_vamp_ms += contact_pair.vamp_accumulated_planner_ms;
+        result.paper_benchmark["all_segment_attempts"].push_back(paperPairedSegmentJson(
+          "precontact_to_contact", pre_index, contact_index, 0U, 0U, false, contact_pair));
+        if (!contact_pair.success) continue;
+
+        moveit::core::RobotState loaded_contact(*contact_candidates[contact_index].state);
+        attachCarriedBox(loaded_contact);
+        loaded_contact.update(true);
+        std::string retreat_rejection;
+        auto retreat_candidates = solvePoseCandidates(
+          retreatPose(box_center), loaded_contact, true, scene,
+          &result.metrics, false, &retreat_rejection);
+        if (retreat_candidates.size() > precontact_candidate_limit_)
+          retreat_candidates.resize(precontact_candidate_limit_);
+        for (size_t retreat_index = 0U;
+          retreat_index < retreat_candidates.size() && !found; ++retreat_index)
+        {
+          auto retreat_pair = planPaperPairedSegment(
+            scene, loaded_contact, *retreat_candidates[retreat_index].state,
+            box_center, true, segment_index++);
+          all_ompl_ms += retreat_pair.ompl_accumulated_planner_ms;
+          all_vamp_ms += retreat_pair.vamp_accumulated_planner_ms;
+          result.paper_benchmark["all_segment_attempts"].push_back(paperPairedSegmentJson(
+            "contact_to_retreat_loaded", pre_index, contact_index,
+            retreat_index, 0U, true, retreat_pair));
+          if (!retreat_pair.success) continue;
+
+          auto transport_candidates = pose_candidates(
+            placeTcpPose(), *retreat_candidates[retreat_index].state, true, true, false);
+          if (transport_candidates.size() > precontact_candidate_limit_)
+            transport_candidates.resize(precontact_candidate_limit_);
+          for (size_t transport_index = 0U;
+            transport_index < transport_candidates.size() && !found; ++transport_index)
+          {
+            auto transport_pair = planPaperPairedSegment(
+              scene, *retreat_candidates[retreat_index].state,
+              *transport_candidates[transport_index].state,
+              box_center, true, segment_index++);
+            all_ompl_ms += transport_pair.ompl_accumulated_planner_ms;
+            all_vamp_ms += transport_pair.vamp_accumulated_planner_ms;
+            result.paper_benchmark["all_segment_attempts"].push_back(paperPairedSegmentJson(
+              "retreat_to_transport_loaded", pre_index, contact_index,
+              retreat_index, transport_index, true, transport_pair));
+            if (!transport_pair.success) continue;
+
+            moveit::core::RobotState released_transport(
+              *transport_candidates[transport_index].state);
+            released_transport.clearAttachedBody(kCarriedBoxId);
+            released_transport.update(true);
+            auto return_pair = planPaperPairedSegment(
+              scene, released_transport, *initial_state_,
+              box_center, false, segment_index++);
+            all_ompl_ms += return_pair.ompl_accumulated_planner_ms;
+            all_vamp_ms += return_pair.vamp_accumulated_planner_ms;
+            result.paper_benchmark["all_segment_attempts"].push_back(paperPairedSegmentJson(
+              "released_transport_to_home", pre_index, contact_index,
+              retreat_index, transport_index, false, return_pair));
+            if (!return_pair.success) continue;
+            selected = {
+              {"to_precontact", false, pre_pair},
+              {"precontact_to_contact", false, contact_pair},
+              {"contact_to_retreat_loaded", true, retreat_pair},
+              {"retreat_to_transport_loaded", true, transport_pair},
+              {"released_transport_to_home", false, return_pair},
+            };
+            selected_transport_goal = transport_candidates[transport_index].state;
+            result.paper_benchmark["selected_candidate"] = {
+              {"precontact", pre_index}, {"contact", contact_index},
+              {"retreat", retreat_index}, {"transport", transport_index},
+            };
+            found = true;
+          }
+        }
+      }
+    }
+
+    result.paper_benchmark["accumulated_candidate_search"] = {
+      {"ompl_planner_ms", all_ompl_ms}, {"vamp_planner_ms", all_vamp_ms},
+    };
+    if (all_vamp_ms > 0.0) {
+      result.paper_benchmark["accumulated_candidate_search"]["speedup_ompl_over_vamp"] =
+        all_ompl_ms / all_vamp_ms;
+    }
+    if (!found) {
+      result.failure_stage = "paired_multistage_search";
+      result.failure_reason = "no candidate chain succeeded in both matched backends";
+      return finish();
+    }
+
+    double selected_ompl_ms = 0.0;
+    double selected_vamp_ms = 0.0;
+    for (const auto& stage : selected) {
+      result.paper_benchmark["selected_segments"].push_back(paperPairedSegmentJson(
+        stage.name, 0U, 0U, 0U, 0U, stage.attached, stage.pair));
+      selected_ompl_ms += stage.pair.ompl_accumulated_planner_ms;
+      selected_vamp_ms += stage.pair.vamp_accumulated_planner_ms;
+      appendStates(stage.pair.ompl.states, stage.name, stage.attached, true, &result.frames);
+      result.segment_search.push_back({
+        {"stage", stage.name}, {"success", true},
+        {"ompl_planner_ms", stage.pair.ompl_accumulated_planner_ms},
+        {"vamp_planner_ms", stage.pair.vamp_accumulated_planner_ms},
+      });
+    }
+    result.paper_benchmark["selected_chain"] = {
+      {"ompl_planner_ms", selected_ompl_ms},
+      {"vamp_planner_ms", selected_vamp_ms},
+      {"speedup_ompl_over_vamp", selected_vamp_ms > 0.0 ?
+        selected_ompl_ms / selected_vamp_ms : 0.0},
+    };
+    result.metrics.joint_rrt_ms = all_ompl_ms + all_vamp_ms;
+    result.achieved_place_tcp = selected_transport_goal->getGlobalLinkTransform(tool_link_);
+    result.success = true;
+    return finish();
+#endif
+  }
+
+  TaskResult planPaperBenchmark(const Eigen::Vector3d& box_center)
+  {
+    TaskResult result;
+    const auto total_started = std::chrono::steady_clock::now();
+    const auto finish = [&]() {
+        result.total_ms = std::chrono::duration<double, std::milli>(
+          std::chrono::steady_clock::now() - total_started).count();
+        return result;
+      };
+#ifndef ALFA_HAS_VAMP_PAPER_KERNEL
+    result.failure_stage = "paper_kernel";
+    result.failure_reason = "Cricket-generated V3.2.2 kernel was not compiled";
+    return finish();
+#else
+    const auto scene = makeScene(box_center);
+    const std::string initial_collision = collisionReason(scene, *initial_state_, &result.metrics);
+    if (!initial_collision.empty()) {
+      result.failure_stage = "initial_state";
+      result.failure_reason = initial_collision;
+      return finish();
+    }
+    std::string rejections;
+    auto candidates = solvePoseCandidates(
+      precontactPose(box_center), *initial_state_, false, scene,
+      &result.metrics, false, &rejections);
+    if (candidates.empty()) {
+      result.failure_stage = "precontact_ik";
+      result.failure_reason = rejections;
+      return finish();
+    }
+    const auto& goal = *candidates.front().state;
+
+    RrtPlanResult ompl_result;
+    RrtPlanResult vamp_result;
+    const bool vamp_first = (paper_halton_skip_ / 997U) % 2U == 1U;
+    if (vamp_first) {
+      vamp_result = planNativePaperRrt(scene, *initial_state_, goal, box_center);
+      ompl_result = planPureArmUpdownRrt(
+        scene, *initial_state_, goal, false, nullptr, "ompl_paper");
+    } else {
+      ompl_result = planPureArmUpdownRrt(
+        scene, *initial_state_, goal, false, nullptr, "ompl_paper");
+      vamp_result = planNativePaperRrt(scene, *initial_state_, goal, box_center);
+    }
+
+    const auto* group = robot_model_->getJointModelGroup("dual_arm_with_updown");
+    const auto& variables = group->getVariableNames();
+    nlohmann::json start_values = nlohmann::json::array();
+    nlohmann::json goal_values = nlohmann::json::array();
+    for (const auto& variable : variables) {
+      start_values.push_back(initial_state_->getVariablePosition(variable));
+      goal_values.push_back(goal.getVariablePosition(variable));
+    }
+    const auto replay_states = [&](const RrtPlanResult& plan) {
+        nlohmann::json frames = nlohmann::json::array();
+        for (const auto& state : plan.states) {
+          nlohmann::json values = nlohmann::json::array();
+          for (const auto& variable : variables) {
+            values.push_back(state->getVariablePosition(variable));
+          }
+          frames.push_back(std::move(values));
+        }
+        return frames;
+      };
+    const auto ompl_replay_states = replay_states(ompl_result);
+    const auto vamp_replay_states = replay_states(vamp_result);
+    result.paper_benchmark = {
+      {"schema", "alfa.v322.vamp_paper_rrtc_pair.v1"},
+      {"metric", "rrt_connect_planning_time_to_first_collision_valid_path_ms"},
+      {"dimension", variables.size()},
+      {"joint_names", variables},
+      {"start", start_values},
+      {"goal", goal_values},
+      {"endpoint_source", "same_online_pose_ik"},
+      {"ik_inside_timed_region", false},
+      {"sampler", "same_vamp_halton_sequence"},
+      {"halton_skip", paper_halton_skip_},
+      {"execution_order", vamp_first ?
+        nlohmann::json::array({"vamp", "ompl"}) :
+        nlohmann::json::array({"ompl", "vamp"})},
+      {"range", vamp_range_},
+      {"max_iterations", vamp_max_iterations_},
+      {"max_samples", vamp_max_samples_},
+      {"shortcut_used", false},
+      {"cartesian_used", false},
+      {"fallback_used", false},
+      {"ompl", {
+        {"success", ompl_result.success},
+        {"planner_ms", ompl_result.planner_ms},
+        {"total_with_fcl_audit_ms", ompl_result.wall_ms},
+        {"reason", ompl_result.reason},
+        {"audit", ompl_result.backend_audit},
+        {"replay_states", ompl_replay_states},
+        {"replay_state_count", ompl_replay_states.size()},
+      }},
+      {"vamp", {
+        {"success", vamp_result.success},
+        {"planner_ms", vamp_result.planner_ms},
+        {"total_with_fcl_audit_ms", vamp_result.wall_ms},
+        {"reason", vamp_result.reason},
+        {"audit", vamp_result.backend_audit},
+        {"replay_states", vamp_replay_states},
+        {"replay_state_count", vamp_replay_states.size()},
+      }},
+    };
+    if (ompl_result.success && vamp_result.success && vamp_result.planner_ms > 0.0) {
+      result.paper_benchmark["speedup_ompl_over_vamp"] =
+        ompl_result.planner_ms / vamp_result.planner_ms;
+    }
+    result.segment_search.push_back({
+      {"stage", "paper_same_endpoint_ompl"},
+      {"success", ompl_result.success},
+      {"joint_rrt_ms", ompl_result.planner_ms},
+      {"diagnostic", ompl_result.reason},
+    });
+    result.segment_search.push_back({
+      {"stage", "paper_same_endpoint_vamp"},
+      {"success", vamp_result.success},
+      {"joint_rrt_ms", vamp_result.planner_ms},
+      {"diagnostic", vamp_result.reason},
+      {"backend_audit", vamp_result.backend_audit},
+    });
+    result.success = ompl_result.success && vamp_result.success;
+    if (!result.success) {
+      result.failure_stage = "paper_paired_search";
+      result.failure_reason = "OMPL: " + ompl_result.reason + "; VAMP: " + vamp_result.reason;
+    }
+    result.metrics.joint_rrt_ms = ompl_result.planner_ms + vamp_result.planner_ms;
+    return finish();
+#endif
+  }
+
   nlohmann::json sceneJson(const Eigen::Vector3d& box_center) const
   {
     const auto neighbors = obstacleBoxCenters(box_center);
@@ -5609,6 +6885,9 @@ private:
     }
     payload["total_ms"] = result.total_ms;
     payload["segment_search"] = result.segment_search;
+    if (!result.paper_benchmark.empty()) {
+      payload["paper_benchmark"] = result.paper_benchmark;
+    }
     payload["metrics"] = {
       {"ik_calls", result.metrics.ik_calls},
       {"ik_ms", result.metrics.ik_ms},
@@ -5976,6 +7255,9 @@ private:
   int vamp_max_samples_ = 200000;
   double vamp_range_ = 0.08;
   int64_t vamp_seed_ = 20261019;
+  size_t paper_halton_skip_ = 0U;
+  size_t paper_search_retries_ = 3U;
+  std::string paper_shared_ik_path_;
   bool ompl_simplify_solutions_ = true;
   bool natural_motion_enabled_ = true;
   double natural_swivel_weight_ = 0.02;

@@ -1,0 +1,323 @@
+{
+  "schema": "alfa.v322.sphere_false_positive_pairs.v1",
+  "samples": 10000,
+  "mesh_clear_samples": 7104,
+  "sphere_false_positive_states": 2013,
+  "sphere_false_negative_states": 1286,
+  "top_false_positive_pairs": [
+    {
+      "pair": "left_link5_4 <-> left_link7_1",
+      "count": 254
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_3",
+      "count": 193
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_1",
+      "count": 183
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_9",
+      "count": 174
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_4",
+      "count": 168
+    },
+    {
+      "pair": "left_link5_3 <-> left_link7_1",
+      "count": 152
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_11",
+      "count": 150
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_1",
+      "count": 146
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_9",
+      "count": 141
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_1",
+      "count": 140
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_6",
+      "count": 136
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_11",
+      "count": 132
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_10",
+      "count": 127
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_1",
+      "count": 115
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_1",
+      "count": 111
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_3",
+      "count": 110
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_3",
+      "count": 108
+    },
+    {
+      "pair": "right_link5_6 <-> right_link7_3",
+      "count": 108
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_5",
+      "count": 105
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_10",
+      "count": 101
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_3",
+      "count": 98
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_6",
+      "count": 96
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_9",
+      "count": 96
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_2",
+      "count": 95
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_8",
+      "count": 95
+    },
+    {
+      "pair": "left_link5_3 <-> left_link7_6",
+      "count": 93
+    },
+    {
+      "pair": "right_link5_6 <-> right_link7_1",
+      "count": 92
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_2",
+      "count": 92
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_2",
+      "count": 92
+    },
+    {
+      "pair": "right_link5_0 <-> right_link7_8",
+      "count": 91
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_5",
+      "count": 90
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_7",
+      "count": 90
+    },
+    {
+      "pair": "right_link5_6 <-> right_link7_11",
+      "count": 88
+    },
+    {
+      "pair": "left_link5_4 <-> left_link7_11",
+      "count": 86
+    },
+    {
+      "pair": "right_link5_1 <-> right_link7_8",
+      "count": 85
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_0",
+      "count": 85
+    },
+    {
+      "pair": "left_link5_3 <-> left_link7_2",
+      "count": 84
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_11",
+      "count": 83
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_9",
+      "count": 83
+    },
+    {
+      "pair": "right_link5_6 <-> right_link7_9",
+      "count": 83
+    },
+    {
+      "pair": "left_link5_2 <-> left_link7_9",
+      "count": 83
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_11",
+      "count": 81
+    },
+    {
+      "pair": "left_link5_4 <-> left_link7_2",
+      "count": 80
+    },
+    {
+      "pair": "left_link5_4 <-> left_link7_6",
+      "count": 76
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_4",
+      "count": 75
+    },
+    {
+      "pair": "left_link5_3 <-> left_link7_5",
+      "count": 75
+    },
+    {
+      "pair": "left_link5_4 <-> left_link7_5",
+      "count": 72
+    },
+    {
+      "pair": "right_link5_5 <-> right_link7_10",
+      "count": 71
+    },
+    {
+      "pair": "right_link5_6 <-> right_link7_10",
+      "count": 64
+    },
+    {
+      "pair": "right_link5_2 <-> right_link7_10",
+      "count": 64
+    }
+  ],
+  "top_false_negative_pairs": [
+    {
+      "pair": "base_link_0 <-> left_link7_0",
+      "count": 495
+    },
+    {
+      "pair": "base_link_0 <-> right_link7_0",
+      "count": 410
+    },
+    {
+      "pair": "base_link_0 <-> left_link5_0",
+      "count": 309
+    },
+    {
+      "pair": "base_link_0 <-> right_link5_0",
+      "count": 306
+    },
+    {
+      "pair": "base_link_0 <-> left_link4_0",
+      "count": 267
+    },
+    {
+      "pair": "base_link_0 <-> right_link4_0",
+      "count": 258
+    },
+    {
+      "pair": "base_link_0 <-> right_link3_0",
+      "count": 223
+    },
+    {
+      "pair": "base_link_0 <-> left_link3_0",
+      "count": 209
+    },
+    {
+      "pair": "base_link_0 <-> left_link6_0",
+      "count": 155
+    },
+    {
+      "pair": "base_link_0 <-> right_link6_0",
+      "count": 148
+    },
+    {
+      "pair": "base_link_1 <-> left_link7_0",
+      "count": 34
+    },
+    {
+      "pair": "base_link_0 <-> left_link2_0",
+      "count": 26
+    },
+    {
+      "pair": "base_link_1 <-> right_link7_0",
+      "count": 25
+    },
+    {
+      "pair": "base_link_0 <-> right_link2_0",
+      "count": 22
+    },
+    {
+      "pair": "base_link_1 <-> right_link5_0",
+      "count": 15
+    },
+    {
+      "pair": "base_link_1 <-> left_link5_0",
+      "count": 13
+    },
+    {
+      "pair": "base_link_2 <-> right_link7_0",
+      "count": 11
+    },
+    {
+      "pair": "base_link_2 <-> left_link7_0",
+      "count": 9
+    },
+    {
+      "pair": "base_link_1 <-> left_link6_0",
+      "count": 7
+    },
+    {
+      "pair": "base_link_1 <-> right_link6_0",
+      "count": 6
+    },
+    {
+      "pair": "base_link_2 <-> right_link5_0",
+      "count": 6
+    },
+    {
+      "pair": "base_link_2 <-> right_link6_0",
+      "count": 5
+    },
+    {
+      "pair": "base_link_2 <-> left_link5_0",
+      "count": 3
+    },
+    {
+      "pair": "base_link_1 <-> left_link4_0",
+      "count": 2
+    },
+    {
+      "pair": "base_link_1 <-> right_link4_0",
+      "count": 2
+    },
+    {
+      "pair": "base_link_2 <-> left_link4_0",
+      "count": 1
+    },
+    {
+      "pair": "base_link_2 <-> right_link4_0",
+      "count": 1
+    },
+    {
+      "pair": "base_link_2 <-> left_link6_0",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "AlfaV322SafeMixed",
+  "urdf": "../../results/v322_vamp_paper_repro/model/alfa-v322-15d-foam-base-box256-m0.urdf",
+  "srdf": "../../results/v322_vamp_paper_repro/model/alfa-v322-15d.srdf",
+  "end_effector": "left_tool0",
+  "resolution": 64,
+  "template": "/home/tim/.cache/alfa-vamp/cricket/resources/templates/fk_template.hh",
+  "subtemplates": [
+    {
+      "name": "ccfk",
+      "template": "/home/tim/.cache/alfa-vamp/cricket/resources/templates/ccfk_template.hh"
+    }
+  ],
+  "output": "../../results/v322_vamp_paper_repro/model/alfa_v322_safe_mixed_fk.hh"
+}

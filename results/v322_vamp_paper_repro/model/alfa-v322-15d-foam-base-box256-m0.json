@@ -1,0 +1,14 @@
+{
+  "schema": "alfa.v322.injected_link_boxes.v1",
+  "mesh_urdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-mesh.urdf",
+  "base_sphere_urdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-foam-tuned.urdf",
+  "output": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-foam-base-box256-m0.urdf",
+  "margin_m": 0.0,
+  "boxes_per_mesh": 256,
+  "links": [
+    {
+      "link": "base_link",
+      "box_count": 768
+    }
+  ]
+}

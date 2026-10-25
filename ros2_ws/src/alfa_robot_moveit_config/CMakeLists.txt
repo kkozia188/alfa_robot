@@ -38,6 +38,8 @@ find_package(alfa_robot_analytic_ik REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(ompl REQUIRED)
 find_package(vamp QUIET)
+set(ALFA_VAMP_PAPER_KERNEL_DIR "" CACHE PATH
+  "Directory containing the Cricket-generated alfa_v322_fk.hh")
 if(vamp_FOUND AND DEFINED vamp_DIR)
   get_filename_component(_alfa_vamp_prefix "${vamp_DIR}/../../.." ABSOLUTE)
   if(NOT TARGET nigh::nigh AND EXISTS "${_alfa_vamp_prefix}/lib/cmake/nigh/nighTargets.cmake")
@@ -345,6 +347,13 @@ if(vamp_FOUND)
     ALFA_HAS_VAMP=1
     EIGEN_MAX_ALIGN_BYTES=16
     EIGEN_MAX_STATIC_ALIGN_BYTES=16)
+  if(ALFA_VAMP_PAPER_KERNEL_DIR AND
+      EXISTS "${ALFA_VAMP_PAPER_KERNEL_DIR}/alfa_v322_fk.hh")
+    target_include_directories(v3_chest_carry_single_arm_box_planner PRIVATE
+      "${ALFA_VAMP_PAPER_KERNEL_DIR}")
+    target_compile_definitions(v3_chest_carry_single_arm_box_planner PRIVATE
+      ALFA_HAS_VAMP_PAPER_KERNEL=1)
+  endif()
 endif()
 
 ament_target_dependencies(v3_chest_carry_single_arm_box_planner

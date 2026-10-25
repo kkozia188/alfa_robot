@@ -73,6 +73,7 @@ def generate_launch_description():
             DeclareLaunchArgument("box_grid_bottom_z", default_value="0.0"),
             DeclareLaunchArgument("target_box_id", default_value="0"),
             DeclareLaunchArgument("removed_box_ids", default_value=""),
+            DeclareLaunchArgument("collision_inset", default_value="0.002"),
             DeclareLaunchArgument("grasp_mode", default_value="front"),
             DeclareLaunchArgument("front_suction_y_offset", default_value="0.0"),
             DeclareLaunchArgument("front_suction_z_offset", default_value="0.0"),
@@ -105,6 +106,9 @@ def generate_launch_description():
             DeclareLaunchArgument("vamp_max_samples", default_value="200000"),
             DeclareLaunchArgument("vamp_range", default_value="0.08"),
             DeclareLaunchArgument("vamp_seed", default_value="20261019"),
+            DeclareLaunchArgument("paper_halton_skip", default_value="0"),
+            DeclareLaunchArgument("paper_search_retries", default_value="3"),
+            DeclareLaunchArgument("paper_shared_ik_path", default_value=""),
             DeclareLaunchArgument("ompl_simplify_solutions", default_value="true"),
             DeclareLaunchArgument("edge_joint_resolution_deg", default_value="2.5"),
             DeclareLaunchArgument("natural_motion_enabled", default_value="true"),
@@ -284,6 +288,9 @@ def generate_launch_description():
                         "removed_box_ids": ParameterValue(
                             LaunchConfiguration("removed_box_ids"), value_type=str
                         ),
+                        "collision_inset": ParameterValue(
+                            LaunchConfiguration("collision_inset"), value_type=float
+                        ),
                         "grasp_mode": LaunchConfiguration("grasp_mode"),
                         "front_suction_y_offset": ParameterValue(
                             LaunchConfiguration("front_suction_y_offset"), value_type=float
@@ -373,6 +380,15 @@ def generate_launch_description():
                         ),
                         "vamp_seed": ParameterValue(
                             LaunchConfiguration("vamp_seed"), value_type=int
+                        ),
+                        "paper_halton_skip": ParameterValue(
+                            LaunchConfiguration("paper_halton_skip"), value_type=int
+                        ),
+                        "paper_search_retries": ParameterValue(
+                            LaunchConfiguration("paper_search_retries"), value_type=int
+                        ),
+                        "paper_shared_ik_path": ParameterValue(
+                            LaunchConfiguration("paper_shared_ik_path"), value_type=str
                         ),
                         "ompl.simplify_solutions": ParameterValue(
                             LaunchConfiguration("ompl_simplify_solutions"), value_type=bool

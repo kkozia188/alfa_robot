@@ -210,6 +210,15 @@ data/
 /log-chest-carry/
 /results/v322_chest_carry_fast_base/
 
+# Local VAMP paper/sphere-world build trees
+/build-paper/
+/build-sphere-debug/
+/install-paper/
+/install-sphere-debug/
+/log-paper*/
+/log-sphere-debug*/
+/output.json
+
 # MOTION-38 local one-off/debug scripts
 scripts/ik_benchmark/motion38/visualize_single_down_point_9_orients.py
 

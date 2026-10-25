@@ -1,0 +1,15 @@
+{
+  "name": "AlfaV322",
+  "urdf": "../../results/v322_vamp_paper_repro/model/alfa-v322-15d-foam-tuned.urdf",
+  "srdf": "../../results/v322_vamp_paper_repro/model/alfa-v322-15d-sphere-world.srdf",
+  "end_effector": "left_tool0",
+  "resolution": 64,
+  "template": "/home/tim/.cache/alfa-vamp/cricket/resources/templates/fk_template.hh",
+  "subtemplates": [
+    {
+      "name": "ccfk",
+      "template": "/home/tim/.cache/alfa-vamp/cricket/resources/templates/ccfk_template.hh"
+    }
+  ],
+  "output": "../../results/v322_vamp_paper_repro/model/alfa_v322_fk.hh"
+}

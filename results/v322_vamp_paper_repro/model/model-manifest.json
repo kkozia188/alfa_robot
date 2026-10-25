@@ -1,0 +1,35 @@
+{
+  "schema": "alfa.v322.vamp_paper_model.v1",
+  "source_urdf": "/home/tim/alfa_robot-alfa_v3_dev/data/ik_benchmark/v3_scoop_5x5/range_certification_v322_tool0151/model/alfa-robot-v322-tool0151.urdf",
+  "source_urdf_sha256": "537d380a0d8a14a931bd2ca153759879eaeaec8e5f78f9cdf3f5a58c0a122893",
+  "source_srdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/ros2_ws/src/alfa_robot_moveit_config/config/alfa_robot.srdf",
+  "source_srdf_sha256": "48132696d39aedb106d022f8d8a83172cda87ac8d0aeb06e33e713ec75a42995",
+  "prepared_urdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d-mesh.urdf",
+  "prepared_urdf_sha256": "56ed6749a9e68a2bd8ec33c8845e8b24970762b32e09b63816b9024ff01a3e35",
+  "prepared_srdf": "/home/tim/alfa_robot-v322-vamp-paper-repro/results/v322_vamp_paper_repro/model/alfa-v322-15d.srdf",
+  "prepared_srdf_sha256": "48132696d39aedb106d022f8d8a83172cda87ac8d0aeb06e33e713ec75a42995",
+  "dimension": 15,
+  "joint_order": [
+    "updown",
+    "left_joint1",
+    "left_joint2",
+    "left_joint3",
+    "left_joint4",
+    "left_joint5",
+    "left_joint6",
+    "left_joint7",
+    "right_joint1",
+    "right_joint2",
+    "right_joint3",
+    "right_joint4",
+    "right_joint5",
+    "right_joint6",
+    "right_joint7"
+  ],
+  "fixed_for_benchmark": [
+    "head_joint",
+    "head_pitch_joint"
+  ],
+  "collision_geometry_count": 49,
+  "rewritten_mesh_uris": 98
+}

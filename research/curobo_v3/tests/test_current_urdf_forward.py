@@ -18,6 +18,16 @@ from v3_rezero_analytic import RezeroAnalytic
 from v3_zero_model_candidate import TOOL_OFFSET_M
 
 
+def test_shared_demo_accepts_both_current_assets_and_pr65_planner_selection():
+    import inspect
+    from v3_visualized_task_demo import main
+    from v3_timed_single_arm_planner import TimedSingleArmPlanner
+
+    signature = inspect.signature(main)
+    signature.bind(default_assets=current_assets(), planner_class=TimedSingleArmPlanner)
+    assert signature.parameters['planner_class'].default is None
+
+
 def test_current_model_uses_matching_fixed_urdf_and_191mm_tools():
     assets = current_assets()
     verify_current_model(assets)

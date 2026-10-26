@@ -3,6 +3,8 @@
 
 ## 当前URDF迁移补充（2026-10-24）
 
+2026-10-26集成：PR65已合入alfa_v3_curobo@96c2c70c；本开发分支40项提交rebase完成，GUI入口兼容planner_class与default_assets，缺省仍使用原选择的FullCyclePlanner。旧94双臂测试同步为现行92双臂＋25单臂合同，明确排除L07/R02及L02/R07。52项core测试（1项历史资产测试跳过）及17项当前模型/GUI合同测试通过；rebase后四次GPU全流程通过，证据/tmp/curobo-pr65-rebase-verification。PR65时间化入口保留独立，未默认套用在六段LM结果上，不把原时间化25箱证据冒作新模型验收。
+
 - 本轮分支 `feature/curobo-8209-current-urdf`；当前入口仍是 `tools/v3_forward_precontact_demo.py`，默认端口改为8210，与原研究入口和工控机分开。
 - 当前规划器 `CurrentUrdfForwardPlanner` 使用已确认的 `dual-zero-discrete-only-tool191-20261024` 固定根／18轴模型、191mm TCP、现行Home和限位。解析网格统一走RezeroAnalytic，不调用输出旧坐标的笛卡尔批处理库。
 - 运输库按新TCP重新解算、独立URDF FK复核，运行时仍作完整碰撞及1.05m包络筛选。旧2cm升降网格遗漏了侧吸可行窗口；现于原[-0.2,0]m范围内加密为5mm，未改运输Pose、碰撞豁免或限位。

@@ -183,6 +183,7 @@ def main(default_port=8150, planner_class=None, default_assets=None):
                 play.value = False
                 current['result'] = None
                 comparisons.clear()
+                refresh_comparison()
                 refresh_playback()
                 status.content = '后处理已' + ('开启' if postprocessing.value else '关闭') + '，请重新计算当前任务。'
         run = server.gui.add_button("计算完整流程并播放")
@@ -230,7 +231,9 @@ def main(default_port=8150, planner_class=None, default_assets=None):
             lines.append(f"| {label} | {verdict} | {seconds:.2f}s |")
         dual_count=sum(len(boxes)==2 for label,boxes in planner.task_options)
         single_count=sum(len(boxes)==1 for label,boxes in planner.task_options)
-        lines += ["", f"{dual_count}组双臂＋{single_count}组单臂可选。首次生成当前场景终点缓存，后续复用；每次重新计算接触候选和路径。含双龙头车长方体碰撞，无Shortcut/TrajOpt，释放后RRT回Home。"]
+        processing = ('启用PR65验碰Shortcut/平滑时间化，无TrajOpt' if getattr(planner, 'trajectory_optimization_enabled', False)
+                      else '无搜索后Shortcut/TrajOpt或时间化')
+        lines += ["", f"{dual_count}组双臂＋{single_count}组单臂可选。终点库按模型/目标身份复用；每次重新计算接触候选和路径。含双龙头车长方体碰撞，{processing}，释放后RRT回Home。"]
         comparison_status.content = "\n".join(lines) if comparisons else ""
 
     def show_frame(index):

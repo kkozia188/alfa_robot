@@ -1,5 +1,14 @@
 # cuRobo 独立状态、场景与规划核心
 
+2026-10-31固定默认流程：`tools/v3_frozen_cycle.py::FrozenCyclePlanner`。
+旧64候选与8/16/32/64分批解析抽离35cm→多根多目标RRT运输→导航到位→
+128参考点、32局部种子、最多32轮的15轴连续LM放箱→释放→从LM实际末态RRT回Home。
+携箱仅用原40球模型，放箱失败停止，无RRT回退；单臂时空闲臂关节保持放箱起点值。
+当前零位URDF、191mm TCP、放箱箱心0.982m不变。默认界面入口
+`tools/v3_forward_precontact_demo.py`现指向该固定流程，旧名称为兼容已有启动命令保留。
+独立入口`tools/v3_frozen_cycle_demo.py --port 8243`，全117任务复测入口
+`tools/v3_frozen_cycle_validate.py`。均为离线几何规划，不连接实机；旧WARP实验不再是默认入口。
+
 MOTION-276 完成 MoveIt 替代的阶段1～3。当前核心位于 `tools/curobo_core`，提供
 独立场景/具名机器人状态及已有混合算法的调用入口，不需要 MoveIt、ROS 或 Viser。
 算法仍是 cuRobo 数值IK/FK/球碰撞、自研批量RRT及C++解析抽离。

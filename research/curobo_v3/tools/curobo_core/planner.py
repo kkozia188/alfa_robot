@@ -198,7 +198,8 @@ class FullCyclePlanner(CuroboBackend):
             rows.append(next_row)
         dense = np.asarray(densify(np.asarray(rows)))
         self.last_extract_frames = dense
-        extraction_validity = empty_validity if self.snapshot.policy.defer_payload_until_extract_end else loaded_validity
+        extraction_validity = loaded_validity
+        extraction_validity.scene_penetration_tolerance_m = .001
         valid = extraction_validity.mask(torch.tensor(dense, device="cuda", dtype=torch.float32))
         if not bool(valid.all().item()):
             return None, f"抽离机器人碰撞/稳定性失败@frame{int((~valid).nonzero()[0])+1}"

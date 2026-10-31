@@ -26,7 +26,7 @@ METHODS = ('fixed_analytic', 'grid_analytic', 'parameter_rrt', 'lm_informed_conn
 
 
 def path_accepted(metrics):
-    return all(metrics[key] for key in ('collision_passed', 'endpoint_payload_collision_passed', 'anchor_joint_passed')) and metrics['endpoint_error_mm'] <= 2.
+    return all(metrics[key] for key in ('collision_passed', 'endpoint_payload_collision_passed', 'anchor_joint_passed','straight_passed')) and metrics['endpoint_error_mm'] <= 2.
 
 
 def synchronized_time():
@@ -35,7 +35,7 @@ def synchronized_time():
 
 
 class CartesianComparison:
-    def __init__(self, payload_policy='legacy', planner=None):
+    def __init__(self, payload_policy='loaded', planner=None):
         self.planner = planner if planner is not None else TeleportPlanner(PlannerAssets())
         self.payload_policy = payload_policy
         self.solvers = {}
@@ -49,6 +49,8 @@ class CartesianComparison:
         self.library.cartesian_grid.restype = None
 
     def prepare(self, case):
+        if case.get('payload') and self.payload_policy!='loaded':
+            raise ValueError('legacy empty-intermediate extraction is disabled; full payload collision checks are required')
         self.case = case
         self.planner.configure_task(case['task'])
         self.start = np.asarray(case['contact_joints'])
@@ -56,6 +58,7 @@ class CartesianComparison:
         self.loaded = self.planner.checker(case['task'], payload=True) if case['payload'] else self.empty
         self.checker = self.loaded if case['payload'] and self.payload_policy == 'loaded' else self.empty
         self.validity = GpuValidity(self.checker, check_ground=True)
+        self.validity.scene_penetration_tolerance_m=.001
         self.validity.weights[0] = WEIGHTS[0]
         self.validity.search_base_margin_m = .002
         self.active = tuple(case['task'])

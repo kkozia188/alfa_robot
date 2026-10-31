@@ -120,8 +120,11 @@ class TaskCyclePlanner(FullCyclePlanner):
                 angle = Rotation.from_matrix(actual[:3,:3].T@poses[side][:3,:3]).magnitude()
                 if lateral > 0.002 or axial > 0.001 or axial < -0.031 or angle > math.radians(1):
                     return None,dict(failure='短接近直线/朝向验收失败',lateral_error_mm=float(lateral*1000),axial_m=float(axial),orientation_error_deg=float(math.degrees(angle)))
-        if not bool(validity.mask(torch.tensor(straight,device='cuda',dtype=torch.float32)).all().item()):
-            return None,dict(failure='短接近机器人/其他环境碰撞（目标箱子已排除）',
+        contact_validity=self.target_validity(checker,allow_contact=True)
+        contact_validity.scene_penetration_tolerance_m=.001
+        contact_validity.contact_penetration_tolerance_m=.001
+        if not bool(contact_validity.mask(torch.tensor(straight,device='cuda',dtype=torch.float32)).all().item()):
+            return None,dict(failure='短接近机器人/目标箱及其他环境碰撞',
                              contact_sphere_indices={},
                              diagnostic_frames=straight.tolist())
         strict = self.target_validity(checker)
@@ -129,7 +132,7 @@ class TaskCyclePlanner(FullCyclePlanner):
         if approach is None:
             return None,stats
         self.contact_approach_split = len(approach)
-        stats.update(pregrasp_clearance_m=0.03,target_collision_during_final_approach=False,
+        stats.update(pregrasp_clearance_m=0.03,target_collision_during_final_approach=True,
                      target_collision_during_pregrasp=True,
                      contact_pipeline_ms=(time.perf_counter()-started)*1000)
         return np.concatenate([approach,straight[1:]],axis=0),stats
@@ -160,6 +163,10 @@ class TaskCyclePlanner(FullCyclePlanner):
                             generated_obstacles=obstacles, tool_to_box={side:grasp_transform(side, True).tolist() for side in ['left','right']})
             advance_frames = rows
         result = super().full_cycle(boxes, progress)
+        result.setdefault('frames', [])
+        result.setdefault('phases', [])
+        result.setdefault('payload', [])
+        result.setdefault('joint_names', list(names))
         rejected = next((attempt for attempt in result.get('attempts',[]) if attempt.get('approach',{}).get('diagnostic_frames')),None)
         if not result['success'] and rejected:
             frames = []

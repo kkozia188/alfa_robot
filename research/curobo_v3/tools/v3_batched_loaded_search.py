@@ -62,10 +62,24 @@ def loaded_robot(robot, box_fit, active_sides=("left", "right"), attachments=Non
     return loaded
 
 
+def scene_query_spheres(spheres, tolerance_m):
+    if not math.isfinite(tolerance_m) or not 0.0 <= tolerance_m <= .001:
+        raise ValueError('scene penetration tolerance must be between0 and1mm')
+    if tolerance_m == 0:
+        return spheres
+    query = spheres.clone()
+    query[..., 3] = torch.where(spheres[..., 3] > 0,
+        (spheres[..., 3] - tolerance_m).clamp(min=torch.finfo(spheres.dtype).eps), spheres[..., 3])
+    return query
+
+
 class GpuValidity:
     def __init__(self, checker, active_sides=(), max_box_tilt_deg=30.0,
                  stability_weight=10.0, check_ground=False, ground_z=0.0,
-                 joint_names=None, weights=None):
+                 joint_names=None, weights=None, scene_penetration_tolerance_m=0.0):
+        if not math.isfinite(scene_penetration_tolerance_m) or not 0.0 <= scene_penetration_tolerance_m <= .001:
+            raise ValueError('scene penetration tolerance must be between0 and1mm')
+        self.scene_penetration_tolerance_m = scene_penetration_tolerance_m
         self.checker = checker
         self.states_checked = 0
         self.active_sides = tuple(active_sides)
@@ -120,7 +134,8 @@ class GpuValidity:
             )
             collision_cost = (
                 self.checker.get_self_collision(spheres).reshape(1, horizon, -1).sum(-1)
-                + self.checker.collision_constraint.forward(state).reshape(1, horizon, -1).sum(-1)
+                + (self.checker.get_collision_constraint(scene_query_spheres(spheres, self.scene_penetration_tolerance_m))
+                   if self.scene_penetration_tolerance_m else self.checker.collision_constraint.forward(state)).reshape(1, horizon, -1).sum(-1)
                 + self.checker.get_bound(q).reshape(1, horizon, -1).sum(-1)
             ).reshape(-1)
             base_mesh=getattr(self.checker,'base_mesh_layer',None)

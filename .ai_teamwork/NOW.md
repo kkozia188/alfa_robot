@@ -1,5 +1,12 @@
 # 当前项目状态
 
+## 2026-10-31 固定解析抽离／RRT运输／LM放箱流程
+
+- 用户确认以 `FrozenCyclePlanner` 固定全流程：旧多候选解析35cm抽离、多根多目标RRT运输、导航瞬移、128点15轴连续LM放箱、释放后从LM实际末态RRT回Home。放箱不回退RRT，携箱仅用原40球模型。
+- LM参数固定32局部种子、最多32轮；单臂空闲关节保持放箱起点值。当前URDF、191mm TCP、0.982m放箱箱心高度沿用；不再继续调整算法，后续变更需用户提出。
+- 默认 `v3_forward_precontact_demo.py` 已切换固定流程；独立实时入口 `v3_frozen_cycle_demo.py` 使用8243，8242保留放箱段对照。全117任务105成功，11项LM停止、1项原候选失败；失败不补画、不回退，属于离线几何验收。
+- 核心说明 `research/curobo_v3/CORE.md`，紧凑验证记录 `generated/frozen_cycle_release/validation_report.json`。下方新WARP记录为历史方案，不再是默认入口。
+
 ## 2026-10-27 新WARP迁移
 
 8210默认新WARP：球面软参考→128点平滑ψ解析→整段30轮→合法先验Informed Connect→0.25°验收，PR65后处理独立开关保留。当前释放箱心0.982m，模型/191mm TCP/Home不变。1.082m基线117/117复测通过；0.982m仅三代表任务几何和时间化各3/3，不混算全量成功率。运行核心已从benchmark抽出，复测及数据见research/curobo_v3/NEW_WARP_HANDOFF.md迁移补充。8221研究服务保留，未涉及实机。

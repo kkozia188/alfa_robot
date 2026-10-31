@@ -24,12 +24,12 @@ class TargetContactValidity(GpuValidity):
                 delta = torch.abs(spheres[..., :3] - center) - half
                 distance = torch.linalg.vector_norm(torch.clamp(delta, min=0), dim=-1) + torch.clamp(delta.max(dim=-1).values, max=0)
                 penetration = spheres[..., 3] - distance
-                blocked = (penetration > 0) & (spheres[..., 3] > 0)
+                blocked = (penetration > self.scene_penetration_tolerance_m) & (spheres[..., 3] > 0)
                 if self.allow_contact:
                     pose = fk.tool_poses.to_dict()[side + '_tool0']
                     position = pose.position.reshape(len(chunk), 3)
                     gap = torch.linalg.vector_norm(position - torch.tensor(target['contact'],device=values.device,dtype=values.dtype),dim=-1)
                     for index in self.contact_spheres[side]:
-                        blocked[:, index] &= ~((gap <= 0.005) & (penetration[:, index] <= 0.005))
+                        blocked[:, index] &= ~((gap <= 0.005) & (penetration[:, index] <= getattr(self,'contact_penetration_tolerance_m',0.001)))
                 valid[offset:offset + len(chunk)] &= ~blocked.any(dim=-1)
         return valid, stability

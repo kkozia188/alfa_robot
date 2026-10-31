@@ -131,6 +131,15 @@ class ConveyorCyclePlanner(AnalyticContacts):
         append(mobile, 'conveyor_place', True)
         return dense[-1]
 
+    def conveyor_ik_solver(self,boxes):
+        robot=loaded_robot(self.robot,self.box_fit,attachments=self.task_attachments(boxes))
+        config=InverseKinematicsCfg.create(robot=copy.deepcopy(robot),scene_model=self.scene(boxes),
+            collision_cache={'cuboid':max(40,len(self.snapshot.objects)),'mesh':len(self.snapshot.meshes)},
+            num_seeds=64,self_collision_check=True,use_cuda_graph=False,
+            position_tolerance=.002,orientation_tolerance=math.radians(1),
+            override_iters_for_multi_link_ik=160,optimizer_collision_activation_distance=.005)
+        return InverseKinematics(config)
+
     def cartesian_segment(self, start, targets, checker, validity, solver, report, append, phase, payload):
         initial = self.tool_matrices(start)
         rotations = {side: Slerp([0, 1], Rotation.from_matrix(np.stack([initial[side][:3, :3], targets[side][:3, :3]])))
@@ -207,16 +216,10 @@ class ConveyorCyclePlanner(AnalyticContacts):
         report['conveyor_push_m'] = self.conveyor_push_m
         report['placement_base_pose'] = {'position': [*parking.tolist(), 0.], 'yaw_rad': yaw}
         try:
-            progress('导航到位瞬移完成；底盘冻结，求固定放箱目标IK并用RRT连接，启用双龙头车碰撞')
+            progress(getattr(self,'conveyor_placement_description','导航到位瞬移完成；底盘冻结，求固定放箱目标IK并用RRT连接，启用双龙头车碰撞'))
             loaded_checker = self.checker(boxes, payload=True)
             loaded_validity = GpuValidity(loaded_checker, check_ground=True)
-            robot = loaded_robot(self.robot, self.box_fit, attachments=self.task_attachments(boxes))
-            config = InverseKinematicsCfg.create(robot=copy.deepcopy(robot), scene_model=self.scene(boxes),
-                collision_cache={'cuboid': max(40, len(self.snapshot.objects)), 'mesh': len(self.snapshot.meshes)},
-                num_seeds=64, self_collision_check=True, use_cuda_graph=False,
-                position_tolerance=.002, orientation_tolerance=math.radians(1),
-                override_iters_for_multi_link_ik=160, optimizer_collision_activation_distance=.005)
-            solver = InverseKinematics(config)
+            solver = self.conveyor_ik_solver(boxes)
             targets = {}
             for side, tool in self.tool_matrices(start).items():
                 box = tool @ grasp_transform(side, self.top_grasp)
@@ -230,7 +233,7 @@ class ConveyorCyclePlanner(AnalyticContacts):
                     'conveyor_position': reference_targets[side]['conveyor_position']}
             placed = self.plan_conveyor_target(start, targets, loaded_checker, loaded_validity, solver,
                                                 report, append)
-            del solver, config, robot, loaded_checker, loaded_validity
+            del solver, loaded_checker, loaded_validity
             gc.collect()
             torch.cuda.empty_cache()
             for side, tool in self.tool_matrices(placed).items():
@@ -242,6 +245,7 @@ class ConveyorCyclePlanner(AnalyticContacts):
             progress('释放后箱子移出场景，直接用RRT回Home，底盘保持冻结')
             empty_checker = self.checker(boxes)
             empty_validity = GpuValidity(empty_checker, check_ground=True)
+            report['conveyor_home_start_joints']=np.asarray(placed).tolist()
             path, stats = self.joint_plan(placed, self.home_values, empty_checker, empty_validity, 20261014)
             report['conveyor_home_search_stats'] = stats
             if path is None:
